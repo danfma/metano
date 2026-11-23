@@ -874,12 +874,11 @@ public class DartBackendTests
     }
 
     [Test]
-    public async Task NamedArgument_RendersWithDartNamedArgumentSyntax()
+    public async Task NamedArgument_RendersPositionallyInParameterOrder()
     {
-        // When C# passes `new Widget(Width: 2, Height: 3)` the Dart backend
-        // should render it as `Widget(width: 2, height: 3)` — keeping the
-        // named-arg intent the source expressed rather than collapsing to
-        // positional order.
+        // Dart transpiled declarations use positional parameters, so named
+        // arguments at call sites are reordered into parameter order and
+        // printed positionally.
         var (files, _) = DartTranspileHelper.Transpile(
             """
             [Transpile]
@@ -891,7 +890,7 @@ public class DartBackendTests
         );
 
         var dart = files["widget.dart"];
-        await Assert.That(dart).Contains("Widget(width: size, height: size)");
+        await Assert.That(dart).Contains("Widget(size, size)");
     }
 
     [Test]
@@ -1787,8 +1786,8 @@ public class DartBackendTests
         await Assert
             .That(files["ops.dart"])
             .Contains(
-                "this.defaults(/* default */ null, b: 3, -1).toString()"
-                    + " + this.defaults(/* default */ null, /* default */ null, c: 2)"
+                "this.defaults(/* default */ null, 3, -1).toString()"
+                    + " + this.defaults(/* default */ null, /* default */ null, 2)"
             );
     }
 

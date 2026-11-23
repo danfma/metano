@@ -423,6 +423,13 @@ public sealed record IrCallExpression(
     /// <c>undefined</c>.
     /// </summary>
     public int ReifiedArgumentPosition { get; init; }
+
+    /// <summary>
+    /// The 0-based parameter index of the trailing <c>params</c> array when
+    /// the call passes expanded elements (or omits them) rather than a single
+    /// array expression; <c>null</c> for normal-form or non-<c>params</c> calls.
+    /// </summary>
+    public int? ExpandedParamsIndex { get; init; }
 }
 
 /// <summary>
@@ -600,6 +607,13 @@ public sealed record IrNewExpression(
     /// rather than an explicit <c>new S()</c> constructor invocation.
     /// </summary>
     public bool IsStructDefault { get; init; }
+
+    /// <summary>
+    /// The 0-based parameter index of the trailing <c>params</c> array when
+    /// the construction passes expanded elements (or omits them); <c>null</c>
+    /// otherwise.
+    /// </summary>
+    public int? ExpandedParamsIndex { get; init; }
 }
 
 /// <summary>
@@ -1554,10 +1568,4 @@ public sealed record IrTemplateExpression(
     /// inserted (before any <c>params</c> rest parameter).
     /// </summary>
     public int ReifiedArgumentPosition { get; init; }
-
-    /// <summary>
-    /// True when this node represents a C# <c>default(S)</c> for a struct
-    /// rather than an explicit <c>new S()</c> constructor invocation.
-    /// </summary>
-    public bool IsStructDefault { get; init; }
 }

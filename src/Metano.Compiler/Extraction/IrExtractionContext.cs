@@ -81,6 +81,14 @@ public sealed record IrExtractionContext(
     internal bool KeepsNativeCollections => KeepsNativeCollectionsFor(Target);
 
     /// <summary>
+    /// Whether the target keeps C#'s argument evaluation order on calls and
+    /// constructions (TypeScript and Dart). Redirecting <c>: this(...)</c>
+    /// chains still follow <see cref="KeepsArgumentEvaluationOrder"/>.
+    /// </summary>
+    internal bool KeepsCallEvaluationOrder =>
+        KeepsArgumentEvaluationOrder || Target == Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
     /// Post-extraction fixpoint analysis of reified type parameters (spec 011
     /// FR-024, stage 011d).
     /// </summary>

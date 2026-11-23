@@ -1178,7 +1178,7 @@ public sealed partial class IrExpressionExtractor
             designator
         )
         {
-            InputType = type is null ? null : PatternInputType(recursive),
+            InputType = PatternInputType(recursive),
         };
     }
 
@@ -1208,11 +1208,22 @@ public sealed partial class IrExpressionExtractor
             current = PropertySubpattern(
                 segments[index],
                 new IrPropertyPattern(Type: null, [current])
+                {
+                    InputType = MemberTypeOf(segments[index]),
+                }
             );
         }
 
         return current;
     }
+
+    private IrTypeRef? MemberTypeOf(SimpleNameSyntax member) =>
+        _semantic.GetSymbolInfo(member).Symbol switch
+        {
+            IPropertySymbol prop => IrTypeRefMapper.Map(prop.Type, _originResolver, _target),
+            IFieldSymbol field => IrTypeRefMapper.Map(field.Type, _originResolver, _target),
+            _ => null,
+        };
 
     private IrPropertySubpattern PropertySubpattern(SimpleNameSyntax member, IrPattern pattern)
     {
@@ -3365,6 +3376,7 @@ public sealed partial class IrExpressionExtractor
             HasExplicitTypeArguments = WritesTypeArguments(inv),
             ReifiedTypeArguments = reifiedCallArgs,
             ReifiedArgumentPosition = reifiedPosition,
+            ExpandedParamsIndex = ExpandedParamsIndexOf(symbol, args),
         };
     }
 
@@ -3584,8 +3596,10 @@ public sealed partial class IrExpressionExtractor
         )
         {
             Overload = MarkSynthesized(bound.Overload, symbol),
+            HasExplicitTypeArguments = WritesTypeArguments(inv),
             ReifiedTypeArguments = reifiedCallArgs,
             ReifiedArgumentPosition = reifiedPosition,
+            ExpandedParamsIndex = bound.ExpandedParamsIndex,
         };
     }
 
@@ -3700,8 +3714,10 @@ public sealed partial class IrExpressionExtractor
         )
         {
             Overload = MarkSynthesized(bound.Overload, symbol),
+            HasExplicitTypeArguments = WritesTypeArguments(inv),
             ReifiedTypeArguments = reifiedCallArgs,
             ReifiedArgumentPosition = reifiedPosition,
+            ExpandedParamsIndex = bound.ExpandedParamsIndex,
         };
     }
 
@@ -5434,6 +5450,18 @@ public sealed partial class IrExpressionExtractor
         return built;
     }
 
+    private static int? ExpandedParamsIndexOf(
+        IMethodSymbol? symbol,
+        IReadOnlyList<IrArgument> args
+    ) =>
+        symbol is { Parameters: [.., { IsParams: true, Type: IArrayTypeSymbol }] }
+        && !(
+            args.Count == symbol.Parameters.Length
+            && (args[^1].IsSpread || args[^1].Value is IrLiteral { Kind: IrLiteralKind.Null })
+        )
+            ? symbol.Parameters.Length - 1
+            : null;
+
     private static bool HasNamedArgument(IReadOnlyList<IrArgument> args) =>
         args.Any(argument => argument.Name is not null);
 
@@ -5551,6 +5579,7 @@ public sealed partial class IrExpressionExtractor
             EvaluationOrder = overload is null
                 ? ReportedConstructionOrderOf(creationSyntax, args, exception)
                 : null,
+            ExpandedParamsIndex = overload is null ? ExpandedParamsIndexOf(ctor, args) : null,
         };
 
         var constructed = BindExceptionArguments(creation);

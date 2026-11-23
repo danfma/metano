@@ -60,9 +60,14 @@ public sealed partial class IrExpressionExtractor
         if (evaluationOrder is not null && call is not null)
             ReportIfEvaluationOrderIsLost(call, bindable);
 
+        var expandedParamsIndex = bindable
+            .FirstOrDefault(argument => argument.ArgumentKind == ArgumentKind.ParamArray)
+            ?.Parameter?.Ordinal;
+
         return new BoundOverloadCall(
             inParameterOrder.Select(argument => argument.Value).ToList(),
-            new IrSelectedOverload(target, evaluationOrder)
+            new IrSelectedOverload(target, evaluationOrder),
+            expandedParamsIndex
         );
     }
 
@@ -209,11 +214,15 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     internal void ReportIfThisChainOrderIsLost(ConstructorInitializerSyntax thisCall)
     {
+        if (_context.KeepsArgumentEvaluationOrder)
+            return;
+
         if (
             _semantic.GetOperation(thisCall) is IInvocationOperation invocation
             && IsReordered(invocation.Arguments)
+            && CountOrderSensitiveEvaluations(invocation, invocation.Arguments) >= 2
         )
-            ReportIfEvaluationOrderIsLost(invocation, invocation.Arguments);
+            ReportLostEvaluationOrder(invocation);
     }
 
     /// <summary>
@@ -242,12 +251,16 @@ public sealed partial class IrExpressionExtractor
         ImmutableArray<IArgumentOperation> arguments
     )
     {
-        if (_context.KeepsArgumentEvaluationOrder || IsBaseInitializer(call))
+        if (_context.KeepsCallEvaluationOrder || IsBaseInitializer(call))
             return;
 
         if (CountOrderSensitiveEvaluations(call, arguments) < 2)
             return;
 
+        ReportLostEvaluationOrder(call);
+    }
+
+    private void ReportLostEvaluationOrder(IOperation call) =>
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
@@ -259,7 +272,6 @@ public sealed partial class IrExpressionExtractor
                 call.Syntax.GetLocation()
             )
         );
-    }
 
     /// <summary>
     /// A <c>: base(...)</c> call or a primary-constructor base call.

@@ -297,7 +297,12 @@ public sealed class DartIrRewriter
         var rewrittenArgs = call.Arguments.Select(RewriteArgument).ToList();
         var rewrittenCall = call with { Target = rewrittenTarget, Arguments = rewrittenArgs };
 
-        return IrToDartBclMapper.TryMapCall(rewrittenCall, _registry) ?? rewrittenCall;
+        if (IrToDartBclMapper.TryMapCall(rewrittenCall, _registry) is { } mapped)
+            return mapped is IrCallExpression mappedCall
+                ? DartEvaluationOrder.BindCall(mappedCall)
+                : mapped;
+
+        return DartEvaluationOrder.BindCall(rewrittenCall);
     }
 
     private IrExpression RewriteMemberAccess(IrMemberAccess access)
@@ -349,14 +354,17 @@ public sealed class DartIrRewriter
     {
         var arguments = construction.Arguments.Select(RewriteArgument).ToList();
 
-        return
+        if (
             construction.Overload is { } overload
             && _overloads.ConstructorNameOf(overload.Target) is { } constructorName
-            ? new DartNamedConstruction(construction.Type, constructorName, arguments)
-            : construction with
-            {
-                Arguments = arguments,
-            };
+        )
+            return DartEvaluationOrder.BindNamedConstruction(
+                new DartNamedConstruction(construction.Type, constructorName, arguments),
+                overload.EvaluationOrder,
+                construction.ExpandedParamsIndex
+            );
+
+        return DartEvaluationOrder.BindNew(construction with { Arguments = arguments });
     }
 
     private IrMemberOrigin? ClearNoContainerUnlessFlattened(IrMemberOrigin? origin) =>
