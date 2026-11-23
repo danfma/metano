@@ -164,4 +164,19 @@ public class ModuleImportGapTests
                     + "export const derived: number = MaxItems + 1;\n"
             );
     }
+
+    [Test]
+    public async Task SameNamedModuleVariablesOfTwoContainerlessClasses_ReportMS0020()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer] public static class Limits { public static readonly int Default = 1; }
+            [Transpile, NoContainer] public static class Nc { public static readonly int Default = 2; }
+            """
+        );
+
+        var clash = diagnostics.Single(d => d.Code == "MS0020");
+
+        await Assert.That(clash.Message).Contains("'Nc.Default' is exported as 'default_'");
+    }
 }

@@ -24,6 +24,10 @@ namespace Metano.Compiler.TypeScript.Transformation;
 ///     range variable or local function of the same TypeScript name.</item>
 ///   <item>A write from a file other than the declaring one: an ES import binding
 ///     is read-only (TS2632).</item>
+///   <item>An exported module variable whose name another containerless class of
+///     the same namespace already exports, as a variable or a function: the barrel
+///     would re-export the name twice (TS2308, #401). This one reports MS0020, the
+///     code of the same clash between two functions.</item>
 /// </list>
 /// Limitation: a module function called from an initializer that reads a later
 /// variable, and an import cycle between two containerless classes' initializers,
@@ -40,6 +44,8 @@ public sealed class ModuleVariableValidator(
 
     public void Validate()
     {
+        RejectBarrelClashes();
+
         foreach (var type in transpilableTypes)
         {
             if (type.IsContainerless())
@@ -54,6 +60,75 @@ public sealed class ModuleVariableValidator(
             }
         }
     }
+
+    /// <summary>
+    /// Reports the second containerless class of a namespace that exports a module
+    /// variable under a name the barrel already re-exports from another one. The
+    /// functions are registered first and never reported here: a clash between two
+    /// functions is the export registry's MS0020.
+    /// </summary>
+    private void RejectBarrelClashes()
+    {
+        var containerless = transpilableTypes.Where(type => type.IsContainerless()).ToList();
+        var exporters = new Dictionary<(string Namespace, string Name), INamedTypeSymbol>();
+
+        foreach (var type in containerless)
+        {
+            var functions = type.GetMembers()
+                .OfType<IMethodSymbol>()
+                .Where(method => method.IsExportedModuleFunction(TargetLanguage.TypeScript));
+
+            foreach (var function in functions)
+            {
+                exporters.TryAdd(
+                    BarrelKey(type, IrToTsNamingPolicy.ToFunctionName(function)),
+                    type
+                );
+            }
+        }
+
+        foreach (var type in containerless)
+        {
+            var variables = type.GetMembers()
+                .Where(IsModuleState)
+                .Where(member => member.DeclaredAccessibility is not Accessibility.Private);
+
+            foreach (var variable in variables)
+            {
+                RejectBarrelClash(exporters, type, variable);
+            }
+        }
+    }
+
+    private void RejectBarrelClash(
+        Dictionary<(string Namespace, string Name), INamedTypeSymbol> exporters,
+        INamedTypeSymbol type,
+        ISymbol variable
+    )
+    {
+        var name = EmittedName(variable);
+
+        if (
+            exporters.TryAdd(BarrelKey(type, name), type)
+            || SymbolEqualityComparer.Default.Equals(exporters[BarrelKey(type, name)], type)
+        )
+            return;
+
+        reportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.NoContainerFactoryNameClash,
+                $"Module variable '{type.Name}.{variable.Name}' is exported as '{name}', which "
+                    + $"'{exporters[BarrelKey(type, name)].Name}' already exports in the same "
+                    + "namespace, so the barrel would export it twice. Rename one via "
+                    + "[Name(\"...\")].",
+                variable.Locations.FirstOrDefault()
+            )
+        );
+    }
+
+    private static (string Namespace, string Name) BarrelKey(INamedTypeSymbol type, string name) =>
+        (type.ContainingNamespace.ToDisplayString(), name);
 
     private void RejectStaticConstructors(INamedTypeSymbol type)
     {
