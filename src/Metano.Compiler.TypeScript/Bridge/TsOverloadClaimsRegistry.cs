@@ -60,13 +60,14 @@ public sealed class TsOverloadClaimsRegistry(
     /// <summary>
     /// Whether a class needs a claim pass: it declares an overload group or a
     /// conversion operator, whose fixed name the pass checks (baseline
-    /// FR-078), or it extends an emitted class whose static side it must claim
-    /// against.
+    /// FR-078), it extends an emitted class whose static side it must claim
+    /// against, or it lists an emitted interface whose names it must declare.
     /// </summary>
     internal static bool AppliesTo(IrClassDeclaration ir) =>
         HasOverloadGroup(ir)
         || HasConversion(ir)
-        || IrToTsClassBridge.BuildExtends(ir) is TsNamedType;
+        || IrToTsClassBridge.BuildExtends(ir) is TsNamedType
+        || DeclaresTranspiledInterface(ir);
 
     /// <summary>
     /// The emitted fast-path name of a root overload (spec 013 FR-025): a
@@ -144,6 +145,13 @@ public sealed class TsOverloadClaimsRegistry(
     {
         var ir = ShapeOf(type);
 
+        var interfaceRequirements = new TsInterfaceRequirementFinder(
+            InterfaceShapeOf,
+            InterfaceFastPathsOf,
+            ShapeOf,
+            For
+        ).Of(type, ir, EmittedBaseOf(type, ir));
+
         return TsOverloadClaimPass.Run(
             new TsClaimPassInput(
                 ir,
@@ -159,6 +167,9 @@ public sealed class TsOverloadClaimsRegistry(
                     ),
                 RootFastPathOf
             )
+            {
+                InterfaceRequirements = interfaceRequirements,
+            }
         );
     }
 
@@ -263,6 +274,15 @@ public sealed class TsOverloadClaimsRegistry(
         context.TypeMapping is { } typeMapping
             ? IrTypeOriginResolverFactory.CreateUnrecorded(typeMapping)
             : null;
+
+    /// <summary>
+    /// Whether the class lists an emitted interface, whose names it must
+    /// declare (<see cref="TsInterfaceRequirement"/>).
+    /// </summary>
+    private static bool DeclaresTranspiledInterface(IrClassDeclaration ir) =>
+        (ir.Interfaces ?? []).Any(contract =>
+            contract is IrNamedTypeRef { Semantics.IsTranspilable: true }
+        );
 
     private static bool HasConversion(IrClassDeclaration ir) =>
         (ir.Members ?? []).Any(member =>

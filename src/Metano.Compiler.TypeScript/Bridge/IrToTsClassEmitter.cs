@@ -657,6 +657,10 @@ internal sealed class IrToTsClassEmitter(
             if (members is not null)
                 classMembers.AddRange(members);
         }
+
+        classMembers.AddRange(
+            IrToTsOverloadDispatcherBridge.BuildInterfaceForwarders(claims, lowering)
+        );
     }
 
     /// <summary>

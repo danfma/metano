@@ -192,4 +192,76 @@ public class OverloadDispatcherFixTests
         await Assert.That(reported).Count().IsEqualTo(1);
         await Assert.That(reported[0].Message).Contains("'Dto.Get(string)'");
     }
+
+    [Test]
+    public async Task OverloadedImplementation_ForwardsTheRenamedInterfaceMember()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public interface IGreeter
+            {
+                [Name("hello")]
+                string Greet(int n);
+            }
+
+            public class Greeter : IGreeter
+            {
+                public string Greet(int n) => "int";
+
+                public string Greet(string s) => s;
+            }
+            """
+        );
+
+        await Assert
+            .That(result["greeter.ts"])
+            .Contains("hello(n: number): string {\n    return this.greetN(n);\n  }");
+    }
+
+    [Test]
+    public async Task InheritedImplementations_ForwardTheInterfaceFastPaths()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public interface IConv<T>
+            {
+                string Conv(T x);
+
+                string Conv(T x, int n);
+            }
+
+            public class B2
+            {
+                public virtual string Conv(int a) => "bi";
+
+                public virtual string Conv(int a, int n) => "bin";
+            }
+
+            public class D2 : B2, IConv<int> { }
+
+            public class D3 : B2, IConv<int>
+            {
+                public string Conv(bool x) => "db";
+            }
+            """
+        );
+
+        await Assert
+            .That(files["d2.ts"])
+            .Contains("convX(a: number): string {\n    return this.convA(a);\n  }");
+        await Assert
+            .That(files["d2.ts"])
+            .Contains("convXN(a: number, n: number): string {\n    return this.convAN(a, n);");
+        await Assert.That(files["d3.ts"]).Contains("convX$(x: boolean): string {");
+        await Assert.That(files["d3.ts"]).Contains("convX(a: number): string {");
+        await Assert
+            .That(diagnostics.Select(diagnostic => diagnostic.Message))
+            .Contains(message => message.Contains("'D3.convX'") && message.Contains("forwarder"));
+    }
 }

@@ -269,6 +269,25 @@ public static class IrToTsOverloadDispatcherBridge
     }
 
     /// <summary>
+    /// The forwarding members a class declares for the names its interfaces
+    /// require of it, which its own and inherited members do not declare
+    /// (<see cref="TsOverloadClaims.InterfaceForwarders"/>, #565, #595).
+    /// </summary>
+    internal static IEnumerable<TsMethodMember> BuildInterfaceForwarders(
+        TsOverloadClaims names,
+        IrToTsBridgeContext context
+    ) =>
+        names.InterfaceForwarders.Select(forwarder =>
+            BuildForwardingMember(
+                forwarder.Signature,
+                forwarder.Name,
+                forwarder.Target,
+                overridesInherited: false,
+                context
+            )
+        );
+
+    /// <summary>
     /// A synthesized value-equality member whose body the target supplies
     /// (spec 013 FR-038): no user declaration was folded into it and it routes
     /// to none.
