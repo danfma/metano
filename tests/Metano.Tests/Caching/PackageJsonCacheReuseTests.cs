@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Metano.Compiler;
+using Metano.Packaging;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 

@@ -2,6 +2,7 @@ using ConsoleAppFramework;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Watch;
+using Metano.Packaging;
 
 namespace Metano;
 

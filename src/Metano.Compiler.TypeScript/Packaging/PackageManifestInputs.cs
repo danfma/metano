@@ -1,7 +1,7 @@
 using Metano.Compiler;
 using Metano.Compiler.TypeScript.AST;
 
-namespace Metano;
+namespace Metano.Packaging;
 
 /// <summary>
 /// What a TypeScript run hands to the package.json stage

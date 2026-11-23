@@ -5,6 +5,7 @@ using Metano.Compiler.TypeScript;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Caching;
 using Metano.Compiler.TypeScript.Transformation;
+using Metano.Packaging;
 
 namespace Metano.Tests;
 

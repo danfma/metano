@@ -177,6 +177,28 @@ where .NET answers `true`. The compiler reports `MS0001` at that test instead, a
 throws at run time. An overload dispatcher's branch for such a parameter still tests the
 runtime classes only.
 
+### Additions after 3.0.0
+
+| C# | TypeScript |
+|----|----|
+| `Array.Sort(a)`, `MemoryExtensions.Sort(span)` | `sortArray(a)` / `sortArrayByKeys(...)` (.NET ordering, not JS text order) |
+| `Array.IndexOf(a, v)`, `LastIndexOf`, span `Contains` / `IndexOf` / `LastIndexOf` | `arrayIndexOf` / `arrayLastIndexOf` / `arrayContains` (value equality, NaN found) |
+| `StringComparer.Ordinal` / `OrdinalIgnoreCase` | runtime singletons (lazy, tree-shakable) |
+| `StringBuilder`, `Lazy<T>`, `TaskCompletionSource<T>` | runtime classes of the same name (`Lazy` ignores `LazyThreadSafetyMode`) |
+| `KeyValuePair.Create(k, v)`, `EqualityComparer<T>.Default` | mapped |
+| `BigInteger.Zero/One/MinusOne`, `IsZero/IsOne/IsEven` | `0n` / `1n` / `-1n` and the matching predicates |
+| `char.Is*` (11 predicates), `Convert.ToDouble` (int-sized, `double`, `float`, `decimal`, `bool`, `string`), `decimal.ToDouble` | mapped |
+| `int.CompareTo` | `int`, `uint`, `double`, `float` give -1/0/1 (NaN first); `short`, `ushort`, `byte`, `sbyte`, `char` give the difference, as .NET |
+| LINQ `ElementAt`, `ElementAtOrDefault`, `DefaultIfEmpty`, `Distinct(comparer)` | `elementAt`, `elementAtOrDefault`, `defaultIfEmpty`, `distinct(comparer)` |
+
+Not mapped, reported with `MS0001`: `ElementAt(Index)`, `Array.IndexOf(a, v, start, count)`,
+`Array.Sort(a, index, length)`. Known gaps: `(decimal)double` emits the raw double; a record has no
+`toString`; `-0` dictionary keys and `list.Equals` differ from .NET; `ReadOnlyDictionary`,
+`FrozenDictionary`, `nint` / `nuint` members and the non-generic `TaskCompletionSource` are unmapped.
+A cast of a set, queue or dictionary to `IList<T>` passes through (known gap, #710). Other numeric details:
+`decimal` in a module function, a branded type or a JSX body is spelled `Decimal`; `decimal` to a
+narrow integer is `narrowFromDecimal(d, 32, true)`; a record hashes a tuple-typed member by its elements, while `HashCode.add` still hashes an array by reference.
+
 ### Lists and arrays
 
 | C# | TypeScript |

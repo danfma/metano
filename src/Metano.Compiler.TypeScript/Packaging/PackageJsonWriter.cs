@@ -5,7 +5,7 @@ using Metano.Compiler.Diagnostics;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Transformation;
 
-namespace Metano;
+namespace Metano.Packaging;
 
 /// <summary>
 /// Generates and updates the consumer's package.json with <c>imports</c>, <c>exports</c>,
@@ -19,6 +19,8 @@ namespace Metano;
 /// </summary>
 public static class PackageJsonWriter
 {
+    internal const string PackageJsonFileName = "package.json";
+
     private const string PeerDependenciesSection = "peerDependencies";
 
     private static readonly string[] DependencySections =
@@ -92,7 +94,7 @@ public static class PackageJsonWriter
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
-        var packageJsonPath = Path.Combine(packageRoot, PackageRootResolver.PackageJsonFileName);
+        var packageJsonPath = Path.Combine(packageRoot, PackageJsonFileName);
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
         var (outputPrefix, prefixDiagnostic) = OutputPrefix.Resolve(srcRoot, srcRelative);
@@ -129,6 +131,7 @@ public static class PackageJsonWriter
         );
 
         JsonObject root;
+
         if (File.Exists(packageJsonPath))
         {
             var existing = File.ReadAllText(packageJsonPath);
@@ -272,6 +275,7 @@ public static class PackageJsonWriter
             return;
 
         var existingName = root["name"]?.GetValue<string>();
+
         if (existingName is null)
         {
             root["name"] = authoritativePackageName;
