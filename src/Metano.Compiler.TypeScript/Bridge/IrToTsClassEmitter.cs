@@ -730,9 +730,7 @@ internal sealed class IrToTsClassEmitter(
                 IrToTsRecordSynthesisBridge.Generate(
                     ir,
                     userMembers,
-                    ir is { Semantics.IsValueType: true, StaticInitializer: not null }
-                        ? PerClassBackingFields.For(type).ScopeFor(ir)
-                        : PerClassBackingFieldScope.None
+                    PerClassBackingFields.For(type).ScopeFor(ir)
                 )
             );
 
