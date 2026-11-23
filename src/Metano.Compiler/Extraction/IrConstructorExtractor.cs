@@ -434,7 +434,10 @@ public static class IrConstructorExtractor
             DeclarationOrdinal = DeclarationOrdinalOf(chainedCtor) ?? 0,
         };
 
-        return new IrConstructorChain(arguments, chainedDecl);
+        return new IrConstructorChain(arguments, chainedDecl)
+        {
+            ExpandedParamsArguments = extractor.ExpandedParamsArgumentsOf(thisCall),
+        };
     }
 
     private static SyntaxNode? DeclaringSyntax(IMethodSymbol ctor) =>

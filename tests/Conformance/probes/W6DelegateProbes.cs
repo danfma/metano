@@ -13,7 +13,30 @@ public class W6Holder
     public W6Listener Bound { get; set; } = (self, x) => self.V + x;
 }
 
-/// <summary>Wave 6 group G: delegate conversions and invocations.</summary>
+public class W6Bag
+{
+    public int[] Xs;
+    public string Tag;
+
+    public W6Bag(string tag, params int[] xs)
+    {
+        Tag = tag;
+        Xs = xs;
+    }
+
+    public W6Bag()
+        : this("none") { }
+
+    public W6Bag(int a)
+        : this("one", a, a + 1, a + 2) { }
+
+    public W6Bag(int[] arr, bool copy)
+        : this("arr", arr) { }
+
+    public string Show() => Tag + ":" + Xs.Length + ":" + string.Join(",", Xs);
+}
+
+/// <summary>Wave 6 group G: delegate conversions and invocations, params chains.</summary>
 public static class W6DelegateProbes
 {
     static int Fold(W6Folder f) => f(1, 2, 3);
@@ -49,4 +72,7 @@ public static class W6DelegateProbes
 
         return $"{a.Invoke(h, x: 20)} {a(h, x: 21)} {a.Invoke(x: 22, self: h)}";
     }
+
+    public static string ExpandedParamsInThisChain() =>
+        $"{new W6Bag().Show()} {new W6Bag(5).Show()} {new W6Bag([9, 8], true).Show()}";
 }
