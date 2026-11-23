@@ -291,7 +291,7 @@ internal sealed class JsonTypeDescriptorBuilder(
         // int64 descriptor: the runtime calls create after the exact read,
         // as the branded converter does, so MS0034's honored factory stays
         // honored (added by the review of slice 012e, #450).
-        if (type is INamedTypeSymbol branded && SymbolHelper.HasBranded(branded))
+        if (type is INamedTypeSymbol branded && SymbolHelper.IsPrimitiveBackedBranded(branded))
         {
             var (factoryTypeName, member) = BrandedFactoryTarget(branded);
 
