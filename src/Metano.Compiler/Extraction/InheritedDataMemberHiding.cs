@@ -52,15 +52,13 @@ internal static class InheritedDataMemberHiding
     }
 
     private static bool CanHide(ISymbol member) =>
-        IsInstanceDataMember(member) && member is not IPropertySymbol { IsOverride: true };
+        SymbolHelper.IsInstanceDataMember(member)
+        && member is not IPropertySymbol { IsOverride: true };
 
     private static bool IsHideableBy(ISymbol inherited, TargetLanguage? target) =>
-        IsInstanceDataMember(inherited)
+        SymbolHelper.IsInstanceDataMember(inherited)
         && inherited.DeclaredAccessibility is not Accessibility.Private
         && !SymbolHelper.HasIgnore(inherited, target);
-
-    private static bool IsInstanceDataMember(ISymbol member) =>
-        member is (IFieldSymbol or IPropertySymbol { IsIndexer: false }) && !member.IsStatic;
 
     private static IEnumerable<INamedTypeSymbol> BaseTypesOf(INamedTypeSymbol type)
     {

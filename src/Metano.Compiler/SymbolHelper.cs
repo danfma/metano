@@ -183,10 +183,18 @@ public static class SymbolHelper
         string name,
         StringComparison comparison
     ) =>
-        member
-            is IPropertySymbol { IsStatic: false, IsIndexer: false }
-                or IFieldSymbol { IsStatic: false, IsImplicitlyDeclared: false }
-        && string.Equals(member.Name, name, comparison);
+        member is IFieldSymbol { IsImplicitlyDeclared: true }
+            ? false
+            : IsInstanceDataMember(member) && string.Equals(member.Name, name, comparison);
+
+    /// <summary>
+    /// The one rule for "is a data member": an instance field or property.
+    /// Indexers are accessors over a parameterized lookup, not data, so every
+    /// consumer that enumerates data members (guards, interface fields, JSON
+    /// shapes, equality) goes through this predicate.
+    /// </summary>
+    public static bool IsInstanceDataMember(ISymbol member) =>
+        member is (IFieldSymbol or IPropertySymbol { IsIndexer: false }) && !member.IsStatic;
 
     /// <summary>
     /// Reads a symbol's <c>[Name]</c> override. Multiple <c>[Name]</c>
