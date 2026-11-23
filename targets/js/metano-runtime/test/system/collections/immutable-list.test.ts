@@ -59,14 +59,6 @@ describe("ImmutableList", () => {
     expect(ImmutableList.from(original)).toBe(original);
   });
 
-  test("an empty list's addRange of an ImmutableList returns that source", () => {
-    const source = list();
-
-    expect(ImmutableList.empty<number>().addRange(source)).toBe(source);
-    expect(ImmutableList.empty<number>().addRange([1, 2])).not.toBe(source);
-    expect(source.addRange(source)).not.toBe(source);
-  });
-
   test("reads and searches", () => {
     const original = ImmutableList.of([1, 2, 1]);
 

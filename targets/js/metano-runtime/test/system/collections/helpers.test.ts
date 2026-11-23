@@ -14,11 +14,7 @@ import {
   isIterable,
 } from "#/system/collections/helpers.ts";
 
-import { Dictionary } from "#/system/collections/dictionary.ts";
-import { HashSet } from "#/system/collections/hash-set.ts";
 import { List } from "#/system/collections/list.ts";
-import { Queue } from "#/system/collections/queue.ts";
-import { Stack } from "#/system/collections/stack.ts";
 import { IndexOutOfRangeException } from "#/system/exceptions/index-out-of-range-exception.ts";
 import { InvalidCastException } from "#/system/exceptions/invalid-cast-exception.ts";
 
@@ -70,15 +66,6 @@ describe("helpers", () => {
     expect(asList(undefined, LIST_OF_INT32)).toBeNull();
     expect(asList<number>(list, LIST_OF_INT32)).toBe(list);
     expect(Object.is(asList(shaped, LIST_OF_INT32), shaped)).toBe(true);
-  });
-
-  test("asList rejects a runtime collection that is never a list", () => {
-    expect(() => asList(new HashSet<number>(), LIST_OF_INT32)).toThrow(InvalidCastException);
-    expect(() => asList(new Dictionary<number, number>(), LIST_OF_INT32)).toThrow(
-      InvalidCastException,
-    );
-    expect(() => asList(new Queue<number>(), LIST_OF_INT32)).toThrow(InvalidCastException);
-    expect(() => asList(new Stack<number>(), LIST_OF_INT32)).toThrow(InvalidCastException);
   });
 
   test("asList rejects a primitive with .NET's InvalidCastException", () => {

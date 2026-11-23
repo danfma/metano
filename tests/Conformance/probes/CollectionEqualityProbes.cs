@@ -48,6 +48,7 @@ public static class CollectionEqualityProbes
         bs.Sort();
         var ns = new List<int?> { 3, null, 1 };
         ns.Sort();
+
         return string.Join(",", bs)
             + "|"
             + string.Join(",", ns.Select(n => n?.ToString() ?? "null"));
@@ -67,6 +68,7 @@ public static class CollectionEqualityProbes
             Guid.Parse("00000000-0000-0000-0000-0000000000ff"),
             Guid.Parse("00000000-0000-0000-0000-000000000009"),
         };
+
         xs.Sort();
         return string.Join(",", xs);
     }
@@ -128,6 +130,7 @@ public static class CollectionEqualityProbes
     {
         var xs = new List<CeItem> { new("a", 1), new("b", 2), new("a", 1) };
         var probe = new CeItem("a", 1);
+
         return xs.Contains(probe)
             + ","
             + xs.IndexOf(probe)
@@ -154,6 +157,7 @@ public static class CollectionEqualityProbes
     public static string NaNSearches()
     {
         var xs = new List<double> { 1.0, double.NaN };
+
         return xs.Contains(double.NaN)
             + ","
             + xs.IndexOf(double.NaN)
@@ -164,6 +168,7 @@ public static class CollectionEqualityProbes
     public static string ArraySearches()
     {
         var xs = new[] { new CeItem("a", 1), new CeItem("b", 2) };
+
         return Array.IndexOf(xs, new CeItem("b", 2))
             + ","
             + xs.Contains(new CeItem("a", 1))
@@ -176,6 +181,7 @@ public static class CollectionEqualityProbes
     public static string ArrayNaNSearches()
     {
         var xs = new[] { 1.0, double.NaN };
+
         return Array.IndexOf(xs, double.NaN)
             + ","
             + xs.Contains(double.NaN)
@@ -193,6 +199,7 @@ public static class CollectionEqualityProbes
     {
         var d = new Dictionary<CeItem, string> { [new CeItem("a", 1)] = "x" };
         d[new CeItem("a", 1)] = "y";
+
         return d.Count
             + ","
             + d[new CeItem("a", 1)]
@@ -261,6 +268,7 @@ public static class CollectionEqualityProbes
         var d = new Dictionary<double, string> { [-0.0] = "neg" };
         var s = new HashSet<double> { -0.0 };
         var keys = string.Join(",", d.Keys.Select(k => 1 / k < 0 ? "-0" : "+0"));
+
         return keys
             + "|"
             + string.Join(",", s.Select(k => 1 / k < 0 ? "-0" : "+0"))
@@ -268,9 +276,40 @@ public static class CollectionEqualityProbes
             + d.ContainsKey(0.0);
     }
 
+    public static string CollectionInterfaceCasts()
+    {
+        object set = new HashSet<int> { 1, 2 };
+        object queue = new Queue<int>(new[] { 1, 2, 3 });
+        object dict = new Dictionary<string, int> { ["a"] = 1 };
+        object sorted = new SortedSet<int> { 4, 5 };
+
+        return ((ICollection<int>)set).Count
+            + ","
+            + ((IReadOnlyCollection<int>)set).Count
+            + ","
+            + ((IReadOnlyCollection<int>)queue).Count
+            + ","
+            + ((ICollection<KeyValuePair<string, int>>)dict).Count
+            + ","
+            + ((IReadOnlyCollection<KeyValuePair<string, int>>)dict).Count
+            + ","
+            + ((ICollection<int>)sorted).Count
+            + ","
+            + ((IReadOnlyCollection<int>)sorted).Count;
+    }
+
+    public static string CovariantEmptyAddRange()
+    {
+        var source = ImmutableList.Create("a");
+        var result = ImmutableList<object>.Empty.AddRange(source);
+
+        return ReferenceEquals(result, source) + "," + (result is ImmutableList<object>);
+    }
+
     public static string AddRangeSelf()
     {
         var xs = new List<int> { 1, 2, 3 };
+
         try
         {
             xs.AddRange(xs);
@@ -285,6 +324,7 @@ public static class CollectionEqualityProbes
     public static string AsListCast()
     {
         object o = new HashSet<int> { 1 };
+
         try
         {
             var l = (IList<int>)o;
