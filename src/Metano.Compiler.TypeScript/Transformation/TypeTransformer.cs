@@ -1341,7 +1341,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         && (
             SymbolHelper.HasExportedAsModule(type)
             || SymbolHelper.HasNoContainer(type)
-            || HasExtensionMembers(type)
+            || type.HasExtensionMembers()
         );
 
     /// <summary>
@@ -3067,34 +3067,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         return false;
     }
 
-    /// <summary>
-    /// Checks if a static class contains extension methods (classic or C# 14 blocks).
-    /// </summary>
-    internal static bool HasExtensionMembers(INamedTypeSymbol type)
-    {
-        // Classic extensions
-        if (
-            type.GetMembers()
-                .OfType<IMethodSymbol>()
-                .Any(m => m.IsExtensionMethod && m.MethodKind == MethodKind.Ordinary)
-        )
-            return true;
-
-        // C# 14 extension blocks — detected via syntax
-        foreach (var syntaxRef in type.DeclaringSyntaxReferences)
-        {
-            var syntax = syntaxRef.GetSyntax();
-            if (
-                syntax
-                    .DescendantNodes()
-                    .Any(n => n.Kind().ToString() == "ExtensionBlockDeclaration")
-            )
-                return true;
-        }
-
-        return false;
-    }
-
     internal static TsAccessibility MapAccessibility(Accessibility accessibility) =>
         accessibility switch
         {
@@ -3144,8 +3116,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var type in transpilableTypes)
         {
-            if (!SymbolHelper.IsContainerless(type))
+            if (!IsModuleShapedStaticClass(type))
                 continue;
+
             if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
                 continue;
 
@@ -3153,7 +3126,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
             foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
             {
-                if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
+                if (!SymbolHelper.IsExportedModuleFunction(member, TargetLanguage.TypeScript))
                     continue;
 
                 var fnName = IrToTsNamingPolicy.ToFunctionName(member);
@@ -3312,12 +3285,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         TypeMappingContext typeMappingContext
     )
     {
-        if (
-            type.DeclaredAccessibility == Accessibility.Public
-            && SymbolHelper.IsContainerless(type)
-        )
+        if (type.DeclaredAccessibility == Accessibility.Public && IsModuleShapedStaticClass(type))
         {
             var originKey = type.GetCrossAssemblyOriginKey();
+
             if (crossAssemblyOrigins.TryGetValue(originKey, out var typeOrigin))
             {
                 // Stage the version hint so the import collector's
@@ -3353,9 +3324,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     ),
                     IsStringEnum: false
                 );
+
                 foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
                 {
-                    if (!SymbolHelper.IsEmittedModuleFunction(member, TargetLanguage.TypeScript))
+                    if (!SymbolHelper.IsExportedModuleFunction(member, TargetLanguage.TypeScript))
                         continue;
 
                     var fnName = IrToTsNamingPolicy.ToFunctionName(member);

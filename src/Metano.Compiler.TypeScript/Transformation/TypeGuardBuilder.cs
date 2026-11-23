@@ -90,7 +90,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         !TypeTransformer.IsExceptionType(type)
         && !SymbolHelper.HasExportedAsModule(type)
         && !SymbolHelper.HasNoContainer(type)
-        && !TypeTransformer.HasExtensionMembers(type)
+        && !type.HasExtensionMembers()
         && !SymbolHelper.HasImport(type);
 
     /// <summary>

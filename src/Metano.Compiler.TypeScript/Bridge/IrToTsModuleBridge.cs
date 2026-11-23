@@ -338,12 +338,13 @@ public static class IrToTsModuleBridge
             allParameters,
             IrToTsTypeMapper.Map(fn.ReturnType),
             body,
-            Exported: true,
+            Exported: IsExported(fn),
             // Generators can't also be async under this backend; the extractor
             // already forced Async off when IsGenerator is on.
             Async: fn.Semantics.IsAsync,
             Generator: fn.Semantics.IsGenerator,
-            TypeParameters: MapTypeParameters(fn.TypeParameters)
+            TypeParameters: MapTypeParameters(fn.TypeParameters),
+            JSDoc: IrToTsVisibilityMapper.Map(fn.Visibility).JSDoc
         );
     }
 
@@ -366,12 +367,20 @@ public static class IrToTsModuleBridge
             [argsParam],
             IrToTsTypeMapper.Map(fn.ReturnType),
             body,
-            Exported: true,
+            Exported: IsExported(fn),
             Async: fn.Semantics.IsAsync,
             Generator: fn.Semantics.IsGenerator,
-            TypeParameters: MapTypeParameters(fn.TypeParameters)
+            TypeParameters: MapTypeParameters(fn.TypeParameters),
+            JSDoc: IrToTsVisibilityMapper.Map(fn.Visibility).JSDoc
         );
     }
+
+    /// <summary>
+    /// Whether a module function is exported: a private helper stays local to its
+    /// module, as a private module variable does.
+    /// </summary>
+    private static bool IsExported(IrModuleFunction fn) =>
+        fn.Visibility is not IrVisibility.Private;
 
     private static IReadOnlyList<TsTypeParameter>? MapTypeParameters(
         IReadOnlyList<IrTypeParameter>? typeParameters

@@ -820,6 +820,7 @@ public static class IrModuleFunctionExtractor
             OverloadName = claim?.Name,
             SignatureText = claim?.SignatureText,
             ReifiedTypeParameters = context.ReifiedTypeAnalysis.ReifiedParametersOf(method),
+            Visibility = IrVisibilityMapper.Map(method.DeclaredAccessibility),
         };
     }
 

@@ -44,8 +44,13 @@ public class CallerArgumentExpressionCallShapeTests
             """
         );
 
-        await Assert.That(output).Contains("return show(count, \"count\");");
-        await Assert.That(output).Contains("return Ext.show(count, \"count\");");
+        await Assert
+            .That(output)
+            .Contains("static plain(count: number): string {\n    return show(count, \"count\");");
+
+        await Assert
+            .That(output)
+            .Contains("static static(count: number): string {\n    return show(count, \"count\");");
 
         await Assert
             .That(output)

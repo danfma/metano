@@ -3970,6 +3970,10 @@ public sealed partial class IrExpressionExtractor
         var isDeclaringTypeExternal = SymbolHelper.HasExternal(symbol.ContainingType);
         // `[ExportedAsModule]` flattens like `[NoContainer]` at call sites (#286).
         var isDeclaringTypeNoContainer = symbol.ContainingType.IsContainerless();
+
+        var isDeclaringTypeExtensionContainer =
+            !isDeclaringTypeNoContainer && IsStaticMethodOfExtensionContainer(symbol);
+
         // `[JsCallable]` interface `Invoke(…)` call → the receiver IS the JS
         // function, so the call lowers to `recv(args)`. A `[JsTuple]`
         // positional member or C# tuple element read carries its position,
@@ -4002,7 +4006,8 @@ public sealed partial class IrExpressionExtractor
                 ? TypeReferenceTo(symbol.ContainingType)
                 : null,
             IsForeignMember: SymbolHelper.IsForeignMember(symbol, _semantic.Compilation),
-            IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true }
+            IsCompileTimeConstant: symbol is IFieldSymbol { IsConst: true },
+            IsDeclaringTypeExtensionContainer: isDeclaringTypeExtensionContainer
         )
         {
             ResultType = symbol switch

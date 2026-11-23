@@ -71,4 +71,11 @@ public sealed record IrModuleFunction(
     /// hidden <c>T$type</c> parameters (spec 011 FR-024, stage 011d).
     /// </summary>
     public IReadOnlyList<IrReifiedTypeParameter> ReifiedTypeParameters { get; init; } = [];
+
+    /// <summary>
+    /// The C# accessibility of the method the function comes from. A private helper of
+    /// a containerless class is still emitted, since its class's other functions call
+    /// it; a target decides what it exposes beyond the module.
+    /// </summary>
+    public IrVisibility Visibility { get; init; } = IrVisibility.Public;
 }

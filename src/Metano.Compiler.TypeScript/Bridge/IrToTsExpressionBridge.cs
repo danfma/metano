@@ -842,9 +842,12 @@ public static partial class IrToTsExpressionBridge
         // namespace contract the runtime ambient declarations expose
         // (e.g. `Js.document` over the runtime's actual `document`
         // global). Instance access (ill-formed on a static class)
-        // falls through to the normal property-access path.
+        // falls through to the normal property-access path. A static
+        // method of an extension container flattens too: TypeScript emits
+        // that class as a module of functions (#554).
         if (
-            ma.Origin is { IsStatic: true, IsDeclaringTypeNoContainer: true } containerless
+            ma.Origin is { } containerless
+            && FlattensToModuleMember(containerless)
             && ma.Target is IrTypeReference container
         )
         {

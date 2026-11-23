@@ -83,14 +83,11 @@ public class ModuleFunctionClaimGoldenTests
             result["priv-host.ts"]
         );
 
-        // The call sites name the claimed fast paths; the container qualifier
-        // they keep is the pre-existing #554.
+        // The call sites name the claimed fast paths, flattened like any
+        // module function's (#554).
         await Assert
             .That(result["use.ts"])
-            .Contains(
-                "return ((3 * 3) + IgnHost.plainInt32(1) + EmHost.loneInt32(1) "
-                    + "+ PrivHost.hiddenInt32(1)) | 0;"
-            );
+            .Contains("return ((3 * 3) + plainInt32(1) + loneInt32(1) + hiddenInt32(1)) | 0;");
     }
 
     /// <summary>
@@ -132,10 +129,8 @@ public class ModuleFunctionClaimGoldenTests
             result["block-only.ts"]
         );
 
-        // The container qualifier on the plain call is the pre-existing #554.
-        await Assert
-            .That(result["use.ts"])
-            .Contains("return (twice(\"x\") + BlockOnly.plainInt32(1)) | 0;");
+        // The plain call flattens like any module function's (#554).
+        await Assert.That(result["use.ts"]).Contains("return (twice(\"x\") + plainInt32(1)) | 0;");
     }
 
     /// <summary>
