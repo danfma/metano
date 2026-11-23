@@ -124,3 +124,4 @@ UnmodeledCollectionProbes.throwsStack none  W6-K #581: ImmutableStack collection
 UnmodeledCollectionProbes.throwsFrozenSet none  W6-K #581: FrozenSet collection expression is not modelled; MS0001 and a loud throw instead of an array without dedup or Count (.NET: 2)
 UnmodeledCollectionProbes.throwsBag none  W6-K #581: a multi-element ConcurrentBag collection expression is not modelled; MS0001 and a loud throw (.NET: 1,2)
 UnmodeledCollectionProbes.throwsUserAdd none  W6-K #581: a user collection type's own Add is not lowered; MS0001 and a loud throw instead of skipping Add (.NET: 10,20)
+UnmodeledCollectionProbes.throwsHiddenAdd none  W6-K #581: a user subclass that hides List<T>.Add with its own is not lowered; MS0001 and a loud throw instead of skipping Add (.NET: 101,102)

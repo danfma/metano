@@ -122,23 +122,56 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// Whether the array would enumerate other elements than <paramref name="target"/>
-    /// holds: two or more elements (or a spread) handed to a type that sorts,
-    /// deduplicates or reverses them (<c>ImmutableSortedSet</c>,
-    /// <c>FrozenSet</c>, <c>ImmutableStack</c>, <c>ConcurrentBag</c>), or any
-    /// element handed to a user type's own <c>Add</c>, which may do anything.
+    /// holds. The decision follows the collection whose construction runs: the
+    /// type that declares the <c>Add</c> the elements bind to (a user subclass
+    /// of <c>List&lt;T&gt;</c> or <c>Collection&lt;T&gt;</c> inherits theirs), or
+    /// the target itself for a collection-builder type. A user-declared
+    /// <c>Add</c> may do anything, so any element rebuilds; a BCL type that
+    /// sorts, deduplicates or reverses (<see cref="IsReorderingBclCollection"/>)
+    /// rebuilds two or more elements (or a spread).
     /// </summary>
     private static bool RebuildsElements(CollectionExpressionSyntax coll, INamedTypeSymbol target)
     {
         if (coll.Elements.Count == 0)
             return false;
 
-        if (!target.ContainingAssembly.IsBclAssembly())
+        var builder = AddDeclaringTypeOf(target) ?? target;
+
+        if (!builder.ContainingAssembly.IsBclAssembly())
             return true;
 
         var canReorder =
             coll.Elements.Count > 1 || coll.Elements.Any(e => e is SpreadElementSyntax);
 
-        return canReorder && IsReorderingBclCollection(target);
+        return canReorder && IsReorderingBclCollection(builder);
+    }
+
+    /// <summary>
+    /// The nearest type in <paramref name="target"/>'s base chain that declares a
+    /// public one-parameter instance <c>Add</c>: the one a collection expression
+    /// binds to, since a derived declaration hides or overrides the base's;
+    /// <c>null</c> when none does (a collection-builder type).
+    /// </summary>
+    private static INamedTypeSymbol? AddDeclaringTypeOf(INamedTypeSymbol target)
+    {
+        for (var type = target; type is not null; type = type.BaseType)
+        {
+            var declaresAdd = type.GetMembers("Add")
+                .OfType<IMethodSymbol>()
+                .Any(method =>
+                    method
+                        is {
+                            IsStatic: false,
+                            Parameters.Length: 1,
+                            DeclaredAccessibility: Accessibility.Public,
+                        }
+                );
+
+            if (declaresAdd)
+                return type;
+        }
+
+        return null;
     }
 
     private static bool IsReorderingBclCollection(INamedTypeSymbol target) =>
@@ -146,7 +179,9 @@ public sealed partial class IrExpressionExtractor
             is "System.Collections.Immutable.ImmutableSortedSet<T>"
                 or "System.Collections.Immutable.ImmutableStack<T>"
                 or "System.Collections.Frozen.FrozenSet<T>"
-                or "System.Collections.Concurrent.ConcurrentBag<T>";
+                or "System.Collections.Concurrent.ConcurrentBag<T>"
+                or "System.Collections.Generic.HashSet<T>"
+                or "System.Collections.Generic.SortedSet<T>";
 
     /// <summary>
     /// The array literal of a list or array target, with the element type the

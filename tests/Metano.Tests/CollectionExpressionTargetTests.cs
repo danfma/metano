@@ -32,8 +32,23 @@ public class CollectionExpressionTargetTests
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
+        public class MyList : List<int> { }
+
+        public class MyColl : Collection<int> { }
+
+        public class Hiding : List<int>
+        {
+            public new void Add(int x) => base.Add(x + 100);
+        }
+
         public static class Targets
         {
+            public static MyList Inherited() => [1, 2];
+
+            public static MyColl InheritedColl() => [1, 2];
+
+            public static Hiding Hidden() => [1, 2];
+
             public static Collection<int> Kept() => [1, 2];
 
             public static ObservableCollection<int> Observed() => [1, 2];
@@ -66,6 +81,8 @@ public class CollectionExpressionTargetTests
     [Arguments("static queue(): ImmutableQueue<number> {\n    return [1, 2, 3];")]
     [Arguments("static empty(): Collection<number> {\n    return [];")]
     [Arguments("static oneBag(): ConcurrentBag<number> {\n    return [1];")]
+    [Arguments("static inherited(): MyList {\n    return [1, 2];")]
+    [Arguments("static inheritedColl(): MyColl {\n    return [1, 2];")]
     public async Task OrderPreservingTargets_KeepTheArray(string expected)
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(UnmodeledSource);
@@ -83,6 +100,7 @@ public class CollectionExpressionTargetTests
     [Arguments("frozen")]
     [Arguments("twoBag")]
     [Arguments("userBag")]
+    [Arguments("hidden")]
     public async Task RebuildingTargets_Throw(string method)
     {
         var (files, _) = TranspileHelper.TranspileWithDiagnostics(UnmodeledSource);
@@ -104,9 +122,9 @@ public class CollectionExpressionTargetTests
             .Select(d => d.Message)
             .ToList();
 
-        await Assert.That(messages).Count().IsEqualTo(10);
-        await Assert.That(messages.Count(m => m.Contains("a plain array stands in"))).IsEqualTo(5);
-        await Assert.That(messages.Count(m => m.Contains("throws at run time"))).IsEqualTo(5);
+        await Assert.That(messages).Count().IsEqualTo(13);
+        await Assert.That(messages.Count(m => m.Contains("a plain array stands in"))).IsEqualTo(7);
+        await Assert.That(messages.Count(m => m.Contains("throws at run time"))).IsEqualTo(6);
     }
 
     [Test]

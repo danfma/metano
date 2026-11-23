@@ -119,6 +119,7 @@ TextProbes.generic = <True>TrueTrue<1E-07>1E-071E-07<0.10000000149011612>0.10000
 TextProbes.recordToString = [object Object]
 UnmodeledCollectionProbes.throwsBag = throws
 UnmodeledCollectionProbes.throwsFrozenSet = throws
+UnmodeledCollectionProbes.throwsHiddenAdd = throws
 UnmodeledCollectionProbes.throwsSortedSet = throws
 UnmodeledCollectionProbes.throwsStack = throws
 UnmodeledCollectionProbes.throwsUserAdd = throws

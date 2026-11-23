@@ -18,6 +18,18 @@ public class UcTimesTen : IEnumerable<int>
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
 
+/// <summary>A user list that inherits List&lt;T&gt;.Add.</summary>
+public class UcList : List<int> { }
+
+/// <summary>A user collection that inherits Collection&lt;T&gt;.Add.</summary>
+public class UcColl : Collection<int> { }
+
+/// <summary>A user list that hides List&lt;T&gt;.Add with its own.</summary>
+public class UcHidingList : List<int>
+{
+    public new void Add(int x) => base.Add(x + 100);
+}
+
 /// <summary>
 /// Collection expressions over types the transpiler does not model (#581): an
 /// order-preserving list-like keeps the array (MS0001 warning), a type that
@@ -60,6 +72,16 @@ public static class UnmodeledCollectionProbes
             + string.Join(",", stack);
     }
 
+    public static string KeptInheritedAdd()
+    {
+        UcList list = [1, 2];
+        UcColl coll = [3, 4];
+
+        return string.Join(",", list) + "|" + string.Join(",", coll);
+    }
+
+    public static string ThrowsHiddenAdd() => Attempt(() => string.Join(",", Hiding()));
+
     public static string ThrowsSortedSet() => Attempt(() => string.Join(",", Sorted()));
 
     public static string ThrowsStack() => Attempt(() => string.Join(",", Stacked()));
@@ -79,6 +101,8 @@ public static class UnmodeledCollectionProbes
     private static ConcurrentBag<int> Bagged() => [1, 2];
 
     private static UcTimesTen TimesTen() => [1, 2];
+
+    private static UcHidingList Hiding() => [1, 2];
 
     private static string Attempt(Func<string> build)
     {
