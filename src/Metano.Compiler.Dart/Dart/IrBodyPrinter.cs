@@ -886,6 +886,19 @@ public static class IrBodyPrinter
                 {
                     if (i > 0)
                         sb.Append(", ");
+                    if (
+                        pos.Type is not null
+                        && pos.ElementMembers is { } elementMembers
+                        && i < elementMembers.Count
+                        && elementMembers[i] is { } member
+                    )
+                    {
+                        sb.Append(
+                                member.EmittedName
+                                    ?? IrToDartNamingPolicy.ToParameterName(member.Name)
+                            )
+                            .Append(": ");
+                    }
                     PrintSwitchPattern(sb, pos.Elements[i]);
                 }
                 sb.Append(')');
@@ -1378,7 +1391,7 @@ public static class IrBodyPrinter
     /// never as an emitted name.
     /// </summary>
     private static string MemberNameOf(IrMemberAccess access) =>
-        access.Origin is { EmittedName: { } emittedName }
+        access.Origin is { IsStringEnumMember: false, EmittedName: { } emittedName }
             ? emittedName
             : IrToDartNamingPolicy.ToParameterName(access.MemberName);
 

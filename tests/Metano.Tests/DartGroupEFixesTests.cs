@@ -186,6 +186,43 @@ public class DartGroupEFixesTests
         await Assert.That(ms0001.Count).IsEqualTo(2);
     }
 
+    [Test]
+    public async Task RecordEquality_UsesEqualityMembersAndChainsToRecordBase_243()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record BaseRec(int A);
+
+            [Transpile]
+            public record DerivedRec(int A, int B) : BaseRec(A)
+            {
+                public int Extra { get; init; }
+            }
+
+            [Transpile]
+            public static class Matcher
+            {
+                public static bool IsOrigin(BaseRec r) => r switch
+                {
+                    BaseRec(0) => true,
+                    _ => false,
+                };
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        var derived = files["derived_rec.dart"];
+        var matcher = files["matcher.dart"];
+
+        await Assert.That(derived).Contains("super == other");
+        await Assert.That(derived).Contains("other.extra == this.extra");
+        await Assert.That(derived).Contains("super.hashCode");
+        await Assert.That(derived).Contains("this.extra");
+        await Assert.That(matcher).Contains("BaseRec(a: 0)");
+    }
+
     private static void AssertDartAnalyzes(Dictionary<string, string> files)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"metano-dart-w6e-{Guid.NewGuid():N}");

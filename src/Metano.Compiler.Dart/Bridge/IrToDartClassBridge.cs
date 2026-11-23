@@ -119,13 +119,14 @@ public static class IrToDartClassBridge
     // ── Record synthesis ───────────────────────────────────────────────────
 
     private static bool ShouldSynthesizeRecordMembers(IrClassDeclaration ir) =>
-        ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject && ir.Constructor is not null;
+        ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject;
 
     /// <summary>
-    /// Synthesizes <c>operator ==</c>, <c>hashCode</c>, and <c>copyWith</c> for
-    /// a record-like class. The fields to compare/hash/rebuild are the
-    /// constructor's primary parameters (promoted or not) — the same set C# uses
-    /// for its synthesized value equality.
+    /// Synthesizes <c>operator ==</c>, <c>hashCode</c>, and (for records with a
+    /// primary constructor) <c>copyWith</c>. Value equality compares
+    /// <see cref="IrClassDeclaration.EqualityMembers"/> and chains to
+    /// <c>super == other</c> / <c>super.hashCode</c> when the record extends
+    /// an emitted record base (#243).
     /// <para>
     /// A record that declares its own equality members
     /// (<see cref="IrValueEqualitySynthesis"/>) keeps them: a
@@ -142,24 +143,41 @@ public static class IrToDartClassBridge
         List<DartClassMember> members
     )
     {
-        var fields = ir.Constructor!.Parameters.Select(p =>
+        var equalityFields = (ir.EqualityMembers ?? [])
+            .Select(m =>
                 (
-                    Name: IrToDartNamingPolicy.ToParameterName(p.Parameter.Name),
-                    Type: IrToDartTypeMapper.Map(p.Parameter.Type)
+                    Name: m.EmittedName ?? IrToDartNamingPolicy.ToParameterName(m.Name),
+                    Type: IrToDartTypeMapper.Map(m.Type)
                 )
             )
             .ToList();
 
+        var hasRecordBase =
+            ir.Semantics.IsRecord
+            && ir.BaseType is IrNamedTypeRef { Semantics.IsTranspilable: true };
+
         members.Add(
             IrValueEqualitySynthesis.DeclaresEquals(ir)
                 ? BuildEqualsOperatorOverUserEquals(className)
-                : BuildEqualsOperator(className, fields)
+                : BuildEqualsOperator(className, equalityFields, hasRecordBase)
         );
 
         if (!IrValueEqualitySynthesis.DeclaresHashCode(ir))
-            members.Add(BuildHashCodeGetter(fields));
+            members.Add(BuildHashCodeGetter(equalityFields, hasRecordBase));
 
-        members.Add(BuildCopyWithMethod(className, primaryConstructorName, fields));
+        if (ir.Semantics.IsRecord && ir.Constructor is { } ctor)
+        {
+            var copyFields = ctor
+                .Parameters.Select(p =>
+                    (
+                        Name: IrToDartNamingPolicy.ToParameterName(p.Parameter.Name),
+                        Type: IrToDartTypeMapper.Map(p.Parameter.Type)
+                    )
+                )
+                .ToList();
+
+            members.Add(BuildCopyWithMethod(className, primaryConstructorName, copyFields));
+        }
     }
 
     /// <summary>
@@ -238,24 +256,32 @@ public static class IrToDartClassBridge
     /// </summary>
     private static DartMethodSignature BuildEqualsOperator(
         string className,
-        IReadOnlyList<(string Name, DartType Type)> fields
+        IReadOnlyList<(string Name, DartType Type)> fields,
+        bool hasRecordBase
     )
     {
         IrExpression body = new IrIsPatternExpression(
             new IrIdentifier("other"),
             new IrTypePattern(new IrNamedTypeRef(className))
         );
-        // Exact-type comparison (runtimeType). Placed after the `is T` narrowing
-        // so downstream field accesses still see `other` as T.
-        body = new IrBinaryExpression(
-            body,
-            IrBinaryOp.LogicalAnd,
-            new IrBinaryExpression(
+
+        // When extending a record base, `super == other` checks `other is Base &&
+        // other.runtimeType == this.runtimeType` and all base fields (including
+        // private ones). Without a record base, check `runtimeType` directly.
+        IrExpression baseCheck = hasRecordBase
+            ? new IrBinaryExpression(
+                new IrBaseExpression(),
+                IrBinaryOp.Equal,
+                new IrIdentifier("other")
+            )
+            : new IrBinaryExpression(
                 new IrMemberAccess(new IrIdentifier("other"), "runtimeType"),
                 IrBinaryOp.Equal,
                 new IrMemberAccess(new IrThisExpression(), "runtimeType")
-            )
-        );
+            );
+
+        body = new IrBinaryExpression(body, IrBinaryOp.LogicalAnd, baseCheck);
+
         foreach (var (name, _) in fields)
         {
             body = new IrBinaryExpression(
@@ -272,26 +298,34 @@ public static class IrToDartClassBridge
     }
 
     /// <summary>
-    /// Emits a <c>hashCode</c> getter that combines every field through the
-    /// runtime <c>HashCode</c> helper:
+    /// Emits a <c>hashCode</c> getter that combines every field (and
+    /// <c>super.hashCode</c> for derived records) through the runtime
+    /// <c>HashCode</c> helper:
     /// <list type="bullet">
-    ///   <item>0 fields → literal <c>0</c>.</item>
-    ///   <item>1-4 fields → <c>HashCode.combine[N](this.a, …)</c>.</item>
-    ///   <item>5+ fields → <c>var hc = HashCode(); hc.add(this.a); …; return hc.toHashCode();</c>.</item>
+    ///   <item>0 fields → literal <c>0</c> (or <c>super.hashCode</c>).</item>
+    ///   <item>1-4 items → <c>HashCode.combine[N](…)</c>.</item>
+    ///   <item>5+ items → <c>var hc = HashCode(); hc.add(…); …; return hc.toHashCode();</c>.</item>
     /// </list>
-    /// Going through <c>HashCode</c> instead of Dart's built-in <c>Object.hash</c>
-    /// keeps the hash deterministic and bit-identical to the TypeScript runtime,
-    /// so values sharing a record type across stacks share a hash.
     /// </summary>
     private static DartClassMember BuildHashCodeGetter(
-        IReadOnlyList<(string Name, DartType Type)> fields
+        IReadOnlyList<(string Name, DartType Type)> fields,
+        bool hasRecordBase
     )
     {
+        var items = new List<IrExpression>(fields.Count + (hasRecordBase ? 1 : 0));
+
+        if (hasRecordBase)
+            items.Add(new IrMemberAccess(new IrBaseExpression(), "hashCode"));
+
+        foreach (var (name, _) in fields)
+            items.Add(new IrMemberAccess(new IrThisExpression(), name));
+
         IReadOnlyList<IrStatement> body =
-            fields.Count == 0 ? [new IrReturnStatement(new IrLiteral(0, IrLiteralKind.Int32))]
-            : fields.Count <= HashCodeMaxCombineArity
-                ? [new IrReturnStatement(BuildCombineExpression(fields))]
-            : BuildHashCodeBuilderBody(fields);
+            items.Count == 0 ? [new IrReturnStatement(new IrLiteral(0, IrLiteralKind.Int32))]
+            : items.Count == 1 && hasRecordBase ? [new IrReturnStatement(items[0])]
+            : items.Count <= HashCodeMaxCombineArity
+                ? [new IrReturnStatement(BuildCombineExpression(items))]
+            : BuildHashCodeBuilderBody(items);
 
         return new DartGetter(
             Name: "hashCode",
@@ -306,14 +340,10 @@ public static class IrToDartClassBridge
     // the builder API (`HashCode()..add(...)`...`toHashCode()`).
     private const int HashCodeMaxCombineArity = 4;
 
-    private static IrCallExpression BuildCombineExpression(
-        IReadOnlyList<(string Name, DartType Type)> fields
-    )
+    private static IrCallExpression BuildCombineExpression(IReadOnlyList<IrExpression> items)
     {
-        var combineMethod = fields.Count == 1 ? "combine" : $"combine{fields.Count}";
-        var args = fields
-            .Select(f => new IrArgument(new IrMemberAccess(new IrThisExpression(), f.Name)))
-            .ToList();
+        var combineMethod = items.Count == 1 ? "combine" : $"combine{items.Count}";
+        var args = items.Select(item => new IrArgument(item)).ToList();
         return new IrCallExpression(
             new IrMemberAccess(new IrTypeReference("HashCode"), combineMethod),
             args
@@ -321,10 +351,10 @@ public static class IrToDartClassBridge
     }
 
     private static IReadOnlyList<IrStatement> BuildHashCodeBuilderBody(
-        IReadOnlyList<(string Name, DartType Type)> fields
+        IReadOnlyList<IrExpression> items
     )
     {
-        var statements = new List<IrStatement>(fields.Count + 2)
+        var statements = new List<IrStatement>(items.Count + 2)
         {
             new IrVariableDeclaration(
                 Name: "hc",
@@ -332,13 +362,13 @@ public static class IrToDartClassBridge
                 Initializer: new IrNewExpression(new IrNamedTypeRef("HashCode"), [])
             ),
         };
-        foreach (var (name, _) in fields)
+        foreach (var item in items)
         {
             statements.Add(
                 new IrExpressionStatement(
                     new IrCallExpression(
                         new IrMemberAccess(new IrIdentifier("hc"), "add"),
-                        [new IrArgument(new IrMemberAccess(new IrThisExpression(), name))]
+                        [new IrArgument(item)]
                     )
                 )
             );
