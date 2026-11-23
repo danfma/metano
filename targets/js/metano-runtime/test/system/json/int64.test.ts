@@ -92,9 +92,12 @@ describe("int64 — writes (FR-051)", () => {
     expect(writtenText(-0n, "System.Int64")).toBe("0");
     expect(writtenText(0n, "System.UInt64")).toBe("0");
 
-    // A bigint has no negative zero (`-0n === 0n`), so writing `-0` into a
-    // ulong slot writes `0` instead of throwing (#545).
+    // A bigint has no negative zero (`-0n === 0n`), and a `number` `-0`
+    // writes its `0` too, so writing `-0` into a ulong slot writes `0`
+    // instead of throwing (#545).
     expect(writtenText(-0n, "System.UInt64")).toBe("0");
+    expect(writtenText(-0, "System.UInt64")).toBe("0");
+    expect(writtenText(-0, "System.Int64")).toBe("0");
   });
 
   test("the write is a rawJSON leaf, so a tree round-trips without text (FR-057)", () => {
@@ -523,16 +526,10 @@ describe("int64 — writes range-check (review round 1)", () => {
     );
   });
 
-  test("a negative or fractional number cannot be written, a ulong's -0 included", () => {
+  test("a negative or fractional number cannot be written", () => {
     expectJsonException(
       () => writtenText(-5, "System.UInt64"),
       "The value -5 cannot be written as System.UInt64: only an exact integer within the " +
-        "System.UInt64 range can be written.",
-    );
-
-    expectJsonException(
-      () => writtenText(-0, "System.UInt64"),
-      "The value 0 cannot be written as System.UInt64: only an exact integer within the " +
         "System.UInt64 range can be written.",
     );
 
