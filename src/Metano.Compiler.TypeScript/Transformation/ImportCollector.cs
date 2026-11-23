@@ -1786,11 +1786,11 @@ public sealed class ImportCollector(
                 break;
             case TsIdentifier bareId:
                 // Bare identifiers starting with uppercase may reference transpilable
-                // types used as values (e.g., enum objects passed to descriptor specs).
+                // types used as values (e.g., enum objects passed to descriptor specs,
+                // or a nested case tested by `instanceof Owner.Case`).
                 if (bareId.Name.Length > 0 && char.IsUpper(bareId.Name[0]))
                 {
-                    names.Add(bareId.Name);
-                    valueNames.Add(bareId.Name);
+                    sink.AddValueReference(bareId.Name);
                 }
                 // Method-group reference to a [NoContainer] static method lowers
                 // to a bare lowercase identifier (delegate position, lambda
@@ -1821,15 +1821,7 @@ public sealed class ImportCollector(
                 }
                 else if (newExpr.Callee is TsIdentifier id)
                 {
-                    names.Add(id.Name);
-                    valueNames.Add(id.Name); // used as value (constructor call)
-                    // For nested types like "Outer.Inner", also mark the root as value
-                    if (id.Name.Contains('.'))
-                    {
-                        var rootName = RootSegment(id.Name);
-                        names.Add(rootName);
-                        valueNames.Add(rootName);
-                    }
+                    sink.AddValueReference(id.Name);
                 }
                 else
                 {
@@ -2236,6 +2228,22 @@ internal sealed class ImportCollectionSink(
         {
             _boundScopes.Pop();
         }
+    }
+
+    /// <summary>
+    /// Records <paramref name="name"/> as read at run time. A nested type spelled
+    /// through its owner (<c>Owner.Case</c>) reads the owner's static getter, so the
+    /// owner is recorded as a value too: a type-only import of it would leave the
+    /// read unbound (TS1361, <c>ReferenceError</c> — #726).
+    /// </summary>
+    public void AddValueReference(string name)
+    {
+        var root = RootOf(name);
+
+        Names.Add(name);
+        ValueNames.Add(name);
+        Names.Add(root);
+        ValueNames.Add(root);
     }
 
     private static string RootOf(string name)
