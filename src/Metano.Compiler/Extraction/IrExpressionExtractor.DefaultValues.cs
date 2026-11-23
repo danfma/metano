@@ -35,11 +35,55 @@ public sealed partial class IrExpressionExtractor
 
         var value = DefaultOf(type);
 
-        if (value is IrNewExpression)
+        if (value is IrNewExpression structDefaultNew)
+        {
             ReportUnsetStructFields(syntax, type);
+
+            if (type is INamedTypeSymbol namedStruct)
+            {
+                var reifiedArgs = _context.ReifiedTypeAnalysis.ReifiedTypeArgumentsForNew(
+                    namedStruct,
+                    t => MapTypeWithReifiedScope(t, syntax)
+                );
+
+                if (reifiedArgs is { Count: > 0 })
+                {
+                    return structDefaultNew with
+                    {
+                        ReifiedTypeArguments = reifiedArgs,
+                        IsStructDefault = true,
+                    };
+                }
+            }
+
+            return structDefaultNew;
+        }
 
         if (value is not null)
             return value;
+
+        if (
+            type is INamedTypeSymbol { IsValueType: true } genericStruct
+            && _context.ReifiedTypeAnalysis.TypeArgumentSlotOf(genericStruct) is not null
+        )
+        {
+            var reifiedArgs = _context.ReifiedTypeAnalysis.ReifiedTypeArgumentsForNew(
+                genericStruct,
+                t => MapTypeWithReifiedScope(t, syntax)
+            );
+
+            if (reifiedArgs is { Count: > 0 })
+            {
+                return new IrNewExpression(
+                    IrTypeRefMapper.Map(genericStruct, _originResolver, _target),
+                    []
+                )
+                {
+                    ReifiedTypeArguments = reifiedArgs,
+                    IsStructDefault = true,
+                };
+            }
+        }
 
         ReportUnrepresentableDefaultLiteral(syntax, type);
 

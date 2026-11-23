@@ -18,6 +18,7 @@ export function specialize<T>(open: ClassType<T>, args: ReadonlyArray<RuntimeTyp
     name: `${open.name}<${args.map((arg) => arg.name).join(",")}>`,
     fullName: `${open.fullName}<${args.map((arg) => arg.fullName).join(",")}>`,
     typeArguments: args,
+    ...(open.default !== undefined ? { default: () => open.default!(args) } : {}),
     ...(open.create !== undefined ? { create: () => open.create!(args) } : {}),
     test: (value: unknown): value is T =>
       open.test(value) &&

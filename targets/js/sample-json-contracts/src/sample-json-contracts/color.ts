@@ -17,5 +17,6 @@ export const Color$runtimeType: EnumType<Color> = {
   values: [0, 1, 2],
   names: ["Red", "Green", "Blue"],
   isFlags: false,
+  default: () => 0,
   test: (v: unknown): v is Color => isInt32(v),
 };

@@ -52,6 +52,7 @@ export const Color$runtimeType: EnumType<Color> = {
   values: [0, 1],
   names: ["Red", "Green"],
   isFlags: false,
+  default: () => 0,
   test: (v: unknown): v is Color => isInt32(v),
 };
 
@@ -195,6 +196,7 @@ export const Perms$runtimeType: EnumType<Perms> = {
   values: [0, 1, 2],
   names: ["None", "Read", "Write"],
   isFlags: true,
+  default: () => 0 as Perms,
   test: (v: unknown): v is Perms => isInt32(v),
 };
 

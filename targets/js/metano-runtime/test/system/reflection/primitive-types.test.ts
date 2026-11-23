@@ -27,6 +27,14 @@ import {
   TimeSpanType,
 } from "#/system/reflection/temporal-types.ts";
 
+import {
+  DateOnlyDefaultType,
+  DateTimeDefaultType,
+  DateTimeOffsetDefaultType,
+  TimeOnlyDefaultType,
+  TimeSpanDefaultType,
+} from "#/system/reflection/temporal-type-defaults.ts";
+import { DecimalDefaultType } from "#/system/reflection/decimal-type-defaults.ts";
 import { Temporal } from "@js-temporal/polyfill";
 import Decimal from "decimal.js";
 
@@ -105,18 +113,21 @@ describe("primitive descriptors", () => {
     expect(CharType.default?.()).toBe("\0");
     expect(StringType.default).toBeUndefined();
     expect(GuidType.default?.()).toBe("00000000-0000-0000-0000-000000000000");
-    expect(DecimalType.default?.().toString()).toBe("0");
-    expect(DateTimeType.default?.().toString()).toBe("0001-01-01T00:00:00");
-    expect(DateOnlyType.default?.().toString()).toBe("0001-01-01");
-    expect(TimeOnlyType.default?.().toString()).toBe("00:00:00");
-    expect(TimeSpanType.default?.().toString()).toBe("PT0S");
-    expect(DateTimeOffsetType.default?.().year).toBe(1);
+    expect(DecimalType.default).toBeUndefined();
+    expect(DateTimeType.default).toBeUndefined();
+    expect(DecimalDefaultType.default?.().toString()).toBe("0");
+    expect(DateTimeDefaultType.default?.().toString()).toBe("0001-01-01T00:00:00");
+    expect(DateOnlyDefaultType.default?.().toString()).toBe("0001-01-01");
+    expect(TimeOnlyDefaultType.default?.().toString()).toBe("00:00:00");
+    expect(TimeSpanDefaultType.default?.().toString()).toBe("PT0S");
+    expect(DateTimeOffsetDefaultType.default?.().year).toBe(1);
 
     expect(Int32Type.create?.()).toBe(0);
     expect(BooleanType.create?.()).toBe(false);
     expect(StringType.create).toBeUndefined();
     expect(GuidType.create?.()).toBe("00000000-0000-0000-0000-000000000000");
-    expect(DecimalType.create?.().toString()).toBe("0");
+    expect(DecimalType.create).toBeUndefined();
+    expect(DecimalDefaultType.create?.().toString()).toBe("0");
   });
 });
 

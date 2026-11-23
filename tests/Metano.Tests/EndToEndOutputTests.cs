@@ -167,6 +167,7 @@ public class EndToEndOutputTests
             + "  values: [0, 1],\n"
             + "  names: [\"Open\", \"Closed\"],\n"
             + "  isFlags: false,\n"
+            + "  default: () => 0,\n"
             + "  test: (v: unknown): v is IssueStatus => isInt32(v),\n"
             + "};\n";
 

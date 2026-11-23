@@ -110,6 +110,13 @@ internal static class IrToTsConstructorFactoryBridge
         var names = selectors.Claims.NamesOf(overload);
         var typeParameters = IrToTsTypeParameterMapper.Convert(type.TypeParameters);
         var parameters = FactoryParameters(overload, context);
+
+        if (
+            type.TypeArgumentSlot is not null
+            && type.TypeParameters is { Count: > 0 } classTypeParams
+        )
+            parameters = WithTypeArgsParameter(parameters, classTypeParams);
+
         var (accessibility, jsDoc) = VisibilityOf(overload, isWidened);
 
         var construction = new TsNewExpression(
@@ -172,6 +179,30 @@ internal static class IrToTsConstructorFactoryBridge
             parameter.Parameter.CanBeOmitted,
             parameter.Parameter.IsRestParams
         );
+
+    private static List<TsParameter> WithTypeArgsParameter(
+        List<TsParameter> parameters,
+        IReadOnlyList<IrTypeParameter> typeParameters
+    )
+    {
+        var typeArgsParam = new TsParameter(
+            IrToTsClassBridge.TypeArgsParameterName,
+            IrToTsClassBridge.TypeArgsTupleType(typeParameters),
+            Optional: true
+        );
+
+        var restIndex = parameters.FindIndex(p => p.Rest);
+
+        if (restIndex < 0)
+            return [.. parameters, typeArgsParam];
+
+        var updated = new List<TsParameter>(parameters.Count + 1);
+        updated.AddRange(parameters.Take(restIndex));
+        updated.Add(typeArgsParam);
+        updated.AddRange(parameters.Skip(restIndex));
+
+        return updated;
+    }
 
     private static TsExpression ForwardedArgument(TsParameter parameter)
     {

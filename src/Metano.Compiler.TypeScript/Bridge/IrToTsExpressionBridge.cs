@@ -2398,6 +2398,20 @@ public static partial class IrToTsExpressionBridge
         )
             return mapped;
 
+        if (ne.IsStructDefault)
+        {
+            IReadOnlyList<TsExpression> defaultArgs = ne.ReifiedTypeArguments
+                is { Count: > 0 } reified
+                ? [BuildTypeArgsTuple(reified, context)]
+                : [];
+
+            return new TsCallExpression(
+                new TsPropertyAccess(MapNewTarget(ne.Type), "$default"),
+                defaultArgs,
+                TypeArguments: ConstructedTypeArgumentsOf(ne.Type, context)
+            );
+        }
+
         if (FactoryOf(ne) is { } factory)
         {
             // A generic class's factory re-declares the class's type
@@ -2408,7 +2422,7 @@ public static partial class IrToTsExpressionBridge
 
             return InEvaluationOrder(ne, args, ordered => new TsCallExpression(
                 factoryCallee,
-                ordered,
+                WithReifiedNewArguments(ordered, ne, context),
                 TypeArguments: typeArguments
             ));
         }

@@ -22,6 +22,14 @@ internal sealed class InMemorySourceFrontend(Compilation compilation) : ISourceF
     public Task<IrCompilation> ExtractAsync(
         string projectPath,
         CancellationToken ct = default,
-        TargetLanguage target = TargetLanguage.TypeScript
-    ) => Task.FromResult(_extractor.ExtractFromCompilation(compilation, target));
+        TargetLanguage target = TargetLanguage.TypeScript,
+        bool? supportsReifiedTypeParameters = null
+    ) =>
+        Task.FromResult(
+            _extractor.ExtractFromCompilation(
+                compilation,
+                target,
+                supportsReifiedTypeParameters: supportsReifiedTypeParameters
+            )
+        );
 }

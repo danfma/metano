@@ -17,5 +17,6 @@ export const Priority$runtimeType: EnumType<Priority> = {
   values: ["low", "medium", "high"],
   names: ["Low", "Medium", "High"],
   isFlags: false,
+  default: () => "low",
   test: (v: unknown): v is Priority => v === "low" || v === "medium" || v === "high",
 };

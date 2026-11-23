@@ -16,6 +16,7 @@ export const TokenKind$runtimeType: EnumType<TokenKind> = {
   values: ["NumberToken", "TextToken"],
   names: ["NumberToken", "TextToken"],
   isFlags: false,
+  default: () => "NumberToken",
   test: (v: unknown): v is TokenKind => v === "NumberToken" || v === "TextToken",
 };
 

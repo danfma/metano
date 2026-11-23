@@ -19,6 +19,7 @@ export const IssueType$runtimeType: EnumType<IssueType> = {
   values: ["story", "bug", "chore", "spike"],
   names: ["Story", "Bug", "Chore", "Spike"],
   isFlags: false,
+  default: () => "story",
   test: (v: unknown): v is IssueType =>
     v === "story" || v === "bug" || v === "chore" || v === "spike",
 };

@@ -62,12 +62,14 @@ public static class IrToTsConstructorDispatcherBridge
         ConstructorSelectors selectors,
         IReadOnlyList<TsStatement>? implicitParameterlessBody,
         IrToTsBridgeContext context,
-        Func<IrConstructorDeclaration, TsJSDoc?>? signatureJSDoc = null
+        Func<IrConstructorDeclaration, TsJSDoc?>? signatureJSDoc = null,
+        string? typeArgumentSlot = null
     )
     {
         if (primary.Overloads is not { Count: > 0 })
             return null;
 
+        var hasSlot = typeArgumentSlot is not null && typeParameters.Count > 0;
         var sorted = OverloadDispatchOrder.Sort([primary, .. primary.Overloads], ctor =>
             ctor.PlainParameters
         );
@@ -77,16 +79,27 @@ public static class IrToTsConstructorDispatcherBridge
         IReadOnlyList<TsConstructorOverload> implicitParameterless = implicitParameterlessBody
             is null
             ? []
-            : [new TsConstructorOverload([])];
+            :
+            [
+                new TsConstructorOverload(
+                    hasSlot ? IrToTsClassBridge.WithTypeArgsParam([], typeParameters) : []
+                ),
+            ];
 
         List<TsConstructorOverload> overloads =
         [
             .. declared.Select(ctor =>
-                BuildSelectorSignature(ctor, selectors, context, signatureJSDoc)
+                BuildSelectorSignature(
+                    ctor,
+                    selectors,
+                    hasSlot ? typeParameters : null,
+                    context,
+                    signatureJSDoc
+                )
             ),
             .. implicitParameterless,
             .. sorted.Select(ctor => new TsConstructorOverload(
-                SignatureParameters(ctor, context),
+                SignatureParameters(ctor, hasSlot ? typeParameters : null, context),
                 signatureJSDoc?.Invoke(ctor)
             )),
         ];
@@ -94,13 +107,26 @@ public static class IrToTsConstructorDispatcherBridge
         var body = new List<TsStatement>();
 
         if (implicitParameterlessBody is not null)
-            body.Add(BuildImplicitParameterlessBranch(implicitParameterlessBody));
+            body.Add(BuildImplicitParameterlessBranch(implicitParameterlessBody, typeArgumentSlot));
 
         foreach (var ctor in declared)
-            body.Add(BuildSelectorBranch(ctor, baseCall, selectors, context));
+        {
+            body.Add(
+                BuildSelectorBranch(
+                    ctor,
+                    baseCall,
+                    selectors,
+                    typeParameters,
+                    typeArgumentSlot,
+                    context
+                )
+            );
+        }
 
         foreach (var ctor in sorted)
-            body.Add(BuildBranch(ctor, baseCall, typeParameters, context));
+        {
+            body.Add(BuildBranch(ctor, baseCall, typeParameters, typeArgumentSlot, context));
+        }
 
         // Unmatched — match the legacy behavior: the bare TS `throw` so a
         // caller that passes an unsupported signature fails loudly at runtime.
@@ -134,11 +160,13 @@ public static class IrToTsConstructorDispatcherBridge
     /// default cannot appear there either, so a parameter with one is
     /// optional (<c>n?: number</c>). (#25.2)
     /// </summary>
-    private static List<TsConstructorParam> SignatureParameters(
+    private static IReadOnlyList<TsConstructorParam> SignatureParameters(
         IrConstructorDeclaration ctor,
+        IReadOnlyList<IrTypeParameter>? slotTypeParameters,
         IrToTsBridgeContext context
-    ) =>
-        ctor
+    )
+    {
+        var parameters = ctor
             .Parameters.Select(p => new TsConstructorParam(
                 IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
                 IrToTsTypeMapper.MapParameterType(p.Parameter, context.TypeOverrides),
@@ -148,6 +176,11 @@ public static class IrToTsConstructorDispatcherBridge
             ))
             .ToList();
 
+        return slotTypeParameters is { Count: > 0 }
+            ? IrToTsClassBridge.WithTypeArgsParam(parameters, slotTypeParameters)
+            : parameters;
+    }
+
     /// <summary>
     /// <c>constructor(overload: typeof T.byTX, x: number)</c>: the overload
     /// addressed by its selector. The selector parameter takes a name none of
@@ -156,11 +189,12 @@ public static class IrToTsConstructorDispatcherBridge
     private static TsConstructorOverload BuildSelectorSignature(
         IrConstructorDeclaration ctor,
         ConstructorSelectors selectors,
+        IReadOnlyList<IrTypeParameter>? slotTypeParameters,
         IrToTsBridgeContext context,
         Func<IrConstructorDeclaration, TsJSDoc?>? signatureJSDoc
     )
     {
-        var parameters = SignatureParameters(ctor, context);
+        var parameters = SignatureParameters(ctor, slotTypeParameters, context);
 
         var selector = new TsConstructorParam(
             SelectorParameterName(parameters),
@@ -187,6 +221,8 @@ public static class IrToTsConstructorDispatcherBridge
         IrConstructorDeclaration ctor,
         DispatcherBaseCall baseCall,
         ConstructorSelectors selectors,
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        string? typeArgumentSlot,
         IrToTsBridgeContext context
     )
     {
@@ -202,9 +238,13 @@ public static class IrToTsConstructorDispatcherBridge
             new TsBinaryExpression(selectorArgument, "===", selectors.ReferenceTo(ctor))
         );
 
-        var arguments = OverloadArgumentShape.AfterSelector(ctor.PlainParameters);
+        var slotReified = SlotReifiedParameters(ctor, typeParameters, typeArgumentSlot);
+        var arguments = OverloadArgumentShape.AfterSelector(ctor.PlainParameters, slotReified);
 
-        return new TsIfStatement(guard, BuildBranchBody(ctor, arguments, baseCall, context));
+        return new TsIfStatement(
+            guard,
+            BuildBranchBody(ctor, arguments, baseCall, typeParameters, typeArgumentSlot, context)
+        );
     }
 
     /// <summary>
@@ -212,21 +252,55 @@ public static class IrToTsConstructorDispatcherBridge
     /// <c>if (args.length === 0) { …defaults…; return; }</c>.
     /// </summary>
     private static TsIfStatement BuildImplicitParameterlessBranch(
-        IReadOnlyList<TsStatement> parameterlessBody
-    ) =>
-        new(
-            new OverloadArgumentShape([]).Guard(TypeCheckScope.Empty),
-            [.. parameterlessBody, new TsReturnStatement()]
+        IReadOnlyList<TsStatement> parameterlessBody,
+        string? typeArgumentSlot
+    )
+    {
+        IReadOnlyList<IrReifiedTypeParameter>? slotReified = typeArgumentSlot is not null
+            ?
+            [
+                new IrReifiedTypeParameter(
+                    IrToTsClassBridge.TypeArgsParameterName,
+                    IrToTsClassBridge.TypeArgsParameterName,
+                    0,
+                    HasDefault: true
+                ),
+            ]
+            : null;
+
+        var body = new List<TsStatement>();
+
+        if (typeArgumentSlot is not null)
+        {
+            body.Add(
+                new TsVariableDeclaration(
+                    IrToTsClassBridge.TypeArgsParameterName,
+                    OverloadArgumentShape.ArgumentAt(0)
+                )
+            );
+
+            body.Add(IrToTsClassBridge.BuildSlotDefineProperty(typeArgumentSlot));
+        }
+
+        body.AddRange(parameterlessBody);
+        body.Add(new TsReturnStatement());
+
+        return new TsIfStatement(
+            new OverloadArgumentShape([], slotReified).Guard(TypeCheckScope.Empty),
+            body
         );
+    }
 
     private static TsIfStatement BuildBranch(
         IrConstructorDeclaration ctor,
         DispatcherBaseCall baseCall,
         IReadOnlyList<IrTypeParameter> typeParameters,
+        string? typeArgumentSlot,
         IrToTsBridgeContext context
     )
     {
-        var arguments = new OverloadArgumentShape(ctor.PlainParameters);
+        var slotReified = SlotReifiedParameters(ctor, typeParameters, typeArgumentSlot);
+        var arguments = new OverloadArgumentShape(ctor.PlainParameters, slotReified);
 
         return new TsIfStatement(
             arguments.Guard(
@@ -235,8 +309,32 @@ public static class IrToTsConstructorDispatcherBridge
                     RuntimeTypes = context.RuntimeTypes,
                 }
             ),
-            BuildBranchBody(ctor, arguments, baseCall, context)
+            BuildBranchBody(ctor, arguments, baseCall, typeParameters, typeArgumentSlot, context)
         );
+    }
+
+    private static IReadOnlyList<IrReifiedTypeParameter>? SlotReifiedParameters(
+        IrConstructorDeclaration ctor,
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        string? typeArgumentSlot
+    )
+    {
+        if (typeArgumentSlot is null || typeParameters.Count == 0)
+            return null;
+
+        var declaredFixedCount = ctor.PlainParameters is [.., { IsRestParams: true }]
+            ? ctor.PlainParameters.Count - 1
+            : ctor.PlainParameters.Count;
+
+        return
+        [
+            new IrReifiedTypeParameter(
+                IrToTsClassBridge.TypeArgsParameterName,
+                IrToTsClassBridge.TypeArgsParameterName,
+                declaredFixedCount,
+                HasDefault: true
+            ),
+        ];
     }
 
     /// <summary>
@@ -248,10 +346,17 @@ public static class IrToTsConstructorDispatcherBridge
         IrConstructorDeclaration ctor,
         OverloadArgumentShape arguments,
         DispatcherBaseCall baseCall,
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        string? typeArgumentSlot,
         IrToTsBridgeContext context
     )
     {
         var branch = new List<TsStatement>();
+        var hasSlot = typeArgumentSlot is not null && typeParameters.Count > 0;
+
+        var declaredFixedCount = ctor.Parameters is [.., { Parameter.IsRestParams: true }]
+            ? ctor.Parameters.Count - 1
+            : ctor.Parameters.Count;
 
         // Bring the original parameter names back into scope as
         // `const <name> = args[i] as <Type>`. The dispatcher signature is
@@ -263,19 +368,39 @@ public static class IrToTsConstructorDispatcherBridge
         for (var i = 0; i < ctor.Parameters.Count; i++)
         {
             var param = ctor.Parameters[i];
+            var argIndex = param.Parameter.IsRestParams ? arguments.FixedCount : i;
 
             branch.Add(
                 new TsVariableDeclaration(
                     IrToTsNamingPolicy.ToParameterName(param.Parameter.Name),
                     new TsCastExpression(
-                        BindArgument(arguments, param, i, context),
+                        BindArgument(arguments, param, argIndex, context),
                         IrToTsTypeMapper.Map(param.Parameter.Type, context.TypeOverrides)
                     )
                 )
             );
         }
 
-        branch.AddRange(LowerConstructorInvocation(ctor, chainDepth: 0, baseCall, context));
+        if (hasSlot)
+        {
+            branch.Add(
+                new TsVariableDeclaration(
+                    IrToTsClassBridge.TypeArgsParameterName,
+                    new TsCastExpression(
+                        arguments.ValueOf(declaredFixedCount),
+                        new TsUnionType([
+                            IrToTsClassBridge.TypeArgsTupleType(typeParameters),
+                            new TsNamedType("undefined"),
+                        ])
+                    )
+                )
+            );
+        }
+
+        branch.AddRange(
+            LowerConstructorInvocation(ctor, chainDepth: 0, baseCall, typeArgumentSlot, context)
+        );
+
         branch.Add(new TsReturnStatement());
 
         return branch;
@@ -317,15 +442,21 @@ public static class IrToTsConstructorDispatcherBridge
         IrConstructorDeclaration ctor,
         int chainDepth,
         DispatcherBaseCall baseCall,
+        string? typeArgumentSlot,
         IrToTsBridgeContext context
     )
     {
         var statements = new List<TsStatement>();
 
         if (ctor.ThisChain is { } chain)
-            statements.AddRange(LowerThisChain(chain, chainDepth, baseCall, context));
+            statements.AddRange(
+                LowerThisChain(chain, chainDepth, baseCall, typeArgumentSlot, context)
+            );
         else if (SuperCallOf(ctor, baseCall, context) is { } superCall)
             statements.AddRange(superCall.ToStatements());
+
+        if (chainDepth == 0 && typeArgumentSlot is not null)
+            statements.Add(IrToTsClassBridge.BuildSlotDefineProperty(typeArgumentSlot));
 
         statements.AddRange(IrToTsClassBridge.BuildCapturedAssignments(ctor));
 
@@ -356,6 +487,7 @@ public static class IrToTsConstructorDispatcherBridge
         IrConstructorChain chain,
         int chainDepth,
         DispatcherBaseCall baseCall,
+        string? typeArgumentSlot,
         IrToTsBridgeContext context
     )
     {
@@ -384,7 +516,9 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        targetScope.AddRange(LowerConstructorInvocation(target, chainDepth + 1, baseCall, context));
+        targetScope.AddRange(
+            LowerConstructorInvocation(target, chainDepth + 1, baseCall, typeArgumentSlot, context)
+        );
 
         return [.. temporaries, new TsBlockStatement(targetScope)];
     }

@@ -21,6 +21,7 @@ export const IssueStatus$runtimeType: EnumType<IssueStatus> = {
   values: ["backlog", "ready", "in-progress", "in-review", "done", "cancelled"],
   names: ["Backlog", "Ready", "InProgress", "InReview", "Done", "Cancelled"],
   isFlags: false,
+  default: () => "backlog",
   test: (v: unknown): v is IssueStatus =>
     v === "backlog" ||
     v === "ready" ||

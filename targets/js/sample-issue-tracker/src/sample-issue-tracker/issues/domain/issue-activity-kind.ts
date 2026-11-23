@@ -20,6 +20,7 @@ export const IssueActivityKind$runtimeType: EnumType<IssueActivityKind> = {
   values: ["created", "assigned", "status-changed", "commented", "closed"],
   names: ["Created", "Assigned", "StatusChanged", "Commented", "Closed"],
   isFlags: false,
+  default: () => "created",
   test: (v: unknown): v is IssueActivityKind =>
     v === "created" ||
     v === "assigned" ||

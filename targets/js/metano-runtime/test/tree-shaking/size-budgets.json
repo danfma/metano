@@ -29,14 +29,14 @@
     {
       "name": "isType + getRuntimeType + one class descriptor",
       "entry": "entries/runtime-type-of-class.js",
-      "maxGzip": 2260,
-      "$comment": "Re-measured for stage 011d (W5-5 f): bun 2251 B / esbuild 2220 B (was 1792 B; +specialize/identity-memo generic class slot closure in getRuntimeType and Decimal/Temporal default+create)."
+      "maxGzip": 2294,
+      "$comment": "Re-measured for stage 011d (W5-9 R6): bun 2085 B / esbuild 2062 B + 10% = 2294 B (was 1792 B; +specialize/identity-memo generic class slot closure in getRuntimeType; Decimal/Temporal zero factories moved out)."
     },
     {
       "name": "one primitive descriptor (Int32Type with isInt32)",
       "entry": "entries/int32-descriptor.js",
-      "maxGzip": 240,
-      "$comment": "Re-measured for stage 011d (W5-5 f): bun 235 B / esbuild 234 B (was 205 B; +create: () => 0 on Int32Type)."
+      "maxGzip": 235,
+      "$comment": "Re-measured for stage 011d (W5-9 R6): bun 213 B / esbuild 211 B + 10% = 235 B (was 205 B; +default/create: () => 0 on Int32Type)."
     },
     {
       "name": "box + Boxed (a boxed enum)",
@@ -378,6 +378,7 @@
     "system/reflection/cast-to",
     "system/reflection/constructor-descriptor",
     "system/reflection/create-instance",
+    "system/reflection/decimal-type-defaults",
     "system/reflection/enum-from-raw",
     "system/reflection/enum-is-defined",
     "system/reflection/get-number-type",
@@ -396,12 +397,14 @@
     "system/reflection/runtime-type",
     "system/reflection/specialize-collection",
     "system/reflection/specialize",
+    "system/reflection/temporal-type-defaults",
     "system/reflection/temporal-types",
     "system/reflection/to-string-tag",
     "system/reflection/tuple-type",
     "system/reflection/unbox-for-cast",
     "system/reflection/unbox-for",
     "system/reflection/unbox",
+    "system/reflection/unsupported-type",
     "system/reflection/well-known-types",
     "system/reflection/with-implementers",
     "system/standard-numeric-format",

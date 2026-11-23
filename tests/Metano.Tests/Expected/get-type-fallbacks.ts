@@ -70,8 +70,8 @@ export class Meter {
       typeParameters: [],
       isAbstract: false,
       isValueType: true,
-      default: () => new Meter(),
-      create: () => new Meter(),
+      default: () => Meter.$default(),
+      create: () => Meter.$default(),
       test: (v: unknown): v is Meter => v instanceof Meter,
     });
   }
@@ -85,6 +85,10 @@ export class Meter {
     hc.add(this.value);
 
     return hc.toHashCode();
+  }
+
+  static $default(): Meter {
+    return Object.assign(Object.create(Meter.prototype), { value: 0 });
   }
 }
 
@@ -106,6 +110,7 @@ export const Mode$runtimeType: EnumType<Mode> = {
   values: [0, 1],
   names: ["A", "B"],
   isFlags: false,
+  default: () => 0,
   test: (v: unknown): v is Mode => isInt32(v),
 };
 
