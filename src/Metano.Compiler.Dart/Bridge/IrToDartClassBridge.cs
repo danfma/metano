@@ -557,8 +557,33 @@ public static class IrToDartClassBridge
             className,
             ConvertParameters(ctor, rewriter, initializesFields: true),
             Body: body,
-            Name: name
+            Name: name,
+            SuperCall: BuildSuperCall(ctor, rewriter)
         );
+    }
+
+    private static DartSuperCall? BuildSuperCall(
+        IrConstructorDeclaration ctor,
+        DartIrRewriter rewriter
+    )
+    {
+        if (ctor.ThisChain is not null)
+            return null;
+
+        var superName = ctor.BaseOverload is { } baseOverload
+            ? rewriter.ConstructorNameOf(baseOverload.Target)
+            : null;
+
+        var hasArgs = ctor.BaseArguments is { Count: > 0 };
+
+        if (superName is null && !hasArgs)
+            return null;
+
+        var args = (ctor.BaseArguments ?? [])
+            .Select(arg => arg with { Value = rewriter.Rewrite(arg.Value)! })
+            .ToList();
+
+        return new DartSuperCall(superName, args);
     }
 
     private static IReadOnlyList<IrStatement> BuildCapturedAssignments(

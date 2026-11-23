@@ -112,7 +112,8 @@ public sealed record DartConstructor(
     bool IsConst = false,
     IReadOnlyList<Metano.Compiler.IR.IrStatement>? Body = null,
     string? Name = null,
-    DartConstructorRedirect? Redirect = null
+    DartConstructorRedirect? Redirect = null,
+    DartSuperCall? SuperCall = null
 );
 
 /// <summary>
@@ -120,6 +121,15 @@ public sealed record DartConstructor(
 /// or <c>this(arguments)</c> when the name is <c>null</c>.
 /// </summary>
 public sealed record DartConstructorRedirect(
+    string? ConstructorName,
+    IReadOnlyList<Metano.Compiler.IR.IrArgument> Arguments
+);
+
+/// <summary>
+/// A base constructor initializer: <c>super.<see cref="ConstructorName"/>(arguments)</c>,
+/// or <c>super(arguments)</c> when the name is <c>null</c>.
+/// </summary>
+public sealed record DartSuperCall(
     string? ConstructorName,
     IReadOnlyList<Metano.Compiler.IR.IrArgument> Arguments
 );

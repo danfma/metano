@@ -18,10 +18,17 @@ internal sealed class DartFlatClaimPass
     private readonly Dictionary<DartOverloadKey, string> _fastPaths = [];
     private readonly List<DartClaimFinding> _findings = [];
 
-    private DartFlatClaimPass(string ownerName, IEnumerable<string> userMembers)
+    private DartFlatClaimPass(
+        string ownerName,
+        IEnumerable<string> userMembers,
+        HashSet<string>? sharedTaken = null
+    )
     {
         _ownerName = ownerName;
-        _taken = new HashSet<string>(userMembers, StringComparer.Ordinal);
+        _taken = sharedTaken ?? new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var member in userMembers)
+            _taken.Add(member);
     }
 
     /// <summary>The fast paths an interface declares beside its other members.</summary>
@@ -49,7 +56,8 @@ internal sealed class DartFlatClaimPass
     public static DartOverloadClaims Run(
         string moduleName,
         IReadOnlyList<IrModuleFunction> functions,
-        IReadOnlyList<IrMemberDeclaration>? variables = null
+        IReadOnlyList<IrMemberDeclaration>? variables = null,
+        HashSet<string>? sharedTaken = null
     )
     {
         var userMembers = functions
@@ -67,16 +75,17 @@ internal sealed class DartFlatClaimPass
                 function.SignatureText
             ));
 
-        return Run(moduleName, userMembers, candidates);
+        return Run(moduleName, userMembers, candidates, sharedTaken);
     }
 
     private static DartOverloadClaims Run(
         string ownerName,
         IEnumerable<string> userMembers,
-        IEnumerable<DartFlatCandidate> candidates
+        IEnumerable<DartFlatCandidate> candidates,
+        HashSet<string>? sharedTaken = null
     )
     {
-        var pass = new DartFlatClaimPass(ownerName, userMembers);
+        var pass = new DartFlatClaimPass(ownerName, userMembers, sharedTaken);
 
         foreach (var candidate in candidates)
             pass.Claim(candidate.Key, candidate.Name, candidate.Signature);

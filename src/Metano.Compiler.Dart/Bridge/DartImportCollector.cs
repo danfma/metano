@@ -146,6 +146,9 @@ public static class DartImportCollector
 
         foreach (var argument in constructor.Redirect?.Arguments ?? [])
             WalkExpression(argument.Value, ctx);
+
+        foreach (var argument in constructor.SuperCall?.Arguments ?? [])
+            WalkExpression(argument.Value, ctx);
     }
 
     private static void WalkMember(DartClassMember member, WalkContext ctx)

@@ -66,6 +66,9 @@ public sealed class DartIrRewriter
     public IrExpression? Rewrite(IrExpression? expression) =>
         expression is null ? null : RewriteExpression(expression);
 
+    internal string? ConstructorNameOf(IrOverloadRef overload) =>
+        _overloads.ConstructorNameOf(overload);
+
     public IReadOnlyList<IrStatement>? Rewrite(IReadOnlyList<IrStatement>? body)
     {
         if (body is null)

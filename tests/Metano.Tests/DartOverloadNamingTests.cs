@@ -1493,6 +1493,120 @@ public class DartOverloadNamingTests
         await Assert.That(diagnostics).IsEmpty();
     }
 
+    [Test]
+    public async Task BaseConstructorSelection_EmitsSuperInitializer_AndAnalyzes_572()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class BaseBox
+            {
+                public int Size;
+                public BaseBox(int size) { Size = size; }
+                public BaseBox(string label) { Size = label.Length; }
+            }
+
+            [Transpile]
+            public class DerivedBox : BaseBox
+            {
+                public DerivedBox(int size) : base(size) { }
+                public DerivedBox(string label) : base(label) { }
+            }
+
+            [Transpile]
+            public class OptBase
+            {
+                public int Value;
+                public OptBase(int x = 10) { Value = x; }
+            }
+
+            [Transpile]
+            public class OptDerived : OptBase
+            {
+                public OptDerived(int x) : base(x) { }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        var derived = files["derived_box.dart"];
+        var optDerived = files["opt_derived.dart"];
+
+        await Assert.That(derived).Contains(": super.fromSize(size)");
+        await Assert.That(derived).Contains(": super.fromLabel(label)");
+        await Assert.That(optDerived).Contains(": super(x)");
+
+        AssertDartAnalyzes(files);
+    }
+
+    [Test]
+    public async Task ModuleFastPathsAcrossFiles_DisambiguateSharedNames_572()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class ModA
+            {
+                public static int Foo(int x) => x;
+                public static int Foo(string s) => s.Length;
+            }
+
+            [Transpile, NoContainer]
+            public static class ModB
+            {
+                public static int Foo(int x) => x + 1;
+                public static int Foo(string s) => s.Length + 1;
+            }
+
+            [Transpile]
+            public static class Consumer
+            {
+                public static int Run() => ModA.Foo(1) + ModB.Foo(2);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.OverloadNameShadowed))
+            .IsTrue();
+
+        AssertDartAnalyzes(files);
+    }
+
+    private static void AssertDartAnalyzes(Dictionary<string, string> files)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"metano-dart-572-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            foreach (var (name, content) in files)
+                File.WriteAllText(Path.Combine(tempDir, name), content);
+
+            var psi = new System.Diagnostics.ProcessStartInfo("dart", "analyze")
+            {
+                WorkingDirectory = tempDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+
+            using var process = System.Diagnostics.Process.Start(psi)!;
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException($"dart analyze failed:\n{stdout}{stderr}");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     private static string FirstLineOf(MetanoDiagnostic diagnostic) =>
         diagnostic
             .Location!.SourceTree!.GetText()

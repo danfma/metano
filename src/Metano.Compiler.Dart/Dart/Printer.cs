@@ -309,7 +309,12 @@ public sealed class Printer
         if (ctor.Redirect is { } redirect)
             PrintRedirect(sb, redirect);
         else
+        {
+            if (ctor.SuperCall is { } superCall)
+                PrintSuperCall(sb, superCall);
+
             EmitCtorBodyOrSemicolon(sb, ctor.Body);
+        }
     }
 
     /// <summary><c> : this.name(args);</c> — a redirecting constructor has no body.</summary>
@@ -331,6 +336,26 @@ public sealed class Printer
         }
 
         sb.AppendLine(");");
+    }
+
+    private static void PrintSuperCall(StringBuilder sb, DartSuperCall superCall)
+    {
+        sb.Append(" : super");
+
+        if (superCall.ConstructorName is not null)
+            sb.Append('.').Append(superCall.ConstructorName);
+
+        sb.Append('(');
+
+        for (var i = 0; i < superCall.Arguments.Count; i++)
+        {
+            if (i > 0)
+                sb.Append(", ");
+
+            IrBodyPrinter.PrintExpression(sb, superCall.Arguments[i].Value);
+        }
+
+        sb.Append(')');
     }
 
     private static void AppendConstructorParameter(StringBuilder sb, DartConstructorParameter p)
