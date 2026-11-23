@@ -1612,7 +1612,13 @@ the text are gone:
   Temporal strings, which .NET does not read, and vice versa;
 - `[StringEnum]` values are strings, where .NET writes numbers without
   `JsonStringEnumConverter`;
-- `Dictionary<int, …>` keys come out in JS order (integer-like keys first);
+- dictionary keys that are array indices (`"0"` to `"4294967294"`, of any
+  integer, enum or string key type) come out in JS order, before every other
+  key, and so does a dictionary read and written back: `{"18446744073709551615":null,"1":-1}`
+  round-trips as `{"1":-1,"18446744073709551615":null}` (#562; the texts stay
+  mutually readable, row V17). A JS object cannot hold such keys in insertion
+  order, and writing ordered entries would need a writer that does not build
+  the tree `JSON.stringify` prints;
   `Stack<T>` is written in array order;
 - `double` dictionary keys print as `String()` prints them (`1e+21`, `0` for
   `-0`; .NET: `1E+21`, `-0`), a `NaN` key is written (.NET throws), a
