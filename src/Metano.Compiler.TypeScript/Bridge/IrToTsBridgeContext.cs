@@ -22,8 +22,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// (<c>decimal</c> → <c>Decimal</c>) the overload dispatchers apply to the
 /// parameter types and runtime checks they emit, matching the class
 /// emitter's own signatures. Required, so a class emission cannot forget it;
-/// <c>null</c> (outside class emission, see <see cref="For"/>) keeps the
-/// default mapping.</param>
+/// <c>null</c> (outside class emission, see <see cref="For"/>) falls back to
+/// the running transform's overrides (<see cref="IrToTsTypeMapper.BclOverrides"/>,
+/// #525).</param>
 internal sealed record IrToTsBridgeContext(
     DeclarativeMappingRegistry? Bcl,
     PerClassBackingFieldScope ClassFields,
@@ -114,7 +115,8 @@ internal sealed record IrToTsBridgeContext(
     /// The root context of one file group's transform: the context of a
     /// position outside class emission (module functions, plain objects,
     /// branded structs, static operators, JSX components, entry-point bodies),
-    /// where no backing field is ever recognized and no type override applies,
+    /// where no backing field is ever recognized and the type mapper applies
+    /// the transform's ambient type overrides,
     /// carrying the group's <paramref name="casts"/> and the transform's
     /// <paramref name="runtimeTypes"/>. A class emission derives
     /// its own context from it.
