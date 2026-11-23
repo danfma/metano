@@ -122,4 +122,43 @@ public static class NumericTupleProbes
                 == new TupleFieldRecord((3, 4)).GetHashCode()
             );
     }
+
+    static int liftedCalls;
+
+    static (int, int)? MissingPair()
+    {
+        liftedCalls++;
+
+        return null;
+    }
+
+    static int SideTwo()
+    {
+        liftedCalls += 10;
+
+        return 2;
+    }
+
+    public static string LiftedTupleEquality()
+    {
+        (int, int)? t = (1, 2);
+        (int, int)? u = null;
+        var a = 1;
+        liftedCalls = 0;
+        var evaluated = MissingPair() == (1, SideTwo());
+
+        return (t == (a, 2))
+            + "|"
+            + (t != (a, 2))
+            + "|"
+            + (u == (1, 2))
+            + "|"
+            + (u == t)
+            + "|"
+            + (u != t)
+            + "|"
+            + evaluated
+            + ":"
+            + liftedCalls;
+    }
 }

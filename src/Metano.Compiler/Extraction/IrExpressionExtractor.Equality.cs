@@ -182,8 +182,8 @@ public sealed partial class IrExpressionExtractor
         bool negated
     )
     {
-        if (IsLiftedTupleOperand(tuple.LeftOperand) || IsLiftedTupleOperand(tuple.RightOperand))
-            return ReportUnsupported(bin, "nullable tuple equality");
+        var isLifted =
+            IsLiftedTupleOperand(tuple.LeftOperand) || IsLiftedTupleOperand(tuple.RightOperand);
 
         var left = TupleOperandOf(bin.Left);
         var right = TupleOperandOf(bin.Right);
@@ -198,13 +198,16 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
-        if (ExceedsFlatArity(left) || ExceedsFlatArity(right))
+        if (ExceedsFlatArity(Unwrapped(left)) || ExceedsFlatArity(Unwrapped(right)))
         {
             return ReportUnsupported(
                 bin,
                 $"tuple equality over more than {SymbolHelper.MaxFlatTupleArity} elements"
             );
         }
+
+        if (isLifted)
+            return LiftedTupleEquality(left, right, negated);
 
         if (left.AllLeavesSideEffectFree() && right.AllLeavesSideEffectFree())
             return CompareTupleOperands(left, right, negated);

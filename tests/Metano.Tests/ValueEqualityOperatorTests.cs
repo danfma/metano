@@ -115,9 +115,9 @@ public class ValueEqualityOperatorTests
     }
 
     [Test]
-    public async Task NullableTupleEquality_ReportsUnsupported()
+    public async Task NullableTupleEquality_ComparesWhenPresent()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             [Transpile]
             public static class Comparisons
@@ -128,7 +128,11 @@ public class ValueEqualityOperatorTests
         );
 
         await Assert
+            .That(files["comparisons.ts"])
+            .Contains("return !(a == null) && a[0] === b[0] && a[1] === b[1];");
+
+        await Assert
             .That(diagnostics.Count(d => d.Code == DiagnosticCodes.UnsupportedFeature))
-            .IsEqualTo(1);
+            .IsEqualTo(0);
     }
 }
