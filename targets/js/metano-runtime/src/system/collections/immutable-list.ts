@@ -22,9 +22,9 @@ let empty: ImmutableList<unknown> | undefined;
  * `ImmutableArray<T>` is its sibling over the same core (W4-66). Mutators
  * return the receiver where .NET does (probed on .NET 10): `remove` /
  * `removeItems` / `removeAll` that remove nothing, `removeRange(i, 0)`,
- * `reverse` of at most one element; `addRange` / `insertRange` of an empty
- * source, `setItem` of an equal value and `sort()` return a new list; `clear`
- * returns `empty()`.
+ * `reverse` of at most one element, and an empty list's `addRange` of an `ImmutableList`
+ * (the source itself); `addRange` / `insertRange` of an empty source, `setItem` of an equal
+ * value and `sort()` return a new list; `clear` returns `empty()`.
  */
 export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
   declare readonly $typeArguments$ImmutableList: readonly RuntimeType[] | undefined;
@@ -203,10 +203,14 @@ export class ImmutableList<T> extends ImmutableListCore<T, ImmutableList<T>> {
     return this.searchSorted(item, comparison);
   }
 
-  /** A new list even for an empty source, as .NET's. */
+  /** A new list even for an empty source, as .NET's; an empty list returns an `ImmutableList` source itself. */
   addRange(items: Iterable<T>): ImmutableList<T> {
     if (items === null || items === undefined) {
       throwArgumentNull("items");
+    }
+
+    if (this.isEmpty && items instanceof ImmutableList) {
+      return items;
     }
 
     return this.append([...items]);

@@ -5,8 +5,17 @@
  */
 import { IndexOutOfRangeException } from "../exceptions/index-out-of-range-exception.ts";
 import { invalidCast } from "../reflection/invalid-cast.ts";
+import { ConcurrentDictionary } from "./concurrent-dictionary.ts";
+import { Dictionary } from "./dictionary.ts";
+import { HashSet } from "./hash-set.ts";
+import { ImmutableDictionary } from "./immutable-dictionary.ts";
+import { ImmutableHashSet } from "./immutable-hash-set.ts";
 import type { IList, Span } from "./interfaces.ts";
 import { List } from "./list.ts";
+import { Queue } from "./queue.ts";
+import { SortedDictionary } from "./sorted-dictionary.ts";
+import { SortedSet } from "./sorted-set.ts";
+import { Stack } from "./stack.ts";
 import { throwArgumentNull } from "./throw-helpers.ts";
 
 /* `array[index] as T` in `fromEnd`: the unsigned compare above keeps `index` in range. */
@@ -68,21 +77,39 @@ export function asReadOnlySpan<T>(list: List<T> | null | undefined): ReadonlyArr
  * from a static type that may hold a native array (`object`, `IEnumerable<T>`): a native
  * array becomes a fixed-size list over the same storage, as C# views it; `null` /
  * `undefined` give `null`; a primitive, never a list, throws .NET's `InvalidCastException`
- * naming `targetType` (the cast target's `Type.ToString()`, which the compiler writes); any
- * other value passes through untested (a user class implementing `IList<T>` has no
- * collection descriptor), so an object that is not a list fails at its first use instead
- * of at the cast.
+ * naming `targetType` (the cast target's `Type.ToString()`, which the compiler writes), and
+ * so does an instance of a runtime collection that is never a list (a set, a dictionary, a
+ * queue, a stack); any other value passes through untested (a user class implementing
+ * `IList<T>` has no collection descriptor), so an object that is not a list fails at its
+ * first use instead of at the cast.
  */
 export function asList<T>(value: unknown, targetType: string): IList<T> | null {
   if (value === null || value === undefined) {
     return null;
   }
 
-  if (isPrimitive(value)) {
+  if (isPrimitive(value) || isNeverAList(value)) {
     throw invalidCast(value, targetType);
   }
 
   return Array.isArray(value) ? List.adopt(value as T[], { fixedSize: true }) : (value as IList<T>);
+}
+
+/** The runtime collections that implement no list interface. */
+const NON_LIST_COLLECTIONS: readonly (abstract new (...args: never[]) => object)[] = [
+  HashSet,
+  Dictionary,
+  ConcurrentDictionary,
+  SortedSet,
+  SortedDictionary,
+  Queue,
+  Stack,
+  ImmutableHashSet,
+  ImmutableDictionary,
+];
+
+function isNeverAList(value: unknown): boolean {
+  return NON_LIST_COLLECTIONS.some((collection) => value instanceof collection);
 }
 
 function isPrimitive(value: unknown): value is string | number | boolean | bigint {

@@ -175,13 +175,13 @@
     {
       "name": "ImmutableList alone",
       "entry": "entries/immutable-list-only.js",
-      "maxGzip": 3908,
+      "maxGzip": 3960,
       "mustNotContain": [
         "Queue empty.",
         "upperValue",
         "ImmutableArray`1"
       ],
-      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3553 B / esbuild 3509 B (proposed 2048 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3553 B / esbuild 3509 B (proposed 2048 B); raised from 3908 B to 3960 B for the #710 empty-list AddRange identity (bun 3918 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
     },
     {
       "name": "ImmutableHashSet alone",
