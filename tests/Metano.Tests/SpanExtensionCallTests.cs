@@ -32,18 +32,22 @@ public class SpanExtensionCallTests
         """;
 
     [Test]
-    [Arguments("int[] xs, int x", "xs.Contains(x)", "xs.includes(x)")]
-    [Arguments("string[] xs, string x", "xs.Contains(x)", "xs.includes(x)")]
-    [Arguments("Point[] xs, Point x", "xs.Contains(x)", "xs.includes(x)")]
-    [Arguments("long[] xs, long x", "xs.Contains(x)", "xs.includes(x)")]
-    [Arguments("double[] xs", "xs.Contains(double.NaN)", "xs.includes(Number.NaN)")]
-    [Arguments("int?[] xs", "xs.Contains(null)", "xs.includes(null)")]
-    [Arguments("string?[] xs", "xs.Contains(null)", "xs.includes(null)")]
-    [Arguments("int[] xs, int x", "xs?.Contains(x) ?? false", "xs?.includes(x) ?? false")]
-    [Arguments("int[] xs, int x", "xs.IndexOf(x)", "xs.indexOf(x)")]
-    [Arguments("int?[] xs, int x", "xs.IndexOf(x)", "xs.indexOf(x)")]
-    [Arguments("int[] xs, int x", "xs.LastIndexOf(x)", "xs.lastIndexOf(x)")]
-    [Arguments("int[] xs", "xs.Contains(value: 4)", "xs.includes(4)")]
+    [Arguments("int[] xs, int x", "xs.Contains(x)", "arrayContains(xs, x)")]
+    [Arguments("string[] xs, string x", "xs.Contains(x)", "arrayContains(xs, x)")]
+    [Arguments("Point[] xs, Point x", "xs.Contains(x)", "arrayContains(xs, x)")]
+    [Arguments("long[] xs, long x", "xs.Contains(x)", "arrayContains(xs, x)")]
+    [Arguments("double[] xs", "xs.Contains(double.NaN)", "arrayContains(xs, Number.NaN)")]
+    [Arguments("int?[] xs", "xs.Contains(null)", "arrayContains(xs, null)")]
+    [Arguments("string?[] xs", "xs.Contains(null)", "arrayContains(xs, null)")]
+    [Arguments(
+        "int[] xs, int x",
+        "xs?.Contains(x) ?? false",
+        "(xs == null ? null : arrayContains(xs, x)) ?? false"
+    )]
+    [Arguments("int[] xs, int x", "xs.IndexOf(x)", "arrayIndexOf(xs, x)")]
+    [Arguments("int?[] xs, int x", "xs.IndexOf(x)", "arrayIndexOf(xs, x)")]
+    [Arguments("int[] xs, int x", "xs.LastIndexOf(x)", "arrayLastIndexOf(xs, x)")]
+    [Arguments("int[] xs", "xs.Contains(value: 4)", "arrayContains(xs, 4)")]
     public async Task ValueOverload_LowersAsTheListMethod(
         string parameters,
         string call,
@@ -65,18 +69,18 @@ public class SpanExtensionCallTests
     /// omitted comparer with its default.
     /// </summary>
     [Test]
-    [Arguments("int[] xs", "xs.IndexOf(4, null)", "xs.indexOf(4)")]
-    [Arguments("int[] xs", "xs.IndexOf(4, comparer: null)", "xs.indexOf(4)")]
-    [Arguments("int[] xs", "xs.IndexOf(4, default)", "xs.indexOf(4)")]
-    [Arguments("int[] xs", "xs.IndexOf(4, (IEqualityComparer<int>?)null)", "xs.indexOf(4)")]
-    [Arguments("int[] xs", "xs.IndexOf(4, NoComparer)", "xs.indexOf(4)")]
-    [Arguments("int[] xs", "xs.LastIndexOf(1, null)", "xs.lastIndexOf(1)")]
-    [Arguments("int[] xs", "xs.Contains(4, null)", "xs.includes(4)")]
-    [Arguments("int?[] xs, int x", "xs.Contains(value: x)", "xs.includes(x)")]
-    [Arguments("int?[] xs, int x", "xs.IndexOf(value: x)", "xs.indexOf(x)")]
-    [Arguments("int?[] xs", "xs.LastIndexOf(value: (int?)null)", "xs.lastIndexOf(null)")]
-    [Arguments("int?[] xs, int x", "xs.Contains(x, comparer: null)", "xs.includes(x)")]
-    [Arguments("int?[] xs, int x", "xs.Contains(comparer: null, value: x)", "xs.includes(x)")]
+    [Arguments("int[] xs", "xs.IndexOf(4, null)", "arrayIndexOf(xs, 4)")]
+    [Arguments("int[] xs", "xs.IndexOf(4, comparer: null)", "arrayIndexOf(xs, 4)")]
+    [Arguments("int[] xs", "xs.IndexOf(4, default)", "arrayIndexOf(xs, 4)")]
+    [Arguments("int[] xs", "xs.IndexOf(4, (IEqualityComparer<int>?)null)", "arrayIndexOf(xs, 4)")]
+    [Arguments("int[] xs", "xs.IndexOf(4, NoComparer)", "arrayIndexOf(xs, 4)")]
+    [Arguments("int[] xs", "xs.LastIndexOf(1, null)", "arrayLastIndexOf(xs, 1)")]
+    [Arguments("int[] xs", "xs.Contains(4, null)", "arrayContains(xs, 4)")]
+    [Arguments("int?[] xs, int x", "xs.Contains(value: x)", "arrayContains(xs, x)")]
+    [Arguments("int?[] xs, int x", "xs.IndexOf(value: x)", "arrayIndexOf(xs, x)")]
+    [Arguments("int?[] xs", "xs.LastIndexOf(value: (int?)null)", "arrayLastIndexOf(xs, null)")]
+    [Arguments("int?[] xs, int x", "xs.Contains(x, comparer: null)", "arrayContains(xs, x)")]
+    [Arguments("int?[] xs, int x", "xs.Contains(comparer: null, value: x)", "arrayContains(xs, x)")]
     [Arguments("string s", "s.StartsWith('b', null)", "s.startsWith(\"b\")")]
     [Arguments("string s", "s.EndsWith('b', comparer: null)", "s.endsWith(\"b\")")]
     public async Task NullComparer_LowersAsTheValueOverload(
@@ -104,28 +108,31 @@ public class SpanExtensionCallTests
     [Arguments("sp.StartsWith('a')", "sp.startsWith(\"a\")")]
     [Arguments("sp.EndsWith(\"bc\")", "sp.endsWith(\"bc\")")]
     [Arguments("sp.EndsWith('c')", "sp.endsWith(\"c\")")]
-    [Arguments("sp.IndexOf(\"ca\")", "sp.indexOf(\"ca\")")]
-    [Arguments("sp.IndexOf('c')", "sp.indexOf(\"c\")")]
-    [Arguments("sp.LastIndexOf(\"bc\")", "sp.lastIndexOf(\"bc\")")]
-    [Arguments("sp.LastIndexOf('c')", "sp.lastIndexOf(\"c\")")]
-    [Arguments("sp.Contains('c')", "sp.includes(\"c\")")]
+    [Arguments("sp.IndexOf(\"ca\")", "arrayIndexOf(sp, \"ca\")")]
+    [Arguments("sp.IndexOf('c')", "arrayIndexOf(sp, \"c\")")]
+    [Arguments("sp.LastIndexOf(\"bc\")", "arrayLastIndexOf(sp, \"bc\")")]
+    [Arguments("sp.LastIndexOf('c')", "arrayLastIndexOf(sp, \"c\")")]
+    [Arguments("sp.Contains('c')", "arrayContains(sp, \"c\")")]
     [Arguments("sp.Trim()", "sp.trim()")]
     [Arguments("sp.TrimStart()", "sp.trimStart()")]
     [Arguments("sp.TrimEnd()", "sp.trimEnd()")]
     [Arguments("Span<int> s = xs; s.Reverse()", "s.reverse()")]
-    [Arguments("xs.Sort((x, y) => y - x)", "xs.sort((x: number, y: number) => (y - x) | 0)")]
+    [Arguments("xs.Sort((x, y) => y - x)", "sortArray(xs, (x: number, y: number) => (y - x) | 0)")]
     [Arguments(
         "Span<int> s = xs; s.Sort((x, y) => y - x)",
-        "s.sort((x: number, y: number) => (y - x) | 0)"
+        "sortArray(s, (x: number, y: number) => (y - x) | 0)"
     )]
-    [Arguments("xs.Sort(Descending)", "xs.sort(Calls.descending)")]
+    [Arguments("xs.Sort(Descending)", "sortArray(xs, Calls.descending)")]
+    [Arguments("xs.Sort()", "sortArray(xs)")]
+    [Arguments("xs.Sort((IComparer<int>?)null)", "sortArray(xs)")]
+    [Arguments("Span<int> s = xs; s.Sort()", "sortArray(s)")]
     [Arguments(
         "object o = sp.ToString(); ((string)o).StartsWith(sp)",
         "castTo<string>(o, StringType).startsWith(sp)"
     )]
     [Arguments(
         "object o = sp.ToString(); (o as string)!.IndexOf(sp)",
-        "asType(o, StringType)!.indexOf(sp)"
+        "arrayIndexOf(asType(o, StringType)!, sp)"
     )]
     public async Task SpanOverStringOrArray_LowersToTheJavaScriptMethod(
         string statement,
@@ -165,7 +172,7 @@ public class SpanExtensionCallTests
 
         await Assert
             .That(files["calls.ts"])
-            .Contains("return pairs.includes([3, 4] as [number, number]);");
+            .Contains("return arrayContains(pairs, [3, 4] as [number, number]);");
     }
 
     /// <summary>
@@ -224,10 +231,7 @@ public class SpanExtensionCallTests
     [Arguments("int[] xs, int x", "xs.StartsWith(x)")]
     [Arguments("int[] xs, int[] ys", "xs.EndsWith(ys)")]
     [Arguments("int[] xs, int x", "xs.EndsWith(x)")]
-    [Arguments("int[] xs", "xs.Sort()")]
-    [Arguments("char[] cs", "cs.Sort()")]
     [Arguments("int[] xs", "xs.Sort(Comparer<int>.Default)")]
-    [Arguments("int[] xs", "xs.Sort((IComparer<int>?)null)")]
     [Arguments("int[] xs, int x", "xs.BinarySearch(x)")]
     [Arguments("int[] xs, int x", "xs.IndexOfAny(x, x)")]
     [Arguments("int[] xs, int[] ys", "xs.IndexOfAny(ys)")]

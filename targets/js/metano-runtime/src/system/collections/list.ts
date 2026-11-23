@@ -13,6 +13,7 @@ import type { CollectionType, RuntimeType } from "../reflection/runtime-type.ts"
 import { closeCollectionFor } from "./close-collection.ts";
 import { collectionTypeName } from "./collection-type-name.ts";
 import { copyInto } from "./copy-to.ts";
+import { isIdentityComparable, sortInPlace } from "./array-helpers.ts";
 import { type ComparisonArgument, comparisonOf, elementEquals } from "./default-comparer.ts";
 import type { IList, IReadOnlyList, Span } from "./interfaces.ts";
 import { binarySearch } from "./sorted-array.ts";
@@ -630,11 +631,6 @@ class ListIterator<T> implements IterableIterator<T> {
   }
 }
 
-/** Primitives other than `NaN` compare by `===`, which `Array#indexOf` uses. */
-function isIdentityComparable(value: unknown): boolean {
-  return typeof value !== "object" && !Number.isNaN(value);
-}
-
 function requireDelegate(delegate: unknown, paramName: string): void {
   if (delegate === null || delegate === undefined) {
     throwArgumentNull(paramName);
@@ -666,15 +662,5 @@ function insertAll<T>(storage: T[], index: number, added: readonly T[]): void {
 
   for (const item of tail) {
     storage.push(item);
-  }
-}
-
-function sortInPlace<T>(items: T[], comparison: ComparisonArgument<T>): void {
-  const compare = comparisonOf(comparison);
-
-  try {
-    items.sort(compare);
-  } catch (error) {
-    throwCompareFailed(error);
   }
 }

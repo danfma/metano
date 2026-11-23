@@ -6,7 +6,7 @@
 // to System.Linq.Enumerable. A span lowers to the value it views: an array, or a string
 // for a ReadOnlySpan<char> over a string. An overload whose JavaScript method of the same
 // name computes what C# computes lowers to it. Every other MemoryExtensions call — a
-// comparer or StringComparison overload, SequenceEqual, the parameterless Sort, BinarySearch,
+// comparer or StringComparison overload, SequenceEqual, the keys-and-items Sort, BinarySearch,
 // IndexOfAny, ContainsAny, Count, … — has no mapping and reports MS0001 (the extractor's
 // unlowered-span-call check) instead of emitting a member call that does not exist.
 //
@@ -18,29 +18,32 @@
 using Metano.Annotations;
 
 // ─── Contains / IndexOf / LastIndexOf ───────────────────────
-// The same lowering as List<T>.Contains / IndexOf (see Lists.cs): `includes` compares by
-// SameValueZero (NaN finds NaN, like double.Equals), `indexOf` / `lastIndexOf` by `===`.
-// Neither compares records, record structs, decimals or DateTimes by value. On a string
-// receiver they are the string methods, which search a char or a substring. The
-// subsequence overload (`array.IndexOf(otherArray)`) also passes one argument; the
-// extractor reports it unless the receiver is a string.
+// The same lowering as Array.IndexOf (Arrays.cs): a runtime search with
+// `EqualityComparer<T>.Default` semantics, so a record, a decimal or a date compares by
+// value and `NaN` finds `NaN`, as in .NET. On a string receiver the helper searches the
+// characters (a char or a substring). The subsequence overload
+// (`array.IndexOf(otherArray)`) also passes one argument; the extractor reports it unless
+// the receiver is a string.
 
 [assembly: MapMethod(
     typeof(MemoryExtensions),
     nameof(MemoryExtensions.Contains),
-    JsMethod = "includes",
+    JsTemplate = "arrayContains($this, $0)",
+    RuntimeImports = "arrayContains",
     WhenArgCount = 1
 )]
 [assembly: MapMethod(
     typeof(MemoryExtensions),
     nameof(MemoryExtensions.IndexOf),
-    JsMethod = "indexOf",
+    JsTemplate = "arrayIndexOf($this, $0)",
+    RuntimeImports = "arrayIndexOf",
     WhenArgCount = 1
 )]
 [assembly: MapMethod(
     typeof(MemoryExtensions),
     nameof(MemoryExtensions.LastIndexOf),
-    JsMethod = "lastIndexOf",
+    JsTemplate = "arrayLastIndexOf($this, $0)",
+    RuntimeImports = "arrayLastIndexOf",
     WhenArgCount = 1
 )]
 
@@ -92,16 +95,30 @@ using Metano.Annotations;
     WhenArgCount = 0
 )]
 
-// ─── Sort(comparison) ───────────────────────────────────────
-// `array.Sort((x, y) => …)` and `span.Sort(comparison)` sort in place with the comparison,
-// as Array.sort does with a comparator (the List<T>.Sort mapping). Only the Comparison<T>
-// overload: the parameterless Sort would sort numbers as strings and Sort(comparer) has no
-// comparator, so both keep reporting. Array.sort is stable where .NET's introsort is not,
-// so elements the comparison calls equal may keep a different order.
+// ─── Sort ───────────────────────────────────────────────────
+// `array.Sort()` and `span.Sort(...)` sort in place with `Comparer<T>.Default`, a
+// `Comparison<T>` or an `IComparer<T>` (Arrays.cs): the JavaScript `sort()` would order
+// numbers as text. The sort is stable where .NET's introsort is not, so elements the
+// comparison calls equal may keep a different order.
 
 [assembly: MapMethod(
     typeof(MemoryExtensions),
     nameof(MemoryExtensions.Sort),
-    JsMethod = "sort",
+    JsTemplate = "sortArray($this)",
+    RuntimeImports = "sortArray",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(MemoryExtensions),
+    nameof(MemoryExtensions.Sort),
+    JsTemplate = "sortArray($this, $0)",
+    RuntimeImports = "sortArray",
     WhenParameterTypes = new[] { typeof(Comparison<>) }
+)]
+[assembly: MapMethod(
+    typeof(MemoryExtensions),
+    nameof(MemoryExtensions.Sort),
+    JsTemplate = "sortArray($this, $0)",
+    RuntimeImports = "sortArray",
+    WhenParameterTypes = new[] { typeof(IComparer<>) }
 )]

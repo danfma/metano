@@ -19,6 +19,13 @@ BoxingProbes.objectHashSetMixedCount = 1
 BoxingProbes.switchOnObject = red;color:2;perms:2;color:2;other;
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
 CastProbes.thisCastFail THROWS TypeError: a.asDog(...).bark is not a function
+CollectionEqualityProbes.asListCast = cast1
+CollectionEqualityProbes.distinctComparer THROWS Error: Unsupported expression: UnsupportedLinqOverload
+CollectionEqualityProbes.immutableListEmptyAddRange = False,2
+CollectionEqualityProbes.listEquals THROWS TypeError: a.equals is not a function
+CollectionEqualityProbes.negativeZeroKeys = +0|+0|True
+CollectionEqualityProbes.recordStructToString = [object Object]
+CollectionEqualityProbes.recordToString = [object Object]|[object Object]|[object Object]
 CollectionTypeArgumentProbes.arrayAsInterfaceIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.dictionaryViewInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.enumerableArrayInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest

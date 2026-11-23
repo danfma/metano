@@ -26,6 +26,14 @@ StageHImmutableBindingProbes.immutableConstraintMethodGroup  #335  W4-C34: an im
 StageHImmutableBindingProbes.immutableGenericConstraint  #335  W4-C34: an immutable collection bound to a mutable-interface-constrained type parameter reports MS0001 and throws, instead of silently dropping the mutation
 StageHImmutableBindingProbes.immutableArrayBuilderCountSetter  #335  011h: ImmutableArray<T>.Builder.Count = n is reported (MS0001) and throws an unsupported-expression error when run (the runtime cannot produce default(T))
 
+CollectionEqualityProbes.distinctComparer  #687  Distinct(comparer) is an unsupported LINQ overload (MS0001); a comparer on a LINQ stage needs a runtime signature for the stage
+CollectionEqualityProbes.listEquals  #710  list.Equals(other) emits `list.equals`, which no runtime collection has; the instance object.Equals lowering stays general (dynamic and generic receivers keep `x.equals(y)`)
+CollectionEqualityProbes.asListCast  #710  a cast of a set, dictionary, queue or stack to IList<T> passes through (.NET: InvalidCastException); a check must tell the list targets from ICollection<T> at the call site
+CollectionEqualityProbes.immutableListEmptyAddRange  #712  an empty ImmutableList's AddRange(list) returns a new list (.NET returns the source when it is the same closed type)
+CollectionEqualityProbes.negativeZeroKeys  #710  a -0 double key of a Dictionary or HashSet is stored as +0 (the native Map normalizes it)
+CollectionEqualityProbes.recordToString  #664  a record has no synthesized toString (the PrintMembers text); needs a design for derived records
+CollectionEqualityProbes.recordStructToString  #664  a record struct has no synthesized toString (the PrintMembers text)
+
 AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
 AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call

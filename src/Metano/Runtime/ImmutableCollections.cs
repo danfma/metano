@@ -210,6 +210,13 @@ using Metano.Annotations;
     nameof(ImmutableArray<int>.IsEmpty),
     JsProperty = "isEmpty"
 )]
+// A runtime ImmutableArray is never the uninitialized `default` of a struct, so
+// IsDefaultOrEmpty is IsEmpty.
+[assembly: MapProperty(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.IsDefaultOrEmpty),
+    JsProperty = "isEmpty"
+)]
 [assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Add), JsMethod = "add")]
 [assembly: MapMethod(
     typeof(ImmutableArray<>),
