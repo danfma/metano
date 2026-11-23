@@ -135,9 +135,11 @@ public class OverloadDispatcherFixTests
         await Assert.That(output).Contains("static addString(a: string): number {");
         await Assert.That(output).Contains("static add(...args: unknown[]): number {");
         await Assert.That(output).Contains("return St.addString(args[0] as string);");
+
         await Assert
             .That(output)
             .Contains("add(a: number): number {\n    return this.addInt32(a);");
+
         await Assert.That(output).DoesNotContain("this.addString(");
     }
 
@@ -164,6 +166,7 @@ public class OverloadDispatcherFixTests
         await Assert
             .That(output)
             .Contains("export function getNum(self: Dto, x: number): number {");
+
         await Assert
             .That(output)
             .Contains("export function getStr(self: Dto, s: string): number {");
@@ -255,11 +258,14 @@ public class OverloadDispatcherFixTests
         await Assert
             .That(files["d2.ts"])
             .Contains("convX(a: number): string {\n    return this.convA(a);\n  }");
+
         await Assert
             .That(files["d2.ts"])
             .Contains("convXN(a: number, n: number): string {\n    return this.convAN(a, n);");
+
         await Assert.That(files["d3.ts"]).Contains("convX$(x: boolean): string {");
         await Assert.That(files["d3.ts"]).Contains("convX(a: number): string {");
+
         await Assert
             .That(diagnostics.Select(diagnostic => diagnostic.Message))
             .Contains(message => message.Contains("'D3.convX'") && message.Contains("forwarder"));
@@ -295,12 +301,15 @@ public class OverloadDispatcherFixTests
         await Assert
             .That(output.IndexOf("isSByte(args[0])"))
             .IsLessThan(output.IndexOf("isByte(args[0])"));
+
         await Assert
             .That(output.IndexOf("isInt32(args[0])"))
             .IsLessThan(output.IndexOf("isUInt32(args[0])"));
+
         await Assert
             .That(output.IndexOf("isUInt32(args[0])"))
             .IsLessThan(output.IndexOf("isFloat32(args[0])"));
+
         await Assert
             .That(output.IndexOf("isFloat32(args[0])"))
             .IsLessThan(output.IndexOf("isFloat64(args[0])"));
@@ -388,6 +397,7 @@ public class OverloadDispatcherFixTests
         await Assert.That(output).Contains("return this.convInt32(args[0] as number);");
         await Assert.That(output).Contains("return this.convString(args[0] as string);");
         await Assert.That(output).Contains("convXN(...args: unknown[]): string {");
+
         await Assert
             .That(output)
             .Contains("return this.convStringInt32(args[0] as string, args[1] as number);");
