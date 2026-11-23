@@ -26,6 +26,8 @@ StageHImmutableBindingProbes.immutableConstraintMethodGroup  #335  W4-C34: an im
 StageHImmutableBindingProbes.immutableGenericConstraint  #335  W4-C34: an immutable collection bound to a mutable-interface-constrained type parameter reports MS0001 and throws, instead of silently dropping the mutation
 StageHImmutableBindingProbes.immutableArrayBuilderCountSetter  #335  011h: ImmutableArray<T>.Builder.Count = n is reported (MS0001) and throws an unsupported-expression error when run (the runtime cannot produce default(T))
 
+W6DelegateProbes.invokeGroupAcrossParamsShapesIsLoud  none  Group G round 1: a delegate Invoke method group between a params and a non-params delegate reports MS0001 and throws, instead of miscounting the arguments silently (.NET: 3 3)
+
 AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
 AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call

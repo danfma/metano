@@ -14,7 +14,8 @@ public sealed partial class IrExpressionExtractor
     /// The indices of the written arguments of <paramref name="thisCall"/> that
     /// C# packs into the target's <c>params</c> array in expanded form, in
     /// element order (empty for <c>: this()</c>); <c>null</c> when the chain
-    /// passes the array itself or the target has no <c>params</c> array.
+    /// passes the array itself, the target has no <c>params</c> array, or an
+    /// element maps to no written argument.
     /// </summary>
     internal IReadOnlyList<int>? ExpandedParamsArgumentsOf(ConstructorInitializerSyntax thisCall)
     {
@@ -27,11 +28,14 @@ public sealed partial class IrExpressionExtractor
         var written = thisCall.ArgumentList.Arguments;
         var elements = creation.Initializer?.ElementValues ?? [];
 
-        return
-        [
-            .. elements.Select(element =>
+        var indices = elements
+            .Select(element =>
                 written.IndexOf(argument => argument.Expression == ElementSyntaxOf(element))
-            ),
-        ];
+            )
+            .ToList();
+
+        // An element that maps to no written argument leaves the chain as it
+        // is: the target binds the arguments one by one, as before.
+        return indices.Contains(-1) ? null : indices;
     }
 }

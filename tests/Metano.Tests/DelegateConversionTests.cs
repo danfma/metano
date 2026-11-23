@@ -12,6 +12,7 @@ public class DelegateConversionTests
         public delegate int Folder(params int[] xs);
         public delegate int SeededFolder(int seed, params int[]? xs);
         public delegate int Listener([This] Holder self, int x);
+        public delegate int Three([This] Holder self, int x, int y);
 
         [Transpile]
         public class Holder
@@ -90,6 +91,44 @@ public class DelegateConversionTests
         await Assert.That(output).Contains("return a.call(h, 20);");
         await Assert.That(output).Contains("return a.call(h, 21);");
         await Assert.That(output).DoesNotContain("return a(h, 20);");
+    }
+
+    [Test]
+    public async Task ThisDelegate_NamedArgumentsOutOfOrder_BindInParameterOrder()
+    {
+        var output = TranspileProbe(
+            """
+            public static int A(Holder h, Three a) => a.Invoke(h, y: 1, x: 2);
+            public static int B(Holder h, Three a) => a(h, y: 3, x: 4);
+            public static int C(Holder h, Three a) => a.Invoke(y: 5, self: h, x: 6);
+            """
+        );
+
+        await Assert.That(output).Contains("return a.call(h, 2, 1);");
+        await Assert.That(output).Contains("return a.call(h, 4, 3);");
+        await Assert.That(output).Contains("return a.call(h, 6, 5);");
+    }
+
+    [Test]
+    [Arguments(
+        "public static int A(Folder f) { System.Func<int[], int> g = f.Invoke; return g([1, 2, 3]); }",
+        "f.Invoke"
+    )]
+    [Arguments(
+        "public static int A(System.Func<int[], int> g) { Folder f = g.Invoke; return f(1, 2, 3); }",
+        "g.Invoke"
+    )]
+    public async Task InvokeGroupAcrossParamsShapes_ReportsUnsupported(string member, string group)
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Wrap(member));
+
+        await Assert
+            .That(diagnostics)
+            .Contains(diagnostic =>
+                diagnostic.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.UnsupportedFeature
+                && diagnostic.Message.Contains($"'{group}'")
+                && diagnostic.Message.Contains("params")
+            );
     }
 
     private static string TranspileProbe(string members) =>

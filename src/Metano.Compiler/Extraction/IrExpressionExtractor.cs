@@ -3322,18 +3322,7 @@ public sealed partial class IrExpressionExtractor
             && args.Count > 0
             && IsSafeForCallRewrite(inv)
         )
-        {
-            var receiverIndex = FindReceiverArgumentIndex(symbol, inv.ArgumentList);
-            if (receiverIndex >= 0)
-            {
-                var receiver = args[receiverIndex].Value;
-                var rest = args.Where((_, i) => i != receiverIndex).Select(a => a).ToList();
-                return new IrCallExpression(
-                    new IrMemberAccess(target, "call"),
-                    [new IrArgument(receiver), .. rest]
-                );
-            }
-        }
+            return ThisDelegateCall(inv, symbol, target, args);
 
         if (symbol is not null && SymbolHelper.HasObjectArgs(symbol))
         {
@@ -3903,34 +3892,6 @@ public sealed partial class IrExpressionExtractor
         )
             ? Extract(member.Receiver)
             : null;
-
-    /// <summary>
-    /// Returns the syntactic argument index that corresponds to the
-    /// first parameter of <paramref name="symbol"/> (the
-    /// <c>[This]</c> receiver). Honors named arguments by matching
-    /// <see cref="ArgumentSyntax.NameColon"/> against the parameter
-    /// name; otherwise a positional first argument binds the first
-    /// parameter, as C# binds it, even when named arguments follow
-    /// (<c>a.Invoke(h, x: 20)</c>, #376). Returns <c>-1</c> when the
-    /// receiver slot cannot be located, which signals the caller to
-    /// skip the <c>.call(...)</c> rewrite and emit the plain delegate
-    /// invocation.
-    /// </summary>
-    private static int FindReceiverArgumentIndex(
-        IMethodSymbol symbol,
-        ArgumentListSyntax argumentList
-    )
-    {
-        var receiverName = symbol.Parameters[0].Name;
-        for (var i = 0; i < argumentList.Arguments.Count; i++)
-        {
-            var arg = argumentList.Arguments[i];
-            if (arg.NameColon?.Name.Identifier.ValueText == receiverName)
-                return i;
-        }
-
-        return argumentList.Arguments is [{ NameColon: null }, ..] ? 0 : -1;
-    }
 
     private static bool IsPrimitiveBackedBrandedValueRead(ISymbol symbol) =>
         SymbolHelper.IsBrandedValueMember(symbol)
