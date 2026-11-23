@@ -32,4 +32,26 @@ public class ModuleImportGapTests
         await Assert.That(output).Contains("import { shape } from \"./shape\";");
         await Assert.That(output).Contains("s instanceof shape.Circle");
     }
+
+    [Test]
+    public async Task DefaultImportFacade_BindsTheNameItsCallSitesSpell()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Res
+            {
+                [Import("dflt", "ext-def", AsDefault = true)] public static int BarX(int x) => x;
+            }
+
+            [Transpile]
+            public class Use { public int Go() => Res.BarX(2); }
+            """
+        );
+
+        var use = files["use.ts"];
+
+        await Assert.That(use).Contains("import barX from \"ext-def\";");
+        await Assert.That(use).Contains("return barX(2);");
+    }
 }

@@ -717,6 +717,7 @@ public sealed class ImportCollector(
         {
             var seenTemplateExternals =
                 new HashSet<(string Name, string From, bool IsDefault, string? EmittedName)>();
+
             foreach (var ext in templateExternals)
             {
                 var bindingName = ext.EmittedName ?? ext.Name;
@@ -727,11 +728,18 @@ public sealed class ImportCollector(
                 )
                     continue;
 
-                var aliases = BuildExternalImportAliases(ext);
-
+                // A default import binds whatever local name the file spells — the
+                // facade's own name (#553) — so it takes no alias.
                 imports.Add(
-                    new TsImport([ext.Name], ext.From, IsDefault: ext.IsDefault, Aliases: aliases)
+                    ext.IsDefault
+                        ? new TsImport([bindingName], ext.From, IsDefault: true)
+                        : new TsImport(
+                            [ext.Name],
+                            ext.From,
+                            Aliases: BuildExternalImportAliases(ext)
+                        )
                 );
+
                 importedNames.Add(bindingName);
                 if (ext.Version is { Length: > 0 } version)
                     _typeMappingContext.CrossPackageDependencies.Record(ext.From, version);
