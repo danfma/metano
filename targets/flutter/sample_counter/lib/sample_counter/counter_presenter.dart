@@ -1,26 +1,27 @@
 import 'counter.dart';
 import 'i_counter_view.dart';
-import 'renderer.dart';
 
 final class CounterPresenter {
-  CounterPresenter(ICounterView view, Counter initialState) {
+  CounterPresenter(ICounterView view) {
     this._view = view;
-    this._state = initialState;
-  }
-
-  late Counter _state;
-
-  void startApplication(String containerName) {
-    var renderer = Renderer(containerName);
-    renderer.render(this._view);
-    this._view.onButtonClick = this.onButtonClicked;
-    this._view.showCounter(this._state.count);
-  }
-
-  void onButtonClicked() {
-    this._state = this._state.increment();
-    this._view.showCounter(this._state.count);
+    this.initialize();
   }
 
   late final ICounterView _view;
+
+  Counter _counter = Counter.zero;
+
+  void initialize() => this._view.displayCounter(this._counter);
+
+  void increment() {
+    this._counter = this._counter.increment();
+    this.displayCounter();
+  }
+
+  void decrement() {
+    this._counter = this._counter.decrement();
+    this.displayCounter();
+  }
+
+  void displayCounter() => this._view.displayCounter(this._counter);
 }

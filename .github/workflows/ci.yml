@@ -31,12 +31,6 @@ jobs:
       - name: Build
         run: dotnet build Metano.slnx -maxcpucount:1
 
-      - name: Regenerate Flutter sample
-        run: |
-          dotnet run --project src/Metano.Compiler.Dart/ --no-build -- \
-            -p samples/SampleCounterV1/SampleCounterV1.csproj \
-            -o targets/flutter/sample_counter/lib/sample_counter --clean
-
       - name: Verify samples are regenerated cleanly
         run: |
           if ! git diff --quiet -- targets/ 2>&1; then

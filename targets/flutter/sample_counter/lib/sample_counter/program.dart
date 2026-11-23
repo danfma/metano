@@ -1,3 +1,3 @@
 class Program {
-  static void <Main>$(List<String> args) => throw UnimplementedError();
+  static void main() => print('Hello, World!');
 }

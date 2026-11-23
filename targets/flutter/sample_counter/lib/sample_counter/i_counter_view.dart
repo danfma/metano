@@ -1,7 +1,5 @@
-import 'i_view.dart';
+import 'counter.dart';
 
-abstract interface class ICounterView implements IView {
-  void Function()? get onButtonClick;
-
-  void showCounter(int counter);
+abstract interface class ICounterView {
+  void displayCounter(Counter counter);
 }
