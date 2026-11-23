@@ -133,15 +133,17 @@ public sealed partial class IrExpressionExtractor
     /// operand (parentheses, a conditional's branches, <c>??</c>, a
     /// <c>switch</c> expression's arms, an enclosing literal's elements). A
     /// local's initializer and a lambda's result declare none in a target that
-    /// infers them.
+    /// infers them, and neither does an argument whose parameter is declared
+    /// through a type parameter (<see cref="IsDeclaredByItsParameter"/>).
     /// </summary>
-    private static bool IsTypedByItsPosition(ExpressionSyntax literal)
+    private bool IsTypedByItsPosition(ExpressionSyntax literal)
     {
         var position = PositionOf(literal);
 
         return position.Parent switch
         {
-            ArgumentSyntax or InitializerExpressionSyntax => true,
+            ArgumentSyntax argument => IsDeclaredByItsParameter(argument),
+            InitializerExpressionSyntax => true,
             AssignmentExpressionSyntax assignment => assignment.Right == position,
             ArrowExpressionClauseSyntax => true,
             ReturnStatementSyntax returned => !ReturnsFromALambda(returned),
@@ -152,6 +154,17 @@ public sealed partial class IrExpressionExtractor
             _ => false,
         };
     }
+
+    /// <summary>
+    /// Whether the parameter <paramref name="argument"/> binds to declares a
+    /// type of its own: <c>F(List&lt;int?&gt; xs)</c> does, while
+    /// <c>Wrap&lt;T&gt;(T[] xs)</c> and <c>new List&lt;T&gt;(IEnumerable&lt;T&gt; xs)</c>
+    /// declare it through a type parameter, which a target that infers type
+    /// arguments infers from the literal itself (#614).
+    /// </summary>
+    private bool IsDeclaredByItsParameter(ArgumentSyntax argument) =>
+        _semantic.GetOperation(argument) is not IArgumentOperation { Parameter: { } parameter }
+        || !RuntimeQuestionFacts.MentionsTypeParameter(parameter.OriginalDefinition.Type);
 
     private static SyntaxNode PositionOf(SyntaxNode node) =>
         node.Parent is { } parent && HandsItsPositionTo(parent, node) ? PositionOf(parent) : node;
