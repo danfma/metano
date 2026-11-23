@@ -171,7 +171,7 @@ public class NullableIncrementTests
             """
         );
 
-        await Assert.That(output).Contains("receiver$temp$0 + receiver$temp$1)(BigInt(1))");
+        await Assert.That(output).Contains("return a = a == null ? null : a + 1n;");
     }
 
     [Test]

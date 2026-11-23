@@ -5902,9 +5902,9 @@ public sealed partial class IrExpressionExtractor
     /// integer or a <c>BigInteger</c>, spec 012 FR-003, FR-074, and a
     /// <c>decimal</c> read as a <c>double</c> or <c>float</c>); a constant one
     /// folds. A <c>decimal</c> to a 32-bit or narrower integer also becomes a
-    /// numeric conversion, truncating and checking in every context; Dart keeps
-    /// its legacy <c>expr.trunc().toNumber()</c> fallback below. All other casts
-    /// collapse to the inner expression.
+    /// numeric conversion, truncating and checking in every context, which
+    /// each target renders (#604). All other casts collapse to the inner
+    /// expression.
     /// </summary>
     private IrExpression ExtractCast(CastExpressionSyntax cast)
     {
@@ -5959,23 +5959,6 @@ public sealed partial class IrExpressionExtractor
 
         if (ExplicitTupleConversion(cast, inner, sourceType, targetType) is { } tuple)
             return tuple;
-
-        var truncatesDecimal =
-            sourceType.SpecialType == SpecialType.System_Decimal
-            && targetType.SpecialType
-                is SpecialType.System_Int16
-                    or SpecialType.System_Int32
-                    or SpecialType.System_UInt16
-                    or SpecialType.System_UInt32
-                    or SpecialType.System_Byte
-                    or SpecialType.System_SByte;
-
-        if (truncatesDecimal)
-        {
-            var integral = new IrCallExpression(new IrMemberAccess(inner, "trunc"), []);
-
-            return new IrCallExpression(new IrMemberAccess(integral, "toNumber"), []);
-        }
 
         if (ExplicitBoxOf(cast, inner, sourceType, targetType) is { } box)
             inner = box;
