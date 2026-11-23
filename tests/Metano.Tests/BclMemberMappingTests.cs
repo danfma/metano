@@ -196,6 +196,46 @@ public class BclMemberMappingTests
     }
 
     [Test]
+    public async Task TaskCompletionSourceExceptionSequences_FaultWithTheFirstException()
+    {
+        var output = Transpile(
+            """
+            public static void Fail(TaskCompletionSource<int> source, Exception[] errors)
+            {
+                source.SetException(errors);
+                source.TrySetException(errors);
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("source.setExceptions(errors);");
+        await Assert.That(output).Contains("source.trySetExceptions(errors);");
+    }
+
+    [Test]
+    public async Task StringBuilderAppendOfAnInterpolatedString_PrintsDefaultText()
+    {
+        var output = Transpile(
+            """
+            public static string Build(double d, bool b, float f)
+            {
+                var sb = new StringBuilder();
+
+                sb.Append($"x{d}y{b}{f}").AppendLine($"{false}");
+
+                return sb.ToString();
+            }
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "sb.append(`x${formatDouble(d)}y${formatBoolean(b)}${formatSingle(f)}`).appendLine(`${formatBoolean(false)}`);"
+            );
+    }
+
+    [Test]
     public async Task EveryMappedMember_ReportsNothing()
     {
         var diagnostics = Diagnostics(

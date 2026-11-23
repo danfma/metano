@@ -1,4 +1,9 @@
-import { InvalidOperationException, TaskCanceledException } from "./exceptions/index.ts";
+import {
+  ArgumentException,
+  ArgumentNullException,
+  InvalidOperationException,
+  TaskCanceledException,
+} from "./exceptions/index.ts";
 
 const ALREADY_COMPLETED_MESSAGE =
   "An attempt was made to transition a task to a final state when it had already completed.";
@@ -20,6 +25,7 @@ export class TaskCompletionSource<T> {
       this.resolveTask = resolve;
       this.rejectTask = reject;
     });
+
     this.task.catch(() => undefined);
   }
 
@@ -29,8 +35,24 @@ export class TaskCompletionSource<T> {
   }
 
   /** `TrySetException(exception)`. */
-  trySetException(exception: unknown): boolean {
+  trySetException(exception: Error): boolean {
     return this.complete(() => this.rejectTask(exception));
+  }
+
+  /**
+   * `TrySetException(IEnumerable<Exception>)`: the task faults with the first exception, which
+   * is what awaiting it throws.
+   *
+   * @throws ArgumentNullException for `null`.
+   * @throws ArgumentException for an empty sequence.
+   */
+  trySetExceptions(exceptions: Iterable<Error> | null): boolean {
+    return this.trySetException(firstException(exceptions));
+  }
+
+  /** `SetException(IEnumerable<Exception>)`. */
+  setExceptions(exceptions: Iterable<Error> | null): void {
+    this.setException(firstException(exceptions));
   }
 
   /** `TrySetCanceled()`. */
@@ -44,7 +66,7 @@ export class TaskCompletionSource<T> {
   }
 
   /** `SetException(exception)`. */
-  setException(exception: unknown): void {
+  setException(exception: Error): void {
     this.require(this.trySetException(exception));
   }
 
@@ -69,4 +91,16 @@ export class TaskCompletionSource<T> {
       throw new InvalidOperationException(ALREADY_COMPLETED_MESSAGE);
     }
   }
+}
+
+function firstException(exceptions: Iterable<Error> | null): Error {
+  if (exceptions === null) {
+    throw new ArgumentNullException("exceptions");
+  }
+
+  for (const exception of exceptions) {
+    return exception;
+  }
+
+  throw new ArgumentException("The exceptions collection was empty.", "exceptions");
 }

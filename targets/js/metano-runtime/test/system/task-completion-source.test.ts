@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { InvalidOperationException, TaskCanceledException } from "#/system/exceptions/index.ts";
+import { ArgumentException, InvalidOperationException, TaskCanceledException } from "#/system/exceptions/index.ts";
 import { TaskCompletionSource } from "#/system/task-completion-source.ts";
 
 describe("TaskCompletionSource", () => {
@@ -42,5 +42,20 @@ describe("TaskCompletionSource", () => {
 
     source.setException(new Error("ignored"));
     await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  test("faults the task with the first of several exceptions", async () => {
+    const source = new TaskCompletionSource<number>();
+
+    source.setExceptions([new Error("a"), new Error("b")]);
+
+    await expect(source.task).rejects.toThrow("a");
+  });
+
+  test("rejects an empty sequence of exceptions", () => {
+    const source = new TaskCompletionSource<number>();
+
+    expect(() => source.setExceptions([])).toThrow(ArgumentException);
+    expect(() => source.trySetExceptions(null)).toThrow();
   });
 });

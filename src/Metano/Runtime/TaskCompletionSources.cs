@@ -54,3 +54,15 @@ using Metano.Annotations;
     JsMethod = "trySetException",
     WhenParameterTypes = [typeof(Exception)]
 )]
+[assembly: MapMethod(
+    typeof(TaskCompletionSource<>),
+    nameof(TaskCompletionSource<int>.SetException),
+    JsTemplate = "$this.setExceptions($0)",
+    WhenParameterTypes = [typeof(IEnumerable<Exception>)]
+)]
+[assembly: MapMethod(
+    typeof(TaskCompletionSource<>),
+    nameof(TaskCompletionSource<int>.TrySetException),
+    JsTemplate = "$this.trySetExceptions($0)",
+    WhenParameterTypes = [typeof(IEnumerable<Exception>)]
+)]

@@ -297,4 +297,17 @@ public static class BclMemberProbes
                     .Select(p => p.X + ":" + p.Y)
             );
     }
+
+    public static string StringBuilderInterpolatedHoles()
+    {
+        var sb = new StringBuilder();
+        var flag = true;
+        var single = 0.1f;
+        var big = 1e21;
+        var half = 2.5;
+
+        sb.Append($"x{half}y{flag}z{single}w{big}").AppendLine($"{false}");
+
+        return sb.ToString().Replace("\n", "|");
+    }
 }
