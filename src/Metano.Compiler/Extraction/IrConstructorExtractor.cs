@@ -636,6 +636,7 @@ public static class IrConstructorExtractor
             prop.SetMethod is null || prop.SetMethod.IsInitOnly
                 ? IrParameterPromotion.ReadonlyProperty
                 : IrParameterPromotion.MutableProperty;
+
         return (
             promotion,
             IrVisibilityMapper.MapMember(prop),
