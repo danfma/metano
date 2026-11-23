@@ -145,6 +145,7 @@ internal static class DartToolchain
     private static string? FindMetanoRuntimeDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
+
         while (dir is not null)
         {
             var candidate = Path.Combine(dir.FullName, "targets", "dart", "metano_runtime");
