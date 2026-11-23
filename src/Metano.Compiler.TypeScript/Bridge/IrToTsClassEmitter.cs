@@ -820,7 +820,8 @@ internal sealed class IrToTsClassEmitter(
     ) =>
         promotedMemberDeclaration switch
         {
-            PromotedMemberDeclaration.ParameterProperties => IsPromotedParamsParameter(p),
+            PromotedMemberDeclaration.ParameterProperties => IsPromotedParamsParameter(p)
+                || IrToTsClassBridge.HasReservedPromotedName(p),
             PromotedMemberDeclaration.Fields => p.Promotion is not IrParameterPromotion.None,
             _ => false,
         };
@@ -869,7 +870,7 @@ internal sealed class IrToTsClassEmitter(
         var (accessibility, jsdoc) = IrToTsClassBridge.PromotedMemberVisibility(p);
 
         return new TsFieldMember(
-            IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName),
+            IrToTsClassBridge.PromotedName(p),
             // The field keeps the declared `T[] | null` (`with { Items = null }` is
             // valid C#); only the rest parameter drops it (MapParameterType).
             IrToTsTypeMapper.Map(p.Parameter.Type, BclOverrides),

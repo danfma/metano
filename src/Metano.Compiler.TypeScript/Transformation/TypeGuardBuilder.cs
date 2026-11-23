@@ -673,7 +673,7 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         var member = type.GetMembers(fieldName).OfType<IPropertySymbol>().FirstOrDefault();
         var nameOverride = member?.GetNameOverride(TargetLanguage.TypeScript);
 
-        return IrToTsNamingPolicy.ToDataMemberName(fieldName, nameOverride);
+        return nameOverride ?? TypeScriptNaming.ToCamelCase(fieldName);
     }
 
     /// <summary>
@@ -685,7 +685,6 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 
         // Collect from all levels of hierarchy
         var current = type;
-
         while (
             current is not null
             && current.SpecialType == SpecialType.None
@@ -708,11 +707,8 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 if (SymbolHelper.HasIgnore(member, TargetLanguage.TypeScript))
                     continue;
 
-                var name = IrToTsNamingPolicy.ToDataMemberName(
-                    member.Name,
-                    SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
-                );
-
+                var name = SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
+                    ?? TypeScriptNaming.ToCamelCase(member.Name);
                 var tsType = MapType(member.Type);
 
                 // Avoid duplicates (from overrides)
@@ -733,11 +729,8 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
                 if (SymbolHelper.HasIgnore(member, TargetLanguage.TypeScript))
                     continue;
 
-                var name = IrToTsNamingPolicy.ToDataMemberName(
-                    member.Name,
-                    SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
-                );
-
+                var name = SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
+                    ?? TypeScriptNaming.ToCamelCase(member.Name);
                 var tsType = MapType(member.Type);
 
                 if (fields.All(f => f.Name != name))

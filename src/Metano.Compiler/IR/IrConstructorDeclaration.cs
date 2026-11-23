@@ -141,7 +141,15 @@ public sealed record IrConstructorParameter(
     string? CapturedFieldName = null,
     IrVisibility? PromotedVisibility = null,
     string? EmittedName = null
-);
+)
+{
+    /// <summary>
+    /// The C# name of the property the parameter is promoted to (<c>Of</c> for
+    /// <c>class Btn(int of) { public int Of { get; } = of; }</c>), which the member
+    /// is declared under; <c>null</c> when the parameter is not promoted.
+    /// </summary>
+    public string? PromotedPropertyName { get; init; }
+}
 
 /// <summary>
 /// How a constructor parameter is promoted to a class member.

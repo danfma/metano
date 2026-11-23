@@ -303,7 +303,8 @@ public static class IrConstructorExtractor
         var parameters = ctor
             .Parameters.Select(p =>
             {
-                var (promotion, promotedVisibility, emittedName) = ResolvePromotionInfo(p, context);
+                var (promotion, promotedVisibility, emittedName, propertyName) =
+                    ResolvePromotionInfo(p, context);
 
                 return new IrConstructorParameter(
                     new IrParameter(
@@ -318,7 +319,10 @@ public static class IrConstructorExtractor
                     promotion,
                     PromotedVisibility: promotedVisibility,
                     EmittedName: emittedName
-                );
+                )
+                {
+                    PromotedPropertyName = propertyName,
+                };
             })
             .ToList();
 
@@ -621,11 +625,12 @@ public static class IrConstructorExtractor
     private static (
         IrParameterPromotion Promotion,
         IrVisibility? Visibility,
-        string? EmittedName
+        string? EmittedName,
+        string? PropertyName
     ) ResolvePromotionInfo(IParameterSymbol param, PromotionContext context)
     {
         if (context.PromotionTarget(param) is not { } prop)
-            return (IrParameterPromotion.None, null, null);
+            return (IrParameterPromotion.None, null, null, null);
 
         var promotion =
             prop.SetMethod is null || prop.SetMethod.IsInitOnly
@@ -634,7 +639,8 @@ public static class IrConstructorExtractor
         return (
             promotion,
             IrVisibilityMapper.MapMember(prop),
-            SymbolHelper.GetNameOverride(prop, context.Target)
+            SymbolHelper.GetNameOverride(prop, context.Target),
+            prop.Name
         );
     }
 

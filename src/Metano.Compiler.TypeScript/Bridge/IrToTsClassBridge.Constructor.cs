@@ -180,8 +180,34 @@ internal static partial class IrToTsClassBridge
     private static bool IsPromoted(IrConstructorParameter p) =>
         p.Promotion is not IrParameterPromotion.None;
 
-    private static string PromotedName(IrConstructorParameter p) =>
-        IrToTsNamingPolicy.ToDataMemberName(p.Parameter.Name, p.EmittedName);
+    /// <summary>
+    /// The member a promoted parameter declares: the property it is promoted to,
+    /// under the data-member rule (<c>Of</c> → <c>of_</c>, a positional <c>@new</c>
+    /// → <c>new</c>).
+    /// </summary>
+    internal static string PromotedName(IrConstructorParameter p) =>
+        IrToTsNamingPolicy.ToDataMemberName(
+            p.PromotedPropertyName ?? p.Parameter.Name,
+            p.EmittedName
+        );
+
+    /// <summary>
+    /// A promoted member named like a JS reserved word (<c>record R(int @new)</c>):
+    /// a valid property name but not a parameter name, so it cannot be a parameter
+    /// property. It is declared as a field, assigned from the escaped parameter
+    /// (<c>new_</c>), and keeps its public name (#404).
+    /// </summary>
+    internal static bool HasReservedPromotedName(IrConstructorParameter p) =>
+        IsPromoted(p) && TypeScriptNaming.EscapeIfReserved(PromotedName(p)) != PromotedName(p);
+
+    /// <summary>
+    /// The constructor parameter a promoted member is passed through: the member's
+    /// own name, or the escaped parameter name when that name is reserved.
+    /// </summary>
+    private static string PromotedParameterName(IrConstructorParameter p) =>
+        HasReservedPromotedName(p)
+            ? IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
+            : PromotedName(p);
 
     /// <summary>
     /// Lowers one promoted parameter: the promoted property's accessibility,
@@ -195,7 +221,7 @@ internal static partial class IrToTsClassBridge
         IrToTsBridgeContext context
     )
     {
-        var name = PromotedName(p);
+        var name = PromotedParameterName(p);
         var tsType = resolveType(p);
         var defaultValue = ResolveCtorParamDefault(p, context);
 
@@ -205,7 +231,11 @@ internal static partial class IrToTsClassBridge
         // emit the rest form; the field declaration + body assignment
         // are synthesized separately by the class emitter so the
         // promoted shape is preserved at the surface. (#152)
-        if (p.Parameter.IsRestParams || context.ClassFields.FieldOf(p.Parameter.Name) is not null)
+        if (
+            p.Parameter.IsRestParams
+            || context.ClassFields.FieldOf(p.Parameter.Name) is not null
+            || HasReservedPromotedName(p)
+        )
         {
             return new TsConstructorParam(
                 name,
@@ -408,33 +438,25 @@ internal static partial class IrToTsClassBridge
             body.AddRange(BuildCapturedAssignments(ir));
 
             // Promoted `params T[]` slots can't carry the parameter-property
-            // modifier (TS forbids `readonly ...x: T[]`), so the field is
-            // declared separately by the class emitter and the value is
-            // copied across in the ctor body. (#152)
+            // modifier (TS forbids `readonly ...x: T[]`), nor can a member named
+            // like a reserved word (#404), so the field is declared separately
+            // by the class emitter and the value is copied across in the ctor
+            // body. (#152)
             foreach (var p in ir.Parameters)
             {
                 var backingField = context.ClassFields.FieldOf(p.Parameter.Name);
 
                 if (
-                    (!p.Parameter.IsRestParams && backingField is null)
+                    (
+                        !p.Parameter.IsRestParams
+                        && backingField is null
+                        && !HasReservedPromotedName(p)
+                    )
                     || p.Promotion is IrParameterPromotion.None
                 )
                     continue;
 
-                var paramName = PromotedName(p);
-
-                body.Add(
-                    new TsExpressionStatement(
-                        new TsBinaryExpression(
-                            new TsPropertyAccess(
-                                new TsIdentifier("this"),
-                                backingField ?? paramName
-                            ),
-                            "=",
-                            new TsIdentifier(paramName)
-                        )
-                    )
-                );
+                body.Add(ThisAssignment(backingField ?? PromotedName(p), PromotedParameterName(p)));
             }
 
             // Explicit ctor body statements (a non-record ctor with body
