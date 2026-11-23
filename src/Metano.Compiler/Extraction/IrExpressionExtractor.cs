@@ -3478,7 +3478,10 @@ public sealed partial class IrExpressionExtractor
     /// declares, as C# passes it.
     /// </summary>
     private IrArgument OmittedDefault(IMethodSymbol method, IParameterSymbol parameter) =>
-        new(BuildDefaultArgument(parameter), IsOmittedDefault: AppliesItsOwnDefaults(method));
+        new(
+            BuildDefaultArgument(parameter),
+            IsOmittedDefault: parameter.HasExplicitDefaultValue && AppliesItsOwnDefaults(method)
+        );
 
     private bool AppliesItsOwnDefaults(IMethodSymbol method) =>
         IsStaticallyDispatched(method) && HasTranspiledDeclaration(method);
@@ -5814,10 +5817,8 @@ public sealed partial class IrExpressionExtractor
     /// What a call passes to <paramref name="parameter"/>: the unnamed
     /// argument at its position (C# only lets a named argument precede it
     /// when that one is in position), else the argument named after it, else
-    /// its explicit default — nothing for an omitted <c>params</c> parameter.
-    /// When a parameter has no explicit default (shouldn't happen for valid
-    /// C#) the slot falls back to <c>IrLiteralKind.Default</c> so the
-    /// pipeline keeps a visible marker instead of silently dropping it.
+    /// its default (<see cref="BuildDefaultArgument"/>) — nothing for an
+    /// omitted <c>params</c> parameter.
     /// </summary>
     private IEnumerable<IrArgument> ArgumentsBoundTo(
         IParameterSymbol parameter,
@@ -5839,11 +5840,11 @@ public sealed partial class IrExpressionExtractor
     {
         if (parameter.HasExplicitDefaultValue)
             return BuildLiteralForDefault(parameter.ExplicitDefaultValue, parameter.Type);
-        // No explicit default — surface an IrLiteral(Default) so the printer
-        // emits a visible marker (`undefined`) rather than producing invalid
-        // code. Roslyn should never let us reach this branch for a well-formed
-        // call, but we stay defensive.
-        return new IrLiteral(null, IrLiteralKind.Default);
+
+        // An [Optional] parameter with no explicit default receives
+        // default(T), as C# passes it (#449); the declaration has no default
+        // of its own to apply.
+        return DefaultOrMarker(parameter.Type);
     }
 
     /// <summary>

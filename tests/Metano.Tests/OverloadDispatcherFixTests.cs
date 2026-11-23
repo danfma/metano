@@ -305,4 +305,28 @@ public class OverloadDispatcherFixTests
             .That(output.IndexOf("isFloat32(args[0])"))
             .IsLessThan(output.IndexOf("isFloat64(args[0])"));
     }
+
+    [Test]
+    public async Task OptionalParameterWithoutDefault_ReceivesTheDefaultOfItsType()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Runtime.InteropServices;
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Opt
+            {
+                public string Q([Optional] int a, int b) => "q";
+
+                public string R([Optional] string? a, int b) => "r";
+
+                public string Run() => Q(b: 2) + R(b: 3);
+            }
+            """
+        );
+
+        await Assert.That(result["opt.ts"]).Contains("this.q(0, 2)");
+        await Assert.That(result["opt.ts"]).Contains("this.r(null, 3)");
+    }
 }
