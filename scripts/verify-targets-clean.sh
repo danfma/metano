@@ -26,6 +26,13 @@ if ! dotnet build Metano.slnx --nologo -v q -m:1; then
   exit 1
 fi
 
+if ! dotnet run --project src/Metano.Compiler.Dart/ --no-build -- \
+  -p samples/SampleCounterV1/SampleCounterV1.csproj \
+  -o targets/flutter/sample_counter/lib/sample_counter --clean >/dev/null; then
+  echo "verify-targets-clean: Dart SampleCounterV1 regeneration failed." >&2
+  exit 1
+fi
+
 if ! git diff --quiet -- targets/; then
   echo "verify-targets-clean: generated TS under targets/ is out of sync." >&2
   echo "Run 'dotnet build Metano.slnx', commit the regen, and push again." >&2

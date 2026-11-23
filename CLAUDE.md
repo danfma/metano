@@ -62,7 +62,7 @@ Metano.slnx
 │   │   ├── PackageJsonWriter.cs         # Auto-generates package.json (imports/exports/dependencies)
 │   │   ├── Transformation/              # 39 focused handlers (TypeTransformer, ExpressionTransformer, etc.)
 │   │   └── TypeScript/AST + Printer.cs  # ~65 TS AST record types and the printer
-│   └── Metano.Compiler.Dart/         # Dart/Flutter target (prototype — shape-only, no bodies yet)
+│   └── Metano.Compiler.Dart/         # Dart/Flutter target (classes, modules, method bodies)
 │       ├── DartTarget.cs                # ITranspilerTarget adapter
 │       ├── Commands.cs                  # CLI — `metano-dart`
 │       ├── Bridge/                      # IR → Dart AST (enum, interface, class)

@@ -1,15 +1,13 @@
 import 'package:metano_runtime/metano_runtime.dart' show HashCode;
 
-class Counter {
+final class Counter {
   Counter(this.count);
 
   final int count;
 
-  static Counter get zero => Counter(0);
+  static final Counter zero = Counter(0);
 
-  Counter increment() => Counter(this.count + 1);
-
-  Counter decrement() => Counter(this.count - 1);
+  Counter increment() => this.copyWith(count: this.count + 1);
 
   @override
   bool operator ==(Object other) => other is Counter && other.runtimeType == this.runtimeType && other.count == this.count;
