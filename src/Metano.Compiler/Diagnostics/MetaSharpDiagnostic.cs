@@ -611,4 +611,13 @@ public static class DiagnosticCodes
     /// An error at the module; the user renames the member with <c>[Name]</c> (#484).
     /// </summary>
     public const string RuntimeHelperNameHijacked = "MS0071";
+
+    /// <summary>MS0072 — two properties of a JSON contract map to the same JSON name,
+    /// after <c>[JsonPropertyName]</c> and the naming policy apply, compared ignoring case
+    /// when the context reads names case-insensitively (inherited properties included; a
+    /// redeclaration under the same name is one property). System.Text.Json throws
+    /// <c>InvalidOperationException</c> on first use of the contract, so the build fails
+    /// instead of emitting a contract no .NET peer can use. An error at the second
+    /// property (spec 009, #442).</summary>
+    public const string JsonPropertyNameCollision = "MS0072";
 }

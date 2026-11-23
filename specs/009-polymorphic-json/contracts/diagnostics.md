@@ -135,3 +135,13 @@ Not reported, because they are mirrored: `PropertyNamingPolicy`, `PropertyNameCa
 change the JSON value: `WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`,
 `DefaultBufferSize`, `GenerationMode`. `[JsonStringEnumMemberName]` only matters under a string
 enum converter, which is reported itself.
+
+## `MS0072` `JsonPropertyNameCollision` — Error
+
+Added by #442 (wave 6) from the range reserved for this group; not part of the original
+`MS0032`–`MS0037` reservation. System.Text.Json throws `InvalidOperationException` on the first use
+of a contract whose properties share a JSON name (measured on .NET 10, source-generated context).
+
+| Rule | Location | Message shape |
+|---|---|---|
+| Two properties of a contract (inherited ones included) map to the same JSON name after `[JsonPropertyName]` and the naming policy apply: `ID` / `Id` under Web, `[JsonPropertyName("name")] Label` / `Name` under Web, `FooBar` / `Foo_Bar` under snake_case. Names compare ordinally, ignoring case when the context reads names case-insensitively (`PropertyNameCaseInsensitive`, Web). A redeclaration (`override` / `new`) under the same JSON name is one property; `ID` / `Id` without a policy or case-insensitive reads do not collide | the second property | `The JSON property name for 'Coll.id' collides with another property: System.Text.Json throws InvalidOperationException for this contract. Give one of them another name with [JsonPropertyName].` |

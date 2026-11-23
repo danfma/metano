@@ -280,6 +280,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         ).Collect(roots);
 
         ReportUnmirroredSettings(contextType, properties, contract, report);
+        ReportPropertyNameCollisions(contextType, properties, contract, report);
 
         return new JsonContextPlan(
             names,
@@ -288,6 +289,26 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             contract.Polymorphisms,
             JsonOptionsReader.ReadOptionsOf(contextType)
         );
+    }
+
+    /// <summary>Reports <c>MS0072</c> for every contract whose properties share a JSON name (#442).</summary>
+    private static void ReportPropertyNameCollisions(
+        INamedTypeSymbol contextType,
+        JsonPropertyCollector properties,
+        JsonContract contract,
+        Action<MetanoDiagnostic> report
+    )
+    {
+        var caseInsensitive = JsonOptionsReader
+            .ReadOptionsOf(contextType)
+            .PropertyNameCaseInsensitive;
+
+        var errors = new JsonPropertyNameCollisions(properties, caseInsensitive).ErrorsOf(
+            contract.Entries
+        );
+
+        foreach (var error in errors)
+            report(error);
     }
 
     /// <summary>
