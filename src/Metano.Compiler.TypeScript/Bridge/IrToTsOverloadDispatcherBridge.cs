@@ -74,12 +74,74 @@ public static class IrToTsOverloadDispatcherBridge
         IrClassDeclaration? owner = null
     )
     {
-        var group = IrMethodGroup.Of(primary);
+        var group = IrMethodGroup.Of(LiftClassTypeParameters(primary, classTypeParameters));
 
         if (!group.IsDispatched)
             return [];
 
-        var isStatic = primary.IsStatic;
+        if (StaticAndInstanceSidesOf(group) is { } sides)
+            return
+            [
+                .. sides.SelectMany(side =>
+                    BuildSide(side, containingTypeName, classTypeParameters, names, context, owner)
+                ),
+            ];
+
+        return BuildGroup(group, containingTypeName, classTypeParameters, names, context, owner);
+    }
+
+    /// <summary>
+    /// One side of a group that mixes static and instance overloads: a group
+    /// of its own, whose lone overload, when it has one, is also reachable
+    /// under the C# name through a forwarding member in place of a
+    /// dispatcher.
+    /// </summary>
+    private static List<TsClassMember> BuildSide(
+        IrMethodGroup side,
+        string containingTypeName,
+        IReadOnlyList<IrTypeParameter> classTypeParameters,
+        TsOverloadClaims names,
+        IrToTsBridgeContext context,
+        IrClassDeclaration? owner
+    )
+    {
+        var members = BuildGroup(
+            side,
+            containingTypeName,
+            classTypeParameters,
+            names,
+            context,
+            owner
+        );
+
+        if (side.Members is [var lone])
+            members.Add(
+                BuildForwardingMember(
+                    lone,
+                    TsClassMemberTable.MethodNameOf(lone),
+                    names.FastPathNameOf(lone),
+                    overridesInherited: false,
+                    context
+                )
+            );
+
+        return members;
+    }
+
+    /// <summary>
+    /// The fast paths, forwarders and dispatchers of one group whose overloads
+    /// all sit on the same side (static or instance).
+    /// </summary>
+    private static List<TsClassMember> BuildGroup(
+        IrMethodGroup group,
+        string containingTypeName,
+        IReadOnlyList<IrTypeParameter> classTypeParameters,
+        TsOverloadClaims names,
+        IrToTsBridgeContext context,
+        IrClassDeclaration? owner
+    )
+    {
+        var isStatic = group.Primary.IsStatic;
         var members = new List<TsClassMember>();
 
         foreach (var overload in OverloadDispatchOrder.Sort(group.Members, m => m.Parameters))
@@ -137,6 +199,73 @@ public static class IrToTsOverloadDispatcherBridge
             members.Add(dispatcher);
 
         return members;
+    }
+
+    /// <summary>
+    /// A static group of a generic class with every overload re-declaring the
+    /// class type parameters it names, as a single static method does
+    /// (<see cref="IrToTsClassEmitter.PromoteClassTypeParamsForStatic"/>):
+    /// TypeScript forbids a static member to name the class's own (TS2302,
+    /// #449). An instance overload is unchanged.
+    /// </summary>
+    private static IrMethodDeclaration LiftClassTypeParameters(
+        IrMethodDeclaration primary,
+        IReadOnlyList<IrTypeParameter> classTypeParameters
+    )
+    {
+        if (classTypeParameters.Count == 0)
+            return primary;
+
+        return LiftedOverload(primary, classTypeParameters) with
+        {
+            Overloads = primary
+                .Overloads?.Select(overload => LiftedOverload(overload, classTypeParameters))
+                .ToList(),
+        };
+    }
+
+    private static IrMethodDeclaration LiftedOverload(
+        IrMethodDeclaration overload,
+        IReadOnlyList<IrTypeParameter> classTypeParameters
+    )
+    {
+        if (
+            IrToTsClassEmitter.PromoteClassTypeParamsForStatic(overload, classTypeParameters)
+            is not { } promoted
+        )
+            return overload;
+
+        var own = (overload.TypeParameters ?? []).Where(typeParameter =>
+            promoted.All(classTypeParameter => classTypeParameter.Name != typeParameter.Name)
+        );
+
+        return overload with
+        {
+            TypeParameters = [.. promoted, .. own],
+        };
+    }
+
+    /// <summary>
+    /// The static and the instance overloads of a declared group that mixes
+    /// both (C# groups <c>Add(int)</c> with <c>static Add(string)</c>), each
+    /// lowered as a group of its own: an instance dispatcher cannot reach a
+    /// static fast path through <c>this</c>, nor the reverse (#566). A side
+    /// with one overload forwards to its fast path instead. <c>null</c>
+    /// when the group keeps to one side.
+    /// </summary>
+    private static IReadOnlyList<IrMethodGroup>? StaticAndInstanceSidesOf(IrMethodGroup group)
+    {
+        if (group.DispatcherKind is not IrDispatcherKind.Declared)
+            return null;
+
+        var sides = group.Members.GroupBy(member => member.IsStatic).ToList();
+
+        if (sides.Count < 2)
+            return null;
+
+        return sides
+            .Select(side => IrMethodGroup.Of(side.First() with { Overloads = [.. side.Skip(1)] }))
+            .ToList();
     }
 
     /// <summary>
@@ -590,6 +719,7 @@ public static class IrToTsOverloadDispatcherBridge
             parameters,
             IrToTsTypeMapper.Map(method.ReturnType, context.TypeOverrides),
             [new TsReturnStatement(call)],
+            Static: method.IsStatic,
             TypeParameters: MapTypeParameters(method.TypeParameters),
             Override: overridesInherited
         );

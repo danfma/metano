@@ -1105,7 +1105,7 @@ internal sealed class IrToTsClassEmitter(
 
         var returnType = IrToTsTypeMapper.Map(irMethod.ReturnType, BclOverrides);
 
-        var promotedStaticTps = PromoteClassTypeParamsForStatic(irMethod, owner);
+        var promotedStaticTps = PromoteClassTypeParamsForStatic(irMethod, owner.TypeParameters);
         var sourceTypeParams = (promotedStaticTps, irMethod.TypeParameters) switch
         {
             ({ Count: > 0 } p, { Count: > 0 } m) =>
@@ -1137,12 +1137,12 @@ internal sealed class IrToTsClassEmitter(
     /// Returns <c>null</c> for non-static methods or when the class has no
     /// type parameters.
     /// </summary>
-    private static IReadOnlyList<IrTypeParameter>? PromoteClassTypeParamsForStatic(
+    internal static IReadOnlyList<IrTypeParameter>? PromoteClassTypeParamsForStatic(
         IrMethodDeclaration method,
-        IrClassDeclaration owner
+        IReadOnlyList<IrTypeParameter>? classTypeParameters
     )
     {
-        if (!method.IsStatic || owner.TypeParameters is not { Count: > 0 } classTps)
+        if (!method.IsStatic || classTypeParameters is not { Count: > 0 } classTps)
             return null;
 
         var referenced = new HashSet<string>(StringComparer.Ordinal);

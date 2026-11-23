@@ -81,6 +81,67 @@ public class OverloadDispatcherFixTests
     }
 
     [Test]
+    public async Task StaticGroupOfGenericClass_RedeclaresTheClassTypeParameters()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Box<T>
+            {
+                public T V;
+
+                public Box(T v) { V = v; }
+
+                public static Box<T> Make(T v) => new Box<T>(v);
+
+                public static Box<T> Make(T v, int n) => new Box<T>(v);
+            }
+            """
+        );
+
+        var output = result["box.ts"];
+
+        await Assert.That(output).Contains("static makeV<T>(v: T): Box<T> {");
+        await Assert.That(output).Contains("static makeVN<T>(v: T, n: number): Box<T> {");
+        await Assert.That(output).Contains("static make<T>(v: T): Box<T>;");
+        await Assert.That(output).Contains("static make(...args: unknown[]): any {");
+    }
+
+    [Test]
+    public async Task StaticAndInstanceOverloads_LowerOnTheirOwnSides()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class St
+            {
+                public int Add(int a) => a;
+
+                public static int Add(string a) => 0;
+
+                public static int Add(string a, string b) => 1;
+
+                public int Use() => Add(1) + Add("x");
+            }
+            """
+        );
+
+        var output = result["st.ts"];
+
+        await Assert.That(output).Contains("static addString(a: string): number {");
+        await Assert.That(output).Contains("static add(...args: unknown[]): number {");
+        await Assert.That(output).Contains("return St.addString(args[0] as string);");
+        await Assert
+            .That(output)
+            .Contains("add(a: number): number {\n    return this.addInt32(a);");
+        await Assert.That(output).DoesNotContain("this.addString(");
+    }
+
+    [Test]
     public async Task PlainObjectOverloads_EmitOneFunctionPerName()
     {
         var result = TranspileHelper.Transpile(
