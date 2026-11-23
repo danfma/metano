@@ -26,7 +26,7 @@ internal static class DartConstructorsBridge
 
             acc.Add(
                 new DartField(
-                    IrToDartNamingPolicy.ToParameterName(p.Parameter.Name),
+                    IrToDartNamingPolicy.ToPromotedMemberName(p),
                     IrToDartTypeMapper.Map(p.Parameter.Type),
                     IsFinal: isFinal
                 )
@@ -209,7 +209,9 @@ internal static class DartConstructorsBridge
                     initializesFields && p.Promotion != IrParameterPromotion.None;
 
                 return new DartConstructorParameter(
-                    Name: IrToDartNamingPolicy.ToParameterName(p.Parameter.Name),
+                    Name: isFieldInitializer
+                        ? IrToDartNamingPolicy.ToPromotedMemberName(p)
+                        : IrToDartNamingPolicy.ToParameterName(p.Parameter.Name),
                     Type: isFieldInitializer ? null : IrToDartTypeMapper.Map(p.Parameter.Type),
                     IsFieldInitializer: isFieldInitializer,
                     IsRequired: !p.Parameter.HasDefaultValue,

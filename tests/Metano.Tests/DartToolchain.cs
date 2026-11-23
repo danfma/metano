@@ -63,6 +63,8 @@ internal static class DartToolchain
 
         try
         {
+            await WritePackageConfigAsync(tempDir);
+
             foreach (var (name, content) in files)
                 await File.WriteAllTextAsync(Path.Combine(tempDir, name), content);
 
@@ -90,6 +92,8 @@ internal static class DartToolchain
 
         try
         {
+            await WritePackageConfigAsync(tempDir);
+
             foreach (var (name, content) in files)
                 await File.WriteAllTextAsync(Path.Combine(tempDir, name), content);
 
@@ -110,5 +114,46 @@ internal static class DartToolchain
             if (Directory.Exists(tempDir))
                 Directory.Delete(tempDir, recursive: true);
         }
+    }
+
+    private static async Task WritePackageConfigAsync(string tempDir)
+    {
+        var runtimeDir = FindMetanoRuntimeDir();
+        if (runtimeDir is null)
+            return;
+
+        var dartToolDir = Path.Combine(tempDir, ".dart_tool");
+        Directory.CreateDirectory(dartToolDir);
+
+        var rootUri = new Uri(runtimeDir.TrimEnd(Path.DirectorySeparatorChar) + "/").AbsoluteUri;
+        var json = $$"""
+            {
+              "configVersion": 2,
+              "packages": [
+                {
+                  "name": "metano_runtime",
+                  "rootUri": "{{rootUri}}",
+                  "packageUri": "lib/"
+                }
+              ]
+            }
+            """;
+
+        await File.WriteAllTextAsync(Path.Combine(dartToolDir, "package_config.json"), json);
+    }
+
+    private static string? FindMetanoRuntimeDir()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, "targets", "dart", "metano_runtime");
+            if (Directory.Exists(candidate))
+                return candidate;
+
+            dir = dir.Parent;
+        }
+
+        return null;
     }
 }

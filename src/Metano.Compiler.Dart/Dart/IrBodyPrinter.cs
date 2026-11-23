@@ -626,7 +626,20 @@ public static class IrBodyPrinter
             // The member name stays in its original C# casing; `IrMemberAccess`
             // is rendered via the body printer which in turn calls the naming
             // policy, so we don't camelCase it twice here.
-            var member = new IrMemberAccess(value, sub.MemberName);
+            var member = new IrMemberAccess(
+                value,
+                sub.MemberName,
+                Origin: sub.EmittedName is { } emitted
+                    ? new IrMemberOrigin(
+                        "",
+                        sub.MemberName,
+                        false,
+                        false,
+                        false,
+                        EmittedName: emitted
+                    )
+                    : null
+            );
             PrintSubPatternAsBooleanExpression(sb, member, sub.Pattern);
             wroteAny = true;
         }

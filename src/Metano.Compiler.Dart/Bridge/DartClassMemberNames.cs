@@ -28,7 +28,7 @@ internal static class DartClassMemberNames
             {
                 members.Add(
                     new DartUserMember(
-                        IrToDartNamingPolicy.ToParameterName(parameter.Parameter.Name),
+                        IrToDartNamingPolicy.ToPromotedMemberName(parameter),
                         parameter.Parameter.Name,
                         IsStatic: false
                     )

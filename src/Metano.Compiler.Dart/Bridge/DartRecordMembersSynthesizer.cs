@@ -49,7 +49,7 @@ internal static class DartRecordMembersSynthesizer
             var copyFields = ctor
                 .Parameters.Select(p =>
                     (
-                        Name: IrToDartNamingPolicy.ToParameterName(p.Parameter.Name),
+                        Name: IrToDartNamingPolicy.ToPromotedMemberName(p),
                         Type: IrToDartTypeMapper.Map(p.Parameter.Type)
                     )
                 )

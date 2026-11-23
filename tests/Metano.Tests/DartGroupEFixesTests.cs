@@ -362,6 +362,54 @@ public class DartGroupEFixesTests
         await Assert.That(output).IsEqualTo("OK");
     }
 
+    [Test]
+    public async Task RecordPositionalProperty_NameAttribute_ConsistentEverywhere_347()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record Rec([property: Name("ident")] int Id);
+
+            [Transpile]
+            public static class RecUser
+            {
+                public static int Use(Rec r) => r is { Id: 3 } ? (r with { Id = 4 }).Id : r.Id;
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        var rec = files["rec.dart"];
+        await Assert.That(rec).Contains("Rec(this.ident);");
+        await Assert.That(rec).Contains("final int ident;");
+        await Assert.That(rec).Contains("Rec copyWith({int? ident})");
+
+        var recUser = files["rec_user.dart"];
+        await Assert.That(recUser).Contains("r.ident == 3 ? r.copyWith(ident: 4).ident : r.ident");
+
+        var output = await DartToolchain.AnalyzeAndRunAsync(
+            files,
+            """
+            import 'rec.dart';
+            import 'rec_user.dart';
+
+            void main() {
+              var a = Rec(3);
+              var b = Rec(3);
+              if (a != b || a.hashCode != b.hashCode) {
+                throw StateError('Equality mismatch');
+              }
+              if (RecUser.use(a) != 4 || RecUser.use(Rec(5)) != 5) {
+                throw StateError('Unexpected use result');
+              }
+              print('OK');
+            }
+            """
+        );
+        await Assert.That(output).IsEqualTo("OK");
+    }
+
     private static Dictionary<string, string> TranspileTrees(IReadOnlyList<string> sources)
     {
         var trees = sources
