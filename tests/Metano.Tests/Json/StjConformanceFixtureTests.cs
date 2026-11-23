@@ -733,6 +733,11 @@ public class StjConformanceFixtureTests
                 () => (Tiny)200,
                 async value => await Assert.That(value).IsEqualTo((Tiny)200)
             ),
+            // #502: a member typed as a non-polymorphic interface.
+            ["V13f"] = WriteOnly(() => new Dashboard("t", new Gauge(5, "kg"))),
+            ["V13g"] = ReadOnly(async value =>
+                await Assert.That(((Dashboard)value!).Main).IsNull()
+            ),
             ["V14"] = Roundtrip(
                 () => Flavor.Sweet,
                 async value => await Assert.That(value).IsEqualTo(Flavor.Sweet)

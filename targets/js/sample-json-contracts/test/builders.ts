@@ -10,12 +10,14 @@ import { Account } from "#/sample-json-contracts/account";
 import { Blob } from "#/sample-json-contracts/blob";
 import type { Clip } from "#/sample-json-contracts/clip";
 import { Color } from "#/sample-json-contracts/color";
+import { Dashboard } from "#/sample-json-contracts/dashboard";
 import { DBer } from "#/sample-json-contracts/d-ber";
 import { DBase } from "#/sample-json-contracts/d-base";
 import { EpisodeRec } from "#/sample-json-contracts/episode-rec";
 import { EpisodeSummary } from "#/sample-json-contracts/episode-summary";
 import { Feed } from "#/sample-json-contracts/feed";
 import { Flavor } from "#/sample-json-contracts/flavor";
+import { Gauge } from "#/sample-json-contracts/gauge";
 import { GDer } from "#/sample-json-contracts/g-der";
 import { Group } from "#/sample-json-contracts/group";
 import { GuidMapHolder } from "#/sample-json-contracts/guid-map-holder";
@@ -438,6 +440,9 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   },
   V13b: { build: () => 42, assertRead: (value) => expect(value).toBe(42) },
   V13c: { build: () => 200, assertRead: (value) => expect(value).toBe(200) },
+  // #502: a member typed as a non-polymorphic interface.
+  V13f: { build: () => new Dashboard("t", new Gauge(5, "kg")) },
+  V13g: { assertRead: (value) => expect((value as Dashboard).main).toBeNull() },
   V14: { build: () => Flavor.Sweet, assertRead: (value) => expect(value).toBe("Sweet") },
   V15: {
     build: () => HashSet.of(["a", "b"]),

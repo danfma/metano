@@ -1392,6 +1392,14 @@ export function isPoint(value: unknown): value is Point {
   `{"$type":"sq","Side":2,"Area":4}`, as System.Text.Json does. An interface
   registered as a derived type is `MS0032`; an interface without
   `[JsonDerivedType]` is still not a JSON contract (`MS0035` as a root).
+- **Non-polymorphic interface members.** A member typed as an interface without
+  `[JsonDerivedType]` claims a spec with the interface's properties and no
+  `type`, as System.Text.Json writes it: `Dashboard("t", new Gauge(5, "kg"))`
+  through `IGauge Main` writes `{"Title":"t","Main":{"Level":5}}`. Reading a
+  JSON object into it throws `NotSupportedException` `Deserialization of
+  interface or abstract types is not supported. Type
+  'SampleJsonContracts.IGauge'.`, as does reading into a non-polymorphic
+  abstract class; `null` reads as `null` (#502).
 - **Synthesized guards.** Every `[PlainObject]` type a `[JsonDerivedType]`
   registers, and every concrete `[PlainObject]` type that is itself
   polymorphic, gets an `isT` guard in its own file, built like a

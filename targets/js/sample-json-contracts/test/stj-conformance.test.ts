@@ -18,6 +18,7 @@ import { JsonException, JsonSerializer, NotSupportedException } from "metano-run
 
 import { Account } from "#/sample-json-contracts/account";
 import { Blob } from "#/sample-json-contracts/blob";
+import { Dashboard } from "#/sample-json-contracts/dashboard";
 import { DBer } from "#/sample-json-contracts/d-ber";
 import { DBase } from "#/sample-json-contracts/d-base";
 import { EpisodeRec } from "#/sample-json-contracts/episode-rec";
@@ -104,6 +105,7 @@ const errorClasses = { JsonException, NotSupportedException } as const;
 const expectedClasses: Record<string, new (...args: never[]) => object> = {
   Account,
   Blob,
+  Dashboard,
   DBer,
   DBase,
   EpisodeRec,

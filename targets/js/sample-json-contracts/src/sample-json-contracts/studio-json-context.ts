@@ -3,11 +3,17 @@ import { Temporal } from "@js-temporal/polyfill";
 import { UUID, type ClassType } from "metano-runtime";
 import { Dictionary, HashSet, List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { Decimal } from "metano-runtime/system/decimal";
-import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
+import {
+  NotSupportedException,
+  SerializerContext,
+  type TypeSpec,
+  type ValueSpec,
+} from "metano-runtime/system/json";
 import { Clip } from "./clip";
 import { Color } from "./color";
 import { DBase } from "./d-base";
 import { DBer } from "./d-ber";
+import { Dashboard } from "./dashboard";
 import { EpisodeRec } from "./episode-rec";
 import { EpisodeSummary } from "./episode-summary";
 import { Feed } from "./feed";
@@ -24,6 +30,7 @@ import { HolderInt } from "./holder-int";
 import { HolderLevel } from "./holder-level";
 import { HolderSPoint } from "./holder-s-point";
 import { IBase } from "./i-base";
+import type { IGauge } from "./i-gauge";
 import type { IShape } from "./i-shape";
 import type { IShapeB } from "./i-shape-b";
 import { IA } from "./ia";
@@ -134,6 +141,7 @@ export class StudioJsonContext extends SerializerContext {
   private _flavor?: ValueSpec<Flavor>;
   private _perms?: ValueSpec<Perms>;
   private _tiny?: ValueSpec<Tiny>;
+  private _dashboard?: TypeSpec<Dashboard>;
   private _sPoint?: TypeSpec<SPoint>;
   private _title?: ValueSpec<Title>;
   private _episodeRec?: TypeSpec<EpisodeRec>;
@@ -163,6 +171,7 @@ export class StudioJsonContext extends SerializerContext {
   private _rect?: TypeSpec<Rect>;
   private _mixedClass?: TypeSpec<MixedClass>;
   private _mixedPoint?: TypeSpec<MixedPoint>;
+  private _iGauge?: TypeSpec<IGauge>;
 
   static get $runtimeType(): ClassType<StudioJsonContext> {
     return (StudioJsonContext$rt ??= {
@@ -1305,6 +1314,34 @@ export class StudioJsonContext extends SerializerContext {
     }));
   }
 
+  get dashboard(): TypeSpec<Dashboard> {
+    return (this._dashboard ??= this.createSpec({
+      type: Dashboard,
+      runtimeType: () => Dashboard.$runtimeType,
+      factory: (p: Record<string, unknown>) =>
+        new Dashboard(p.title as string, p.main as IGauge | null),
+      properties: [
+        {
+          ts: "title",
+          json: "Title",
+          type: { kind: "primitive" },
+        },
+        {
+          ts: "main",
+          json: "Main",
+          type: {
+            kind: "nullable",
+            inner: {
+              kind: "ref",
+              spec: () => this.iGauge,
+            },
+          },
+          optional: true,
+        },
+      ],
+    }));
+  }
+
   get sPoint(): TypeSpec<SPoint> {
     return (this._sPoint ??= this.createSpec({
       type: SPoint,
@@ -1583,7 +1620,9 @@ export class StudioJsonContext extends SerializerContext {
       runtimeType: () => UNearAbs.$runtimeType,
       base: this.uNear,
       factory: () => {
-        throw new Error("Cannot construct abstract type 'UNearAbs'.");
+        throw new NotSupportedException(
+          "Deserialization of interface or abstract types is not supported. Type 'SampleJsonContracts.UNearAbs'.",
+        );
       },
       properties: [],
     }));
@@ -1796,6 +1835,23 @@ export class StudioJsonContext extends SerializerContext {
         {
           ts: "x",
           json: "X",
+          type: { kind: "primitive", numberType: "System.Int32" },
+        },
+      ],
+    }));
+  }
+
+  get iGauge(): TypeSpec<IGauge> {
+    return (this._iGauge ??= this.createSpec({
+      factory: () => {
+        throw new NotSupportedException(
+          "Deserialization of interface or abstract types is not supported. Type 'SampleJsonContracts.IGauge'.",
+        );
+      },
+      properties: [
+        {
+          ts: "level",
+          json: "Level",
           type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],

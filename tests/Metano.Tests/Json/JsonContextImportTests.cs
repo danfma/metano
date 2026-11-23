@@ -143,7 +143,9 @@ public class JsonContextImportTests
 
         await Assert
             .That(ts)
-            .Contains("""throw new Error("Cannot construct abstract type 'Base'.");""");
+            .Contains(
+                """throw new NotSupportedException("Deserialization of interface or abstract types is not supported. Type 'TestApp.Base'.");"""
+            );
     }
 
     [Test]
@@ -171,7 +173,9 @@ public class JsonContextImportTests
 
         await Assert
             .That(ts)
-            .Contains("""throw new Error("Cannot construct abstract type 'Base'.");""");
+            .Contains(
+                """throw new NotSupportedException("Deserialization of interface or abstract types is not supported. Type 'TestApp.Base'.");"""
+            );
     }
 
     /// <summary>

@@ -493,6 +493,32 @@
     }
   },
   {
+    "id": "V13f",
+    "context": "StudioJsonContext",
+    "getter": "dashboard",
+    "direction": "write",
+    "json": "{\"Title\":\"t\",\"Main\":{\"Level\":5}}"
+  },
+  {
+    "id": "V13g",
+    "context": "StudioJsonContext",
+    "getter": "dashboard",
+    "direction": "read",
+    "expectedClass": "Dashboard",
+    "json": "{\"Title\":\"t\",\"Main\":null}"
+  },
+  {
+    "id": "V13h",
+    "context": "StudioJsonContext",
+    "getter": "dashboard",
+    "direction": "read",
+    "json": "{\"Title\":\"t\",\"Main\":{\"Level\":5}}",
+    "error": {
+      "class": "NotSupportedException",
+      "message": "Deserialization of interface or abstract types is not supported. Type 'SampleJsonContracts.IGauge'."
+    }
+  },
+  {
     "id": "V15",
     "context": "StudioJsonContext",
     "getter": "hashSetString",
