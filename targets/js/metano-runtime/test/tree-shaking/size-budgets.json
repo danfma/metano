@@ -355,6 +355,7 @@
     "system/json/public-json-shape",
     "system/json/serializer-context",
     "system/json/spec-kind",
+    "system/json/spec-plans",
     "system/json/temporal-reads",
     "system/json/temporal-text",
     "system/json/types",
