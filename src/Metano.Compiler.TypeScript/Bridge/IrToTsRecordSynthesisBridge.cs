@@ -395,7 +395,8 @@ public static class IrToTsRecordSynthesisBridge
     /// The <c>hc.add</c> calls of one member: a (non-nullable) tuple adds
     /// each element, recursing into nested tuples, since the runtime cannot
     /// tell a tuple from a C# array, which hashes by reference (#403); any
-    /// other member adds itself.
+    /// other member adds itself. The reads are optional (<c>?.[0]</c>): a
+    /// struct's unrepresentable default leaves a tuple member undefined.
     /// </summary>
     private static IEnumerable<TsExpressionStatement> HashAdditions(
         TsExpression value,
@@ -407,7 +408,8 @@ public static class IrToTsRecordSynthesisBridge
                     HashAdditions(
                         new TsElementAccess(
                             value,
-                            new TsLiteral(index.ToString(CultureInfo.InvariantCulture))
+                            new TsLiteral(index.ToString(CultureInfo.InvariantCulture)),
+                            Optional: true
                         ),
                         element
                     )

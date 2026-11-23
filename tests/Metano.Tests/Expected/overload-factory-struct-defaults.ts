@@ -113,7 +113,8 @@ export class Day {
     hc.add(this.mood);
     hc.add(this.nested);
     hc.add(this.id);
-    hc.add(this.span);
+    hc.add(this.span?.[0]);
+    hc.add(this.span?.[1]);
 
     return hc.toHashCode();
   }

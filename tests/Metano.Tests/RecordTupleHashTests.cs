@@ -19,9 +19,9 @@ public class RecordTupleHashTests
             """
         )["shape.ts"];
 
-        await Assert.That(output).Contains("hc.add(this.pair[0][0]);");
-        await Assert.That(output).Contains("hc.add(this.pair[0][1]);");
-        await Assert.That(output).Contains("hc.add(this.pair[1]);");
+        await Assert.That(output).Contains("hc.add(this.pair?.[0]?.[0]);");
+        await Assert.That(output).Contains("hc.add(this.pair?.[0]?.[1]);");
+        await Assert.That(output).Contains("hc.add(this.pair?.[1]);");
         await Assert.That(output).Contains("hc.add(this.items);");
     }
 }
