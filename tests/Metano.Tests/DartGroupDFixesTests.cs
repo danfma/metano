@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Metano.Tests;
 
 /// <summary>
@@ -363,45 +361,20 @@ public class DartGroupDFixesTests
 
         await Assert.That(diagnostics).IsEmpty();
 
-        if (!IsDartAvailable())
-            Skip.Test("dart SDK not found on PATH.");
+        var output = await DartToolchain.AnalyzeAndRunAsync(
+            files,
+            """
+            import 'program.dart';
 
-        var tempDir = Path.Combine(Path.GetTempPath(), $"metano-dart-w6d-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-
-        try
-        {
-            foreach (var (name, content) in files)
-                await File.WriteAllTextAsync(Path.Combine(tempDir, name), content);
-
-            await File.WriteAllTextAsync(
-                Path.Combine(tempDir, "main.dart"),
-                """
-                import 'program.dart';
-
-                Future<void> main() async {
-                  if (!await Program.check()) {
-                    throw StateError('Program.check() returned false');
-                  }
-                  print('OK');
-                }
-                """
-            );
-
-            var analyze = await RunDartAsync(["analyze"], tempDir);
-            if (analyze.ExitCode != 0)
-                throw new InvalidOperationException($"dart analyze failed:\n{analyze.Output}");
-
-            var run = await RunDartAsync(["run", "main.dart"], tempDir);
-            if (run.ExitCode != 0)
-                throw new InvalidOperationException($"dart run failed:\n{run.Output}");
-            await Assert.That(run.Output.Trim()).IsEqualTo("OK");
-        }
-        finally
-        {
-            if (Directory.Exists(tempDir))
-                Directory.Delete(tempDir, recursive: true);
-        }
+            Future<void> main() async {
+              if (!await Program.check()) {
+                throw StateError('Program.check() returned false');
+              }
+              print('OK');
+            }
+            """
+        );
+        await Assert.That(output).IsEqualTo("OK");
     }
 
     [Test]
@@ -469,54 +442,5 @@ public class DartGroupDFixesTests
 
         await Assert.That(diagnostics).IsNotEmpty();
         await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsTrue();
-    }
-
-    private static bool IsDartAvailable()
-    {
-        var path = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrEmpty(path))
-            return false;
-
-        var executable = OperatingSystem.IsWindows() ? "dart.exe" : "dart";
-        return path.Split(Path.PathSeparator)
-            .Any(dir =>
-                !string.IsNullOrWhiteSpace(dir) && File.Exists(Path.Combine(dir, executable))
-            );
-    }
-
-    private static async Task<(int ExitCode, string Output)> RunDartAsync(
-        string[] args,
-        string workingDirectory
-    )
-    {
-        var psi = new ProcessStartInfo("dart")
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-
-        foreach (var arg in args)
-            psi.ArgumentList.Add(arg);
-
-        using var process = Process.Start(psi)!;
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-
-        try
-        {
-            await process.WaitForExitAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"dart {string.Join(' ', args)} timed out after 30s.");
-        }
-
-        var outputs = await Task.WhenAll(stdoutTask, stderrTask);
-        return (process.ExitCode, outputs[0] + outputs[1]);
     }
 }

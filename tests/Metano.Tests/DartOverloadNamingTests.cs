@@ -1537,7 +1537,7 @@ public class DartOverloadNamingTests
         await Assert.That(derived).Contains(": super.fromLabel(label)");
         await Assert.That(optDerived).Contains(": super(x)");
 
-        AssertDartAnalyzes(files);
+        await DartToolchain.AssertAnalyzesAsync(files);
     }
 
     [Test]
@@ -1571,40 +1571,7 @@ public class DartOverloadNamingTests
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.OverloadNameShadowed))
             .IsTrue();
 
-        AssertDartAnalyzes(files);
-    }
-
-    private static void AssertDartAnalyzes(Dictionary<string, string> files)
-    {
-        var tempDir = Path.Combine(Path.GetTempPath(), $"metano-dart-572-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-
-        try
-        {
-            foreach (var (name, content) in files)
-                File.WriteAllText(Path.Combine(tempDir, name), content);
-
-            var psi = new System.Diagnostics.ProcessStartInfo("dart", "analyze")
-            {
-                WorkingDirectory = tempDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-
-            using var process = System.Diagnostics.Process.Start(psi)!;
-            var stdout = process.StandardOutput.ReadToEnd();
-            var stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
-                throw new InvalidOperationException($"dart analyze failed:\n{stdout}{stderr}");
-        }
-        finally
-        {
-            if (Directory.Exists(tempDir))
-                Directory.Delete(tempDir, recursive: true);
-        }
+        await DartToolchain.AssertAnalyzesAsync(files);
     }
 
     private static string FirstLineOf(MetanoDiagnostic diagnostic) =>

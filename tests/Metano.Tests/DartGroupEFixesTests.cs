@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Dart.Transformation;
@@ -159,7 +158,7 @@ public class DartGroupEFixesTests
         await Assert.That(consumer).Contains("import 'config.dart';");
         await Assert.That(consumer).Contains("=> count + max;");
 
-        AssertDartAnalyzes(files);
+        await DartToolchain.AssertAnalyzesAsync(files);
     }
 
     [Test]
@@ -237,40 +236,7 @@ public class DartGroupEFixesTests
 
         await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsTrue();
         await Assert.That(files["my_dict.dart"]).DoesNotContain("extends Map");
-        AssertDartAnalyzes(files);
-    }
-
-    private static void AssertDartAnalyzes(Dictionary<string, string> files)
-    {
-        var tempDir = Path.Combine(Path.GetTempPath(), $"metano-dart-w6e-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-
-        try
-        {
-            foreach (var (name, content) in files)
-                File.WriteAllText(Path.Combine(tempDir, name), content);
-
-            var psi = new ProcessStartInfo("dart", "analyze")
-            {
-                WorkingDirectory = tempDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-
-            using var process = Process.Start(psi)!;
-            var stdout = process.StandardOutput.ReadToEnd();
-            var stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
-                throw new InvalidOperationException($"dart analyze failed:\n{stdout}{stderr}");
-        }
-        finally
-        {
-            if (Directory.Exists(tempDir))
-                Directory.Delete(tempDir, recursive: true);
-        }
+        await DartToolchain.AssertAnalyzesAsync(files);
     }
 
     private static Dictionary<string, string> TranspileTrees(IReadOnlyList<string> sources)
