@@ -272,6 +272,20 @@ public class DartGroupDFixesTests
             }
 
             [Transpile]
+            public class Cell<T>
+            {
+                public T V;
+
+                public Cell(T v) => V = v;
+            }
+
+            [Transpile]
+            public class Acc
+            {
+                public int Pair(int a, int b) => a * 10 + b;
+            }
+
+            [Transpile]
             public static class Program
             {
                 public static List<string> Log = [];
@@ -292,6 +306,8 @@ public class DartGroupDFixesTests
                 }
 
                 public static T Identity<T>(T value) => value;
+
+                public static Cell<T> Make<T>(T a, T b) => new Cell<T>(a);
 
                 public static Dictionary<string, int> CloneDict<T>(T d) where T : Dictionary<string, int> =>
                     new Dictionary<string, int>([.. d]);
@@ -314,6 +330,10 @@ public class DartGroupDFixesTests
                     var combined = Combine(b: Step("b", 2), a: Step("a", 1));
                     var summed = Sum(2, 1, 2, 3);
                     var id = Identity<object>(5);
+                    object cell = Make(b: Step("cell-b", 2), a: Step("cell-a", 1));
+                    var acc = new Acc();
+                    var pairTotal = 0;
+                    pairTotal += acc.Pair(b: Step("pair-b", 2), a: Step("pair-a", 1));
                     var d = new Dictionary<string, int>();
                     d["k"] = 7;
                     var cloned = CloneDict(d);
@@ -323,9 +343,15 @@ public class DartGroupDFixesTests
                         && svc.Scale(4) == 12
                         && calc.Add(3) == 8
                         && combined == 12
-                        && Log.Count == 2
+                        && cell is Cell<int>
+                        && pairTotal == 12
+                        && Log.Count == 6
                         && Log[0] == "b"
                         && Log[1] == "a"
+                        && Log[2] == "cell-b"
+                        && Log[3] == "cell-a"
+                        && Log[4] == "pair-b"
+                        && Log[5] == "pair-a"
                         && summed == 12
                         && (int)id == 5
                         && cloned["k"] == 7
@@ -336,6 +362,9 @@ public class DartGroupDFixesTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+
+        if (!IsDartAvailable())
+            Skip.Test("dart SDK not found on PATH.");
 
         var tempDir = Path.Combine(Path.GetTempPath(), $"metano-dart-w6d-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
@@ -359,11 +388,11 @@ public class DartGroupDFixesTests
                 """
             );
 
-            var analyze = RunDart("analyze", tempDir);
+            var analyze = await RunDartAsync(["analyze"], tempDir);
             if (analyze.ExitCode != 0)
                 throw new InvalidOperationException($"dart analyze failed:\n{analyze.Output}");
 
-            var run = RunDart("run main.dart", tempDir);
+            var run = await RunDartAsync(["run", "main.dart"], tempDir);
             if (run.ExitCode != 0)
                 throw new InvalidOperationException($"dart run failed:\n{run.Output}");
             await Assert.That(run.Output.Trim()).IsEqualTo("OK");
@@ -375,9 +404,92 @@ public class DartGroupDFixesTests
         }
     }
 
-    private static (int ExitCode, string Output) RunDart(string args, string workingDirectory)
+    [Test]
+    public async Task ReorderedCall_TypesClosureParametersAndExplicitTypeArguments_586()
     {
-        var psi = new ProcessStartInfo("dart", args)
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Cell<T>
+            {
+                public T V;
+
+                public Cell(T v) => V = v;
+            }
+
+            [Transpile]
+            public class Acc
+            {
+                public int Pair(int a, int b) => a * 10 + b;
+            }
+
+            [Transpile]
+            public static class Gens
+            {
+                public static int Tr(int x) => x;
+
+                public static Cell<T> Make<T>(T a, T b) => new Cell<T>(a);
+
+                public static bool Check()
+                {
+                    object o = Make(b: Tr(2), a: Tr(1));
+                    var acc = new Acc();
+                    int total = 0;
+                    total += acc.Pair(b: Tr(2), a: Tr(1));
+                    return o is Cell<int> && total == 12;
+                }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        var dart = files["gens.dart"];
+        await Assert
+            .That(dart)
+            .Contains("(int __arg1, int __arg0) => Gens.make<int>(__arg0, __arg1)");
+        await Assert
+            .That(dart)
+            .Contains("(Acc __target, int __arg1, int __arg0) => __target.pair(__arg0, __arg1)");
+    }
+
+    [Test]
+    public async Task SkippedNullableOpaqueDefault_ReportsMS0001_586_577()
+    {
+        var (_, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Ops
+            {
+                public ulong? U(ulong? a = 10, int b = 0) => a;
+
+                public bool Check() => U(b: 1) == 10;
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsNotEmpty();
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsTrue();
+    }
+
+    private static bool IsDartAvailable()
+    {
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(path))
+            return false;
+
+        var executable = OperatingSystem.IsWindows() ? "dart.exe" : "dart";
+        return path.Split(Path.PathSeparator)
+            .Any(dir =>
+                !string.IsNullOrWhiteSpace(dir) && File.Exists(Path.Combine(dir, executable))
+            );
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunDartAsync(
+        string[] args,
+        string workingDirectory
+    )
+    {
+        var psi = new ProcessStartInfo("dart")
         {
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
@@ -385,11 +497,26 @@ public class DartGroupDFixesTests
             UseShellExecute = false,
         };
 
-        using var process = Process.Start(psi)!;
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
+        foreach (var arg in args)
+            psi.ArgumentList.Add(arg);
 
-        return (process.ExitCode, stdout + stderr);
+        using var process = Process.Start(psi)!;
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        try
+        {
+            await process.WaitForExitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException($"dart {string.Join(' ', args)} timed out after 30s.");
+        }
+
+        var outputs = await Task.WhenAll(stdoutTask, stderrTask);
+        return (process.ExitCode, outputs[0] + outputs[1]);
     }
 }

@@ -486,7 +486,15 @@ public sealed partial class IrExpressionExtractor
         {
             ArgumentKind.ParamArray => ExpandedParamsElementsOf(argument),
             ArgumentKind.ParamCollection => [ExpandedParamsCollectionOf(argument)],
-            ArgumentKind.DefaultValue => [new IrArgument(BoundDefaultOf(argument))],
+            ArgumentKind.DefaultValue =>
+            [
+                new IrArgument(
+                    BoundDefaultOf(argument),
+                    Type: argument.Parameter is { } defaultParam
+                        ? MapTypeWithReifiedScope(defaultParam.Type, argument.Syntax)
+                        : null
+                ),
+            ],
             _ => [ExplicitBoundArgumentOf(argument)],
         };
 
@@ -510,7 +518,15 @@ public sealed partial class IrExpressionExtractor
                 },
                 argumentSyntax.Expression
             ),
-            ExpressionSyntax expression => (new IrArgument(Extract(expression)), expression),
+            ExpressionSyntax expression => (
+                new IrArgument(
+                    Extract(expression),
+                    Type: argument.Parameter is { } extParam
+                        ? MapTypeWithReifiedScope(extParam.Type, expression)
+                        : null
+                ),
+                expression
+            ),
             _ => throw new InvalidCastException(
                 $"An explicit argument has unexpected syntax '{argument.Syntax?.Kind()}'."
             ),
@@ -536,7 +552,18 @@ public sealed partial class IrExpressionExtractor
         var elements = ((IArrayCreationOperation)argument.Value).Initializer?.ElementValues
             ?? ImmutableArray<IOperation>.Empty;
 
-        return elements.Select(element => new IrArgument(Extract(ElementSyntaxOf(element))));
+        var elementType = (argument.Parameter?.Type as IArrayTypeSymbol)?.ElementType;
+
+        return elements.Select(element =>
+        {
+            var syntax = ElementSyntaxOf(element);
+            var type = elementType ?? element.Type;
+
+            return new IrArgument(
+                Extract(syntax),
+                Type: type is not null ? MapTypeWithReifiedScope(type, syntax) : null
+            );
+        });
     }
 
     /// <summary>

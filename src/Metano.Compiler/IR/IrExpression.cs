@@ -222,6 +222,12 @@ public sealed record IrMemberAccess(
 ) : IrExpression
 {
     /// <summary>
+    /// The static type of <see cref="Target"/> when resolved by the extractor,
+    /// so targets that bind the receiver to a closure parameter can type it.
+    /// </summary>
+    public IrTypeRef? TargetType { get; init; }
+
+    /// <summary>
     /// The dispatched overload a method-group reference resolved to (spec 013
     /// FR-018): a target renames the access to the overload's claimed fast
     /// path, keeping the receiver binding (<c>b.addX.bind(b)</c>). The
@@ -459,7 +465,8 @@ public sealed record IrArgument(
     IrExpression Value,
     string? Name = null,
     bool IsSpread = false,
-    bool IsOmittedDefault = false
+    bool IsOmittedDefault = false,
+    IrTypeRef? Type = null
 );
 
 /// <summary>

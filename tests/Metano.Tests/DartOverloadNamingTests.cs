@@ -317,13 +317,13 @@ public class DartOverloadNamingTests
             class Run {
               static int next() => 1;
 
-              static double a(K k) => ((__target, __arg1, __arg0) => __target.scaleDN(__arg0, __arg1))(k, Run.next(), 2);
+              static double a(K k) => ((K __target, int __arg1, double __arg0) => __target.scaleDN(__arg0, __arg1))(k, Run.next(), 2);
 
               static int b(K k) => k.countNItems(Run.next(), []);
 
               static int c() {
                 var c = Inner(1);
-                return ((__target, __arg1, __arg0) => __target.mAB(__arg0, __arg1))(c, (c = Inner(2)).tag, 3);
+                return ((Inner __target, int __arg1, int __arg0) => __target.mAB(__arg0, __arg1))(c, (c = Inner(2)).tag, 3);
               }
 
               static int d(Inner i) => i.mAB(2, 1);
@@ -463,25 +463,25 @@ public class DartOverloadNamingTests
 
               static Future<int> nextAsync() => Task.fromResult(1);
 
-              static int construct() => ((__arg1, __arg0) => Pair.fromAB(__arg0, __arg1))(Use.next(), Use.next()).v;
+              static int construct() => ((int __arg1, int __arg0) => Pair.fromAB(__arg0, __arg1))(Use.next(), Use.next()).v;
 
-              static int call(Pair p) => ((__target, __arg1, __arg0) => __target.twoAB(__arg0, __arg1))(p, Use.next(), Use.next());
+              static int call(Pair p) => ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(p, Use.next(), Use.next());
 
-              static int receiver(Holder h) => ((__target, __arg1, __arg0) => __target.twoAB(__arg0, __arg1))(h.inner, Use.next(), 3);
+              static int receiver(Holder h) => ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(h.inner, Use.next(), 3);
 
               static int localRead(Pair p) {
                 var x = 5;
-                return ((__target, __arg1, __arg0) => __target.twoAB(__arg0, __arg1))(p, Use.next(), x);
+                return ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(p, Use.next(), x);
               }
 
-              static double conditional(Pair p) => ((__target, __arg1, __arg0) => __target.scaleDN(__arg0, __arg1))(p, Use.next(), Use.flag() ? 2 : 3);
+              static double conditional(Pair p) => ((Pair __target, int __arg1, double __arg0) => __target.scaleDN(__arg0, __arg1))(p, Use.next(), Use.flag() ? 2 : 3);
 
-              static Future<int> awaited(Pair p) async => ((__target, __arg1, __arg0) => __target.twoAB(__arg0, __arg1))(p, Use.next(), await Use.nextAsync());
+              static Future<int> awaited(Pair p) async => ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(p, Use.next(), await Use.nextAsync());
 
               static int captured(Pair p) {
                 int x = 0;
                 int Function() bump = () => ++x;
-                return ((__target, __arg1, __arg0) => __target.twoAB(__arg0, __arg1))(p, bump(), x);
+                return ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(p, bump(), x);
               }
             }
 
@@ -1404,9 +1404,9 @@ public class DartOverloadNamingTests
             class Use {
               static int next() => 1;
 
-              static int call(Engine e) => ((__target, __arg1, __arg0) => __target.single(__arg0, __arg1))(e, Use.next(), Use.next());
+              static int call(Engine e) => ((Engine __target, int __arg1, int __arg0) => __target.single(__arg0, __arg1))(e, Use.next(), Use.next());
 
-              static Pair construct() => ((__arg1, __arg0) => Pair(__arg0, __arg1))(Use.next(), Use.next());
+              static Pair construct() => ((int __arg1, int __arg0) => Pair(__arg0, __arg1))(Use.next(), Use.next());
 
               static int oneEvaluation(Engine e) => e.single(4, Use.next());
 

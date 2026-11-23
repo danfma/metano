@@ -86,6 +86,15 @@ public static class DartBodyTypeReferences
             [
                 IrToDartTypeMapper.Map(pattern.Type),
             ],
+            IrLambdaExpression lambda => lambda
+                .Parameters.Select(p => p.Type)
+                .Where(t => t is not (IrUnknownTypeRef or IrDynamicTypeRef))
+                .Select(IrToDartTypeMapper.Map),
+            IrCallExpression
+            {
+                HasExplicitTypeArguments: true,
+                TypeArguments: { Count: > 0 } typeArgs
+            } => typeArgs.Select(IrToDartTypeMapper.Map),
             _ => [],
         };
 

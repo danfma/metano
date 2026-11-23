@@ -2841,7 +2841,11 @@ public sealed partial class IrExpressionExtractor
             return folded;
 
         var origin = BuildOrigin(_semantic.GetSymbolInfo(member.Node).Symbol);
-        var memberAccess = new IrMemberAccess(target, name, origin);
+        var receiverType = _semantic.GetTypeInfo(member.Receiver).Type;
+        var targetType = receiverType is not null
+            ? MapTypeWithReifiedScope(receiverType, member.Receiver)
+            : null;
+        var memberAccess = new IrMemberAccess(target, name, origin) { TargetType = targetType };
         return WrapMethodGroupForDelegate(member.Node, symbol, memberAccess);
     }
 
@@ -4377,8 +4381,23 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrArgument ExtractArgument(ArgumentSyntax argument) =>
         argument.RefOrOutKeyword.IsKind(SyntaxKind.None)
-            ? new(Extract(argument.Expression), argument.NameColon?.Name.Identifier.ValueText)
+            ? new(
+                Extract(argument.Expression),
+                argument.NameColon?.Name.Identifier.ValueText,
+                Type: ArgumentTypeOf(argument)
+            )
             : ExtractByReferenceArgument(argument);
+
+    private IrTypeRef? ArgumentTypeOf(ArgumentSyntax argument)
+    {
+        if (_semantic.GetOperation(argument) is IArgumentOperation { Parameter: { } parameter })
+            return MapTypeWithReifiedScope(parameter.Type, argument);
+
+        var type = _semantic.GetTypeInfo(argument.Expression).ConvertedType
+            ?? _semantic.GetTypeInfo(argument.Expression).Type;
+
+        return type is not null ? MapTypeWithReifiedScope(type, argument) : null;
+    }
 
     /// <summary>
     /// Lowers an extension-method call site (classic <c>(this T)</c>
@@ -4468,9 +4487,15 @@ public sealed partial class IrExpressionExtractor
             };
         }
 
+        var receiverType = _semantic.GetTypeInfo(extensionAccess.Receiver).Type;
         IReadOnlyList<IrArgument> helperArgs =
         [
-            new IrArgument(Extract(extensionAccess.Receiver)),
+            new IrArgument(
+                Extract(extensionAccess.Receiver),
+                Type: receiverType is not null
+                    ? MapTypeWithReifiedScope(receiverType, extensionAccess.Receiver)
+                    : null
+            ),
             .. extensionArgs,
         ];
 
@@ -5861,7 +5886,15 @@ public sealed partial class IrExpressionExtractor
         if (byName.TryGetValue(parameter.Name, out var named))
             return [named];
 
-        return parameter.IsParams ? [] : [new IrArgument(BuildDefaultArgument(parameter))];
+        return parameter.IsParams
+            ? []
+            :
+            [
+                new IrArgument(
+                    BuildDefaultArgument(parameter),
+                    Type: IrTypeRefMapper.Map(parameter.Type, _originResolver, _target)
+                ),
+            ];
     }
 
     private IrExpression BuildDefaultArgument(IParameterSymbol parameter)
