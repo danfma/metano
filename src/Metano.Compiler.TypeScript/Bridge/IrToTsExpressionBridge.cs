@@ -2699,7 +2699,8 @@ public static partial class IrToTsExpressionBridge
 
     private static bool KeepsTypeArguments(IrNewExpression ne) =>
         ne.Type is IrSetTypeRef or IrMapTypeRef or IrCollectionTypeRef
-        || ne is { Arguments.Count: 0, Type: IrNamedTypeRef { TypeArguments.Count: > 0 } };
+        || ne is { Arguments.Count: 0, Type: IrNamedTypeRef { TypeArguments.Count: > 0 } }
+        || ne.Type is IrNamedTypeRef { ContainerTypeArguments.Count: > 0 };
 
     private static IReadOnlyList<TsType>? ConstructedTypeArgumentsOf(
         IrTypeRef type,
@@ -2709,7 +2710,8 @@ public static partial class IrToTsExpressionBridge
         IReadOnlyList<IrTypeRef>? typeArguments = type switch
         {
             IrCollectionTypeRef collection => collection.TypeArguments,
-            IrNamedTypeRef { TypeArguments: { Count: > 0 } named } => named,
+            IrNamedTypeRef named
+                when IrToTsTypeMapper.AllTypeArgumentsOf(named) is { Count: > 0 } all => all,
             IrSetTypeRef set => [set.ElementType],
             IrMapTypeRef map => [map.KeyType, map.ValueType],
             _ => null,

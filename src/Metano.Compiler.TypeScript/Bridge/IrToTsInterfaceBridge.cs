@@ -65,7 +65,7 @@ public static class IrToTsInterfaceBridge
         // transformer already registered in `TypeNamesBySymbol` (and
         // consequently the file name + import collector).
         var tsName = nameOverride ?? IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
-        var typeParams = ConvertTypeParameters(ir.TypeParameters);
+        var typeParams = IrToTsTypeParameterMapper.ConvertDeclared(ir);
         var extends = BuildExtends(ir.BaseInterfaces);
 
         statements.Add(

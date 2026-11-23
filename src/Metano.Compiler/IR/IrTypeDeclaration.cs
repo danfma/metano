@@ -10,7 +10,16 @@ public abstract record IrTypeDeclaration(
     IrVisibility Visibility,
     IReadOnlyList<IrTypeParameter>? TypeParameters = null,
     IReadOnlyList<IrAttribute>? Attributes = null
-);
+)
+{
+    /// <summary>
+    /// For a class, struct or interface nested in generic types, the type
+    /// parameters of those containers, outermost first, which C# lets the nested
+    /// type use without declaring them (<c>Gen&lt;T&gt;.Sub</c> reads
+    /// <c>T</c>); <c>null</c> when no container is generic.
+    /// </summary>
+    public IReadOnlyList<IrTypeParameter>? ContainerTypeParameters { get; init; }
+}
 
 /// <summary>
 /// A class, struct, or record declaration.

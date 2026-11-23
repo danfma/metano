@@ -5,6 +5,18 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 internal static class IrToTsTypeParameterMapper
 {
+    /// <summary>
+    /// The type parameters a TypeScript declaration of <paramref name="declaration"/>
+    /// declares: those of its generic containers, which a declaration lowered
+    /// outside its container must bind itself (#436), then its own.
+    /// </summary>
+    public static IReadOnlyList<TsTypeParameter>? ConvertDeclared(IrTypeDeclaration declaration) =>
+        Convert(
+            declaration.ContainerTypeParameters is { } container
+                ? [.. container, .. declaration.TypeParameters ?? []]
+                : declaration.TypeParameters
+        );
+
     public static IReadOnlyList<TsTypeParameter>? Convert(
         IReadOnlyList<IrTypeParameter>? typeParameters
     )
