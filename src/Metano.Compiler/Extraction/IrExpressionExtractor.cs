@@ -2001,13 +2001,15 @@ public sealed partial class IrExpressionExtractor
             );
 
     /// <summary>
-    /// The endpoint of <paramref name="convertedType"/> when it is exactly
-    /// <c>decimal</c> or <c>BigInteger</c>; a nullable one keeps the literal's
-    /// own kind, which its lifted conversion converts.
+    /// The endpoint of <paramref name="convertedType"/>, nullable or not, when
+    /// it is <c>decimal</c> or <c>BigInteger</c>: a literal in a
+    /// <c>decimal?</c> slot (<c>decimal? d = 5</c>) is a decimal value too,
+    /// since no conversion node follows a literal (#606).
     /// </summary>
     private static IrNumericEndpoint? DigitCarryingTarget(ITypeSymbol? convertedType) =>
-        convertedType?.SpecialType == SpecialType.System_Decimal || convertedType.IsBigInteger()
-            ? NumericEndpoints.Of(convertedType)
+        NumericEndpoints.Of(convertedType)
+            is { Kind: IrNumericKind.Decimal or IrNumericKind.BigInteger, IsEnum: false } endpoint
+            ? endpoint
             : null;
 
     private static IrLiteral ClassifyNumeric(object? value) =>
