@@ -70,13 +70,34 @@ smoke_wrapper_pid=""
 smoke_job_pid=""
 export METANO_SMOKE_WRAPPER_PID_FILE="$WORK_DIR/wrapper.pid"
 export METANO_SMOKE_CANCEL_FILE="$WORK_DIR/cancel.signal"
+
+# Confirms wrapper.pid still names our own python3 wrapper before signalling
+# it: the pid can outlive the file's cleanup and be reused by an unrelated
+# process in that window (#717) — this narrows it, it does not close it.
+# run_dotnet stamps a nonce on the wrapper's own argv (after the long -c
+# script), so a reused pid's live command line won't carry it; -ww asks ps
+# for the unlimited-width line so that long -c text is never truncated away.
+verified_wrapper_pid() {
+  local content="$1"
+  [[ "$content" == *" "* ]] || return 0
+  local pid="${content%% *}" nonce="${content#* }"
+  [ -n "$pid" ] && [ -n "$nonce" ] || return 0
+  local command
+  command="$(ps -ww -p "$pid" -o command= 2>/dev/null)" || return 0
+  [[ "$command" == *"$nonce"* ]] && printf '%s' "$pid"
+  return 0
+}
+
 terminate_smoke() {
   local signum="$1"
   trap '' TERM INT
   echo "$signum" >"$METANO_SMOKE_CANCEL_FILE.tmp"
   mv "$METANO_SMOKE_CANCEL_FILE.tmp" "$METANO_SMOKE_CANCEL_FILE"
-  if [ -f "$METANO_SMOKE_WRAPPER_PID_FILE" ]; then
-    smoke_wrapper_pid="$(cat "$METANO_SMOKE_WRAPPER_PID_FILE")"
+  # Trust an already-known pid from this same shell (run_dotnet's own $!)
+  # over the file; only fall back to the verified file-based lookup when we
+  # don't have one (the subshell/capture call sites signal across shells).
+  if [ -z "$smoke_wrapper_pid" ] && [ -f "$METANO_SMOKE_WRAPPER_PID_FILE" ]; then
+    smoke_wrapper_pid="$(verified_wrapper_pid "$(cat "$METANO_SMOKE_WRAPPER_PID_FILE")")"
   fi
   if [ -n "$smoke_wrapper_pid" ]; then
     kill -"$signum" "$smoke_wrapper_pid" 2>/dev/null || true
@@ -88,7 +109,7 @@ trap 'terminate_smoke 15' TERM
 trap 'terminate_smoke 2' INT
 
 run_dotnet() {
-  local status=0
+  local status=0 nonce="wrapper-$$-$RANDOM-$RANDOM"
   python3 -c '
 import math, os, pathlib, signal, subprocess, sys
 deadline = float(os.environ.get("METANO_SMOKE_DOTNET_TIMEOUT_SECONDS", "300"))
@@ -118,6 +139,31 @@ def kill_group(signum):
         ):
             raise
 
+def kill_group_recording(signum):
+    # A killpg failure (an EPERM refusal, or a failure in the Darwin
+    # disambiguation ps call) must not skip the SIGKILL escalation and final
+    # wait; record it and let the caller fail only once the group is reaped (#717).
+    try:
+        kill_group(signum)
+    except Exception as error:
+        print(f"killpg(group({process.pid}), {signum}) failed: {error}", file=sys.stderr)
+        return error
+    return None
+
+def reap_after_signal(termination_signum):
+    reap_error = kill_group_recording(termination_signum)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    # The parent can exit before descendants that ignore the forwarded signal.
+    reap_error = kill_group_recording(signal.SIGKILL) or reap_error
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+    return reap_error
+
 class SmokeSignal(BaseException):
     def __init__(self, signum):
         self.signum = signum
@@ -141,13 +187,13 @@ def prepare_child():
 try:
     pid_file = pathlib.Path(os.environ["METANO_SMOKE_WRAPPER_PID_FILE"])
     temporary_pid_file = pid_file.with_suffix(".tmp")
-    temporary_pid_file.write_text(str(os.getpid()))
+    temporary_pid_file.write_text(f"{os.getpid()} {sys.argv[1]}")
     temporary_pid_file.replace(pid_file)
     cancellation = pathlib.Path(os.environ["METANO_SMOKE_CANCEL_FILE"])
     if cancellation.exists():
         raise SmokeSignal(int(cancellation.read_text()))
     process = subprocess.Popen(
-        ["dotnet", *sys.argv[1:]], start_new_session=True, preexec_fn=prepare_child
+        ["dotnet", *sys.argv[2:]], start_new_session=True, preexec_fn=prepare_child
     )
     signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
     sys.exit(process.wait(timeout=deadline))
@@ -156,21 +202,21 @@ except SmokeSignal as termination:
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     if process is None:
         sys.exit(128 + termination.signum)
-    kill_group(termination.signum)
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        pass
-    # The parent can exit before descendants that ignore the forwarded signal.
-    kill_group(signal.SIGKILL)
-    process.wait()
+    reap_error = reap_after_signal(termination.signum)
+    if reap_error is not None:
+        raise reap_error
     sys.exit(128 + termination.signum)
 except subprocess.TimeoutExpired:
-    kill_group(signal.SIGKILL)
-    process.wait()
+    reap_error = kill_group_recording(signal.SIGKILL)
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
     print(f"dotnet exceeded the {deadline:g}-second smoke-test deadline", file=sys.stderr)
+    if reap_error is not None:
+        raise reap_error
     sys.exit(124)
-' "$@" &
+' "$nonce" "$@" &
   smoke_wrapper_pid=$!
   wait "$smoke_wrapper_pid" || status=$?
   smoke_wrapper_pid=""

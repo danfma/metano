@@ -2,6 +2,7 @@
 """Exercise the real smoke deadline and signal wrapper with a dotnet process tree."""
 
 import ast
+import io
 import os
 from pathlib import Path
 import signal
@@ -14,6 +15,13 @@ from unittest.mock import Mock
 
 root = Path(sys.argv[1])
 smoke = Path(__file__).with_name("smoke-test-build-package.sh").resolve()
+
+
+def wrapper_source():
+    return smoke.read_text().split("python3 -c '\n", 1)[1].split("\n' \"$nonce\" \"$@\" &", 1)[0]
+
+
+WRAPPER_MODULE = ast.parse(wrapper_source())
 stub_dir = root / "stub-bin"
 stub_dir.mkdir()
 stub = stub_dir / "dotnet"
@@ -135,8 +143,7 @@ def check_capture(exit_code):
 def check_reaped_group(platform, states, refused):
     # Exercise the real embedded kill function without relying on Darwin's rare
     # EPERM/reaping race. A live group or another platform must still fail loudly.
-    wrapper = smoke.read_text().split("python3 -c '\n", 1)[1].split("\n' \"$@\" &", 1)[0]
-    function = next(node for node in ast.parse(wrapper).body
+    function = next(node for node in WRAPPER_MODULE.body
                     if isinstance(node, ast.FunctionDef) and node.name == "kill_group")
     namespace = {
         "os": SimpleNamespace(killpg=Mock(side_effect=PermissionError)),
@@ -153,10 +160,127 @@ def check_reaped_group(platform, states, refused):
         assert not refused, (platform, states)
 
 
+def run_reap_after_signal(refusal_count):
+    # Drives the real kill_group_recording/reap_after_signal (AST-extracted
+    # from the wrapper, not reimplemented) with a fake killpg that refuses
+    # the first `refusal_count` calls, returning (reap_error, calls, stderr).
+    functions = [
+        node for node in WRAPPER_MODULE.body
+        if isinstance(node, ast.FunctionDef) and node.name in ("kill_group_recording", "reap_after_signal")
+    ]
+    assert {f.name for f in functions} == {"kill_group_recording", "reap_after_signal"}, (
+        "kill_group_recording/reap_after_signal were not found verbatim in the wrapper"
+    )
+
+    calls = []
+    remaining = {"n": refusal_count}
+
+    def fake_kill_group(signum):
+        calls.append(("kill_group", signum))
+        if remaining["n"] > 0:
+            remaining["n"] -= 1
+            raise PermissionError(f"Operation not permitted ({signum})")
+
+    class FakeProcess:
+        pid = 4242
+
+        def wait(self, timeout=None):
+            calls.append(("wait", timeout))
+
+    stderr = io.StringIO()
+    namespace = {
+        "process": FakeProcess(),
+        "kill_group": fake_kill_group,
+        "signal": SimpleNamespace(SIGKILL=signal.SIGKILL, SIGTERM=signal.SIGTERM),
+        "subprocess": SimpleNamespace(TimeoutExpired=subprocess.TimeoutExpired),
+        "sys": SimpleNamespace(stderr=stderr),
+    }
+    exec(
+        compile(ast.Module(body=functions, type_ignores=[]), str(smoke), "exec"),
+        namespace,
+    )
+    reap_error = namespace["reap_after_signal"](signal.SIGTERM)
+    return reap_error, calls, stderr.getvalue()
+
+
+def check_reap_despite_eperm():
+    # A killpg refusal (the Darwin EPERM race) must not skip the SIGKILL
+    # escalation and the final wait; it must only fail after both ran (#717).
+    reap_error, calls, stderr_text = run_reap_after_signal(refusal_count=1)
+    assert isinstance(reap_error, PermissionError), reap_error
+    assert calls == [
+        ("kill_group", signal.SIGTERM),
+        ("wait", 5),
+        ("kill_group", signal.SIGKILL),
+        ("wait", 10),
+    ], calls
+    assert "failed" in stderr_text, stderr_text
+
+    # If the SIGKILL escalation is ALSO refused, its error — not the original
+    # signal's — must be the one that surfaces, since it is the more final
+    # failure; the call order and the final bounded wait must still happen.
+    reap_error, calls, stderr_text = run_reap_after_signal(refusal_count=2)
+    assert isinstance(reap_error, PermissionError), reap_error
+    assert str(signal.SIGKILL) in str(reap_error), reap_error
+    assert calls == [
+        ("kill_group", signal.SIGTERM),
+        ("wait", 5),
+        ("kill_group", signal.SIGKILL),
+        ("wait", 10),
+    ], calls
+    assert stderr_text.count("failed") == 2, stderr_text
+
+
+def check_stale_pid_guard():
+    # A wrapper.pid that outlives its process can be reused by an unrelated
+    # one before the file is cleaned up (#717, a negligible-probability
+    # window). verified_wrapper_pid must refuse a pid whose live command line
+    # does not carry the nonce run_dotnet stamped on its own argv, instead of
+    # trusting the file blindly. Exercised directly (not through a real
+    # SIGTERM/terminate_smoke round trip): kill's own argument parsing would
+    # already reject an unverified "pid nonce" pair, which would make an
+    # end-to-end test pass for the wrong reason.
+    real_nonce = f"nonce-{os.getpid()}-{id(object())}"
+    live = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(10)", real_nonce])
+    try:
+        deadline = time.monotonic() + 5
+        command = ""
+        while time.monotonic() < deadline:
+            command = subprocess.run(
+                ["ps", "-ww", "-p", str(live.pid), "-o", "command="],
+                capture_output=True, text=True, timeout=2,
+            ).stdout
+            if real_nonce in command:
+                break
+            time.sleep(0.05)
+        assert real_nonce in command, "could not observe the live helper's own nonce via ps"
+
+        def verified_pid(content):
+            result = subprocess.run(
+                ["bash", "-c", 'source "$1"; verified_wrapper_pid "$2"', "fixture", str(smoke), content],
+                capture_output=True, text=True, timeout=5,
+            )
+            return result.stdout
+
+        assert verified_pid(f"{live.pid} {real_nonce}") == str(live.pid), \
+            "a live pid with its own nonce was not accepted"
+        assert verified_pid(f"{live.pid} wrong-nonce") == "", \
+            "a live pid with a mismatched nonce was accepted"
+        assert verified_pid(str(live.pid)) == "", \
+            "a legacy pid-only entry (no nonce) was accepted"
+        assert verified_pid(f"999999999 {real_nonce}") == "", \
+            "a nonexistent pid was accepted"
+    finally:
+        live.kill()
+        live.wait(timeout=5)
+
+
 check_reaped_group("darwin", "", False)
 check_reaped_group("darwin", "123 Z\n456 S\n", False)
 check_reaped_group("darwin", "123 S\n", True)
 check_reaped_group("linux", "", True)
+check_reap_despite_eperm()
+check_stale_pid_guard()
 check_capture(0)
 check_capture(17)
 check_tree("deadline")
