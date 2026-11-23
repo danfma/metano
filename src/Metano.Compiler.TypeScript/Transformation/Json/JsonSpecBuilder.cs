@@ -223,6 +223,7 @@ internal sealed class JsonSpecBuilder
 
         TsObjectProperty?[] trailingProperties =
         [
+            PlainObjectTypeNameProperty(targetType, polymorphism),
             IgnoredPropertiesProperty(targetType),
             AssignIfPresentProperty(targetType),
             polymorphism is null ? null : _polymorphismSpecs.Build(polymorphism),
@@ -281,6 +282,22 @@ internal sealed class JsonSpecBuilder
         )
             ? _context.RuntimeTypes.Reaches(RuntimeTypeReachability.KeyOf(type))
             : RuntimeTypeReachability.IsLibraryClassWithDescriptor(type);
+
+    /// <summary>
+    /// <c>typeName: "MyApp.Dto"</c> for a non-polymorphic <c>[PlainObject]</c>
+    /// reference contract: it has no constructor to name in its conversion
+    /// errors, which named <c>Object</c> where System.Text.Json names the CLR
+    /// type (#512). A struct gets it with <c>valueType</c>
+    /// (<see cref="ValueTypeProperties"/>), a polymorphic base names
+    /// <c>polymorphism.typeName</c>.
+    /// </summary>
+    private static TsObjectProperty? PlainObjectTypeNameProperty(
+        INamedTypeSymbol targetType,
+        JsonPolymorphism? polymorphism
+    ) =>
+        SymbolHelper.HasPlainObject(targetType) && polymorphism is null && !RejectsNull(targetType)
+            ? new TsObjectProperty("typeName", new TsStringLiteral(ClrTypeName.Of(targetType)))
+            : null;
 
     /// <summary><c>base: this.baseSpec</c> when the type links to a base spec.</summary>
     private TsObjectProperty? BaseLinkProperty(INamedTypeSymbol targetType) =>

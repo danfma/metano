@@ -728,6 +728,12 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   T22: {
     assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30+02:00[+02:00]"),
   },
+  // #512: the accepted variants first measured only on the runtime side.
+  T49: { assertRead: (value) => expect(String(value)).toBe("00:00:00") },
+  T50: { assertRead: (value) => expect(String(value)).toBe("03:04:05") },
+  T51: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30-02:00[-02:00]"),
+  },
   T41: {
     assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30.9999999"),
   },

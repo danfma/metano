@@ -322,10 +322,11 @@ internal sealed class JsonTypeDescriptorBuilder(
             : QualifiedReference(typeName);
 
     /// <summary>
-    /// A temporal descriptor parses through its mapped <c>Temporal</c> type
-    /// (a hand-written spec's path) and names its CLR <c>typeName</c>, which
-    /// tells the runtime to read with System.Text.Json's own grammar and to
-    /// report its conversion errors (#485).
+    /// A temporal descriptor names its CLR <c>typeName</c>, which tells the
+    /// runtime to read with System.Text.Json's own grammar and to report its
+    /// conversion errors (#485). The <c>parse</c> of the mapped
+    /// <c>Temporal</c> type is still emitted, but the runtime reads it only
+    /// for a hand-written descriptor without <c>typeName</c> (#512).
     /// </summary>
     private TsObjectLiteral BuildTemporalDescriptor(ITypeSymbol type)
     {

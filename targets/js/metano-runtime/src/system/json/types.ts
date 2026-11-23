@@ -304,8 +304,9 @@ export interface TypeSpec<T = unknown> {
   /**
    * The CLR name System.Text.Json prints for this struct contract
    * (`MyApp.SPoint`, `MyApp.Outer+Inner`, ``MyApp.Pair`1[System.Int32]``);
-   * the generator emits it next to `valueType`. Errors name the constructor
-   * without it.
+   * the generator emits it next to `valueType`, and on a non-polymorphic
+   * `[PlainObject]` contract, which has no constructor to name (#512).
+   * Errors name the constructor without it.
    */
   readonly typeName?: string;
   /** The context's read behavior; absent when it is System.Text.Json's default. */

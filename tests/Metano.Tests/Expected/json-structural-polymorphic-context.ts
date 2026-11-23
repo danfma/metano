@@ -222,6 +222,7 @@ export class JsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
+      typeName: "TestApp.Point",
     });
   }
 
@@ -241,6 +242,7 @@ export class JsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
+      typeName: "TestApp.Point3",
     });
   }
 
@@ -260,6 +262,7 @@ export class JsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
+      typeName: "TestApp.Rect",
     });
   }
 
@@ -274,6 +277,7 @@ export class JsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
+      typeName: "TestApp.Dog",
     });
   }
 
@@ -288,6 +292,7 @@ export class JsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
+      typeName: "TestApp.SDog",
     });
   }
 
@@ -302,6 +307,7 @@ export class JsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
+      typeName: "TestApp.MP",
     });
   }
 

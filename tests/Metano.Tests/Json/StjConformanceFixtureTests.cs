@@ -1028,6 +1028,16 @@ public class StjConformanceFixtureTests
             ["T22"] = ReadOnly(async value =>
                 await Assert.That(((DateTimeOffset)value!).Offset).IsEqualTo(new TimeSpan(2, 0, 0))
             ),
+            // #512: the accepted variants first measured only on the runtime side.
+            ["T49"] = ReadOnly(async value =>
+                await Assert.That((TimeOnly)value!).IsEqualTo(new TimeOnly(0, 0))
+            ),
+            ["T50"] = ReadOnly(async value =>
+                await Assert.That((TimeOnly)value!).IsEqualTo(new TimeOnly(3, 4, 5))
+            ),
+            ["T51"] = ReadOnly(async value =>
+                await Assert.That(((DateTimeOffset)value!).Offset).IsEqualTo(new TimeSpan(-2, 0, 0))
+            ),
             ["T41"] = ReadOnly(async value =>
                 await Assert
                     .That((DateTime)value!)

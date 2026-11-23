@@ -32,6 +32,7 @@ export class JsonContext extends SerializerContext {
           },
         },
       ],
+      typeName: "SampleTodo.Service.StoredTodo",
     }));
   }
 
@@ -53,6 +54,7 @@ export class JsonContext extends SerializerContext {
           type: { kind: "enum", values: Priority, typeName: "SampleTodo.Priority" },
         },
       ],
+      typeName: "SampleTodo.Service.CreateTodoDto",
     }));
   }
 
@@ -92,6 +94,7 @@ export class JsonContext extends SerializerContext {
           optional: true,
         },
       ],
+      typeName: "SampleTodo.Service.UpdateTodoDto",
     }));
   }
 

@@ -157,6 +157,24 @@ would not make E8 exact anyway.
 The TS message is compared whole; only STJ appends `Path: … | LineNumber: … |
 BytePositionInLine: …` (DECIDED-5), which the normalization removes.
 
+## Later row families (sync of #512)
+
+The manifest (`targets/js/sample-json-contracts/test/fixtures/stj/cases.json`) is the
+authority; this table names each family added after the rows above and what it pins. Unless
+noted, every row runs on both sides.
+
+| Rows | Getters | What they pin |
+|---|---|---|
+| V11 / V12, V11b / V12b | `dateTimeOffset`, `timeSpan` | V11 / V12 run on the STJ side only (`sides: ["stj"]`, the texts are not mutually readable, DECIDED-16); V11b / V12b run on the TypeScript side only and pin its own written text (`…+00:00[UTC]`, `PT1H2M3S`). |
+| T1–T51 | `timeOnly`, `dateOnly`, `dateTime`, `dateTimeOffset`, `timeSpan`, `schedule`, `listTimeOnly`, `dictionaryStringTimeOnly` | Temporal reads with System.Text.Json's grammar (#485): accepted short forms (`3:04:05`, `00:00`, `10`, `1.10:20`), the 7-digit fraction limit, range edges, offsets up to `±14:00`, and the rejected forms with their conversion errors (a property names the declaring contract). T49–T51 pin on the STJ side the variants first measured only by the runtime (`0:0:0`, `003:04:05`, an hour-only offset `-02`, #512). |
+| NU1–NU17 | holders, `schedule`, lists, sets, dictionaries, arrays | JSON `null` for a value type (FR-037, #471): an `int`, enum, `char`, struct, temporal, `Guid` property, element or dictionary value throws naming the type, a property naming its declaring contract. |
+| OK1–OK4 | `listNullableInt32`, `dictionaryStringNullableInt32`, `listString`, `holderChar` | The `null` reads that succeed: a nullable element or value, a reference element, a one-code-unit `char`. |
+| I1–I21 | `int64Box`, `int64Containers`, `int64`, `uInt64` | The 64-bit rows of spec 012 (FR-050–FR-057): exact digits on write, integer tokens on read, dictionary key grammar, the errors. Both sides run them; the TypeScript side reads through `deserializeText` (#605). I6 / I17 keep the nullable-inner message divergence. |
+| V13a–V13e | `perms`, `color`, `tiny` | A numeric enum reads any integer of its underlying type, member or not (a `[Flags]` combination, an undeclared value), and rejects a non-integer or out-of-range value naming the enum (#369). |
+| V13f–V13h | `dashboard` | A member typed as a non-polymorphic interface writes its declared properties, reads `null`, and throws `NotSupportedException` for an object (#502). |
+| V13i–V13l | `immHolder`, `immutableArrayInt32`, `listImmutableArrayInt32` | `ImmutableArray<T>` is a struct: JSON `null` throws naming its CLR type (a property names its declaring contract on the TypeScript side, `stjPath`) (#713). |
+| V13m | `point` | A `[PlainObject]` contract names its CLR type in a conversion error (#512). |
+
 ## Not covered
 
 See spec.md "Documented divergences". In particular, no fixture uses duplicate keys, `1.0` int

@@ -1824,6 +1824,7 @@ export class StudioJsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
+      typeName: "SampleJsonContracts.Point",
     }));
   }
 
@@ -1847,6 +1848,7 @@ export class StudioJsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
+      typeName: "SampleJsonContracts.Point3",
     }));
   }
 
@@ -1866,6 +1868,7 @@ export class StudioJsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Double" },
         },
       ],
+      typeName: "SampleJsonContracts.Rect",
     }));
   }
 
@@ -1896,6 +1899,7 @@ export class StudioJsonContext extends SerializerContext {
           type: { kind: "primitive", numberType: "System.Int32" },
         },
       ],
+      typeName: "SampleJsonContracts.MixedPoint",
     }));
   }
 

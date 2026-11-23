@@ -563,6 +563,17 @@
     "divergence": "A null property names the declaring contract on the runtime side, STJ the ImmutableArray type (stjPath pins the member, DECIDED-23 c)"
   },
   {
+    "id": "V13m",
+    "context": "StudioJsonContext",
+    "getter": "point",
+    "direction": "read",
+    "json": "{\"X\":null}",
+    "error": {
+      "class": "JsonException",
+      "message": "The JSON value could not be converted to SampleJsonContracts.Point."
+    }
+  },
+  {
     "id": "V15",
     "context": "StudioJsonContext",
     "getter": "hashSetString",
@@ -1854,6 +1865,27 @@
       "class": "JsonException",
       "message": "The JSON value could not be converted to System.DateTimeOffset."
     }
+  },
+  {
+    "id": "T49",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"0:0:0\""
+  },
+  {
+    "id": "T50",
+    "context": "StudioJsonContext",
+    "getter": "timeOnly",
+    "direction": "read",
+    "json": "\"003:04:05\""
+  },
+  {
+    "id": "T51",
+    "context": "StudioJsonContext",
+    "getter": "dateTimeOffset",
+    "direction": "read",
+    "json": "\"2024-01-31T10:20:30-02\""
   },
   {
     "id": "NU1",

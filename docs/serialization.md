@@ -305,11 +305,13 @@ JSON `null` at a root reads and writes as System.Text.Json does (measured on
   through its descriptor, which writes `null`.
 - Not mirrored: a value-type custom converter. .NET passes the `null` token
   to a custom converter of a value type, which decides what it reads; Metano
-  throws before any converter runs. Also, JSON `null` for an `int`, `bool`,
-  enum, branded or temporal **property, element or dictionary value** still
-  reads `null`, where .NET throws (`The JSON value could not be converted to
-  MyApp.Holder.` for a constructor-bound property, `System.Int32` for an
-  element): their descriptors carry no value-type flag.
+  throws before any converter runs (the null checks of a property, an element
+  and a dictionary value precede the custom converter lookup, #512). JSON
+  `null` for an `int`, `bool`, enum, branded, temporal or `decimal`
+  **property, element or dictionary value** throws as .NET does (#471): a
+  property names its declaring contract (`MyApp.Holder`, a `[PlainObject]`
+  contract its CLR name, #512), an element or a dictionary value its own type
+  (`System.Int32`).
 - An empty or blank text has no JSON token: `deserializeText("", …)` throws
   `The input does not contain any JSON tokens. Expected the input to start with
   a valid JSON token, when isFinalBlock is true.` for every root, as STJ does.
