@@ -1,4 +1,3 @@
-using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -12,16 +11,15 @@ namespace Metano.Compiler.Extraction;
 /// <c>(long, long)</c>, nested and nullable tuples included), and a tuple is
 /// one value in the targets, so the conversion rebuilds it — each element is
 /// read by position and goes through the scalar
-/// <see cref="IrNumericConversion"/> its own conversion needs. A source with
-/// side effects (a call) is bound to a temporary and evaluated once; a
-/// property read counts as side-effect free and is not bound, so a getter
-/// source is read once per element read (#630). A tuple literal is not
-/// rebuilt: its elements convert where they are written, in source order —
-/// implicitly as Roslyn reports them, and under an explicit cast through
-/// the numeric conversion their types lower to, a missing nullable value
-/// throwing there. An element whose conversion lowers to nothing
-/// (<c>int?</c> to <c>int</c>, <c>long?</c> to <c>long</c>) is not unwrapped
-/// the way its scalar cast is: it keeps <c>null</c> (#630). Dart keeps the
+/// <see cref="IrNumericConversion"/> its own conversion needs. A source
+/// other than a plain name is bound to a temporary and evaluated once, as
+/// .NET reads it once (a call, and a property getter, #630). A tuple literal
+/// is not rebuilt: its elements convert where they are written, in source
+/// order — implicitly as Roslyn reports them, and under an explicit cast
+/// through the numeric conversion their types lower to, a missing nullable
+/// value throwing there. An element that only unwraps a nullable
+/// (<c>int?</c> to <c>int</c>, <c>(int, int)?</c> to <c>(int, int)</c>)
+/// unwraps with the .NET throw as its scalar cast does (#630). Dart keeps the
 /// tuple as it is: its <c>int</c> holds both widths, so a record of them
 /// needs no rebuild.
 /// </summary>
@@ -265,10 +263,24 @@ public sealed partial class IrExpressionExtractor
 
         var (operand, isLifted) = UnwrappedOrLifted(value, from, to);
 
-        return BindOnce(operand, IrEvaluationTraits.IsSideEffectFree(operand), tuple =>
+        return BindOnce(operand, MayBeReadPerElement(operand), tuple =>
             RebuiltTuple(site, tuple, isLifted, source, target, elements)
         );
     }
+
+    /// <summary>
+    /// Whether the rebuilt tuple may read <paramref name="source"/> once per
+    /// element: a literal, a plain name, or a tuple element read of one. A
+    /// member read may run a getter, which .NET runs once (#630).
+    /// </summary>
+    private static bool MayBeReadPerElement(IrExpression source) =>
+        source switch
+        {
+            IrLiteral or IrIdentifier or IrThisExpression => true,
+            IrMemberAccess { Origin.TupleElement: not IrTupleElementKind.None } element =>
+                MayBeReadPerElement(element.Target),
+            _ => false,
+        };
 
     /// <summary>
     /// How a value of type <paramref name="from"/> enters its conversion to
@@ -327,7 +339,8 @@ public sealed partial class IrExpressionExtractor
     /// rebuilt, a numeric element takes its scalar conversion, any other
     /// element is the read itself. A nullable numeric element converts
     /// lifted into a nullable one and unwraps, with the .NET throw, into a
-    /// non-nullable one.
+    /// non-nullable one; so does a nullable element whose value needs no
+    /// other conversion (#630).
     /// </summary>
     private IrExpression ConvertedElement(
         SyntaxNode site,
@@ -341,7 +354,7 @@ public sealed partial class IrExpressionExtractor
             return nested;
 
         if (elements.ScalarEndpoints(from, to) is not var (source, target))
-            return element;
+            return UnwrapsNullableValue(from, to) ? GuardedValueOrThrow(element) : element;
 
         var (operand, isLifted) = UnwrappedOrLifted(element, from, to);
 
@@ -417,9 +430,15 @@ public sealed partial class IrExpressionExtractor
             return converts ? (source, target) : null;
         }
 
-        /// <summary>Whether an element of type <paramref name="from"/> converts on its way to <paramref name="to"/>: a tuple with a converting element, or a numeric element.</summary>
+        /// <summary>
+        /// Whether an element of type <paramref name="from"/> converts on its
+        /// way to <paramref name="to"/>: a tuple with a converting element, a
+        /// numeric element, or a nullable element that unwraps (#630).
+        /// </summary>
         public bool ConvertsElement(ITypeSymbol from, ITypeSymbol to) =>
-            ConvertingTuples(from, to) is not null || ScalarEndpoints(from, to) is not null;
+            ConvertingTuples(from, to) is not null
+            || ScalarEndpoints(from, to) is not null
+            || UnwrapsNullableValue(from, to);
 
         /// <summary>The endpoints of a numeric element that converts; <c>null</c> for any other element.</summary>
         public (IrNumericEndpoint From, IrNumericEndpoint To)? ScalarEndpoints(
