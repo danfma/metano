@@ -36,7 +36,10 @@ public static class IrToDartClassBridge
         var modifier = ResolveClassModifier(ir);
         var typeParameters = IrToDartTypeParameterMapper.Map(ir.TypeParameters);
 
-        var extendsType = ir.BaseType is not null ? IrToDartTypeMapper.Map(ir.BaseType) : null;
+        var extendsType =
+            ir.BaseType is not null && !IsUnextendableDartCollection(ir.BaseType)
+                ? IrToDartTypeMapper.Map(ir.BaseType)
+                : null;
         // Filter out C# BCL interfaces (IEquatable, IComparable, ...) that records and
         // structs implicitly implement — they have no Dart equivalent and would produce
         // unresolvable references. User-defined interfaces pass through untouched.
@@ -813,6 +816,12 @@ public static class IrToDartClassBridge
         };
 
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    internal static bool IsUnextendableDartCollection(IrTypeRef? typeRef) =>
+        (typeRef is IrCollectionTypeRef collection ? collection.LegacyForm : typeRef)
+            is IrMapTypeRef
+                or IrArrayTypeRef
+                or IrSetTypeRef;
 
     private static DartClassModifier ResolveClassModifier(IrClassDeclaration ir)
     {

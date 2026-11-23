@@ -223,6 +223,23 @@ public class DartGroupEFixesTests
         await Assert.That(matcher).Contains("BaseRec(a: 0)");
     }
 
+    [Test]
+    public async Task CollectionBaseType_ReportsMs0001_AndOmitsExtends_FollowUp()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class MyDict : Dictionary<string, int> { }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsTrue();
+        await Assert.That(files["my_dict.dart"]).DoesNotContain("extends Map");
+        AssertDartAnalyzes(files);
+    }
+
     private static void AssertDartAnalyzes(Dictionary<string, string> files)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"metano-dart-w6e-{Guid.NewGuid():N}");

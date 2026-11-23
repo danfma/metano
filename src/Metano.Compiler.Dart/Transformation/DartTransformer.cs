@@ -193,6 +193,7 @@ public sealed class DartTransformer
                     ReportUnnamedOverloads(classIr, type.Name, classClaims.Shape);
                     ReportMultiplyConstructedInterfaces(type);
                     ReportStaticConstructor(type, classIr);
+                    ReportCollectionBaseType(type, classIr);
                     ReportChainedConstructorsWithBodies(type, classIr, classClaims.Shape);
                     IrToDartClassBridge.Convert(classIr, classClaims, statements, _rewriter);
                     ScanInto(runtimeRequirements, classIr);
@@ -308,6 +309,23 @@ public sealed class DartTransformer
                 )
             );
         }
+    }
+
+    private void ReportCollectionBaseType(INamedTypeSymbol type, IrClassDeclaration classIr)
+    {
+        if (!IrToDartClassBridge.IsUnextendableDartCollection(classIr.BaseType))
+            return;
+
+        ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"Dart target: '{type.Name}' cannot extend a built-in collection type "
+                    + "(Dart's Map/List/Set have no generative constructor); the extends clause "
+                    + "is omitted.",
+                type.Locations.FirstOrDefault()
+            )
+        );
     }
 
     /// <summary>
