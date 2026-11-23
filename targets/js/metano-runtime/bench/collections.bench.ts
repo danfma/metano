@@ -57,7 +57,6 @@ interface Row {
   readonly name: string;
   readonly mode: Mode;
   readonly budgetNs: number | undefined;
-  readonly deferredTo: string | undefined;
   readonly baselineMs: number;
   readonly variantMs: number;
   readonly rawNs: number;
@@ -94,7 +93,6 @@ function rowOf(benchCase: BenchCase, mode: Mode, baseline: Measurement, variant:
     name: benchCase.name,
     mode,
     budgetNs: budgetFor(benchCase),
-    deferredTo: benchCase.deferredTo,
     baselineMs: baseline.medianMs,
     variantMs: variant.medianMs,
     rawNs,
@@ -199,7 +197,7 @@ function print(rows: readonly Row[]): void {
   console.log(`${"case".padEnd(width)}  ${"mode".padEnd(34)}  base ms  var ms  raw ns  C_meas  norm ns  budget`);
 
   for (const row of rows) {
-    const verdict = row.budgetNs === undefined ? "report" : row.normalizedNs <= row.budgetNs ? `<= ${row.budgetNs} ok` : `> ${row.budgetNs} MISS${row.deferredTo === undefined ? "" : ` (${row.deferredTo})`}`;
+    const verdict = row.budgetNs === undefined ? "report" : row.normalizedNs <= row.budgetNs ? `<= ${row.budgetNs} ok` : `> ${row.budgetNs} MISS`;
 
     console.log(
       `${row.name.padEnd(width)}  ${MODE_LABEL[row.mode].padEnd(34)}  ${fixed(row.baselineMs, 7)}  ${fixed(row.variantMs, 6)}  ${fixed(row.rawNs, 6)}  ${fixed(row.cMeasuredNs, 6)}  ${fixed(row.normalizedNs, 7)}  ${verdict}`,
@@ -246,7 +244,7 @@ async function main(): Promise<void> {
       writeFileSync(options.json, `${JSON.stringify({ engine: engineVersion(), machine: machine(), rows }, null, 2)}\n`);
     }
 
-    const misses = rows.filter((row) => row.mode === "checked" && row.deferredTo === undefined && row.budgetNs !== undefined && row.normalizedNs > row.budgetNs);
+    const misses = rows.filter((row) => row.mode === "checked" && row.budgetNs !== undefined && row.normalizedNs > row.budgetNs);
 
     if (options.check && misses.length > 0) {
       process.exitCode = 1;
