@@ -1110,9 +1110,8 @@ public class StjConformanceFixtureTests
             ["OK4"] = ReadOnly(async value =>
                 await Assert.That(((HolderChar)value!).C).IsEqualTo('a')
             ),
-            // The 64-bit rows of spec 012 (slice 012e): every row runs on the
-            // System.Text.Json side; the TypeScript side runs I2 (wire
-            // compatible within the safe integers) until the bigint flip.
+            // The 64-bit rows of spec 012 (slices 012e, 012h): both sides run
+            // every row, the TypeScript side through deserializeText (#605).
             ["I1"] = WriteOnly(() => new Int64Box(1152921504606846977, ulong.MaxValue, null)),
             ["I2"] = Roundtrip(
                 () => new Int64Box(42, 7, null),

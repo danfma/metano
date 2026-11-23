@@ -29,6 +29,7 @@ import { ImmHolder } from "#/sample-json-contracts/imm-holder";
 import { ImageClip } from "#/sample-json-contracts/image-clip";
 import { InitRec } from "#/sample-json-contracts/init-rec";
 import { Int64Box } from "#/sample-json-contracts/int64-box";
+import { Int64Containers } from "#/sample-json-contracts/int64-containers";
 import { IntMapHolder } from "#/sample-json-contracts/int-map-holder";
 import { IS } from "#/sample-json-contracts/is";
 import { Level } from "#/sample-json-contracts/level";
@@ -783,9 +784,13 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   OK4: {
     assertRead: (value) => expect((value as { c: string }).c).toBe("a"),
   },
-  // The 64-bit rows of spec 012 (slice 012e) run on the System.Text.Json
-  // side only (#605 moves them here); I2 runs on both sides: the generated
-  // fields are bigint values, which write and read the same digits.
+  // The 64-bit rows of spec 012 (slices 012e, 012h) run on both sides
+  // (#605): the generated fields are bigint values, written as their exact
+  // digits; every read goes through deserializeText, which keeps a 64-bit
+  // token's digits and shape as System.Text.Json reads them (FR-053).
+  I1: {
+    build: () => new Int64Box(1152921504606846977n, 18446744073709551615n, null),
+  },
   I2: {
     build: () => new Int64Box(42n, 7n, null),
     assertRead: (value) => {
@@ -797,7 +802,57 @@ export const caseBuilders: Record<string, CaseBuilder> = {
 
       expect(box.parent).toBeNull();
     },
+    viaText: true,
   },
+  I3: {
+    build: () =>
+      new Int64Containers(
+        [-9223372036854775808n, 9223372036854775807n],
+        Dictionary.assign<bigint, string>([
+          [9223372036854775807n, "a"],
+          [-3n, "b"],
+        ]),
+        Dictionary.assign<bigint, string>([[18446744073709551615n, "u"]]),
+      ),
+  },
+  I4: { viaText: true },
+  I5: { viaText: true },
+  I6: { viaText: true },
+  I7: { viaText: true },
+  I8: { viaText: true },
+  I9: { viaText: true },
+  I10: { viaText: true },
+  I11: { viaText: true },
+  I12: {
+    assertRead: (value) => {
+      const containers = expectClass(value, Int64Containers);
+
+      expect(containers.byName.get(5n)).toBe("b");
+
+      expect(containers.byName.get(0n)).toBe("c");
+    },
+    viaText: true,
+  },
+  I13: { viaText: true },
+  I14: { viaText: true },
+  I15: { viaText: true },
+  I16: { viaText: true },
+  I17: { viaText: true },
+  I18: { viaText: true },
+  I19: {
+    assertRead: (value) => {
+      const box = expectClass(value, Int64Box);
+
+      expect(box.id).toBe(9007199254740993n);
+
+      expect(box.mask).toBe(18446744073709551615n);
+
+      expect(box.parent).toBe(-9223372036854775808n);
+    },
+    viaText: true,
+  },
+  I20: { assertRead: (value) => expect(value).toBe(0n), viaText: true },
+  I21: { viaText: true },
 };
 
 /** Every builder key must have a manifest row (drift fails the test). */
