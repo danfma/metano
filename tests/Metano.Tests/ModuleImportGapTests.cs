@@ -82,4 +82,45 @@ public class ModuleImportGapTests
         await Assert.That(use).Contains("return delete_(1);");
         await Assert.That(use).Contains("return delete_;");
     }
+
+    [Test]
+    public async Task ImportFacadeOnANonStaticOrNestedHost_IsReservedAgainstFastPaths()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public record RHost { [Import("zap", "ext-lib")] public static int FooX(int x) => x; }
+
+            [Transpile]
+            public static class Outer
+            {
+                public static class CHost { [Import("zip", "ext-lib")] public static int FooS(int x) => x; }
+            }
+
+            [Transpile, NoContainer]
+            public static class Neighbor
+            {
+                public static int Foo(int x) => x + 100;
+                public static int Foo(string s) => 100;
+            }
+
+            [Transpile]
+            public class Use
+            {
+                public int Go() =>
+                    RHost.FooX(1) + Outer.CHost.FooS(3) + Neighbor.Foo(1) + Neighbor.Foo("s");
+            }
+            """
+        );
+
+        var use = files["use.ts"];
+
+        await Assert.That(use).Contains("import { zap as fooX, zip as fooS } from \"ext-lib\";");
+
+        await Assert
+            .That(use)
+            .Contains("return (fooX(1) + fooS(3) + fooX$(1) + fooS$(\"s\")) | 0;");
+
+        await Assert.That(diagnostics.Count(d => d.Code == "MS0067")).IsEqualTo(2);
+    }
 }

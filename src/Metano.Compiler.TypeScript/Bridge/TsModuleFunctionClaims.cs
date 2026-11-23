@@ -116,7 +116,8 @@ public sealed class TsModuleFunctionClaims
             .Select(type => ClaimPass.TypeFunctions.Extract(type, extraction))
             .ToList();
 
-        var pass = new ClaimPass(staticTypes, shapes);
+        var importHosts = TypeGuardBuilder.EnumerateAssemblyTypes(assembly).ToList();
+        var pass = new ClaimPass(importHosts, shapes);
         pass.Run();
 
         return pass.Seal(compilation);
@@ -152,7 +153,7 @@ public sealed class TsModuleFunctionClaims
     /// </summary>
     private sealed class ClaimPass
     {
-        private readonly IReadOnlyList<INamedTypeSymbol> _staticTypes;
+        private readonly IReadOnlyList<INamedTypeSymbol> _importHosts;
         private readonly IReadOnlyList<TypeFunctions> _shapes;
         private readonly HashSet<string> _taken = new(StringComparer.Ordinal);
         private readonly Dictionary<IMethodSymbol, MemberClaim> _claims = new(
@@ -161,11 +162,11 @@ public sealed class TsModuleFunctionClaims
         private readonly List<MetanoDiagnostic> _findings = [];
 
         public ClaimPass(
-            IReadOnlyList<INamedTypeSymbol> staticTypes,
+            IReadOnlyList<INamedTypeSymbol> importHosts,
             IReadOnlyList<TypeFunctions> shapes
         )
         {
-            _staticTypes = staticTypes;
+            _importHosts = importHosts;
             _shapes = shapes;
         }
 
@@ -173,7 +174,7 @@ public sealed class TsModuleFunctionClaims
         /// Two passes so the order a name is taken in stays the one the
         /// barrel has always used: pass 1 reserves every dispatcher and
         /// module variable of every module type and the <c>[Import]</c>
-        /// binding of every static type, pass 2 claims each dispatched
+        /// binding of every type, nested and non-static ones included (#557), pass 2 claims each dispatched
         /// group's fast paths against them.
         /// </summary>
         public void Run()
@@ -183,7 +184,7 @@ public sealed class TsModuleFunctionClaims
                 ReserveNames(shape);
             }
 
-            foreach (var type in _staticTypes)
+            foreach (var type in _importHosts)
             {
                 ReserveImportBindings(type);
             }
@@ -266,7 +267,8 @@ public sealed class TsModuleFunctionClaims
         }
 
         /// <summary>
-        /// Pass 1, every static type: the name each static <c>[Import]</c>
+        /// Pass 1, every type of the assembly, nested and non-static ones
+        /// included (#557): the name each static <c>[Import]</c>
         /// method binds in the files that call it (<see
         /// cref="SymbolHelper.ImportBindingOf"/>). A facade emits no function,
         /// so it binds its name wherever it is called — a class that keeps
