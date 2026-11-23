@@ -34,6 +34,7 @@ internal sealed class TsOverloadClaimPass
     private readonly Dictionary<TsMethodOverloadKey, TsMethodOverloadNames> _methods = [];
     private readonly List<TsClaimFinding> _findings = [];
     private readonly List<TsInterfaceRequirement> _forwarded = [];
+    private readonly List<TsForwardingRoot> _forwardingRoots = [];
 
     private TsOverloadClaimPass(TsClaimPassInput input)
     {
@@ -71,6 +72,7 @@ internal sealed class TsOverloadClaimPass
         )
         {
             InterfaceForwarders = [.. _forwarded.Select(ForwarderOf)],
+            ForwardingRoots = _forwardingRoots,
         };
     }
 
@@ -314,9 +316,47 @@ internal sealed class TsOverloadClaimPass
             ClaimAnchoredFastPaths(group, baseName);
 
         ClaimInterfaceForwarders();
+        ClaimForwardingRoots();
 
         foreach (var (group, baseName) in groups)
             ClaimOwnFastPaths(group, baseName);
+    }
+
+    /// <summary>
+    /// Reserves the name of each constructed root that no method of the class
+    /// is anchored on but that the class implements through methods outside
+    /// it (<see cref="IrConstructedRoot.Forwards"/>, #594), for a runtime
+    /// dispatcher that forwards to them.
+    /// </summary>
+    private void ClaimForwardingRoots()
+    {
+        var anchoredRoots = _input
+            .Ir.Members?.OfType<IrMethodDeclaration>()
+            .SelectMany(method => IrMethodGroup.Of(method).Members)
+            .Select(_input.Ir.ConstructedRootOf)
+            .OfType<IrConstructedRoot>()
+            .ToHashSet();
+
+        foreach (var root in _input.Ir.ConstructedRoots ?? [])
+        {
+            if (anchoredRoots?.Contains(root) is true || root.Forwards.All(f => f is null))
+                continue;
+
+            if (_input.RootFastPathOf(root.Root) is not { } name)
+                continue;
+
+            if (HolderOfFastPath(name, isStatic: false) is not null)
+                continue;
+
+            _instances[name] = new TsClaimedMember(
+                TsClaimedMemberKind.FastPath,
+                $"the runtime dispatcher of '{name}'",
+                TypeName,
+                Declaration: name
+            );
+
+            _forwardingRoots.Add(new TsForwardingRoot(name, root));
+        }
     }
 
     /// <summary>
@@ -767,6 +807,12 @@ internal sealed record TsClaimPassInput(
     /// </summary>
     public IReadOnlyList<TsInterfaceRequirement> InterfaceRequirements { get; init; } = [];
 }
+
+/// <summary>
+/// A constructed root the class implements only through methods outside its
+/// runtime dispatcher, and the name that dispatcher takes (#594).
+/// </summary>
+internal sealed record TsForwardingRoot(string Name, IrConstructedRoot Root);
 
 /// <summary>The name an overload declares for one of its roots.</summary>
 internal sealed record TsRootName(IrOverloadRef Root, string Name);

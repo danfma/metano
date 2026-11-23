@@ -52,6 +52,14 @@ internal static class TsOverloadCallSites
         RequiredClaims.RootFastPathOf(overload);
 
     /// <summary>
+    /// The emitted name of the class method a constructed root's dispatcher
+    /// forwards to; <c>null</c> when the declaring type is not visible to the
+    /// transform.
+    /// </summary>
+    internal static string? ImplementationNameOf(IrOverloadRef implementation) =>
+        RequiredClaims.ImplementationNameOf(implementation);
+
+    /// <summary>
     /// The fast path of <paramref name="overload"/>: its claimed name, or, for a
     /// synthesized value-equality member whose declaring type's claims this
     /// transform cannot read, the stable name every package gives it

@@ -99,6 +99,31 @@ public sealed class TsOverloadClaimsRegistry(
     }
 
     /// <summary>
+    /// The emitted name of a class method a constructed root's dispatcher
+    /// forwards to (<see cref="IrConstructedRoot.Forwards"/>, #594): the fast
+    /// path of a dispatched overload, else the lone method's own name;
+    /// <c>null</c> when this compilation cannot see the declaring type.
+    /// </summary>
+    internal string? ImplementationNameOf(IrOverloadRef implementation)
+    {
+        if (RootFastPathOf(implementation) is { } fastPath)
+            return fastPath;
+
+        if (IrTypeKeys.Find(implementation.DeclaringType, _context.Compilation) is not { } type)
+            return null;
+
+        var declaration = (ShapeOf(type).Members ?? [])
+            .OfType<IrMethodDeclaration>()
+            .SelectMany(method => IrMethodGroup.Of(method).Members)
+            .FirstOrDefault(method =>
+                method.Name == implementation.MemberName
+                && method.DeclarationOrdinal == implementation.Ordinal
+            );
+
+        return declaration is null ? null : TsClassMemberTable.MethodNameOf(declaration);
+    }
+
+    /// <summary>
     /// The companion plan of a branded struct, computed on first use from
     /// its shape; <c>null</c> for a type that emits no companion namespace.
     /// The type's emission and every call into it read this one plan.

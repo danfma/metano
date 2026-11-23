@@ -271,21 +271,27 @@ public static class IrToTsOverloadDispatcherBridge
     /// <summary>
     /// The forwarding members a class declares for the names its interfaces
     /// require of it, which its own and inherited members do not declare
-    /// (<see cref="TsOverloadClaims.InterfaceForwarders"/>, #565, #595).
+    /// (<see cref="TsOverloadClaims.InterfaceForwarders"/>, #565, #595), and
+    /// the dispatchers of the constructed roots it implements only through
+    /// methods outside them (<see cref="TsOverloadClaims.ForwardingRoots"/>,
+    /// #594).
     /// </summary>
     internal static IEnumerable<TsMethodMember> BuildInterfaceForwarders(
+        IrClassDeclaration owner,
         TsOverloadClaims names,
         IrToTsBridgeContext context
     ) =>
-        names.InterfaceForwarders.Select(forwarder =>
-            BuildForwardingMember(
-                forwarder.Signature,
-                forwarder.Name,
-                forwarder.Target,
-                overridesInherited: false,
-                context
+        names
+            .InterfaceForwarders.Select(forwarder =>
+                BuildForwardingMember(
+                    forwarder.Signature,
+                    forwarder.Name,
+                    forwarder.Target,
+                    overridesInherited: false,
+                    context
+                )
             )
-        );
+            .Concat(ForwardingRootDispatchers(owner, names, context));
 
     /// <summary>
     /// A synthesized value-equality member whose body the target supplies
@@ -334,6 +340,27 @@ public static class IrToTsOverloadDispatcherBridge
                     context
                 )
             );
+
+    /// <summary>
+    /// The runtime dispatchers of the constructed roots no method of the class
+    /// is anchored on, whose constructions it implements only through
+    /// inherited methods or overrides of base methods (#594): each forwards
+    /// every construction to its implementation.
+    /// </summary>
+    private static IEnumerable<TsMethodMember> ForwardingRootDispatchers(
+        IrClassDeclaration owner,
+        TsOverloadClaims names,
+        IrToTsBridgeContext context
+    ) =>
+        names.ForwardingRoots.Select(root =>
+            IrToTsConstructedRootDispatcherBridge.Build(
+                root.Name,
+                root.Root,
+                implementations: [],
+                owner.TypeParameters ?? [],
+                context
+            )
+        );
 
     /// <summary>
     /// The group's dispatcher as <see cref="IrMethodGroup.DispatcherKind"/>
@@ -886,35 +913,39 @@ public static class IrToTsOverloadDispatcherBridge
         var body = new List<TsStatement>();
 
         for (var i = 0; i < sorted.Count; i++)
-        {
-            var method = sorted[i];
-            var arguments = new OverloadArgumentShape(
-                method.Parameters,
-                method.ReifiedTypeParameters
-            );
-
-            var scope = classScope.Within(method);
-
-            var delegateCall = new TsCallExpression(
-                FastPathCallee(receiver, fastPathNames[i]),
-                DelegatedArguments(
-                    method.Parameters,
-                    method.TypeParameters,
-                    arguments,
-                    classScope.TypeOverrides,
-                    method.ReifiedTypeParameters
-                )
-            );
-
-            body.Add(
-                new TsIfStatement(
-                    arguments.Guard(scope),
-                    BuildBranchStatements(method, delegateCall)
-                )
-            );
-        }
+            body.Add(BuildDelegatingBranch(sorted[i], fastPathNames[i], receiver, classScope));
 
         return body;
+    }
+
+    /// <summary>
+    /// The branch that tests the arguments against <paramref name="method"/>'s
+    /// parameters and delegates to <paramref name="fastPathName"/>.
+    /// </summary>
+    internal static TsIfStatement BuildDelegatingBranch(
+        IrMethodDeclaration method,
+        string fastPathName,
+        TsExpression? receiver,
+        TypeCheckScope classScope
+    )
+    {
+        var arguments = new OverloadArgumentShape(method.Parameters, method.ReifiedTypeParameters);
+
+        var delegateCall = new TsCallExpression(
+            FastPathCallee(receiver, fastPathName),
+            DelegatedArguments(
+                method.Parameters,
+                method.TypeParameters,
+                arguments,
+                classScope.TypeOverrides,
+                method.ReifiedTypeParameters
+            )
+        );
+
+        return new TsIfStatement(
+            arguments.Guard(classScope.Within(method)),
+            BuildBranchStatements(method, delegateCall)
+        );
     }
 
     /// <summary>

@@ -348,4 +348,48 @@ public class OverloadDispatcherFixTests
 
         await Assert.That(result["user-id.ts"]).Contains("function UserId$make(v: number = 3)");
     }
+
+    [Test]
+    public async Task OverrideBesideMultiplyConstructedInterface_OverridesTheBaseFastPath()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public interface IConv<T>
+            {
+                string Conv(T x);
+
+                string Conv(T x, int n);
+            }
+
+            public class B
+            {
+                public virtual string Conv(int a) => "bi";
+
+                public virtual string Conv(int a, int n) => "bin";
+
+                public virtual string Conv(string a) => "bs";
+
+                public virtual string Conv(string a, int n) => "bsn";
+            }
+
+            public class D : B, IConv<int>, IConv<string>
+            {
+                public override string Conv(int a) => "di";
+            }
+            """
+        );
+
+        var output = result["d.ts"];
+
+        await Assert.That(output).Contains("override convInt32(a: number): string {");
+        await Assert.That(output).Contains("return this.convInt32(args[0] as number);");
+        await Assert.That(output).Contains("return this.convString(args[0] as string);");
+        await Assert.That(output).Contains("convXN(...args: unknown[]): string {");
+        await Assert
+            .That(output)
+            .Contains("return this.convStringInt32(args[0] as string, args[1] as number);");
+    }
 }

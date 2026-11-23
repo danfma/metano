@@ -49,3 +49,42 @@ public static class InterfaceForwarderProbes
         return viaInterface.Conv(1) + "," + viaInterface.Conv(1, 2) + "," + direct.Conv(3);
     }
 }
+
+public class MultiBase
+{
+    public virtual string Conv(int a) => "bi" + a;
+
+    public virtual string Conv(int a, int n) => "bin" + a + n;
+
+    public virtual string Conv(string a) => "bs" + a;
+
+    public virtual string Conv(string a, int n) => "bsn" + a + n;
+}
+
+public class MultiDerived : MultiBase, IFwdConv<int>, IFwdConv<string>
+{
+    public override string Conv(int a) => "di" + a;
+}
+
+public static class MultiplyConstructedOverrideProbes
+{
+    public static string OverrideOfDispatchedBase()
+    {
+        var d = new MultiDerived();
+        MultiBase b = d;
+        IFwdConv<int> ci = d;
+        IFwdConv<string> cs = d;
+
+        return d.Conv(1)
+            + ","
+            + b.Conv(2)
+            + ","
+            + ci.Conv(3)
+            + ","
+            + cs.Conv("s")
+            + ","
+            + ci.Conv(4, 5)
+            + ","
+            + cs.Conv("t", 6);
+    }
+}

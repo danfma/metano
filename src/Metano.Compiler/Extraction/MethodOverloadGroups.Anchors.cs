@@ -29,12 +29,15 @@ internal static partial class MethodOverloadGroups
         var target = policy.Target;
 
         var interfaceRoots = InterfaceRootsOf(type, method, target);
+        var overrideRoot = method.IsOverride ? DispatchedOverrideRootOf(method, policy) : null;
 
         // A root of an interface the type implements more than once keeps
         // runtime dispatch under its name (DECIDED-30): every implementation
-        // anchors on it, an override of a base's included.
+        // anchors on it, an override of a base's included — unless the base
+        // dispatches the overridden method outside that root (#594).
         var constructedRoot = interfaceRoots.FirstOrDefault(root =>
             MultiplyConstructedInterfaces.AreMultiplyConstructed(type, root.ContainingType)
+            && !(overrideRoot is not null && OverridesOutsideConstructedRoot(method, root))
         );
 
         if (constructedRoot is not null)
@@ -42,8 +45,12 @@ internal static partial class MethodOverloadGroups
 
         // An override reuses its root's names; the base it overrides already
         // declares the forwarding members of any further interface roots.
-        if (method.IsOverride && DispatchedOverrideRootOf(method, policy) is { } root)
-            return new MemberAnchor(new DeclaredRoot(root), IrOverloadAnchorKind.Override, []);
+        if (overrideRoot is not null)
+            return new MemberAnchor(
+                new DeclaredRoot(overrideRoot),
+                IrOverloadAnchorKind.Override,
+                []
+            );
 
         if (interfaceRoots.Count == 0)
             return null;
@@ -66,6 +73,25 @@ internal static partial class MethodOverloadGroups
                 .ToList()
         );
     }
+
+    /// <summary>
+    /// Whether <paramref name="method"/> overrides a base method outside the
+    /// runtime dispatcher of <paramref name="root"/>, which the type implements
+    /// more than once and the overridden method's type does not (#594): an
+    /// override of a dispatched base overload then overrides the base's fast
+    /// path, and the type's root dispatcher forwards to it
+    /// (<see cref="IrConstructedRoot.Forwards"/>).
+    /// </summary>
+    private static bool OverridesOutsideConstructedRoot(IMethodSymbol method, IMethodSymbol root) =>
+        method.OverriddenMethod?.ContainingType is { } overriddenType
+        && MultiplyConstructedInterfaces.AreMultiplyConstructed(
+            method.ContainingType,
+            root.ContainingType
+        )
+        && !MultiplyConstructedInterfaces.AreMultiplyConstructed(
+            overriddenType,
+            root.ContainingType
+        );
 
     /// <summary>
     /// Whether an emitted base class already implements
