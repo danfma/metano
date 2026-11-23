@@ -106,7 +106,7 @@ public class DartGroupEFixesTests
     {
         var result = TranspileHelper.TranspileWithDiagnostics(
             """
-            [NoContainer]
+            [Transpile, NoContainer]
             public static class Config
             {
                 public static int Count = 1;
@@ -122,6 +122,68 @@ public class DartGroupEFixesTests
 
         var ms0001 = result.Diagnostics.Where(d => d.Code == "MS0001").ToList();
         await Assert.That(ms0001.Count).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task ContainerlessModuleVariables_EmitTopLevelDeclarations_AndAnalyze_327()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Config
+            {
+                public static readonly int Max = 10;
+                public static int Count = 0;
+                private static int Secret = 42;
+                public static int DoubleSecret() => Secret * 2;
+                public static int Next() => ++Count;
+            }
+
+            [Transpile]
+            public static class Consumer
+            {
+                public static int Read() => Config.Count + Config.Max;
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+        var config = files["config.dart"];
+        var consumer = files["consumer.dart"];
+
+        await Assert.That(config).Contains("final int max = 10;");
+        await Assert.That(config).Contains("int count = 0;");
+        await Assert.That(config).Contains("int _secret = 42;");
+        await Assert.That(config).Contains("_secret * 2");
+
+        await Assert.That(consumer).Contains("import 'config.dart';");
+        await Assert.That(consumer).Contains("=> count + max;");
+
+        AssertDartAnalyzes(files);
+    }
+
+    [Test]
+    public async Task ContainerlessModuleVariables_StaticCtorAndShadowing_ReportDiagnostics_327()
+    {
+        var (_, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Config
+            {
+                public static int Count = 1;
+
+                static Config()
+                {
+                    Count = 2;
+                }
+
+                public static int ReadShadowed(int count) => Count + count;
+            }
+            """
+        );
+
+        var ms0001 = diagnostics.Where(d => d.Code == "MS0001").ToList();
+        await Assert.That(ms0001.Count).IsEqualTo(2);
     }
 
     private static void AssertDartAnalyzes(Dictionary<string, string> files)

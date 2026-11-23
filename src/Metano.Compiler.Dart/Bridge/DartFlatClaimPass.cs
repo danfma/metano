@@ -48,14 +48,16 @@ internal sealed class DartFlatClaimPass
     /// <summary>The top-level fast paths of a containerless module's dispatched groups.</summary>
     public static DartOverloadClaims Run(
         string moduleName,
-        IReadOnlyList<IrModuleFunction> functions
+        IReadOnlyList<IrModuleFunction> functions,
+        IReadOnlyList<IrMemberDeclaration>? variables = null
     )
     {
         var userMembers = functions
             .Where(function => function.OverloadName is null)
             .Select(function =>
                 IrToDartNamingPolicy.ToMemberName(function.Name, function.Attributes)
-            );
+            )
+            .Concat((variables ?? []).Select(IrToDartModuleBridge.VariableNameOf));
 
         var candidates = functions
             .Where(function => function is { OverloadName: not null, OverloadRef: not null })

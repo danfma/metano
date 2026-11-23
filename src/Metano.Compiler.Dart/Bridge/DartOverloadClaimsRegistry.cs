@@ -71,7 +71,8 @@ public sealed class DartOverloadClaimsRegistry : IDartOverloadNames
         {
             return DartFlatClaimPass.Run(
                 type.Name,
-                IrModuleFunctionExtractor.Extract(type, _shapeExtraction)
+                IrModuleFunctionExtractor.Extract(type, _shapeExtraction),
+                IrModuleVariableExtractor.Extract(type, _shapeExtraction)
             );
         }
 

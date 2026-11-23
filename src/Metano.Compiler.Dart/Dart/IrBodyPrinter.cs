@@ -1243,11 +1243,8 @@ public static class IrBodyPrinter
         }
     }
 
-    // Only functions lose the qualifier: the Dart bridge emits no module-level variables
-    // for [NoContainer] data members, so those keep their (currently unresolved) qualifier.
     private static bool IsContainerlessFunction(IrMemberOrigin origin) =>
-        origin
-            is { IsStatic: true, IsDeclaringTypeNoContainer: true, IsTranspiledDataMember: false };
+        origin is { IsStatic: true, IsDeclaringTypeNoContainer: true };
 
     /// <summary>
     /// A positional element read of a C# tuple, which Dart models as a record:

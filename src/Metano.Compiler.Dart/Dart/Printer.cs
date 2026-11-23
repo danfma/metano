@@ -50,6 +50,15 @@ public sealed class Printer
             case DartFunction fn:
                 PrintFunction(sb, fn);
                 break;
+            case DartTopLevelVariable variable:
+                PrintTopLevelVariable(sb, variable);
+                break;
+            case DartTopLevelGetter getter:
+                PrintTopLevelGetter(sb, getter);
+                break;
+            case DartTopLevelSetter setter:
+                PrintTopLevelSetter(sb, setter);
+                break;
             case DartTypedef td:
                 PrintTypedef(sb, td);
                 break;
@@ -84,6 +93,43 @@ public sealed class Printer
             sb.Append(" async");
         if (fn.Body is not null)
             IrBodyPrinter.PrintBody(sb, fn.Body, indentLevel: 0);
+        else
+            sb.AppendLine(" => throw UnimplementedError();");
+    }
+
+    private static void PrintTopLevelVariable(StringBuilder sb, DartTopLevelVariable v)
+    {
+        if (v.IsLate)
+            sb.Append("late ");
+        if (v.IsFinal)
+            sb.Append("final ");
+        sb.Append(FormatType(v.Type)).Append(' ').Append(v.Name);
+        if (v.Initializer is not null)
+        {
+            sb.Append(" = ");
+            IrBodyPrinter.PrintExpression(sb, v.Initializer);
+        }
+        sb.AppendLine(";");
+    }
+
+    private static void PrintTopLevelGetter(StringBuilder sb, DartTopLevelGetter g)
+    {
+        sb.Append(FormatType(g.ReturnType)).Append(" get ").Append(g.Name);
+        if (g.Body is not null)
+            IrBodyPrinter.PrintBody(sb, g.Body, indentLevel: 0);
+        else
+            sb.AppendLine(" => throw UnimplementedError();");
+    }
+
+    private static void PrintTopLevelSetter(StringBuilder sb, DartTopLevelSetter s)
+    {
+        sb.Append("set ")
+            .Append(s.Name)
+            .Append('(')
+            .Append(FormatType(s.ValueType))
+            .Append(" value)");
+        if (s.Body is not null)
+            IrBodyPrinter.PrintBody(sb, s.Body, indentLevel: 0);
         else
             sb.AppendLine(" => throw UnimplementedError();");
     }
