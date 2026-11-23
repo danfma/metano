@@ -98,6 +98,7 @@ public static class PackageJsonWriter
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
         var (outputPrefix, prefixDiagnostic) = OutputPrefix.Resolve(srcRoot, srcRelative);
+
         if (prefixDiagnostic is not null)
             diagnostics.Add(prefixDiagnostic);
 
@@ -117,10 +118,12 @@ public static class PackageJsonWriter
         // but may still need the "#" import alias for internal barrel imports.
         // When outputPrefix is set, the root barrel is at {prefix}/index.ts.
         var rootIndexName = outputPrefix.Length > 0 ? $"{outputPrefix}/index.ts" : "index.ts";
+
         var hasRootIndex = files.Any(f =>
             NormalizePath(f.FileName).Equals(rootIndexName, StringComparison.Ordinal)
             || NormalizePath(f.FileName).Equals("index.ts", StringComparison.Ordinal)
         );
+
         var imports = BuildImports(
             srcRelative,
             distDirRelativeToPackageRoot,
@@ -436,6 +439,7 @@ public static class PackageJsonWriter
     {
         if (root.ContainsKey(key))
             return;
+
         root[key] = value;
     }
 
@@ -444,6 +448,7 @@ public static class PackageJsonWriter
     {
         if (root.ContainsKey(key))
             return;
+
         root[key] = value;
     }
 
@@ -500,6 +505,7 @@ public static class PackageJsonWriter
         {
             if (generated.ContainsKey(entryKey))
                 continue;
+
             if (IsTranspilerEmittedExportEntry(entryValue, transpilerDistPrefix))
                 existing.Remove(entryKey);
         }
@@ -603,6 +609,7 @@ public static class PackageJsonWriter
 
         var types = ReadStringField(obj, "types");
         var import = ReadStringField(obj, "import");
+
         if (types is null || import is null)
             return false;
 
@@ -623,6 +630,7 @@ public static class PackageJsonWriter
     {
         if (obj[fieldName] is not JsonValue value)
             return null;
+
         return value.TryGetValue<string>(out var s) ? s : null;
     }
 
