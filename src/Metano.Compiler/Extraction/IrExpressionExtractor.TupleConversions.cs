@@ -93,7 +93,7 @@ public sealed partial class IrExpressionExtractor
     {
         if (
             KeepsTuplesUnconverted
-            || TupleLiteralAs(cast.Expression, targetType) is not var (literal, target)
+            || AsTupleLiteralOf(cast.Expression, targetType) is not var (literal, target)
         )
             return null;
 
@@ -128,7 +128,7 @@ public sealed partial class IrExpressionExtractor
         TupleElementConversions elements
     )
     {
-        if (TupleLiteralAs(element, to) is var (literal, target))
+        if (AsTupleLiteralOf(element, to) is var (literal, target))
             return ConvertsLiteral(literal, target, elements);
 
         return _semantic.GetTypeInfo(element).Type is { } from
@@ -209,12 +209,10 @@ public sealed partial class IrExpressionExtractor
         ExpressionSyntax element,
         ITypeSymbol to,
         TupleElementConversions elements
-    )
-    {
-        return TupleLiteralAs(element, to) is var (literal, target)
+    ) =>
+        AsTupleLiteralOf(element, to) is var (literal, target)
             ? ConvertedTupleLiteral(site, literal, target, elements)
             : null;
-    }
 
     /// <summary>A tuple literal of the tuple type <paramref name="type"/> holding <paramref name="values"/>.</summary>
     private IrTupleLiteral TupleLiteralOfType(
@@ -367,13 +365,13 @@ public sealed partial class IrExpressionExtractor
     /// <paramref name="to"/> (nullable unwrapped); <c>null</c> when it is not
     /// a literal or <paramref name="to"/> is not a tuple of its arity.
     /// </summary>
-    private static (TupleExpressionSyntax Literal, INamedTypeSymbol Target)? TupleLiteralAs(
+    private static (TupleExpressionSyntax Literal, INamedTypeSymbol Target)? AsTupleLiteralOf(
         ExpressionSyntax expression,
         ITypeSymbol to
     ) =>
         expression switch
         {
-            ParenthesizedExpressionSyntax parenthesized => TupleLiteralAs(
+            ParenthesizedExpressionSyntax parenthesized => AsTupleLiteralOf(
                 parenthesized.Expression,
                 to
             ),
