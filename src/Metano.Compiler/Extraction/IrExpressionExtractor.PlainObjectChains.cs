@@ -93,7 +93,8 @@ public sealed partial class IrExpressionExtractor
             _context,
             LocalBindingDisambiguator.ForMember(ctor, _context),
             _inlineExpanding,
-            inlineParameterSubs: substitutions
+            inlineParameterSubs: substitutions,
+            temporaries: _temporaries
         );
 
         return hopExtractor.ExtractChainedArguments(chained);
