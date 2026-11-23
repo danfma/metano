@@ -54,9 +54,9 @@ namespace Conformance
     /// <summary>A type referenced through a `using` alias in its own file (#635).</summary>
     public class HTag
     {
-        public int V { get; }
-
         public HTag(int v) => V = v;
+
+        public int V { get; }
 
         public static HTag From(int v) => new(v * 10);
     }

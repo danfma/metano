@@ -139,8 +139,9 @@ internal static class LocalBindingDisambiguator
 
         var collector = new BindingCollector(semantic, naming, policy);
         var bindings = statements.SelectMany(collector.Collect).ToList();
+        var calledNames = CalledFunctionNames(statements, semantic, policy);
 
-        return Disambiguate(bindings, statements[0], naming);
+        return Disambiguate(bindings, statements[0], naming, calledNames);
     }
 
     /// <summary>
@@ -238,21 +239,47 @@ internal static class LocalBindingDisambiguator
             return LocalBindingNames.Empty;
 
         var collector = new BindingCollector(model, naming, context.GroupingPolicy);
+        var calledNames = CalledFunctionNames(roots, model, context.GroupingPolicy);
 
-        return Disambiguate(roots.SelectMany(collector.Collect).ToList(), reportAt, naming);
+        return Disambiguate(
+            roots.SelectMany(collector.Collect).ToList(),
+            reportAt,
+            naming,
+            calledNames
+        );
     }
+
+    /// <summary>
+    /// The bare function names the flattened calls under <paramref name="roots"/> spell
+    /// (<see cref="IrParameterNaming.FlattenedNamesCalledIn"/>): a local of one of these
+    /// names would shadow the function it calls (<c>var helper = 1; Ext.Helper(helper)</c>
+    /// → <c>helper(helper)</c>), so it yields its name like a colliding binding does.
+    /// </summary>
+    private static IReadOnlySet<string> CalledFunctionNames(
+        IEnumerable<SyntaxNode> roots,
+        SemanticModel model,
+        OverloadGroupingPolicy policy
+    ) =>
+        roots
+            .SelectMany(root => IrParameterNaming.FlattenedNamesCalledIn(root, model, policy))
+            .ToHashSet(StringComparer.Ordinal);
 
     private static LocalBindingNames Disambiguate(
         List<Binding> bindings,
         SyntaxNode reportAt,
-        LocalNaming naming
+        LocalNaming naming,
+        IReadOnlySet<string> calledNames
     )
     {
         bindings.Sort((left, right) => left.Position.CompareTo(right.Position));
 
-        var emittedNames = bindings.Select(b => b.EmittedName).ToHashSet(StringComparer.Ordinal);
+        var emittedNames = bindings
+            .Select(b => b.EmittedName)
+            .Concat(calledNames)
+            .ToHashSet(StringComparer.Ordinal);
+
         var renamed = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
-        var resolution = ResolveCollisions(bindings, naming);
+        var resolution = ResolveCollisions(bindings, naming, calledNames);
 
         foreach (var yielding in resolution.Yielding)
         {
@@ -279,10 +306,14 @@ internal static class LocalBindingDisambiguator
     /// </summary>
     private static CollisionResolution ResolveCollisions(
         IReadOnlyList<Binding> bindings,
-        LocalNaming naming
+        LocalNaming naming,
+        IReadOnlySet<string> calledNames
     )
     {
-        var yielding = new List<Binding>();
+        var yielding = bindings
+            .Where(binding => ShadowsACalledFunction(binding, calledNames))
+            .ToList();
+
         var unresolvable = new HashSet<string>(StringComparer.Ordinal);
         var pinnedCollisions = new HashSet<string>(StringComparer.Ordinal);
 
@@ -317,6 +348,15 @@ internal static class LocalBindingDisambiguator
             pinnedCollisions
         );
     }
+
+    /// <summary>
+    /// Whether a local takes the name of a function its member calls flattened. A
+    /// parameter is renamed by <see cref="IrParameterNaming"/> already, or keeps its
+    /// name as part of the call surface.
+    /// </summary>
+    private static bool ShadowsACalledFunction(Binding binding, IReadOnlySet<string> calledNames) =>
+        binding is { IsRenamable: true, Symbol: ILocalSymbol }
+        && calledNames.Contains(binding.EmittedName);
 
     private static bool IsVisibleCollision(Binding earlier, Binding later) =>
         earlier.Position < later.Position

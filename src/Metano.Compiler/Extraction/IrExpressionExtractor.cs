@@ -3971,8 +3971,7 @@ public sealed partial class IrExpressionExtractor
         // `[ExportedAsModule]` flattens like `[NoContainer]` at call sites (#286).
         var isDeclaringTypeNoContainer = symbol.ContainingType.IsContainerless();
 
-        var isDeclaringTypeExtensionContainer =
-            !isDeclaringTypeNoContainer && IsStaticMethodOfExtensionContainer(symbol);
+        var isDeclaringTypeExtensionContainer = IsStaticMethodOfExtensionContainer(symbol);
 
         // `[JsCallable]` interface `Invoke(…)` call → the receiver IS the JS
         // function, so the call lowers to `recv(args)`. A `[JsTuple]`

@@ -25,6 +25,12 @@ public static class SymbolHelper
     /// <summary>The prefix of a C# tuple's default element names (<c>Item1</c>, …).</summary>
     private const string TupleItemPrefix = "Item";
 
+    /// <summary>The <see cref="HasExtensionMembers"/> answer per type, computed once.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        INamedTypeSymbol,
+        System.Runtime.CompilerServices.StrongBox<bool>
+    > ExtensionMemberHolders = new();
+
     /// <summary>
     /// Stable display format used when the same type symbol must produce the
     /// same string in two unrelated places — for instance, both
@@ -836,9 +842,40 @@ public static class SymbolHelper
     /// Whether a type declares extension members: a classic <c>this T</c>
     /// extension method or a C# 14 <c>extension(...)</c> block, whatever their
     /// accessibility or attributes. A target may emit such a static class as a
-    /// module of functions even without <c>[NoContainer]</c>.
+    /// module of functions even without <c>[NoContainer]</c>. Computed once per
+    /// type, since the block test scans the declaring syntax.
     /// </summary>
     public static bool HasExtensionMembers(this INamedTypeSymbol type) =>
+        ExtensionMemberHolders
+            .GetValue(
+                type.OriginalDefinition,
+                definition => new System.Runtime.CompilerServices.StrongBox<bool>(
+                    DeclaresExtensionMembers(definition)
+                )
+            )
+            .Value;
+
+    /// <summary>
+    /// Whether a static class holding extension members is one the toolchain emits
+    /// itself (#554): transpiled for <paramref name="target"/>, not containerless (that
+    /// is <see cref="IsContainerless"/>) and bound to no runtime declaration
+    /// (<c>[Import]</c>, <c>[External]</c>). A BCL class such as <c>Enumerable</c>, a
+    /// type of a plain metadata reference and a bound class are not, so their static
+    /// calls keep the class qualifier. A target that emits such a class as a module of
+    /// functions flattens exactly the static calls into these types.
+    /// </summary>
+    public static bool IsEmittedExtensionContainer(
+        this INamedTypeSymbol type,
+        TargetLanguage? target
+    ) =>
+        type is { IsStatic: true }
+        && !type.IsContainerless()
+        && !HasImport(type)
+        && !HasExternal(type)
+        && Extraction.IrTypeRefMapper.IsTranspilableType(type, target)
+        && type.HasExtensionMembers();
+
+    private static bool DeclaresExtensionMembers(INamedTypeSymbol type) =>
         type.GetMembers()
             .OfType<IMethodSymbol>()
             .Any(method => method is { IsExtensionMethod: true, MethodKind: MethodKind.Ordinary })

@@ -192,4 +192,222 @@ public class ModuleFunctionEmissionTests
         await Assert.That(use).Contains("return plain(1);");
         await Assert.That(use).DoesNotContain("IgnHostL");
     }
+
+    [Test]
+    public async Task MethodGroupOfABclExtensionContainer_KeepsItsClassQualifier()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+            using System.Linq;
+
+            [Transpile, NoContainer]
+            public static class Nc
+            {
+                public static IEnumerable<int> Range(int a, int b) => new[] { -1 };
+            }
+
+            [Transpile]
+            public class Use
+            {
+                public Func<int, int, IEnumerable<int>> Group() => Enumerable.Range;
+            }
+            """
+        );
+
+        var use = files["use.ts"];
+
+        await Assert.That(use).DoesNotContain("from \"./nc\"");
+        await Assert.That(use).DoesNotContain("return range;");
+    }
+
+    [Test]
+    public async Task ImportBoundClassWithAnExtension_KeepsItsQualifiedImport()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Import("Lib", "./lib-mod")]
+            public static class Lib
+            {
+                public static int Foo() => 0;
+                public static int Twice(this int x) => 0;
+            }
+
+            [Transpile]
+            public class Use { public int Go() => Lib.Foo(); }
+            """
+        );
+
+        var use = files["use.ts"];
+
+        await Assert.That(use).Contains("import { Lib } from \"./lib-mod\";");
+        await Assert.That(use).Contains("return Lib.foo();");
+    }
+
+    [Test]
+    public async Task ExternalClassWithAnExtension_KeepsItsQualifier()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [External]
+            public static class JSON2
+            {
+                public static string Stringify(int x) => "";
+                public static int Twice(this int x) => 0;
+            }
+
+            [Transpile]
+            public class Use { public string Go() => JSON2.Stringify(1); }
+            """
+        );
+
+        await Assert.That(files["use.ts"]).Contains("return JSON2.stringify(1);");
+    }
+
+    [Test]
+    public async Task ExtensionContainerStatic_SharingANoContainerFunctionName_StaysValid()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace P.A
+            {
+                [Transpile]
+                public static class StrExt
+                {
+                    public static string Shout(this string s) => s.ToUpper();
+                    public static int Make(int x) => x;
+                }
+            }
+
+            namespace P
+            {
+                [Transpile, NoContainer]
+                public static class Nc { public static int Make(int x) => x * 10; }
+
+                [Transpile]
+                public class Use { public int Go() => Nc.Make(2); }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        await Assert.That(files["p/use.ts"]).Contains("import { make } from \"./nc\";");
+    }
+
+    [Test]
+    public async Task TwoModulesMembersOfOneNameReadInOneFile_ReportInsteadOfBindingOne()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace P.A
+            {
+                [Transpile]
+                public static class StrExt
+                {
+                    public static string Shout(this string s) => s.ToUpper();
+                    public static int Make(int x) => x;
+                }
+            }
+
+            namespace P
+            {
+                [Transpile, NoContainer]
+                public static class Nc { public static int Make(int x) => x * 10; }
+
+                [Transpile]
+                public class Use { public int Go() => Nc.Make(2) + P.A.StrExt.Make(3); }
+            }
+            """
+        );
+
+        var clash = diagnostics.Single(d => d.Code == "MS0021");
+
+        await Assert.That(clash.Message).Contains("'make' of StrExt is read in a file");
+    }
+
+    [Test]
+    public async Task LocalNamedLikeACalledModuleFunction_IsRenamed()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Ext
+            {
+                public static int Double(this int x) => x * 2;
+                public static int Helper(int x) => x + 100;
+            }
+
+            [Transpile]
+            public class Use
+            {
+                public int Go()
+                {
+                    var helper = 1;
+                    return Ext.Helper(helper);
+                }
+            }
+            """
+        );
+
+        var use = files["use.ts"];
+
+        await Assert.That(use).Contains("const helper$1 = 1;");
+        await Assert.That(use).Contains("return helper(helper$1);");
+    }
+
+    [Test]
+    public async Task PrivateHelperNamedLikeAnotherModulesExport_IsNotImportedOverItself()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class A
+            {
+                private static int Helper(int v) => v + 1;
+                public static int Use(int v) => Helper(v);
+            }
+
+            [Transpile, NoContainer]
+            public static class B { public static int Helper(int v) => v * 2; }
+            """
+        );
+
+        var module = files["a.ts"];
+
+        await Assert.That(module).DoesNotContain("import");
+        await Assert.That(module).Contains("return helper(v);");
+    }
+
+    [Test]
+    public async Task TwoExtensionContainersWithASameNamedStatic_ReportNothing()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace P.A
+            {
+                [Transpile]
+                public static class AExt
+                {
+                    public static int Twice(this int x) => x * 2;
+                    public static int Helper(int x) => x;
+                }
+            }
+
+            namespace P.B
+            {
+                [Transpile]
+                public static class BExt
+                {
+                    public static int Thrice(this int x) => x * 3;
+                    public static int Helper(int x) => x + 1;
+                }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
 }

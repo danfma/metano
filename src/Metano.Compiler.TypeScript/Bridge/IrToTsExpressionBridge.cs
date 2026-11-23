@@ -850,13 +850,7 @@ public static partial class IrToTsExpressionBridge
             && FlattensToModuleMember(containerless)
             && ma.Target is IrTypeReference container
         )
-        {
-            // A field or property is a module variable of the container's file
-            // (#314): carry the owner so another file imports it from there.
-            return containerless.IsTranspiledDataMember
-                ? ModuleExportReference(memberName, container)
-                : new TsIdentifier(memberName);
-        }
+            return ModuleMemberReference(containerless, memberName, container);
 
         return new TsPropertyAccess(loweredTarget, memberName);
     }
@@ -2661,6 +2655,7 @@ public static partial class IrToTsExpressionBridge
                 fastPath,
                 moduleExport.OwnerTypeName
             ),
+            TsTypeReference packageExport => new TsTypeReference(fastPath, packageExport.Origin),
             _ => new TsIdentifier(fastPath),
         };
     }

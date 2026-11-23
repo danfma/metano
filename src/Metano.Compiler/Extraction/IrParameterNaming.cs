@@ -110,23 +110,40 @@ internal static class IrParameterNaming
             SymbolHelper.ToCamelCase(parameter.Name)
         );
 
-        foreach (var name in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
+        foreach (var calledName in FlattenedNamesCalledIn(declaration, model, policy))
         {
-            if (
-                model.GetSymbolInfo(name).Symbol is not IMethodSymbol callee
-                || !IsFlattened(callee)
-            )
-                continue;
-
-            foreach (var calleeName in CalledNamesOf(callee, policy))
-            {
-                colliding.UnionWith(
-                    parametersByEmittedName[calleeName].Select(parameter => parameter.Name)
-                );
-            }
+            colliding.UnionWith(
+                parametersByEmittedName[calledName].Select(parameter => parameter.Name)
+            );
         }
 
         return colliding;
+    }
+
+    /// <summary>
+    /// Every bare name a flattened call under <paramref name="root"/> may spell (<see
+    /// cref="CalledNamesOf"/>): the names a binding of that root must not take, since
+    /// it would shadow the function it calls. The local-name disambiguator renames a
+    /// local that takes one of them.
+    /// </summary>
+    internal static IReadOnlySet<string> FlattenedNamesCalledIn(
+        SyntaxNode root,
+        SemanticModel model,
+        OverloadGroupingPolicy policy
+    )
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var name in root.DescendantNodes().OfType<SimpleNameSyntax>())
+        {
+            if (
+                model.GetSymbolInfo(name).Symbol is IMethodSymbol callee
+                && IsFlattened(callee, policy)
+            )
+                names.UnionWith(CalledNamesOf(callee, policy));
+        }
+
+        return names;
     }
 
     /// <summary>
@@ -165,10 +182,10 @@ internal static class IrParameterNaming
 
     /// <summary>
     /// Whether a call to <paramref name="callee"/> may lower to its bare function name:
-    /// a static method of a containerless class, or of an extension container, which
-    /// a target may emit as a module too (#554).
+    /// a static method of a containerless class, or of an emitted extension container,
+    /// which a target may emit as a module too (#554).
     /// </summary>
-    private static bool IsFlattened(IMethodSymbol callee) =>
+    private static bool IsFlattened(IMethodSymbol callee, OverloadGroupingPolicy policy) =>
         callee is { IsStatic: true, ContainingType: { } owner }
-        && (owner.IsContainerless() || (owner.IsStatic && owner.HasExtensionMembers()));
+        && (owner.IsContainerless() || owner.IsEmittedExtensionContainer(policy.Target));
 }

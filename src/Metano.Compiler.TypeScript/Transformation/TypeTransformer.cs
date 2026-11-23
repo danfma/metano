@@ -2831,7 +2831,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     DiagnosticCodes.UnsupportedFeature,
                     $"'{type.Name}' emits {group.Count()} module functions named "
                         + $"'{group.Key}': overloads of a C# 14 extension block member are not "
-                        + "supported yet. Give each overload its own [Name(\"...\")].",
+                        + "supported yet. Rename the overloads in C# so each has its own name.",
                     ExtensionBlockMemberLocation(type, group.First().Name, ordinal: 1)
                 )
             );
@@ -3200,7 +3200,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var type in transpilableTypes)
         {
-            if (!IsModuleShapedStaticClass(type))
+            if (!SymbolHelper.IsContainerless(type))
                 continue;
 
             if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
@@ -3369,7 +3369,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         TypeMappingContext typeMappingContext
     )
     {
-        if (type.DeclaredAccessibility == Accessibility.Public && IsModuleShapedStaticClass(type))
+        if (
+            type.DeclaredAccessibility == Accessibility.Public
+            && SymbolHelper.IsContainerless(type)
+        )
         {
             var originKey = type.GetCrossAssemblyOriginKey();
 

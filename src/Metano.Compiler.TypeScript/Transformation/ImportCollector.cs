@@ -152,6 +152,12 @@ public sealed class ImportCollector(
         _currentFileName = fileName ?? GetFileName(currentType);
         CollectReferencedTypeNames(statements, sink);
 
+        // A function or variable the module declares binds its name here, so
+        // no other module's export of that name is imported over it (a private
+        // helper beside another class's exported function of its name).
+        var moduleScopeNames = ModuleScopeFunctionAndVariableNames(statements).ToHashSet(Ordinal);
+        referencedTypes.ExceptWith(moduleScopeNames);
+
         // C# `using X = Y;` aliases substitute the canonical type name with
         // the user's alias on every emitted token. The walker therefore sees
         // the alias text only; recover the canonical via the per-file scope
@@ -693,7 +699,7 @@ public sealed class ImportCollector(
             ownersByModuleExport,
             currentNs,
             currentFileName,
-            importedNames,
+            importedNames.Union(moduleScopeNames).ToHashSet(Ordinal),
             AddLocal
         );
 
@@ -1139,8 +1145,18 @@ public sealed class ImportCollector(
             var isCurrentFile =
                 ownerRef.Namespace == currentNs && ownerRef.FileName == currentFileName;
 
-            if (isCurrentFile || !importedNames.Add(exportName))
+            if (isCurrentFile)
                 continue;
+
+            // The name is already bound — imported from another module or declared
+            // here — so importing this owner's member under it would silently read
+            // the other binding.
+            if (!importedNames.Add(exportName))
+            {
+                ReportModuleExportShadowed(exportName, owners.Min!);
+
+                continue;
+            }
 
             var ownerPath = _context.PathNaming.ComputeRelativeImportPath(
                 currentNs,
@@ -1151,6 +1167,17 @@ public sealed class ImportCollector(
             addLocal(ownerPath, exportName, false);
         }
     }
+
+    private void ReportModuleExportShadowed(string exportName, string owner) =>
+        _context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.ExtensionHelperNameClash,
+                $"'{exportName}' of {owner} is read in a file that already binds "
+                    + $"'{exportName}' to another import or declaration. Rename one of the "
+                    + "two members in C# so both can be read."
+            )
+        );
 
     private void ReportModuleExportClash(string exportName, IEnumerable<string> owners) =>
         _context.ReportDiagnostic(
@@ -1731,6 +1758,21 @@ public sealed class ImportCollector(
 
     private void CollectFromEmbeddedScope(TsEmbeddedScope scope, ImportCollectionSink sink) =>
         CollectInScope(scope.BoundNames, scope.Statements, scope.Expressions, sink);
+
+    /// <summary>The names the module's top-level functions and variables declare.</summary>
+    private static IEnumerable<string> ModuleScopeFunctionAndVariableNames(
+        IEnumerable<TsTopLevel> statements
+    ) =>
+        statements
+            .Select(statement =>
+                statement switch
+                {
+                    TsFunction function => function.Name,
+                    TsTopLevelStatement { Inner: TsVariableDeclaration variable } => variable.Name,
+                    _ => null,
+                }
+            )
+            .OfType<string>();
 
     /// <summary>
     /// Registers what a bare identifier outside any local binding may import:
