@@ -513,13 +513,43 @@ public static class IrToDartClassBridge
         string className,
         string? name,
         DartIrRewriter rewriter
-    ) =>
-        new(
+    )
+    {
+        var capturedAssignments = BuildCapturedAssignments(ctor);
+        var explicitBody = rewriter.Rewrite(ctor.Body);
+
+        IReadOnlyList<IrStatement>? body =
+            capturedAssignments.Count == 0 ? explicitBody
+            : explicitBody is null ? capturedAssignments
+            : [.. capturedAssignments, .. explicitBody];
+
+        return new DartConstructor(
             className,
             ConvertParameters(ctor, rewriter, initializesFields: true),
-            Body: rewriter.Rewrite(ctor.Body),
+            Body: body,
             Name: name
         );
+    }
+
+    private static IReadOnlyList<IrStatement> BuildCapturedAssignments(
+        IrConstructorDeclaration ctor
+    ) =>
+        ctor
+            .Parameters.Where(p => p.CapturedFieldName is not null)
+            .Select(p =>
+                (IrStatement)
+                    new IrExpressionStatement(
+                        new IrBinaryExpression(
+                            new IrMemberAccess(
+                                new IrThisExpression(),
+                                IrToDartNamingPolicy.ToParameterName(p.CapturedFieldName!)
+                            ),
+                            IrBinaryOp.Assign,
+                            new IrIdentifier(IrToDartNamingPolicy.ToParameterName(p.Parameter.Name))
+                        )
+                    )
+            )
+            .ToList();
 
     /// <summary>
     /// The constructor's parameters; a promoted one is a <c>this.x</c> field
@@ -554,8 +584,8 @@ public static class IrToDartClassBridge
             IrToDartTypeMapper.Map(field.Type),
             IsFinal: field.IsReadonly,
             IsStatic: field.IsStatic,
-            IsLate: NeedsLate(field.Type, field.Initializer is not null),
-            Initializer: rewriter.Rewrite(field.Initializer)
+            IsLate: NeedsLate(field.Type, !field.IsCapturedByCtor && field.Initializer is not null),
+            Initializer: field.IsCapturedByCtor ? null : rewriter.Rewrite(field.Initializer)
         );
 
     private static bool IsNullable(IrTypeRef type) => type is IrNullableTypeRef;
@@ -682,7 +712,8 @@ public static class IrToDartClassBridge
             Parameters: method
                 .Parameters.Select(p => new DartParameter(
                     IrToDartNamingPolicy.ToParameterName(p.Name),
-                    IrToDartTypeMapper.Map(p.Type)
+                    IrToDartTypeMapper.Map(p.Type),
+                    DefaultValue: rewriter.Rewrite(p.DefaultValue)
                 ))
                 .ToList(),
             ReturnType: IrToDartTypeMapper.Map(method.ReturnType),
