@@ -264,4 +264,45 @@ public class OverloadDispatcherFixTests
             .That(diagnostics.Select(diagnostic => diagnostic.Message))
             .Contains(message => message.Contains("'D3.convX'") && message.Contains("forwarder"));
     }
+
+    [Test]
+    public async Task NumericOverloads_TryTheBetterConversionTargetFirst()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Num
+            {
+                public string B(byte a) => "byte";
+
+                public string B(sbyte a) => "sbyte";
+
+                public string D(double a) => "double";
+
+                public string D(float a) => "float";
+
+                public string D(uint a) => "uint";
+
+                public string D(int a) => "int";
+            }
+            """
+        );
+
+        var output = result["num.ts"];
+
+        await Assert
+            .That(output.IndexOf("isSByte(args[0])"))
+            .IsLessThan(output.IndexOf("isByte(args[0])"));
+        await Assert
+            .That(output.IndexOf("isInt32(args[0])"))
+            .IsLessThan(output.IndexOf("isUInt32(args[0])"));
+        await Assert
+            .That(output.IndexOf("isUInt32(args[0])"))
+            .IsLessThan(output.IndexOf("isFloat32(args[0])"));
+        await Assert
+            .That(output.IndexOf("isFloat32(args[0])"))
+            .IsLessThan(output.IndexOf("isFloat64(args[0])"));
+    }
 }
