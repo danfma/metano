@@ -228,7 +228,7 @@ internal static class IrToTsSwitchStatementBridge
             subject,
             label,
             reassigned,
-            context.RuntimeTypes.BoxingEnabled
+            context
         );
 
         return [new TsBlockStatement([.. bindings, .. body])];

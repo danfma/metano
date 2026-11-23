@@ -24,4 +24,14 @@ public static class W6PatternProbes
 
     public static string NaNConstantsByValue() =>
         $"{IsArithmeticNaN(double.NaN)} {IsArithmeticNaN(1)} {IsMissingValue(double.NaN)} {IsMissingValue(0)} {ClassifyNaN(double.NaN)} {ClassifyNaN(0)} {ClassifyNaN(5)}";
+
+    static bool HasNoInner(Exception e) => e is { InnerException: null };
+
+    static bool HasTwoElements(int[] a) => a is { LongLength: 2 };
+
+    static string InnerMessage(Exception e) =>
+        e is { InnerException: { Message: var message } } ? message : "none";
+
+    public static string MappedPropertySubpatterns() =>
+        $"{HasNoInner(new Exception("a"))} {HasNoInner(new Exception("a", new Exception("b")))} {HasTwoElements([1, 2])} {HasTwoElements([1])} {InnerMessage(new Exception("a", new Exception("b")))} {InnerMessage(new Exception("a"))}";
 }

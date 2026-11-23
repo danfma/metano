@@ -757,7 +757,11 @@ public static partial class IrToTsExpressionBridge
         var typeTest = PropertyPatternTypeTest(value, pattern, context);
 
         var memberTests = pattern.Subpatterns.Select(sub =>
-            BuildPatternTestOrNull(PropertyPatternMemberAccess(value, sub), sub.Pattern, context)
+            BuildPatternTestOrNull(
+                PropertyPatternMemberAccess(value, sub, context),
+                sub.Pattern,
+                context
+            )
         );
 
         return JoinWithAnd([typeTest, .. memberTests.OfType<TsExpression>()]);
@@ -787,14 +791,30 @@ public static partial class IrToTsExpressionBridge
                 new TsBinaryExpression(accumulated, "&&", test)
             );
 
+    /// <summary>
+    /// The member read of a property pattern entry, through the declarative
+    /// BCL mappings like an ordinary member read (<c>{ LongLength: 2 }</c> on
+    /// an array reads <c>BigInt(value.length)</c>).
+    /// </summary>
     private static TsExpression PropertyPatternMemberAccess(
         TsExpression value,
-        IrPropertySubpattern sub
+        IrPropertySubpattern sub,
+        IrToTsBridgeContext context
     ) =>
-        new TsPropertyAccess(
+        MappedPropertyPatternRead(value, sub, context)
+        ?? new TsPropertyAccess(
             value,
             ReadDataMemberName(sub.MemberName, sub.EmittedName, sub.IsTranspiledDataMember)
         );
+
+    private static TsExpression? MappedPropertyPatternRead(
+        TsExpression value,
+        IrPropertySubpattern sub,
+        IrToTsBridgeContext context
+    ) =>
+        (sub.Origin, context.Bcl) is ({ } origin, { } bcl)
+            ? IrToTsBclMapper.TryMapInstanceRead(origin, value, bcl)
+            : null;
 
     private static string RelationalOpToken(IrRelationalOp op) =>
         op switch
@@ -821,9 +841,9 @@ public static partial class IrToTsExpressionBridge
         TsExpression value,
         IrPattern pattern,
         IReadOnlySet<string> reassigned,
-        bool unboxes
+        IrToTsBridgeContext context
     ) =>
-        EnumeratePatternBindings(value, pattern, unboxes)
+        EnumeratePatternBindings(value, pattern, context)
             .Select(binding =>
                 (TsStatement)
                     new TsVariableDeclaration(
@@ -839,9 +859,8 @@ public static partial class IrToTsExpressionBridge
     /// <see cref="EnumeratePatternBindings"/> lazily, so it stops at the
     /// first one.
     /// </summary>
-    private static bool HasDesignators(IrPattern pattern) =>
-        EnumeratePatternBindings(new TsIdentifier(ScrutineeParameterName), pattern, unboxes: false)
-            .Any();
+    private static bool HasDesignators(IrPattern pattern, IrToTsBridgeContext context) =>
+        EnumeratePatternBindings(new TsIdentifier(ScrutineeParameterName), pattern, context).Any();
 
     /// <summary>
     /// Every designator the pattern introduces with the value it reads, in
@@ -851,7 +870,7 @@ public static partial class IrToTsExpressionBridge
     private static IEnumerable<PatternBinding> EnumeratePatternBindings(
         TsExpression value,
         IrPattern pattern,
-        bool unboxes
+        IrToTsBridgeContext context
     ) =>
         pattern switch
         {
@@ -873,20 +892,25 @@ public static partial class IrToTsExpressionBridge
             [
                 new PatternBinding(
                     designator.Name,
-                    UnboxedBindingValue(value, typePattern, unboxes)
+                    UnboxedBindingValue(value, typePattern, context.RuntimeTypes.BoxingEnabled)
                 ),
             ],
             IrVarPattern varPattern => [new PatternBinding(varPattern.Designator.Name, value)],
             IrPropertyPattern property => DesignatorBinding(
                     property.Designator,
-                    UnboxedBindingValue(value, property.Type, property.InputType, unboxes)
+                    UnboxedBindingValue(
+                        value,
+                        property.Type,
+                        property.InputType,
+                        context.RuntimeTypes.BoxingEnabled
+                    )
                 )
                 .Concat(
                     property.Subpatterns.SelectMany(sub =>
                         EnumeratePatternBindings(
-                            PropertyPatternMemberAccess(value, sub),
+                            PropertyPatternMemberAccess(value, sub, context),
                             sub.Pattern,
-                            unboxes
+                            context
                         )
                     )
                 ),
@@ -897,7 +921,7 @@ public static partial class IrToTsExpressionBridge
                             EnumeratePatternBindings(
                                 PositionalElementAccess(value, positional, i),
                                 element,
-                                unboxes
+                                context
                             )
                     )
                 ),
@@ -907,17 +931,21 @@ public static partial class IrToTsExpressionBridge
                         EnumeratePatternBindings(
                             ListElementAccess(value, list, i),
                             element,
-                            unboxes
+                            context
                         )
                 )
                 .Concat(SliceBinding(value, list)),
             IrLogicalPattern { Operator: IrLogicalOp.And, Right: { } right } and =>
-                EnumeratePatternBindings(value, and.Left, unboxes)
+                EnumeratePatternBindings(value, and.Left, context)
                     .Concat(
                         EnumeratePatternBindings(
-                            ConjunctionRightValue(value, and.Left, unboxes),
+                            ConjunctionRightValue(
+                                value,
+                                and.Left,
+                                context.RuntimeTypes.BoxingEnabled
+                            ),
                             right,
-                            unboxes
+                            context
                         )
                     ),
             _ => [],

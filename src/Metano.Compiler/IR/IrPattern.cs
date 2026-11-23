@@ -107,7 +107,15 @@ public sealed record IrPropertySubpattern(
     IrPattern Pattern,
     string? EmittedName = null,
     bool IsTranspiledDataMember = false
-);
+)
+{
+    /// <summary>
+    /// The member the entry reads, so a target applies the same declarative
+    /// mappings as an ordinary member read (<c>{ InnerException: null }</c> on an
+    /// <c>Exception</c>); <c>null</c> when the member did not bind.
+    /// </summary>
+    public IrMemberOrigin? Origin { get; init; }
+}
 
 /// <summary>
 /// Relational pattern: <c>x is &gt; 0</c>, <c>x is &lt;= 10</c>, etc.

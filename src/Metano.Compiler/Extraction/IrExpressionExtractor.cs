@@ -1223,7 +1223,10 @@ public sealed partial class IrExpressionExtractor
             CaptureComputedRead(member, symbol, pattern),
             ResolveMemberNameOverride(member),
             IsTranspiledDataMember(symbol)
-        );
+        )
+        {
+            Origin = BuildOrigin(symbol),
+        };
     }
 
     /// <summary>
