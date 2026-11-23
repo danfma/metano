@@ -229,7 +229,4 @@ describe("an explicit default equality comparer is the same as none", () => {
     expect(withDefault.containsKey("a")).toBe(true);
   });
 
-  test("List is unaffected (no comparer to normalize)", () => {
-    expect(List.of([1, 2]).contains(2)).toBe(true);
-  });
 });

@@ -5,6 +5,7 @@
  * 001b2151^ (the last commit before 011c replaced it; identical at 71b02c77^).
  * It is the baseline of the "3.0 HashSet vs 2.x HashSet" row of
  * `collections.bench.ts`. Not exported from the package and not part of `src/`.
+ * Exempt from .claude/rules/frontend.md: it stays verbatim so the comparison measures the real 2.x class.
  */
 import { HashCode } from "../../src/system/hash-code.ts";
 
