@@ -446,8 +446,46 @@ public static class IrClassExtractor
         foreach (var group in MethodOverloadGroups.Of(type, context.GroupingPolicy))
             result.Add(ExtractGroup(type, group, context));
 
+        // System.Text.Json.SourceGeneration emits partial files whose syntax-tree order
+        // can vary between compilations; sort members by kind and ordinal name so every
+        // target receives a deterministic declaration list (#576, #689).
+        if (IsJsonSerializerContext(type))
+        {
+            result.Sort(
+                static (left, right) =>
+                {
+                    var kindCmp = MemberSortRank(left).CompareTo(MemberSortRank(right));
+                    if (kindCmp != 0)
+                        return kindCmp;
+
+                    return StringComparer.Ordinal.Compare(left.Name, right.Name);
+                }
+            );
+        }
+
         return result;
     }
+
+    private static bool IsJsonSerializerContext(INamedTypeSymbol type)
+    {
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (current.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializerContext")
+                return true;
+        }
+
+        return false;
+    }
+
+    private static int MemberSortRank(IrMemberDeclaration member) =>
+        member switch
+        {
+            IrFieldDeclaration => 0,
+            IrPropertyDeclaration => 1,
+            IrEventDeclaration => 2,
+            IrMethodDeclaration => 3,
+            _ => 4,
+        };
 
     /// <summary>
     /// Extracts one method group. A single method that is its own root is an
