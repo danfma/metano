@@ -908,10 +908,10 @@ public class ConstNamingConsistencyTests
             """
         )["range.ts"];
 
-        // A reserved word is a valid TS property name, so the data-member rule
-        // keeps it; the declaration and the capture assignment agree.
-        await Assert.That(output).Contains("private readonly default: number;");
-        await Assert.That(output).Contains("this.default = of_;");
+        // The data-member rule escapes a reserved word whatever the case of its
+        // first letter (#404); the declaration and the capture assignment agree.
+        await Assert.That(output).Contains("private readonly default_: number;");
+        await Assert.That(output).Contains("this.default_ = of_;");
     }
 
     [Test]

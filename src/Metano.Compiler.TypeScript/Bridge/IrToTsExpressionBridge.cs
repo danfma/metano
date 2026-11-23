@@ -2351,17 +2351,23 @@ public static partial class IrToTsExpressionBridge
         if (ne.IsPlainObject)
         {
             var properties = new List<TsObjectProperty>(args.Count);
+
             for (var i = 0; i < args.Count; i++)
             {
                 var paramName =
                     ne.ParameterNames is { } names && i < names.Count ? names[i] : $"_{i}";
+
                 properties.Add(
-                    new TsObjectProperty(TypeScriptNaming.ToCamelCase(paramName), args[i])
+                    new TsObjectProperty(
+                        IrToTsNamingPolicy.ToDataMemberName(paramName, emittedName: null),
+                        args[i]
+                    )
                 );
             }
 
             return new TsObjectLiteral(properties);
         }
+
         // `[JsTuple]` construction: `new T(a, b)` lowers to a positional array
         // literal `[a, b]`, the array-shape sibling of the `[PlainObject]`
         // object-literal lowering above. The class wrapper is erased; the

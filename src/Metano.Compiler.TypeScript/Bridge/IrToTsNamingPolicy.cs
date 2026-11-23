@@ -41,14 +41,16 @@ public static class IrToTsNamingPolicy
     /// declares the member with (a promoted constructor parameter cannot be
     /// named <c>default</c>, so the property it declares is
     /// <c>default_</c>), applied to every data member so the rule does not
-    /// depend on how the member is declared. Every read of the member —
+    /// depend on how the member is declared, nor on the case of its first
+    /// letter: <c>Of</c> and <c>of</c> both print as <c>of_</c>, so a member
+    /// and the parameter promoted to it agree (#404). Every read of the member —
     /// ordinary and optional-chain member access, record equality,
     /// <c>with</c> keys, pattern member reads, JSON specs — goes through here
     /// so it names what was declared. Methods and events are never escaped
     /// (see <see cref="ToMethodName"/>).
     /// </summary>
     public static string ToDataMemberName(string irName, string? emittedName) =>
-        emittedName ?? TypeScriptNaming.ToCamelCase(irName);
+        emittedName ?? TypeScriptNaming.EscapeIfReserved(TypeScriptNaming.ToCamelCase(irName));
 
     /// <summary>
     /// Resolves the parameter name: camelCase with reserved-word escaping
