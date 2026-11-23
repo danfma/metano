@@ -194,7 +194,7 @@ internal static class ValueEqualityShapes
     private static bool IsEmittedAsClass(INamedTypeSymbol type) =>
         !type.HasPlainObject()
         && !type.HasJsTuple()
-        && !type.HasBranded()
+        && !SymbolHelper.IsPrimitiveBackedBranded(type)
         && !type.IsJsxComponent();
 
     private static IEnumerable<IMethodSymbol> UserMethodsOf(

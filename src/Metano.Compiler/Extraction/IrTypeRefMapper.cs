@@ -473,14 +473,14 @@ public static class IrTypeRefMapper
         if (named.TypeKind == TypeKind.Delegate)
             return new IrNamedTypeSemantics(IrNamedTypeKind.Delegate);
 
-        // Inline wrappers collapse to a branded primitive at runtime. The
-        // underlying primitive comes from the first real field / property.
-        if (SymbolHelper.HasBranded(named))
+        // Inline wrappers collapse to a branded primitive at runtime. A
+        // wrapper over anything a brand cannot intersect lowers as the record
+        // or struct it is (#288), so it takes the arms below.
+        if (SymbolHelper.IsPrimitiveBackedBranded(named))
         {
-            var primitive = DetectBrandedUnderlyingPrimitive(named);
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Branded,
-                BrandedUnderlyingPrimitive: primitive,
+                BrandedUnderlyingPrimitive: BrandedUnderlyingPrimitiveOf(named),
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
@@ -792,7 +792,7 @@ public static class IrTypeRefMapper
 
     /// <summary>
     /// A transpiled record or struct the walk enters field by field: not a
-    /// branded wrapper (one value) nor an enum.
+    /// primitive-backed branded wrapper (one value) nor an enum.
     /// </summary>
     private static bool IsWalkedValueType(
         ITypeSymbol type,
@@ -800,7 +800,7 @@ public static class IrTypeRefMapper
     ) =>
         type is INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Struct } named
         && (named.IsRecord || named.TypeKind is TypeKind.Struct)
-        && !SymbolHelper.HasBranded(named)
+        && !SymbolHelper.IsPrimitiveBackedBranded(named)
         && IsTranspilableType(named, target);
 
     /// <summary>
@@ -883,22 +883,17 @@ public static class IrTypeRefMapper
             .SelectMany(current => current.GetMembers().OfType<IFieldSymbol>())
             .Where(field => !field.IsStatic && !field.IsConst);
 
-    private static IrPrimitive? DetectBrandedUnderlyingPrimitive(INamedTypeSymbol wrapper)
-    {
-        var field = wrapper
-            .GetMembers()
-            .OfType<IFieldSymbol>()
-            .FirstOrDefault(f => !f.IsImplicitlyDeclared);
-        if (field is not null && Map(field.Type) is IrPrimitiveTypeRef p)
-            return p.Primitive;
-        var prop = wrapper
-            .GetMembers()
-            .OfType<IPropertySymbol>()
-            .FirstOrDefault(p => !p.IsImplicitlyDeclared);
-        if (prop is not null && Map(prop.Type) is IrPrimitiveTypeRef pp)
-            return pp.Primitive;
-        return null;
-    }
+    /// <summary>
+    /// The primitive a primitive-backed <c>[Branded]</c> wrapper brands, read
+    /// from its single value member (<see cref="SymbolHelper.GetBrandedValueType"/>),
+    /// the rule the declaration side reads too. A static member of the wrapper's
+    /// own type (<c>static readonly UId Zero</c>) is never the value member.
+    /// </summary>
+    private static IrPrimitive? BrandedUnderlyingPrimitiveOf(INamedTypeSymbol wrapper) =>
+        SymbolHelper.GetBrandedValueType(wrapper.OriginalDefinition) is { } valueType
+        && Map(valueType) is IrPrimitiveTypeRef { Primitive: var primitive }
+            ? primitive
+            : null;
 
     /// <summary>
     /// Whether <paramref name="type"/> is an exception with no declaration on

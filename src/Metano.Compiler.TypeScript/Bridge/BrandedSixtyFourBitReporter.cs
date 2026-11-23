@@ -61,7 +61,10 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
         {
             Report(
                 group.Select(method =>
-                    (OverloadSymbols.Of(symbols, method.Parameters), added.Contains(method))
+                    (
+                        OverloadSymbols.Of(symbols, method.Parameters, method.SignatureText),
+                        added.Contains(method)
+                    )
                 ),
                 type,
                 isBrandedOperator
@@ -88,7 +91,9 @@ internal sealed class BrandedSixtyFourBitReporter(Action<MetanoDiagnostic> repor
         foreach (var group in groups)
         {
             Report(
-                group.Select(overload => (OverloadSymbols.Of(symbols, overload.Parameters), true)),
+                group.Select(overload =>
+                    (OverloadSymbols.Of(symbols, overload.Parameters, overload.SignatureText), true)
+                ),
                 type,
                 isBrandedOperator
             );

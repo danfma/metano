@@ -56,13 +56,13 @@ internal sealed class TsCompanionPlan
     public IReadOnlyList<TsClaimFinding> Findings { get; }
 
     /// <summary>
-    /// Whether <paramref name="type"/> can have a companion namespace: a
-    /// <c>[Branded]</c> / <c>[InlineWrapper]</c> struct. Its plan
-    /// (<see cref="Of"/>) still answers <c>null</c> when it wraps something a
-    /// brand cannot intersect.
+    /// Whether <paramref name="type"/> has a companion namespace: a
+    /// <c>[Branded]</c> / <c>[InlineWrapper]</c> struct over a primitive a
+    /// brand can intersect. A wrapper over anything else lowers as the record
+    /// or struct it is (#288).
     /// </summary>
     public static bool AppliesTo(INamedTypeSymbol type) =>
-        SymbolHelper.HasBranded(type) && type.TypeKind == TypeKind.Struct;
+        SymbolHelper.IsPrimitiveBackedBranded(type);
 
     /// <summary>
     /// The TypeScript answer to

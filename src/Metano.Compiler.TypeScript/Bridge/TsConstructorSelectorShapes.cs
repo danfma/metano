@@ -23,7 +23,7 @@ public static class TsConstructorSelectorShapes
         && SymbolHelper.IsTranspiledByItsAssembly(type)
         && !SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript)
         && !SymbolHelper.HasPlainObject(type)
-        && !SymbolHelper.HasBranded(type)
+        && !SymbolHelper.IsPrimitiveBackedBranded(type)
         && !SymbolHelper.HasJsTuple(type)
         && !SymbolHelper.HasExternal(type)
         && !SymbolHelper.HasImport(type)

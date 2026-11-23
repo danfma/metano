@@ -62,8 +62,14 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
         foreach (var catchAll in found)
         {
             Report(
-                OverloadSymbols.Of(symbols, catchAll.Overload.Parameters),
-                catchAll.Shadowed.Select(method => OverloadSymbols.Of(symbols, method.Parameters)),
+                OverloadSymbols.Of(
+                    symbols,
+                    catchAll.Overload.Parameters,
+                    catchAll.Overload.SignatureText
+                ),
+                catchAll.Shadowed.Select(method =>
+                    OverloadSymbols.Of(symbols, method.Parameters, method.SignatureText)
+                ),
                 type
             );
         }
@@ -91,8 +97,14 @@ internal sealed class CatchAllOverloadReporter(Action<MetanoDiagnostic> reportDi
         foreach (var catchAll in found)
         {
             Report(
-                OverloadSymbols.Of(symbols, catchAll.Overload.Parameters),
-                catchAll.Shadowed.Select(o => OverloadSymbols.Of(symbols, o.Parameters)),
+                OverloadSymbols.Of(
+                    symbols,
+                    catchAll.Overload.Parameters,
+                    catchAll.Overload.SignatureText
+                ),
+                catchAll.Shadowed.Select(o =>
+                    OverloadSymbols.Of(symbols, o.Parameters, o.SignatureText)
+                ),
                 type
             );
         }
