@@ -400,7 +400,6 @@ public sealed partial class IrExpressionExtractor
     /// <summary>The literal of a constant <paramref name="value"/> in the kind of <paramref name="target"/>.</summary>
     private static IrLiteral ConstantLiteralOfKind(object value, IrNumericEndpoint? target)
     {
-        // TODO(#602): merge ClassifyNumericForConvertedType into this.
         var number = value is char character ? (int)character : value;
 
         // An enum value is a plain number, unless the target holds it as its

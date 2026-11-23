@@ -1987,37 +1987,28 @@ public sealed partial class IrExpressionExtractor
     /// inferred at the call site. C#'s implicit conversions — `100` in a
     /// `decimal` context, `150` in a `BigInteger` context — carry through the
     /// `ConvertedType`, and the backend needs that info to pick the right
-    /// runtime representation (<c>new Decimal("100")</c>, <c>150n</c>).
-    /// Mirrors the legacy <see cref="Metano.Compiler.TypeScript.Transformation.LiteralHandler"/>
-    /// shape so the IR path produces matching output.
+    /// runtime representation (<c>new Decimal("100")</c>, <c>150n</c>): those
+    /// two carry their digits through <see cref="ConstantLiteralOfKind"/>; a
+    /// literal in any other slot keeps its own kind (a 64-bit slot folds
+    /// before, in <see cref="FoldedInt64Constant"/>).
     /// </summary>
     private IrLiteral ClassifyNumericInContext(LiteralExpressionSyntax lit, object? value) =>
-        ClassifyNumericForConvertedType(
-            lit.Token.ValueText,
-            value,
-            _semantic.GetTypeInfo(lit).ConvertedType
-        );
+        value is null
+            ? ClassifyNumeric(value)
+            : ConstantLiteralOfKind(
+                value,
+                DigitCarryingTarget(_semantic.GetTypeInfo(lit).ConvertedType)
+            );
 
     /// <summary>
-    /// A numeric constant in the representation its converted type needs:
-    /// <c>decimal</c> and <c>BigInteger</c> carry <paramref name="digits"/>
-    /// (precision-preserving text), every other type the
-    /// <see cref="ClassifyNumeric">classified</see> <paramref name="value"/>.
+    /// The endpoint of <paramref name="convertedType"/> when it is exactly
+    /// <c>decimal</c> or <c>BigInteger</c>; a nullable one keeps the literal's
+    /// own kind, which its lifted conversion converts.
     /// </summary>
-    private static IrLiteral ClassifyNumericForConvertedType(
-        string digits,
-        object? value,
-        ITypeSymbol? convertedType
-    )
-    {
-        if (convertedType?.SpecialType == SpecialType.System_Decimal)
-            return new IrLiteral(digits, IrLiteralKind.Decimal);
-
-        if (convertedType.IsBigInteger())
-            return new IrLiteral(digits, IrLiteralKind.BigInteger);
-
-        return ClassifyNumeric(value);
-    }
+    private static IrNumericEndpoint? DigitCarryingTarget(ITypeSymbol? convertedType) =>
+        convertedType?.SpecialType == SpecialType.System_Decimal || convertedType.IsBigInteger()
+            ? NumericEndpoints.Of(convertedType)
+            : null;
 
     private static IrLiteral ClassifyNumeric(object? value) =>
         value switch
