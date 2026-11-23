@@ -93,7 +93,8 @@ public sealed partial class IrExpressionExtractor
     /// the value comparison sees two decimals. For a target that converts
     /// every integer read as a <c>decimal</c> (FR-080), an operand the
     /// extraction already converted is that value, and so is a literal
-    /// already classified as a decimal (<c>d == 0</c>).
+    /// already classified as a decimal (<c>d == 0</c>). A target whose
+    /// decimal literal is a plain number (Dart) keeps the construction.
     /// </summary>
     private IrExpression ExtractAsDecimal(ExpressionSyntax operand)
     {
@@ -118,9 +119,10 @@ public sealed partial class IrExpressionExtractor
     }
 
     private bool IsConvertedToDecimal(IrExpression value) =>
-        value is IrLiteral { Kind: IrLiteralKind.Decimal }
-        || _context.NumericLowering.ComputesDecimalByMethods
-            && value is IrNumericConversion { To.Kind: IrNumericKind.Decimal };
+        _context.NumericLowering.ComputesDecimalByMethods
+        && value
+            is IrLiteral { Kind: IrLiteralKind.Decimal }
+                or IrNumericConversion { To.Kind: IrNumericKind.Decimal };
 
     private static IrExpression ToDecimal(IrExpression number) =>
         new IrNewExpression(new IrPrimitiveTypeRef(IrPrimitive.Decimal), [new IrArgument(number)]);

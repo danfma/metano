@@ -82,12 +82,6 @@ function hashValue(value: unknown): number {
   // 64-bit integers (and BigInteger): .NET folds both 32-bit words (FR-046).
   if (typeof value === "bigint") return hashInt64(value);
 
-  // A tuple (a JS array) hashes its elements in order, as the
-  // element-wise equality it is compared with does (#403).
-  if (Array.isArray(value)) {
-    return hashElements(value);
-  }
-
   // Objects with hashCode method (other Metano records)
   if (
     typeof value === "object" &&
@@ -99,16 +93,6 @@ function hashValue(value: unknown): number {
   }
 
   return 0;
-}
-
-function hashElements(values: readonly unknown[]): number {
-  const hc = new HashCode();
-
-  for (const element of values) {
-    hc.add(element);
-  }
-
-  return hc.toHashCode();
 }
 
 /**

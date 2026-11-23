@@ -31,7 +31,7 @@ public class TupleDefaultValueTests
         var output = TranspileHelper.Transpile(Source)["defaults.ts"];
 
         await Assert.That(output).Contains("tupleEquals(t, [0, 0] as [number, number])");
-        await Assert.That(output).Contains("const t = [0, null] as [number, string];");
+        await Assert.That(output).Contains("const t = [0, null!] as [number, string];");
     }
 
     [Test]
@@ -42,5 +42,35 @@ public class TupleDefaultValueTests
         await Assert
             .That(output)
             .Contains("tupleEquals(t ?? [0, 0] as [number, number], [0, 0] as [number, number])");
+    }
+
+    /// <summary>
+    /// The default and a literal <c>null</c> at a reference position assert
+    /// <c>null!</c>, so the golden type-checks under <c>tsgo --strict</c>
+    /// (metano-runtime <c>test/goldens/strict-goldens.test.ts</c>).
+    /// </summary>
+    [Test]
+    public async Task ReferenceElementDefault_TypeChecksUnderStrict()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class StrictDefaults
+            {
+                public static (int, string) Defaulted()
+                {
+                    (int, string) t = default;
+
+                    return t;
+                }
+
+                public static (int, string) Literal() => (0, null);
+
+                public static ((int, string), bool) Nested() => default;
+            }
+            """
+        )["strict-defaults.ts"];
+
+        await TranspileHelper.AssertGolden("tuple-default-strict.ts", output);
     }
 }

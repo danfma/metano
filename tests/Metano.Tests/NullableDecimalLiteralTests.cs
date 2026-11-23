@@ -38,4 +38,25 @@ public class NullableDecimalLiteralTests
         await Assert.That(output).Contains("const d = new Decimal(\"5\");");
         await Assert.That(output).Contains("const b = 7n;");
     }
+
+    /// <summary>
+    /// Dart prints a decimal literal as a plain number, so the nullable
+    /// decimal equality keeps the construction there (<c>d == Decimal(5)</c>);
+    /// <c>d == 5</c> would compile and always be false.
+    /// </summary>
+    [Test]
+    public async Task DartNullableDecimalEquality_KeepsTheConstruction()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Amounts
+            {
+                public static bool IsFive(decimal? d) => d == 5;
+            }
+            """
+        );
+
+        await Assert.That(string.Concat(files.Values)).Contains("Decimal(5)");
+    }
 }

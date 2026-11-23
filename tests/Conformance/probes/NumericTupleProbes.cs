@@ -19,6 +19,13 @@ public class TupleHolder
 /// <summary>A record with a tuple field, for the hash row.</summary>
 public record TupleFieldRecord((int, int) Pair);
 
+/// <summary>Records whose array members hash by reference, for the hash rows.</summary>
+public record ArrayFieldRecord(int[] A);
+
+public record ObjectArrayFieldRecord(object[] A);
+
+public record TupleArrayFieldRecord((int[], int) T);
+
 /// <summary>Numeric tuple, decimal and cast rows of the wave-6 group J fixes.</summary>
 public static class NumericTupleProbes
 {
@@ -160,5 +167,33 @@ public static class NumericTupleProbes
             + evaluated
             + ":"
             + liftedCalls;
+    }
+
+    public static string ArrayMemberHashIsStable()
+    {
+        var record = new ArrayFieldRecord(new[] { 1, 2 });
+        var set = new HashSet<ArrayFieldRecord> { record };
+        record.A[0] = 9;
+
+        return set.Contains(record).ToString();
+    }
+
+    public static string CyclicArrayMemberHashes()
+    {
+        var array = new object[1];
+        array[0] = array;
+        var record = new ObjectArrayFieldRecord(array);
+
+        return (record.GetHashCode() == record.GetHashCode()).ToString();
+    }
+
+    public static string TupleArrayElementHashIsStable()
+    {
+        var array = new[] { 1 };
+        var key = new TupleArrayFieldRecord((array, 1));
+        var map = new Dictionary<TupleArrayFieldRecord, int> { [key] = 5 };
+        array[0] = 2;
+
+        return map.ContainsKey(key).ToString();
     }
 }
