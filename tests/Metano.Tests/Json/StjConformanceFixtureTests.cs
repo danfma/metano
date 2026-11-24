@@ -747,6 +747,16 @@ public class StjConformanceFixtureTests
                 () => Flavor.Sweet,
                 async value => await Assert.That(value).IsEqualTo(Flavor.Sweet)
             ),
+            // #734: the built-in string-enum converter over a [StringEnum] writes the
+            // member names the descriptor writes; over a numeric enum it does not.
+            ["V14b"] = Roundtrip(
+                () => Spice.Hot,
+                async value => await Assert.That(value).IsEqualTo(Spice.Hot)
+            ),
+            ["V14c"] = Roundtrip(
+                () => Heat.Warm,
+                async value => await Assert.That(value).IsEqualTo(Heat.Warm)
+            ),
             ["V15"] = Roundtrip(
                 () => new HashSet<string> { "a", "b" },
                 async value => await Assert.That(((HashSet<string>)value!).Count).IsEqualTo(2)

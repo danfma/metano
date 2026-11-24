@@ -450,6 +450,23 @@
     "divergence": "StringEnum wire type (baseline mapping), not mutually readable: STJ writes the number, Metano the name"
   },
   {
+    "id": "V14b",
+    "context": "StudioJsonContext",
+    "getter": "spice",
+    "direction": "roundtrip",
+    "json": "\"Hot\""
+  },
+  {
+    "id": "V14c",
+    "context": "StudioJsonContext",
+    "getter": "heat",
+    "direction": "roundtrip",
+    "json": "1",
+    "stjJson": "\"Warm\"",
+    "crossReadable": false,
+    "divergence": "[JsonConverter(typeof(JsonStringEnumConverter))] over a numeric enum (MS0037): STJ writes the name, the descriptor the number"
+  },
+  {
     "id": "V13a",
     "context": "StudioJsonContext",
     "getter": "perms",

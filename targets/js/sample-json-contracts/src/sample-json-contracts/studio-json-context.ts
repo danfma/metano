@@ -31,6 +31,7 @@ import { GuidMapHolder } from "./guid-map-holder";
 import { HBase } from "./h-base";
 import { HLeaf } from "./h-leaf";
 import { HMid } from "./h-mid";
+import { Heat } from "./heat";
 import { HolderChar } from "./holder-char";
 import { HolderInt } from "./holder-int";
 import { HolderLevel } from "./holder-level";
@@ -66,6 +67,7 @@ import { SPoint } from "./s-point";
 import { Schedule } from "./schedule";
 import type { Shape } from "./shape";
 import { SilenceClip } from "./silence-clip";
+import { Spice } from "./spice";
 import { Sq } from "./sq";
 import { SqB } from "./sq-b";
 import { Timeline } from "./timeline";
@@ -146,6 +148,8 @@ export class StudioJsonContext extends SerializerContext {
   private _color?: ValueSpec<Color>;
   private _level?: ValueSpec<Level>;
   private _flavor?: ValueSpec<Flavor>;
+  private _spice?: ValueSpec<Spice>;
+  private _heat?: ValueSpec<Heat>;
   private _perms?: ValueSpec<Perms>;
   private _tiny?: ValueSpec<Tiny>;
   private _dashboard?: TypeSpec<Dashboard>;
@@ -1300,6 +1304,22 @@ export class StudioJsonContext extends SerializerContext {
       descriptor: { kind: "enum", values: Flavor, typeName: "SampleJsonContracts.Flavor" },
       valueType: true,
       typeName: "SampleJsonContracts.Flavor",
+    }));
+  }
+
+  get spice(): ValueSpec<Spice> {
+    return (this._spice ??= this.createValueSpec({
+      descriptor: { kind: "enum", values: Spice, typeName: "SampleJsonContracts.Spice" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Spice",
+    }));
+  }
+
+  get heat(): ValueSpec<Heat> {
+    return (this._heat ??= this.createValueSpec({
+      descriptor: { kind: "numericEnum", values: Heat, typeName: "SampleJsonContracts.Heat" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Heat",
     }));
   }
 

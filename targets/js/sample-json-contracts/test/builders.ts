@@ -21,6 +21,7 @@ import { Gauge } from "#/sample-json-contracts/gauge";
 import { GDer } from "#/sample-json-contracts/g-der";
 import { Group } from "#/sample-json-contracts/group";
 import { GuidMapHolder } from "#/sample-json-contracts/guid-map-holder";
+import { Heat } from "#/sample-json-contracts/heat";
 import { HLeaf } from "#/sample-json-contracts/h-leaf";
 import { HMid } from "#/sample-json-contracts/h-mid";
 import { IA } from "#/sample-json-contracts/ia";
@@ -50,6 +51,7 @@ import { SBase } from "#/sample-json-contracts/s-base";
 import { SetClass } from "#/sample-json-contracts/set-class";
 import { SilenceClip } from "#/sample-json-contracts/silence-clip";
 import { SoftNums } from "#/sample-json-contracts/soft-nums";
+import { Spice } from "#/sample-json-contracts/spice";
 import { Sq } from "#/sample-json-contracts/sq";
 import { SqB } from "#/sample-json-contracts/sq-b";
 import { Stats } from "#/sample-json-contracts/stats";
@@ -451,6 +453,8 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     assertRead: (value) => expect([...(value as ImmHolder).items]).toEqual([1, 2]),
   },
   V14: { build: () => Flavor.Sweet, assertRead: (value) => expect(value).toBe("Sweet") },
+  V14b: { build: () => Spice.Hot, assertRead: (value) => expect(value).toBe("Hot") },
+  V14c: { build: () => Heat.Warm, assertRead: (value) => expect(value).toBe(1) },
   V15: {
     build: () => HashSet.of(["a", "b"]),
     assertRead: (value) => {

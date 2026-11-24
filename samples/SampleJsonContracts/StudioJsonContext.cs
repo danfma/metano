@@ -71,6 +71,8 @@ namespace SampleJsonContracts;
 [JsonSerializable(typeof(Color))]
 [JsonSerializable(typeof(Level))]
 [JsonSerializable(typeof(Flavor))]
+[JsonSerializable(typeof(Spice))]
+[JsonSerializable(typeof(Heat))]
 [JsonSerializable(typeof(Perms))]
 [JsonSerializable(typeof(Tiny))]
 [JsonSerializable(typeof(Dashboard))]
