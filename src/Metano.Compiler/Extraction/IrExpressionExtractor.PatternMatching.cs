@@ -195,9 +195,18 @@ public sealed partial class IrExpressionExtractor
     /// which has a backing field too but may compute.
     /// </summary>
     private static bool IsAutoProperty(IPropertySymbol property) =>
-        HasBackingField(property)
+        IsDeclaredInSource(property)
+        && HasBackingField(property)
         && property.GetMethod is { } getter
         && !AccessorBodies.HasBody(getter);
+
+    /// <summary>
+    /// A property of another assembly may become a computing getter in a later
+    /// version of that assembly, so only properties declared in this
+    /// compilation's source can be storage reads.
+    /// </summary>
+    private static bool IsDeclaredInSource(IPropertySymbol property) =>
+        !property.DeclaringSyntaxReferences.IsEmpty;
 
     private static bool HasBackingField(IPropertySymbol property) =>
         property

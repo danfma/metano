@@ -109,6 +109,7 @@ public static class BclMemberProbes
             '٣',
             ' ',
         };
+
         var text = new StringBuilder();
 
         foreach (var c in chars)
