@@ -601,7 +601,7 @@ public class SwitchPatternTranspileTests
 
         var output = result["geo/checks.ts"];
         await Assert.That(output).Contains("return !(s instanceof Square);");
-        await Assert.That(output).Contains("import { Square } from \"./square\";");
+        await Assert.That(output).Contains("import { Square } from \"./square.js\";");
     }
 
     [Test]
@@ -632,8 +632,8 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["geo/factory.ts"];
-        await Assert.That(output).Contains("import { Square } from \"./square\";");
-        await Assert.That(output).Contains("import { Circle } from \"./circle\";");
+        await Assert.That(output).Contains("import { Square } from \"./square.js\";");
+        await Assert.That(output).Contains("import { Circle } from \"./circle.js\";");
     }
 
     [Test]

@@ -1,6 +1,6 @@
 // wire/i-has-label.ts
 import { implementsInterface, type InterfaceType } from "metano-runtime";
-import { Tagged$runtimeType } from "./tagged";
+import { Tagged$runtimeType } from "./tagged.js";
 
 export interface IHasLabel {
   readonly label: string;
@@ -19,14 +19,14 @@ export const IHasLabel$runtimeType: InterfaceType<IHasLabel> = {
 };
 
 // wire/index.ts
-export { IHasLabel$runtimeType } from "./i-has-label";
-export type { IHasLabel } from "./i-has-label";
-export { isPoint, Point$runtimeType } from "./point";
-export type { Point } from "./point";
-export { Probe } from "./probe";
-export { isTagged, Tagged$runtimeType } from "./tagged";
-export type { Tagged } from "./tagged";
-export type { Unasked } from "./unasked";
+export { IHasLabel$runtimeType } from "./i-has-label.js";
+export type { IHasLabel } from "./i-has-label.js";
+export { isPoint, Point$runtimeType } from "./point.js";
+export type { Point } from "./point.js";
+export { Probe } from "./probe.js";
+export { isTagged, Tagged$runtimeType } from "./tagged.js";
+export type { Tagged } from "./tagged.js";
+export type { Unasked } from "./unasked.js";
 
 // wire/point.ts
 import type { PlainObjectType } from "metano-runtime";
@@ -57,9 +57,9 @@ export const Point$runtimeType: PlainObjectType<Point> = {
 
 // wire/probe.ts
 import { castTo, getRuntimeType, isString, isType } from "metano-runtime";
-import { IHasLabel$runtimeType } from "./i-has-label";
-import { Point$runtimeType, isPoint, type Point } from "./point";
-import { isTagged } from "./tagged";
+import { IHasLabel$runtimeType } from "./i-has-label.js";
+import { Point$runtimeType, isPoint, type Point } from "./point.js";
+import { isTagged } from "./tagged.js";
 
 export class Probe {
   constructor() { }
@@ -147,7 +147,7 @@ export class Probe {
 
 // wire/tagged.ts
 import type { PlainObjectType } from "metano-runtime";
-import type { IHasLabel } from "./i-has-label";
+import type { IHasLabel } from "./i-has-label.js";
 
 export interface Tagged extends IHasLabel {
   readonly label: string;

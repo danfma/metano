@@ -4,7 +4,7 @@ export abstract class Widget {
   abstract build(): string;
 }
 
-import { Widget } from "./widget";
+import { Widget } from "./widget.js";
 
 export abstract class StatefulWidget extends Widget {
   constructor() {

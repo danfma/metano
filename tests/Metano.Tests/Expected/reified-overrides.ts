@@ -6,7 +6,7 @@ export interface IChecker {
 
 // ---
 import { isString, type RuntimeType } from "metano-runtime";
-import type { IChecker } from "./i-checker";
+import type { IChecker } from "./i-checker.js";
 
 export class BaseChecker implements IChecker {
   constructor() { }
@@ -36,7 +36,7 @@ export class BaseChecker implements IChecker {
 
 // ---
 import { isType, type RuntimeType } from "metano-runtime";
-import { BaseChecker } from "./base-checker";
+import { BaseChecker } from "./base-checker.js";
 
 export class ReifiedChecker extends BaseChecker {
   constructor() {

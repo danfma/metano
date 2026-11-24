@@ -1,6 +1,6 @@
 import { checkedInt64 } from "metano-runtime";
-import type { Holder } from "./holder";
-import { bonus$get, bonus$set, nBonus$get, nBonus$set, nShared$get, nShared$set, shared$get, shared$set } from "./holder-extensions";
+import { bonus$get, bonus$set, nBonus$get, nBonus$set, nShared$get, nShared$set, shared$get, shared$set } from "./holder-extensions.js";
+import type { Holder } from "./holder.js";
 
 export class Uses {
   constructor() { }

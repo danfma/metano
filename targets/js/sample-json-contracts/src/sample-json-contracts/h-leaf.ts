@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { HMid } from "./h-mid";
+import { HMid } from "./h-mid.js";
 
 let HLeaf$rt: ClassType<HLeaf> | undefined;
 

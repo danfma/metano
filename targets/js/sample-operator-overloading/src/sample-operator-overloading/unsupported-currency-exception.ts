@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { ClassType } from "metano-runtime";
-import { InvalidCurrencyCodeException } from "./invalid-currency-code-exception";
+import { InvalidCurrencyCodeException } from "./invalid-currency-code-exception.js";
 
 let UnsupportedCurrencyException$rt: ClassType<UnsupportedCurrencyException> | undefined;
 

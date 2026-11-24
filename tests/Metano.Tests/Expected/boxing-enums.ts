@@ -1,6 +1,6 @@
 import { List } from "metano-runtime/system/collections";
 import { box, castTo, defaultEquals, enumText, formatBoolean, getRuntimeType, isType, objectText, unbox, unboxFor } from "metano-runtime";
-import { Color, Color$runtimeType } from "./color";
+import { Color, Color$runtimeType } from "./color.js";
 
 export class Probe {
   constructor() { }

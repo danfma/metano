@@ -1,8 +1,8 @@
 import { formatDouble } from "metano-runtime";
 import { ArgumentOutOfRangeException } from "metano-runtime/system/exceptions/argument-out-of-range-exception";
-import type { Clip } from "./clip";
-import { ImageClip } from "./image-clip";
-import { SilenceClip } from "./silence-clip";
+import type { Clip } from "./clip.js";
+import { ImageClip } from "./image-clip.js";
+import { SilenceClip } from "./silence-clip.js";
 
 export class ClipDescription {
   constructor() { }

@@ -9,7 +9,7 @@ import {
   type ClassType,
 } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
-import { Color$runtimeType, type Color } from "./color";
+import { Color$runtimeType, type Color } from "./color.js";
 
 let SoftNums$rt: ClassType<SoftNums> | undefined;
 

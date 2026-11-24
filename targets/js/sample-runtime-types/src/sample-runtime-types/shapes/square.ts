@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { ClassType } from "metano-runtime";
-import { Shape } from "./shape";
+import { Shape } from "./shape.js";
 
 let Square$rt: ClassType<Square> | undefined;
 

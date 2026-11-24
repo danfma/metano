@@ -1,6 +1,6 @@
-import { Point } from "./point";
-import { Priority } from "./priority";
-import { TodoItem } from "./todo-item";
+import { Point } from "./point.js";
+import { Priority } from "./priority.js";
+import { TodoItem } from "./todo-item.js";
 
 export class Geometry {
   constructor() { }

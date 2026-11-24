@@ -1,18 +1,18 @@
 import { formatDouble, type RuntimeType } from "metano-runtime";
 import { SwitchExpressionException } from "metano-runtime/system/exceptions/switch-expression-exception";
-import { Branch } from "./branch";
-import { Circle } from "./circle";
-import { Completed } from "./completed";
-import { Failed } from "./failed";
-import { Finished } from "./finished";
-import type { JobStatus } from "./job-status";
-import { Leaf } from "./leaf";
-import { Queued } from "./queued";
-import { Running } from "./running";
-import type { Shape } from "./shape";
-import { ShotSource } from "./shot-source";
-import { Square } from "./square";
-import type { Tree } from "./tree";
+import { Branch } from "./branch.js";
+import { Circle } from "./circle.js";
+import { Completed } from "./completed.js";
+import { Failed } from "./failed.js";
+import { Finished } from "./finished.js";
+import type { JobStatus } from "./job-status.js";
+import { Leaf } from "./leaf.js";
+import { Queued } from "./queued.js";
+import { Running } from "./running.js";
+import type { Shape } from "./shape.js";
+import { ShotSource } from "./shot-source.js";
+import { Square } from "./square.js";
+import type { Tree } from "./tree.js";
 
 export class Describer {
   constructor() { }

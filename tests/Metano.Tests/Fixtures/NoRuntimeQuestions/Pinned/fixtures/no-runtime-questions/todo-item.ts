@@ -1,6 +1,6 @@
 import { HashCode, copyRecordWith, formatBoolean, valueEquals } from "metano-runtime";
-import type { Point } from "./point";
-import { Priority } from "./priority";
+import type { Point } from "./point.js";
+import { Priority } from "./priority.js";
 
 export class TodoItem {
   constructor(readonly title: string, readonly priority: Priority, readonly location: Point) { }

@@ -138,7 +138,7 @@ export class Tick {
   }
 }
 
-import { Pt } from "./pt";
+import { Pt } from "./pt.js";
 
 export class Use {
   constructor() { }

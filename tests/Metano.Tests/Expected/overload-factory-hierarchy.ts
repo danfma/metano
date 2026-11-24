@@ -89,7 +89,7 @@ export class Money {
 
 import { isDecimal, isInt32, isInt64, isString } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
-import { Money } from "./money";
+import { Money } from "./money.js";
 
 export class Receipt extends Money {
   protected static readonly byReceiptAmount = /* @__PURE__ */ Symbol("Receipt(decimal amount)");
@@ -183,7 +183,7 @@ export class Receipt extends Money {
 }
 
 import { isInt32, isString } from "metano-runtime";
-import { Receipt } from "./receipt";
+import { Receipt } from "./receipt.js";
 
 export class GiftReceipt extends Receipt {
   protected static readonly byGiftReceiptAmount = /* @__PURE__ */ Symbol("GiftReceipt(string amount)");

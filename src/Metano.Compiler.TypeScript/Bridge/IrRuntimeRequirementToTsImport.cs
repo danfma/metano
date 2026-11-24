@@ -56,7 +56,7 @@ public static class IrRuntimeRequirementToTsImport
 
         return new TsImport(
             typeOnlyByName.Keys.ToArray(),
-            module,
+            new TsPackageModule(module),
             TypeOnly: allTypeOnly,
             TypeOnlyNames: !allTypeOnly && typeOnly.Count > 0 ? typeOnly : null
         );

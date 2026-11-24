@@ -24,9 +24,9 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// 011 FR-019): the interface's descriptor imports the implementer's, which only
 /// extends the interface's type.
 ///
-/// Only intra-project paths (the configurable root alias — <c>#</c> by default, or
-/// <c>#&lt;alias&gt;</c> when <c>--import-alias</c> is set — plus its <c>/</c> subpaths)
-/// participate in the graph. Imports from external packages
+/// Only imports of generated files (<see cref="TsLocalModule"/>) participate in the
+/// graph; the chain is displayed as package-relative file keys
+/// (<c>demo/node → demo/edge → demo/node</c>). Imports from external packages
 /// (<c>metano-runtime</c>, <c>@js-temporal/polyfill</c>, etc.) are skipped — their
 /// resolution lives outside Metano's view of the world.
 /// </summary>
@@ -34,15 +34,13 @@ public static class CyclicReferenceDetector
 {
     public static void DetectAndReport(
         IReadOnlyList<TsSourceFile> files,
-        Action<MetanoDiagnostic> reportDiagnostic,
-        string? importAlias = null
+        Action<MetanoDiagnostic> reportDiagnostic
     )
     {
         if (files.Count == 0)
             return;
 
-        var importGraph = LocalImportGraph.ValueImports(files, importAlias);
-        var aliasPrefix = importGraph.AliasPrefix;
+        var importGraph = LocalImportGraph.ValueImports(files);
 
         var graph = importGraph.Files.ToDictionary(
             file => file,
@@ -61,16 +59,7 @@ public static class CyclicReferenceDetector
         {
             if (visited.Contains(start))
                 continue;
-            DfsVisit(
-                start,
-                graph,
-                visited,
-                onStack,
-                pathStack,
-                seenCycles,
-                reportDiagnostic,
-                aliasPrefix
-            );
+            DfsVisit(start, graph, visited, onStack, pathStack, seenCycles, reportDiagnostic);
         }
     }
 
@@ -81,8 +70,7 @@ public static class CyclicReferenceDetector
         HashSet<string> onStack,
         List<string> pathStack,
         HashSet<string> seenCycles,
-        Action<MetanoDiagnostic> reportDiagnostic,
-        string aliasPrefix
+        Action<MetanoDiagnostic> reportDiagnostic
     )
     {
         onStack.Add(node);
@@ -104,21 +92,13 @@ public static class CyclicReferenceDetector
                 // lex-min start) form. Without this, the same cycle could be reported
                 // from each starting node we DFS into it from.
                 var canonical = Canonicalize(cycle);
+
                 if (seenCycles.Add(canonical))
-                    reportDiagnostic(BuildDiagnostic(cycle, aliasPrefix));
+                    reportDiagnostic(BuildDiagnostic(cycle));
             }
             else if (!visited.Contains(target))
             {
-                DfsVisit(
-                    target,
-                    graph,
-                    visited,
-                    onStack,
-                    pathStack,
-                    seenCycles,
-                    reportDiagnostic,
-                    aliasPrefix
-                );
+                DfsVisit(target, graph, visited, onStack, pathStack, seenCycles, reportDiagnostic);
             }
         }
 
@@ -151,22 +131,14 @@ public static class CyclicReferenceDetector
         return string.Join("→", rotated);
     }
 
-    private static MetanoDiagnostic BuildDiagnostic(IReadOnlyList<string> cycle, string aliasPrefix)
+    private static MetanoDiagnostic BuildDiagnostic(IReadOnlyList<string> cycle)
     {
-        var chain = string.Join(" → ", cycle.Select(key => ToDisplayImportPath(key, aliasPrefix)));
+        var chain = string.Join(" → ", cycle);
+
         return new MetanoDiagnostic(
             MetanoDiagnosticSeverity.Warning,
             DiagnosticCodes.CyclicReference,
             $"Cyclic import detected: {chain}. The TypeScript compiler may emit confusing errors; consider extracting the shared piece into its own file."
         );
-    }
-
-    private static string ToDisplayImportPath(string key, string aliasPrefix)
-    {
-        if (key == "index")
-            return aliasPrefix;
-        if (key.EndsWith("/index", StringComparison.Ordinal))
-            return aliasPrefix + "/" + key[..^"/index".Length];
-        return aliasPrefix + "/" + key;
     }
 }

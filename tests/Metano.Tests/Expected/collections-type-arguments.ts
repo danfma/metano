@@ -1,7 +1,7 @@
 // slots/index.ts
-export { IntList } from "./int-list";
-export { Point } from "./point";
-export { Probe } from "./probe";
+export { IntList } from "./int-list.js";
+export { Point } from "./point.js";
+export { Probe } from "./probe.js";
 
 // slots/int-list.ts
 import { List } from "metano-runtime/system/collections";
@@ -48,7 +48,7 @@ export class Point {
 import { Dictionary, List, Queue, iReadOnlyListType, listType, type IReadOnlyList } from "metano-runtime/system/collections";
 import { Int32Type, isType, StringType } from "metano-runtime";
 import { linq, toList } from "metano-runtime/system/linq";
-import { Point } from "./point";
+import { Point } from "./point.js";
 
 export class Probe {
   constructor() { }

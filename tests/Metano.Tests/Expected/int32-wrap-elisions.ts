@@ -1,5 +1,5 @@
 import { Dictionary, HashSet, type ICollection, List } from "metano-runtime/system/collections";
-import type { Bag } from "./bag";
+import type { Bag } from "./bag.js";
 
 export class Elisions {
   constructor() { }

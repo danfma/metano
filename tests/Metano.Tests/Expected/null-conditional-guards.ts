@@ -1,6 +1,6 @@
 import { List } from "metano-runtime/system/collections";
-import type { Order } from "./order";
-import { score } from "./order-extensions";
+import { score } from "./order-extensions.js";
+import type { Order } from "./order.js";
 
 export function normalize(value: string | null): string {
   return value?.trim() ?? "";

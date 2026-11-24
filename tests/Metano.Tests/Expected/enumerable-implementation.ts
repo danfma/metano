@@ -1,5 +1,5 @@
 import { List } from "metano-runtime/system/collections";
-import type { IBag } from "./i-bag";
+import type { IBag } from "./i-bag.js";
 
 export class Bag<T> implements IBag<T> {
   private readonly _items: List<T> = List.of<T>([]);

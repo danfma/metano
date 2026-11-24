@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { ICounterView } from "#/sample-counter-v1/presenters/i-counter-view";
+import type { ICounterView } from "../presenters/i-counter-view.js";
 
 export class CounterView implements ICounterView {
   private _text: HTMLSpanElement | null = null;

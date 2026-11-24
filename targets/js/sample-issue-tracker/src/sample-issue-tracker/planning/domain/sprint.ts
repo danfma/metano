@@ -3,7 +3,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { HashSet, type IReadOnlyCollection } from "metano-runtime/system/collections";
 import { dayNumber, type ClassType } from "metano-runtime";
-import type { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
+import type { IssueId } from "../../issues/domain/issue-id.js";
 
 let Sprint$rt: ClassType<Sprint> | undefined;
 

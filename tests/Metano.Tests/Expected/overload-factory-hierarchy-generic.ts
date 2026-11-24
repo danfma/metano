@@ -1,5 +1,5 @@
 import { isBool } from "metano-runtime";
-import { B } from "./b";
+import { B } from "./b.js";
 
 export class C<P, Q> extends B<P, Q> {
   protected static readonly byCKV = /* @__PURE__ */ Symbol("C(P k, Q v)");

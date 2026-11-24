@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { publicJsonShape, type ClassType } from "metano-runtime";
-import { OBase } from "./o-base";
+import { OBase } from "./o-base.js";
 
 let ODer$rt: ClassType<ODer> | undefined;
 

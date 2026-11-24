@@ -6,7 +6,7 @@ import {
   valueEquals,
   type ClassType,
 } from "metano-runtime";
-import { IShape$runtimeType, type IShape } from "./i-shape";
+import { IShape$runtimeType, type IShape } from "./i-shape.js";
 
 let Sq$rt: ClassType<Sq> | undefined;
 

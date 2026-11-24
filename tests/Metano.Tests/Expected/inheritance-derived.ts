@@ -1,5 +1,5 @@
 import { HashCode, copyRecordWith, formatDouble, valueEquals } from "metano-runtime";
-import { Shape } from "./shape";
+import { Shape } from "./shape.js";
 
 export class Circle extends Shape {
   constructor(x: number, y: number, readonly radius: number) {

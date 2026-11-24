@@ -1,7 +1,7 @@
 import { List } from "metano-runtime/system/collections";
 import { firstOrDefault, lastOrDefault, linq, singleOrDefault } from "metano-runtime/system/linq";
-import type { Point } from "./point";
-import { Tone } from "./tone";
+import type { Point } from "./point.js";
+import { Tone } from "./tone.js";
 
 export class Zeroed {
   constructor() { }

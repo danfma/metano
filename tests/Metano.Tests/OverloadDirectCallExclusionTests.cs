@@ -63,7 +63,7 @@ public class OverloadDirectCallExclusionTests
             .IsEqualTo(
                 ExpectedCaller(
                     """
-                    import { Shape } from "./shape";
+                    import { Shape } from "./shape.js";
 
                     export class Caller {
                       constructor() { }
@@ -131,7 +131,7 @@ public class OverloadDirectCallExclusionTests
             .IsEqualTo(
                 ExpectedCaller(
                     """
-                    import { Shape } from "./shape";
+                    import { Shape } from "./shape.js";
 
                     export class Caller {
                       constructor() { }
@@ -165,7 +165,7 @@ public class OverloadDirectCallExclusionTests
             .IsEqualTo(
                 ExpectedCaller(
                     """
-                    import { Shape } from "./shape";
+                    import { Shape } from "./shape.js";
 
                     export class Caller {
                       constructor() { }
@@ -202,7 +202,7 @@ public class OverloadDirectCallExclusionTests
             .IsEqualTo(
                 ExpectedCaller(
                     """
-                    import { Shape } from "./shape";
+                    import { Shape } from "./shape.js";
 
                     export class Caller {
                       constructor() { }

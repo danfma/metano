@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { IgnBase } from "./ign-base";
+import { IgnBase } from "./ign-base.js";
 
 let IgnDer$rt: ClassType<IgnDer> | undefined;
 

@@ -6,7 +6,7 @@ export interface IShape {
 }
 
 import { isInt32 } from "metano-runtime";
-import type { IShape } from "./i-shape";
+import type { IShape } from "./i-shape.js";
 
 export class Sq implements IShape {
   constructor() { }
@@ -35,7 +35,7 @@ export class Sq implements IShape {
 }
 
 import { isBool, isInt32 } from "metano-runtime";
-import type { IShape } from "./i-shape";
+import type { IShape } from "./i-shape.js";
 
 export class Plot implements IShape {
   constructor() { }
@@ -87,8 +87,8 @@ export interface IB {
 }
 
 import { isBool, isInt32, isString } from "metano-runtime";
-import type { IA } from "./ia";
-import type { IB } from "./ib";
+import type { IA } from "./ia.js";
+import type { IB } from "./ib.js";
 
 export class Both implements IA, IB {
   constructor() { }
@@ -129,8 +129,8 @@ export class Both implements IA, IB {
   }
 }
 
-import type { IShape } from "./i-shape";
-import type { IA } from "./ia";
+import type { IShape } from "./i-shape.js";
+import type { IA } from "./ia.js";
 
 export class Use {
   constructor() { }

@@ -1,6 +1,6 @@
 import type { ClassType } from "metano-runtime";
-import type { IBox } from "./i-box";
-import { IPlain$runtimeType, type IPlain } from "./i-plain";
+import type { IBox } from "./i-box.js";
+import { IPlain$runtimeType, type IPlain } from "./i-plain.js";
 
 let Person$rt: ClassType<Person> | undefined;
 

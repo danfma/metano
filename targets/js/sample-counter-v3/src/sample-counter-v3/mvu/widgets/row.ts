@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Widget } from "#/sample-counter-v3/mvu/widget";
+import { Widget } from "../widget.js";
 
 export class Row extends Widget {
   private readonly _gap: number;

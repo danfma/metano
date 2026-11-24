@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { BuildContext } from "./build-context";
-import { StateHolder } from "./state-holder";
-import type { StatefulWidget } from "./stateful-widget";
+import { BuildContext } from "./build-context.js";
+import { StateHolder } from "./state-holder.js";
+import type { StatefulWidget } from "./stateful-widget.js";
 
 export class App {
   constructor() {}

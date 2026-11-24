@@ -1,6 +1,6 @@
 import { objectEquals, valueHashCode } from "metano-runtime";
-import type { Color } from "./color";
-import type { Point } from "./point";
+import type { Color } from "./color.js";
+import type { Point } from "./point.js";
 
 export class Money {
   cents: number = 0;

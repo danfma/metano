@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
-import type { SPoint } from "./s-point";
+import type { SPoint } from "./s-point.js";
 
 let HolderSPoint$rt: ClassType<HolderSPoint> | undefined;
 

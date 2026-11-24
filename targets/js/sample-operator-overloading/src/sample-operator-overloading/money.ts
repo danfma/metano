@@ -10,8 +10,8 @@ import {
   roundDecimal,
 } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import { Currency$runtimeType, type Currency } from "./currency";
-import { NoSameMoneyCurrencyException } from "./no-same-money-currency-exception";
+import { Currency$runtimeType, type Currency } from "./currency.js";
+import { NoSameMoneyCurrencyException } from "./no-same-money-currency-exception.js";
 
 export class Money {
   constructor(

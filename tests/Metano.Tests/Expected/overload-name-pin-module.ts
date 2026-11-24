@@ -44,7 +44,7 @@ export function thrice(...args: unknown[]): number {
   throw new Error("No matching overload for thrice");
 }
 
-import { thriceOfText, thriceX, twiceText, twiceX } from "./greets";
+import { thriceOfText, thriceX, twiceText, twiceX } from "./greets.js";
 
 export class Caller {
   constructor() { }
@@ -58,5 +58,5 @@ export class Caller {
   }
 }
 
-export { Caller } from "./caller";
-export { thrice, thriceOfText, thriceX, twice, twiceText, twiceX } from "./greets";
+export { Caller } from "./caller.js";
+export { thrice, thriceOfText, thriceX, twice, twiceText, twiceX } from "./greets.js";

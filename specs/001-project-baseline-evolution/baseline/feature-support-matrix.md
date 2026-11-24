@@ -186,6 +186,15 @@ Declarative array-tuple / callable shapes + tuple deconstruction (no hand-writte
 | Interop | `[JsCallable]` interface → direct invocation | TS | Implemented | `Bridge/IrToTsExpressionBridge.cs`, `Annotations/TypeScript/JsCallableAttribute.cs` | `tests/Metano.Tests/JsCallableTranspileTests.cs` | `recv.Invoke(a)`→`recv(a)`; overloaded `Invoke`; erased; misuse → MS0028. |
 | Interop | Tuple deconstruction `var (a,b)=e` | TS | Implemented | `Extraction/IrStatementExtractor.cs`, `TypeScript/AST/TsDestructuringDeclaration.cs` | `tests/Metano.Tests/DeconstructionTranspileTests.cs` | → `const [a, b] = e`; discards supported; flat only. |
 
+## Node-resolvable import specifiers (#573)
+
+Implemented. Generated internal imports are relative and `.js`-suffixed, so the output loads under plain Node ESM (22, 24, 26), Bun and TypeScript `nodenext` with no resolve hook, no tsconfig `paths` and no `package.json#imports`. `--import-alias` stays opt-in and writes a valid map (no bare `#`, a `bun` condition before `import`). Spec: [specs/004-configurable-import-alias/ Amendment A1](../../004-configurable-import-alias/spec.md) (FR-011–FR-017; FR-016 is a future extension option).
+
+| Area | Feature | Target | Status | Code area | Test | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Packaging | Relative `.js` specifiers for internal edges (004 FR-011–FR-013, FR-017) | TS | Implemented | `Transformation/ModuleSpecifierRenderer.cs`, `TypeScript/AST/TsModuleSpecifier.cs`, `Transformation/LocalImportGraph.cs` | `tests/Metano.Tests/ImportAliasTests.cs`, `tests/Metano.Tests/CyclicReferenceTests.cs`, conformance rows `ModuleSpecifierProbes.*`, `AliasProbes.*` (Node, no resolve hook) | One renderer decides every specifier (`./x.js`, `../a/x.js`, barrels as `…/index.js`, `.tsx` targets as `.js`). Cross-package and BCL specifiers are unchanged (FR-015). The MS0005 chain shows package-relative file keys. `scripts/smoke-test-generated-package.sh` packs `sample-todo` + `sample-todo-service` and runs them on Node 22/24/26 plus tsgo `nodenext` (FR-012, FR-015). |
+| Packaging | Opt-in `package.json#imports` map with Node-valid keys (004 FR-014) | TS | Implemented | `Packaging/PackageJsonWriter.cs` | `tests/Metano.Tests/EmitPackageTests.cs`, `tests/Metano.Tests/SourceConditionTests.cs` | Written only with `--import-alias` (`#<alias>/*`, `#<alias>`; order source, `types`, `bun`, `import`, `default`); existing entries are never deleted. |
+
 ## C# 15 unions and closed hierarchies
 
 `closed` hierarchies ship in 3.1.0 (slice 1 of #304); unions are planned and, until they land, every union type is rejected with `MS0038` at its transpiled declaration and wherever transpiled code uses it (spec 010 FR-012a). A C# 15 `union` declaration is erased to a TS type union, case tests are typed, exhaustive switches end with a `never` check, and JSON matches .NET 11 STJ. Spec: [specs/010-csharp-unions/](../../010-csharp-unions/spec.md) (issue #304). Diagnostics `MS0038`, `MS0041`–`MS0043` are reserved; the union reasons of `MS0039` / `MS0040` fold into `MS0047` / `MS0045` (decision W7-2).

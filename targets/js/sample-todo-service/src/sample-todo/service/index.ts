@@ -5,8 +5,8 @@ export {
   isTodoCreated,
   isTodoUpdated,
   TodoEventKind,
-} from "./events";
-export type { TodoCreated, TodoUpdated } from "./events";
-export { JsonContext } from "./json-context";
-export { assertCreateTodoDto, isCreateTodoDto, TodoStore } from "./todos";
-export type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "./todos";
+} from "./events.js";
+export type { TodoCreated, TodoUpdated } from "./events.js";
+export { JsonContext } from "./json-context.js";
+export { assertCreateTodoDto, isCreateTodoDto, TodoStore } from "./todos.js";
+export type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "./todos.js";

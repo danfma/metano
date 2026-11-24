@@ -1,5 +1,5 @@
 import type { ClassType } from "metano-runtime";
-import { InvalidSlotException } from "./invalid-slot-exception";
+import { InvalidSlotException } from "./invalid-slot-exception.js";
 
 let LabelledSlotException$rt: ClassType<LabelledSlotException> | undefined;
 

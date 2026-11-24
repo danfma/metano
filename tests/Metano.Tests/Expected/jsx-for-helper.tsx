@@ -1,4 +1,4 @@
-import { Counter } from "./counter";
+import { Counter } from "./counter.js";
 import { For } from "solid-js";
 
 export type CounterListProps = { items?: number[] };

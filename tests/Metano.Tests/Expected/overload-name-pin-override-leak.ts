@@ -1,5 +1,5 @@
 import { isBool } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Derived extends Base {
   constructor() {

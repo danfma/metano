@@ -1,11 +1,11 @@
-import { Engine } from "./engine";
-import { scaleFD } from "./engine-extensions";
-import { Holder } from "./holder";
-import type { IEngine } from "./i-engine";
-import type { IReading } from "./i-reading";
-import { blendFD } from "./mixer";
-import type { Plain } from "./plain";
-import { Trace } from "./trace";
+import { scaleFD } from "./engine-extensions.js";
+import { Engine } from "./engine.js";
+import { Holder } from "./holder.js";
+import type { IEngine } from "./i-engine.js";
+import type { IReading } from "./i-reading.js";
+import { blendFD } from "./mixer.js";
+import type { Plain } from "./plain.js";
+import { Trace } from "./trace.js";
 
 export class SourceOrderCalls {
   constructor() { }
@@ -84,9 +84,9 @@ export class SourceOrderCalls {
 }
 
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
-import { Engine } from "./engine";
-import { Label } from "./label";
-import { Trace } from "./trace";
+import { Engine } from "./engine.js";
+import { Label } from "./label.js";
+import { Trace } from "./trace.js";
 
 export class Holder {
   field: number = 0;
@@ -152,8 +152,8 @@ export class Holder {
   }
 }
 
-import { Engine } from "./engine";
-import type { Holder } from "./holder";
+import { Engine } from "./engine.js";
+import type { Holder } from "./holder.js";
 
 export class Derived extends Engine {
   constructor(h: Holder) {
@@ -163,8 +163,8 @@ export class Derived extends Engine {
   }
 }
 
-import { Engine } from "./engine";
-import type { Holder } from "./holder";
+import { Engine } from "./engine.js";
+import type { Holder } from "./holder.js";
 
 export class Tuned extends Engine {
   constructor(h: Holder) {

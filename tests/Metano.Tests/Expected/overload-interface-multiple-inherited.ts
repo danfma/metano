@@ -1,5 +1,5 @@
 import { isInt32 } from "metano-runtime";
-import { C } from "./c";
+import { C } from "./c.js";
 
 export class D3 extends C {
   constructor() {
@@ -20,7 +20,7 @@ export class D3 extends C {
 }
 
 import { isInt32 } from "metano-runtime";
-import type { IConv } from "./i-conv";
+import type { IConv } from "./i-conv.js";
 
 export class C1 implements IConv<number> {
   constructor() { }
@@ -49,8 +49,8 @@ export class C1 implements IConv<number> {
 }
 
 import { isInt32, isString } from "metano-runtime";
-import { C1 } from "./c1";
-import type { IConv } from "./i-conv";
+import { C1 } from "./c1.js";
+import type { IConv } from "./i-conv.js";
 
 export class D4 extends C1 implements IConv<string> {
   constructor() {

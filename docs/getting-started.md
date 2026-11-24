@@ -314,7 +314,7 @@ export type Category = (typeof Category)[keyof typeof Category];
 ```typescript
 import { HashCode } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import type { Category } from "./category";
+import type { Category } from "./category.js";
 
 export class Product {
   constructor(
@@ -367,14 +367,6 @@ dependency from Step 2):
 {
   "name": "my-domain",
   "type": "module",
-  "imports": {
-    "#/*": {
-      "source": "./src/*.ts",
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "default": "./src/*.ts"
-    }
-  },
   "exports": {
     ".": {
       "source": "./src/index.ts",
@@ -388,8 +380,18 @@ dependency from Step 2):
 }
 ```
 
-Every `exports` / `imports` entry lists a `source` condition **first**,
-pointing at the generated `.ts` file. It is opt-in: default resolution
+Imports between generated files are relative and name the built file
+(`./category.js`, `../shared/money.js`), so the output runs under plain Node
+ESM, Bun, TypeScript `nodenext` / `bundler` and Vite with no `paths`, no
+resolve hook and no `package.json#imports`. TypeScript and Bun map the `.js`
+specifier to the `.ts` source. Webpack needs `resolve.extensionAlias`
+(`".js": [".ts", ".js"]`) and Jest a `moduleNameMapper` for the same mapping.
+An `imports` map is written only with `--import-alias <name>`
+(`MetanoImportAlias`), for hand-written code that wants a `#<name>/…` shortcut
+into the generated files.
+
+Every `exports` entry (and `imports` entry, when an alias is set) lists a
+`source` condition **first**, pointing at the generated `.ts` file. It is opt-in: default resolution
 (Node, Bun, bundlers without extra config) skips the unknown condition and
 keeps using `dist`. See [Reading the sources directly](#reading-the-sources-directly-the-source-condition)
 below.

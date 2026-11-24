@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { Stats } from "./stats";
+import { Stats } from "./stats.js";
 
 let SnakeCaseJsonContext$rt: ClassType<SnakeCaseJsonContext> | undefined;
 

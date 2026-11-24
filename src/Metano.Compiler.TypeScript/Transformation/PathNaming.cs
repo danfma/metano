@@ -1,34 +1,28 @@
 using Metano.Compiler;
+using Metano.Compiler.TypeScript.AST;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// TypeScript-specific path / namespace helpers used by both the type emitter and the
-/// import collector, so that subpath imports (<c>#/foo/bar</c>) and on-disk file paths
-/// are computed consistently. Under the full-namespace layout policy (D1, spec 005 /
+/// import collector, so that local module references and on-disk file paths are
+/// computed consistently. Under the full-namespace layout policy (D1, spec 005 /
 /// ADR-0025) <see cref="RootNamespace"/> is empty — nothing is stripped and a type's
 /// path is its complete namespace — so layout never shifts when sibling types change.
 /// The stripping logic is retained for a target that may opt into a non-empty root.
 /// </summary>
-public sealed class PathNaming(string rootNamespace, string? importAlias = null)
+public sealed class PathNaming(string rootNamespace)
 {
     public string RootNamespace { get; } = rootNamespace;
-
-    /// <summary>
-    /// Subpath-imports key prefix for internal imports — <c>#</c> by default, or
-    /// <c>#&lt;alias&gt;</c> when an import alias is configured. Keeping internal imports
-    /// under an isolated key lets generated code live in a subfolder of a host project
-    /// without colliding with that project's own <c>#</c> alias.
-    /// </summary>
-    private string AliasPrefix { get; } = NormalizeImportAliasPrefix(importAlias);
 
     /// <summary>
     /// Normalizes a raw <c>--import-alias</c> value into a subpath-imports key prefix.
     /// Blank (null/empty/whitespace) → <c>#</c> (the default). A single leading <c>#</c>
     /// is optional, so both <c>contracts</c> and <c>#contracts</c> yield <c>#contracts</c>.
-    /// This is the single source of truth for the alias key shape, shared by
-    /// <see cref="CyclicReferenceDetector"/> and <c>PackageJsonWriter</c>.
+    /// This is the single source of truth for the alias key shape, shared by the cache
+    /// fingerprint and <c>PackageJsonWriter</c> (generated specifiers never use it, spec
+    /// 004 FR-011).
     /// </summary>
     public static string NormalizeImportAliasPrefix(string? importAlias)
     {
@@ -75,30 +69,26 @@ public sealed class PathNaming(string rootNamespace, string? importAlias = null)
     }
 
     /// <summary>
-    /// Computes the import specifier for a reference between two generated types, always
-    /// pointing at the defining type's FILE — never a namespace barrel (D3, ADR-0025).
-    /// Routing internal references directly at files keeps internal correctness
-    /// independent of barrel generation/pruning and structurally prevents ESM cycles
-    /// such as <c>issue.ts → #/issues/domain → issues/domain/index.ts → ./issue.ts</c>.
-    ///
-    /// - same namespace      → relative file path (<c>./issue</c>)
-    /// - different namespace → alias path to the file (<c>#/issues/domain/issue</c>)
+    /// The module of the generated file that declares <paramref name="fileName"/> in
+    /// <paramref name="ns"/>: always the defining FILE, never a namespace barrel (D3,
+    /// ADR-0025). Routing internal references directly at files keeps internal
+    /// correctness independent of barrel generation/pruning and structurally prevents ESM
+    /// cycles such as <c>issue.ts → issues/domain/index.ts → ./issue.ts</c>. The text of
+    /// the specifier is decided by <see cref="ModuleSpecifierRenderer"/>.
     /// </summary>
-    public string ComputeRelativeImportPath(string fromNs, string toNs, string typeName)
+    public TsLocalModule LocalModule(string ns, string fileName) => new(FileKey(ns, fileName));
+
+    /// <summary>
+    /// The file key of <paramref name="fileName"/> in <paramref name="ns"/>: its
+    /// package-relative path without extension (<c>shared-kernel/user-id</c>), the path
+    /// <see cref="GetRelativePath"/> gives minus the extension.
+    /// </summary>
+    public string FileKey(string ns, string fileName)
     {
-        var fileName = SymbolHelper.ToKebabCase(typeName);
+        var folder = ToKebabPath(StripRootNamespace(ns));
+        var kebabName = SymbolHelper.ToKebabCase(fileName);
 
-        // Same namespace: relative file import (also sidesteps the namespace barrel
-        // that re-exports the current file).
-        if (fromNs == toNs)
-            return "./" + fileName;
-
-        // Different namespace: import the defining file directly under the local alias.
-        var toFolder = ToKebabPath(StripRootNamespace(toNs));
-
-        return toFolder.Length == 0
-            ? AliasPrefix + "/" + fileName
-            : AliasPrefix + "/" + toFolder + "/" + fileName;
+        return folder.Length > 0 ? folder + "/" + kebabName : kebabName;
     }
 
     /// <summary>

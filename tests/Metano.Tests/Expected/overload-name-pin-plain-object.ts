@@ -10,7 +10,7 @@ export function getStr(self: Reading, s: string): number {
   return s.length;
 }
 
-import { getNum, type Reading } from "./reading";
+import { getNum, type Reading } from "./reading.js";
 
 export class Use {
   constructor() { }

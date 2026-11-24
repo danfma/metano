@@ -1,7 +1,7 @@
 import { List } from "metano-runtime/system/collections";
-import { Color } from "./color";
-import { Level } from "./level";
-import type { Person } from "./person";
+import { Color } from "./color.js";
+import { Level } from "./level.js";
+import type { Person } from "./person.js";
 
 export class Finders {
   constructor() { }

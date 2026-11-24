@@ -38,7 +38,7 @@ export class RefBox<T> {
 }
 
 import { isInt32, isType } from "metano-runtime";
-import { IShape$runtimeType, type IShape } from "./i-shape";
+import { IShape$runtimeType, type IShape } from "./i-shape.js";
 
 export class ShapeBox<T extends IShape> {
   protected static readonly byShapeBoxT = /* @__PURE__ */ Symbol("ShapeBox(T x)");
@@ -78,7 +78,7 @@ export class ShapeBox<T extends IShape> {
 }
 
 import { isInt32 } from "metano-runtime";
-import { Animal } from "./animal";
+import { Animal } from "./animal.js";
 
 export class AnimalBox<T extends Animal> {
   protected static readonly byAnimalBoxT = /* @__PURE__ */ Symbol("AnimalBox(T x)");

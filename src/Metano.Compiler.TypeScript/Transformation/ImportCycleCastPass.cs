@@ -14,7 +14,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// unblocks another cast. A group reused from the cache carries the casts its
 /// cache entry recorded.
 /// </summary>
-internal sealed class ImportCycleCastPass(string? importAlias)
+internal static class ImportCycleCastPass
 {
     /// <summary>The asserted classes of a group transformed with every cast checked.</summary>
     public static readonly IReadOnlySet<string> NoAssertedCasts = FrozenSet.ToFrozenSet(
@@ -27,12 +27,9 @@ internal sealed class ImportCycleCastPass(string? importAlias)
     /// transforms the group at an index again, asserting the casts to the classes it
     /// is given.
     /// </summary>
-    public void Run(GroupOutcomes outcomes, Action<int, IReadOnlySet<string>> transformAgain)
+    public static void Run(GroupOutcomes outcomes, Action<int, IReadOnlySet<string>> transformAgain)
     {
-        var graph = LocalImportGraph.ValueImports(
-            [.. outcomes.Files.OfType<TsSourceFile>()],
-            importAlias
-        );
+        var graph = LocalImportGraph.ValueImports([.. outcomes.Files.OfType<TsSourceFile>()]);
 
         for (var index = 0; index < outcomes.Files.Length; index++)
         {

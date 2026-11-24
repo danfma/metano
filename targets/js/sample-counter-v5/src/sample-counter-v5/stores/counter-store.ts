@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Counter } from "#/sample-counter-v5/models/counter";
+import { Counter } from "../models/counter.js";
 import { createEffect, createSignal } from "solid-js";
 
 export class CounterStore {

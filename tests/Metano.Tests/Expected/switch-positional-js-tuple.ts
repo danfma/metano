@@ -1,4 +1,4 @@
-import type { Pair } from "./pair";
+import type { Pair } from "./pair.js";
 
 export class Pairs {
   constructor() { }

@@ -728,7 +728,7 @@ public class SwitchStatementPatternTests
             """
         );
 
-        await Assert.That(output).Contains("import { Node } from \"./node\";");
+        await Assert.That(output).Contains("import { Node } from \"./node.js\";");
     }
 
     [Test]

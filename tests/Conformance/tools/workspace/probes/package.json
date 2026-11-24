@@ -2,11 +2,5 @@
   "name": "conformance-probes",
   "private": true,
   "type": "module",
-  "sideEffects": false,
-  "imports": {
-    "#/*": {
-      "bun": "./src/*.ts",
-      "default": "./dist/*.js"
-    }
-  }
+  "sideEffects": false
 }

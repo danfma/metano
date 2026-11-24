@@ -10,7 +10,7 @@ import {
 } from "metano-runtime";
 import type { Dictionary, List } from "metano-runtime/system/collections";
 import type { Decimal } from "metano-runtime/system/decimal";
-import { Color$runtimeType, type Color } from "./color";
+import { Color$runtimeType, type Color } from "./color.js";
 
 let Nums$rt: ClassType<Nums> | undefined;
 

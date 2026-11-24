@@ -55,7 +55,7 @@ public class AsCastTranspileTests
 
         await Assert
             .That(output)
-            .Contains("import { INamed$runtimeType, type INamed } from \"./i-named\";");
+            .Contains("import { INamed$runtimeType, type INamed } from \"./i-named.js\";");
     }
 
     [Test]
@@ -167,7 +167,7 @@ public class AsCastTranspileTests
         var output = TranspileCasts("public static Dto? Of(object o) => o as Dto;");
 
         await Assert.That(output).Contains("return isDto(o) ? o : null;");
-        await Assert.That(output).Contains("import { isDto, type Dto } from \"./dto\";");
+        await Assert.That(output).Contains("import { isDto, type Dto } from \"./dto.js\";");
         await Assert.That(output).DoesNotContain("instanceof Dto");
     }
 
@@ -180,7 +180,7 @@ public class AsCastTranspileTests
 
         await Assert
             .That(output)
-            .Contains("import { isGuardedDto, type GuardedDto } from \"./guarded-dto\";");
+            .Contains("import { isGuardedDto, type GuardedDto } from \"./guarded-dto.js\";");
     }
 
     [Test]

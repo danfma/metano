@@ -18,10 +18,10 @@
  *   bun run .
  */
 import { Decimal } from "decimal.js";
-import { BunSqliteProductRepository } from "#/sample-queryable-sqlite/provider/bun-sqlite-product-repository";
-import { createSeededDatabase } from "#/sample-queryable-sqlite/provider/db";
-import type { Product } from "#/sample-queryable-sqlite/product";
-import { ProductDemo } from "#/sample-queryable-sqlite/provider/product-demo";
+import { BunSqliteProductRepository } from "./provider/bun-sqlite-product-repository.js";
+import { createSeededDatabase } from "./provider/db.js";
+import type { Product } from "./product.js";
+import { ProductDemo } from "./provider/product-demo.js";
 
 const db = createSeededDatabase();
 const repo = new BunSqliteProductRepository(db, (sql, params) => {

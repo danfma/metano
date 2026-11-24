@@ -6,7 +6,7 @@ import {
   valueEquals,
   type ClassType,
 } from "metano-runtime";
-import { Token, type TokenKind } from "./token";
+import { Token, type TokenKind } from "./token.js";
 
 let NumberToken$rt: ClassType<NumberToken> | undefined;
 

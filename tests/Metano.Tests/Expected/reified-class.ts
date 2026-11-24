@@ -22,7 +22,7 @@ export class Box<T> {
 
 // ---
 import { Int32Type } from "metano-runtime";
-import { Box } from "./box";
+import { Box } from "./box.js";
 
 export function check(o: Object): boolean {
   const box = new Box<number>([Int32Type]);

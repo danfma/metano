@@ -30,6 +30,8 @@ public sealed record CachedFileMetadata(
     bool HasModuleSideEffects = false
 );
 
+/// <param name="From">The package specifier, or the file key when <paramref name="FromLocalFile"/> is set.</param>
+/// <param name="FromLocalFile">Whether <paramref name="From"/> names a generated file of this package.</param>
 public sealed record CachedImport(
     IReadOnlyList<string> Names,
     string From,
@@ -37,7 +39,8 @@ public sealed record CachedImport(
     bool IsDefault = false,
     IReadOnlyList<string>? TypeOnlyNames = null,
     bool IsNamespace = false,
-    IReadOnlyDictionary<string, string>? Aliases = null
+    IReadOnlyDictionary<string, string>? Aliases = null,
+    bool FromLocalFile = false
 );
 
 public sealed record CachedExport(string Name, CachedExportKind Kind);

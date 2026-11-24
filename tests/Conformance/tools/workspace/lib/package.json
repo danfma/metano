@@ -8,11 +8,5 @@
       "types": "./dist/lib/index.d.ts",
       "default": "./dist/lib/index.js"
     }
-  },
-  "imports": {
-    "#/*": {
-      "bun": "./src/*.ts",
-      "default": "./dist/*.js"
-    }
   }
 }

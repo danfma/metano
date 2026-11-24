@@ -111,7 +111,7 @@ public static class BarrelFileGenerator
 
             foreach (var file in ExportOrder(files, hoists))
             {
-                var moduleName = Path.GetFileNameWithoutExtension(file.FileName);
+                var module = new TsLocalModule(ModulePath.Of(file.FileName));
 
                 // Collect all exported names from this file. If a name has BOTH a value and a
                 // type form (e.g., StringEnum: const + type alias, Branded: namespace + type),
@@ -136,15 +136,11 @@ public static class BarrelFileGenerator
                 typeOnlyNames.ExceptWith(valueNames);
 
                 if (valueNames.Count > 0)
-                    exports.Add(new TsReExport([.. valueNames.OrderBy(n => n)], $"./{moduleName}"));
+                    exports.Add(new TsReExport([.. valueNames.OrderBy(n => n)], module));
 
                 if (typeOnlyNames.Count > 0)
                     exports.Add(
-                        new TsReExport(
-                            [.. typeOnlyNames.OrderBy(n => n)],
-                            $"./{moduleName}",
-                            TypeOnly: true
-                        )
+                        new TsReExport([.. typeOnlyNames.OrderBy(n => n)], module, TypeOnly: true)
                     );
             }
 
@@ -285,7 +281,11 @@ public static class BarrelFileGenerator
         foreach (var dir in leafDirs)
         {
             statements.Add(
-                new TsImport(Names: [dirAliases[dir]], From: $"./{dir}", IsNamespace: true)
+                new TsImport(
+                    Names: [dirAliases[dir]],
+                    From: new TsLocalModule(dir + "/index"),
+                    IsNamespace: true
+                )
             );
         }
 

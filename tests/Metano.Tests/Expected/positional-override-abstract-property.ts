@@ -1,5 +1,5 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
-import { Entry } from "./entry";
+import { Entry } from "./entry.js";
 
 export class Note extends Entry {
   constructor(readonly id: number, readonly text: string) {

@@ -1,4 +1,4 @@
-import type { Bag } from "./bag";
+import type { Bag } from "./bag.js";
 
 export class Stores {
   constructor() { }

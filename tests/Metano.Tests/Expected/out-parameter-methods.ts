@@ -1,7 +1,7 @@
 import { Dictionary } from "metano-runtime/system/collections";
 import { intDiv } from "metano-runtime";
-import type { ILookup } from "./i-lookup";
-import type { Item } from "./item";
+import type { ILookup } from "./i-lookup.js";
+import type { Item } from "./item.js";
 
 export class Catalog implements ILookup {
   private readonly _items: Dictionary<string, Item> = new Dictionary<string, Item>();

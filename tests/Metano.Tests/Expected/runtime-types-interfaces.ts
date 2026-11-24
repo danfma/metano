@@ -1,6 +1,6 @@
 // zoo/badge.ts
 import { HashCode, type ClassType } from "metano-runtime";
-import { ITagged$runtimeType, type ITagged } from "./i-tagged";
+import { ITagged$runtimeType, type ITagged } from "./i-tagged.js";
 
 let Badge$rt: ClassType<Badge> | undefined;
 
@@ -47,8 +47,8 @@ export class Badge implements ITagged {
 
 // zoo/dog.ts
 import type { ClassType } from "metano-runtime";
-import { INamed$runtimeType } from "./i-named";
-import { IPet$runtimeType, type IPet } from "./i-pet";
+import { INamed$runtimeType } from "./i-named.js";
+import { IPet$runtimeType, type IPet } from "./i-pet.js";
 
 let Dog$rt: ClassType<Dog> | undefined;
 
@@ -102,7 +102,7 @@ export const INamed$runtimeType: InterfaceType<INamed> = {
 
 // zoo/i-pet.ts
 import { implementsInterface, type InterfaceType } from "metano-runtime";
-import { INamed$runtimeType, type INamed } from "./i-named";
+import { INamed$runtimeType, type INamed } from "./i-named.js";
 
 export interface IPet extends INamed {
   readonly friendly: boolean;
@@ -159,24 +159,24 @@ export interface IUnasked {
 }
 
 // zoo/index.ts
-export { Badge } from "./badge";
-export { Dog } from "./dog";
-export { INamed$runtimeType } from "./i-named";
-export type { INamed } from "./i-named";
-export { IPet$runtimeType } from "./i-pet";
-export type { IPet } from "./i-pet";
-export { assertITagged, isITagged, ITagged$runtimeType } from "./i-tagged";
-export type { ITagged } from "./i-tagged";
-export type { IUnasked } from "./i-unasked";
-export { Keeper } from "./keeper";
-export { Puppy } from "./puppy";
-export { Rock } from "./rock";
+export { Badge } from "./badge.js";
+export { Dog } from "./dog.js";
+export { INamed$runtimeType } from "./i-named.js";
+export type { INamed } from "./i-named.js";
+export { IPet$runtimeType } from "./i-pet.js";
+export type { IPet } from "./i-pet.js";
+export { assertITagged, isITagged, ITagged$runtimeType } from "./i-tagged.js";
+export type { ITagged } from "./i-tagged.js";
+export type { IUnasked } from "./i-unasked.js";
+export { Keeper } from "./keeper.js";
+export { Puppy } from "./puppy.js";
+export { Rock } from "./rock.js";
 
 // zoo/keeper.ts
 import { asType, castTo, isString, isType } from "metano-runtime";
-import { INamed$runtimeType, type INamed } from "./i-named";
-import { IPet$runtimeType, type IPet } from "./i-pet";
-import { ITagged$runtimeType } from "./i-tagged";
+import { INamed$runtimeType, type INamed } from "./i-named.js";
+import { IPet$runtimeType, type IPet } from "./i-pet.js";
+import { ITagged$runtimeType } from "./i-tagged.js";
 
 export class Keeper {
   constructor() { }
@@ -226,9 +226,9 @@ export class Keeper {
 
 // zoo/puppy.ts
 import type { ClassType } from "metano-runtime";
-import { Dog } from "./dog";
-import { INamed$runtimeType } from "./i-named";
-import { IPet$runtimeType } from "./i-pet";
+import { Dog } from "./dog.js";
+import { INamed$runtimeType } from "./i-named.js";
+import { IPet$runtimeType } from "./i-pet.js";
 
 let Puppy$rt: ClassType<Puppy> | undefined;
 
@@ -259,7 +259,7 @@ export class Puppy extends Dog {
 }
 
 // zoo/rock.ts
-import type { IUnasked } from "./i-unasked";
+import type { IUnasked } from "./i-unasked.js";
 
 export class Rock implements IUnasked {
   constructor() { }

@@ -670,6 +670,12 @@ ModuleImportProbes.lowercaseOwnerCaseTest = True False
 ModuleImportProbes.objectArgsSiblingCall = 4
 ModuleImportProbes.privateModuleHelper = 42
 ModuleImportProbes.usingAliasInDeclaringFile = 40
+ModuleSpecifierProbes.coLocatedTarget = 3
+ModuleSpecifierProbes.deepToShallow = deep<shallow-42>
+ModuleSpecifierProbes.nestedToRoot = root/deep
+ModuleSpecifierProbes.rootToNested = deep<shallow-42>
+ModuleSpecifierProbes.staticInitializerAcrossNamespaces = shallow-42
+ModuleSpecifierProbes.typeOnlyImportAcrossSiblings = area=9
 MultiplyConstructedOverrideProbes.overrideOfDispatchedBase = di1,di2,di3,bss,bin45,bsnt6
 NestedCaseOwnerProbes.isPattern = True|False
 NestedCaseOwnerProbes.switchArm = fresh|reused 3

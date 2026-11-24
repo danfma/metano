@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { Clip } from "./clip";
+import { Clip } from "./clip.js";
 
 let SilenceClip$rt: ClassType<SilenceClip> | undefined;
 

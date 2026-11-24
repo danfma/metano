@@ -467,7 +467,7 @@ public class OverloadCallMethodSiteGoldenTests
         // The callers call the claimed names, flattened and imported (#554).
         var calls = result["use-mixed.ts"];
 
-        await Assert.That(calls).Contains("import { foldS, foldX$ } from \"./mixed\";");
+        await Assert.That(calls).Contains("import { foldS, foldX$ } from \"./mixed.js\";");
         await Assert.That(calls).Contains("return foldX$(1);");
         await Assert.That(calls).Contains("return foldS(\"ab\");");
     }

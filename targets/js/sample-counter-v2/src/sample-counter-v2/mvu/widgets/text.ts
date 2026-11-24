@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { IWidget } from "#/sample-counter-v2/mvu/i-widget";
+import type { IWidget } from "../i-widget.js";
 
 export class Text implements IWidget {
   private readonly _content: string;

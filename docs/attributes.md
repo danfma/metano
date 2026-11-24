@@ -644,7 +644,7 @@ Invalid discriminator setup reports `MS0011`.
 
 Declares the npm package name for this assembly's transpiled output. Used by
 cross-project resolution: when another project references this assembly, imports
-resolve to `"name/subpath"` instead of `"#/...".
+resolve to `"name/subpath"` instead of a relative `"./….js"` file import.
 
 ```csharp
 [assembly: TranspileAssembly]
@@ -656,7 +656,7 @@ monorepo siblings or the assembly's `Identity.Version`.
 
 The optional `SubpathRoot` names the namespace prefix the package name stands for.
 It is stripped from the `package.json#exports` keys and from consumers' imports
-(on-disk layout and the `#/*` alias are unchanged):
+(on-disk layout and the relative internal imports are unchanged):
 
 ```csharp
 [assembly: EmitPackage("@video-studio/domain", SubpathRoot = "VideoStudio.Domain")]

@@ -1,5 +1,5 @@
 import { UnknownType, isType, type RuntimeType } from "metano-runtime";
-import { Circle } from "./circle";
+import { Circle } from "./circle.js";
 
 export function tryMatch<T>(o: Object, n: number = 1, T$type: RuntimeType<T> = UnknownType, ...rest: string[]): boolean {
   return isType(o, T$type);

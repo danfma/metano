@@ -1,4 +1,4 @@
-import { B } from "./b";
+import { B } from "./b.js";
 
 export class A {
   static readonly seed = /* @__PURE__ */ B.fromV(1) as B;
@@ -11,7 +11,7 @@ export class A {
 }
 
 import { isInt32, isString } from "metano-runtime";
-import { A } from "./a";
+import { A } from "./a.js";
 
 export class B {
   protected static readonly byBV = /* @__PURE__ */ Symbol("B(int v)");

@@ -1,9 +1,9 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { castTo, getRuntimeType, isType, type RuntimeType } from "metano-runtime";
-import { AreaDto$runtimeType, type AreaDto } from "./area-dto";
-import { Circle } from "./circle";
-import { IHasArea$runtimeType, type IHasArea } from "./i-has-area";
-import { ShapeFactory } from "./shape-factory";
+import { AreaDto$runtimeType, type AreaDto } from "./area-dto.js";
+import { Circle } from "./circle.js";
+import { IHasArea$runtimeType, type IHasArea } from "./i-has-area.js";
+import { ShapeFactory } from "./shape-factory.js";
 
 export class ShapeQuestions {
   constructor() {}

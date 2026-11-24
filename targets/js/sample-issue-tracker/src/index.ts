@@ -1,10 +1,10 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import * as $SampleIssueTracker from "./sample-issue-tracker";
-import * as $SampleIssueTracker_Issues_Application from "./sample-issue-tracker/issues/application";
-import * as $SampleIssueTracker_Issues_Domain from "./sample-issue-tracker/issues/domain";
-import * as $SampleIssueTracker_Planning_Domain from "./sample-issue-tracker/planning/domain";
-import * as $SampleIssueTracker_SharedKernel from "./sample-issue-tracker/shared-kernel";
+import * as $SampleIssueTracker from "./sample-issue-tracker/index.js";
+import * as $SampleIssueTracker_Issues_Application from "./sample-issue-tracker/issues/application/index.js";
+import * as $SampleIssueTracker_Issues_Domain from "./sample-issue-tracker/issues/domain/index.js";
+import * as $SampleIssueTracker_Planning_Domain from "./sample-issue-tracker/planning/domain/index.js";
+import * as $SampleIssueTracker_SharedKernel from "./sample-issue-tracker/shared-kernel/index.js";
 
 export namespace SampleIssueTracker {
   export import _ = $SampleIssueTracker;

@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { UNear } from "./u-near";
+import { UNear } from "./u-near.js";
 
 let UNearA$rt: ClassType<UNearA> | undefined;
 

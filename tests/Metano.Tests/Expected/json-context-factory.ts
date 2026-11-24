@@ -1,10 +1,10 @@
 import { Dictionary, List } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import { Episode } from "./episode";
-import { Plain } from "./plain";
-import { Slug } from "./slug";
-import { Title } from "./title";
-import { Video } from "./video";
+import { Episode } from "./episode.js";
+import { Plain } from "./plain.js";
+import { Slug } from "./slug.js";
+import { Title } from "./title.js";
+import { Video } from "./video.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

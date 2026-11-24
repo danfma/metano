@@ -1,5 +1,5 @@
-import { Ticks } from "./ticks";
-import type { UId } from "./u-id";
+import { Ticks } from "./ticks.js";
+import type { UId } from "./u-id.js";
 
 export class OperatorCalls {
   constructor() { }

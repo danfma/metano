@@ -42,10 +42,11 @@ public class NamespaceBarrelsTranspileTests
         // aliased as the underscore-joined PascalCased FULL namespace path.
         await Assert
             .That(root)
-            .Contains("import * as $App_Issues_Domain from \"./app/issues/domain\"");
+            .Contains("import * as $App_Issues_Domain from \"./app/issues/domain/index.js\"");
+
         await Assert
             .That(root)
-            .Contains("import * as $App_Planning_Domain from \"./app/planning/domain\"");
+            .Contains("import * as $App_Planning_Domain from \"./app/planning/domain/index.js\"");
 
         // Nested namespace blocks mirror the C# tree, rooted at App.
         await Assert.That(root).Contains("export namespace App");
@@ -85,7 +86,8 @@ public class NamespaceBarrelsTranspileTests
 
         await Assert
             .That(root)
-            .Contains("import * as $App_SharedKernel from \"./app/shared-kernel\"");
+            .Contains("import * as $App_SharedKernel from \"./app/shared-kernel/index.js\"");
+
         await Assert.That(root).Contains("export import SharedKernel = $App_SharedKernel;");
         await Assert.That(root).DoesNotContain("export namespace SharedKernel");
     }
@@ -118,12 +120,14 @@ public class NamespaceBarrelsTranspileTests
         var root = result["index.ts"];
         // The App leaf re-export lives in its own directory barrel.
         await Assert.That(result).ContainsKey("app/index.ts");
-        await Assert.That(result["app/index.ts"]).Contains("export { Root } from \"./root\"");
+        await Assert.That(result["app/index.ts"]).Contains("export { Root } from \"./root.js\"");
         // The root aggregates the App leaf plus the sub-namespace.
-        await Assert.That(root).Contains("import * as $App from \"./app\"");
+        await Assert.That(root).Contains("import * as $App from \"./app/index.js\"");
+
         await Assert
             .That(root)
-            .Contains("import * as $App_Issues_Domain from \"./app/issues/domain\"");
+            .Contains("import * as $App_Issues_Domain from \"./app/issues/domain/index.js\"");
+
         await Assert.That(root).Contains("export namespace App");
         await Assert.That(root).Contains("export namespace Issues");
     }

@@ -1,8 +1,8 @@
 import { Dictionary } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import { Handles } from "./handles";
-import { NativeId } from "./native-id";
-import { NativeQuota } from "./native-quota";
+import { Handles } from "./handles.js";
+import { NativeId } from "./native-id.js";
+import { NativeQuota } from "./native-quota.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

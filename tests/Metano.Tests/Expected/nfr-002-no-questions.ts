@@ -21,9 +21,9 @@ export class Counter {
 }
 
 // fixtures/no-runtime-questions/geometry.ts
-import { Point } from "./point";
-import { Priority } from "./priority";
-import { TodoItem } from "./todo-item";
+import { Point } from "./point.js";
+import { Priority } from "./priority.js";
+import { TodoItem } from "./todo-item.js";
 
 export class Geometry {
   constructor() { }
@@ -38,11 +38,11 @@ export class Geometry {
 }
 
 // fixtures/no-runtime-questions/index.ts
-export { Counter } from "./counter";
-export { Geometry } from "./geometry";
-export { Point } from "./point";
-export { Priority } from "./priority";
-export { TodoItem } from "./todo-item";
+export { Counter } from "./counter.js";
+export { Geometry } from "./geometry.js";
+export { Point } from "./point.js";
+export { Priority } from "./priority.js";
+export { TodoItem } from "./todo-item.js";
 
 // fixtures/no-runtime-questions/point.ts
 import { HashCode, copyRecordWith } from "metano-runtime";
@@ -94,8 +94,8 @@ export type Priority = typeof Priority[keyof typeof Priority];
 
 // fixtures/no-runtime-questions/todo-item.ts
 import { HashCode, copyRecordWith, formatBoolean, valueEquals } from "metano-runtime";
-import type { Point } from "./point";
-import { Priority } from "./priority";
+import type { Point } from "./point.js";
+import { Priority } from "./priority.js";
 
 export class TodoItem {
   constructor(readonly title: string, readonly priority: Priority, readonly location: Point) { }

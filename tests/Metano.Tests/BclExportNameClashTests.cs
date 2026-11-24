@@ -46,7 +46,7 @@ public class BclExportNameClashTests
 
         var output = result["app/calculator.ts"];
 
-        await Assert.That(output).Contains("import type { Decimal } from \"./decimal\";");
+        await Assert.That(output).Contains("import type { Decimal } from \"./decimal.js\";");
         await Assert.That(output).DoesNotContain("metano-runtime/system/decimal");
     }
 
@@ -84,7 +84,7 @@ public class BclExportNameClashTests
 
         var output = result["app/calculator.ts"];
 
-        await Assert.That(output).Contains("import { Decimal } from \"./decimal\";");
+        await Assert.That(output).Contains("import { Decimal } from \"./decimal.js\";");
         await Assert.That(output).Contains("})(new Decimal());");
         await Assert.That(output).DoesNotContain("metano-runtime/system/decimal");
     }
@@ -114,7 +114,7 @@ public class BclExportNameClashTests
         // runtime's `MidpointRounding` mirror the BCL export binds.
         await Assert
             .That(output)
-            .Contains("import { MidpointRounding } from \"./midpoint-rounding\";");
+            .Contains("import { MidpointRounding } from \"./midpoint-rounding.js\";");
 
         await Assert
             .That(output)

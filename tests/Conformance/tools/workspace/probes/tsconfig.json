@@ -11,7 +11,6 @@
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "verbatimModuleSyntax": true,
-    "paths": { "#/*": ["./src/*"] },
     "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,

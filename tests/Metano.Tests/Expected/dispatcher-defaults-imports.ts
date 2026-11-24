@@ -1,6 +1,6 @@
 import { formatText, isBool, isDecimal, isInt32, isString } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import { Color } from "./color";
+import { Color } from "./color.js";
 
 export class Painter {
   protected static readonly byPainterC = /* @__PURE__ */ Symbol("Painter(Color c)");

@@ -1,11 +1,11 @@
 import { tupleEquals, valueEquals } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import type { Counter } from "./counter";
-import type { Dto } from "./dto";
-import type { Node } from "./node";
-import type { Point } from "./point";
-import type { Size } from "./size";
-import type { UserId } from "./user-id";
+import type { Counter } from "./counter.js";
+import type { Dto } from "./dto.js";
+import type { Node } from "./node.js";
+import type { Point } from "./point.js";
+import type { Size } from "./size.js";
+import type { UserId } from "./user-id.js";
 
 export class Comparisons {
   constructor() { }

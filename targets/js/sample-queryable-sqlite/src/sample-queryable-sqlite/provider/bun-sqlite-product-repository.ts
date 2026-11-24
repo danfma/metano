@@ -14,21 +14,16 @@
  */
 import type { Database } from "bun:sqlite";
 import { getStages } from "metano-runtime";
-import type { Product } from "#/sample-queryable-sqlite/product";
-import type { IProductRepository } from "#/sample-queryable-sqlite/provider/i-product-repository";
-import {
-  mapProductRow,
-  productColumn,
-  type ProductRow,
-  SEED_ROWS,
-} from "#/sample-queryable-sqlite/provider/db";
+import type { Product } from "../product.js";
+import type { IProductRepository } from "./i-product-repository.js";
+import { mapProductRow, productColumn, type ProductRow, SEED_ROWS } from "./db.js";
 import {
   PROJECTION_ALIAS,
   type Stage,
   type TranslatedQuery,
   translateChain,
   UntranslatableTreeError,
-} from "#/sample-queryable-sqlite/provider/sqlite-translator";
+} from "./sqlite-translator.js";
 
 const TABLE = "products";
 

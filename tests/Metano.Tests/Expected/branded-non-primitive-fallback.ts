@@ -1,5 +1,5 @@
 import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
-import { Inner } from "./inner";
+import { Inner } from "./inner.js";
 
 export class Boxed {
   constructor(readonly value: Inner) { }

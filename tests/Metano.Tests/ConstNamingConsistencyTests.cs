@@ -539,7 +539,7 @@ public class ConstNamingConsistencyTests
         );
 
         var reader = output["reader.ts"];
-        await Assert.That(reader).Contains("import { MaxItems } from \"./globals\";");
+        await Assert.That(reader).Contains("import { MaxItems } from \"./globals.js\";");
         await Assert.That(reader).Contains("return MaxItems;");
     }
 
@@ -697,7 +697,7 @@ public class ConstNamingConsistencyTests
         await Assert.That(globals).Contains("return (new_ + x) | 0;");
 
         var reader = output["reader.ts"];
-        await Assert.That(reader).Contains("import { new_ } from \"./globals\";");
+        await Assert.That(reader).Contains("import { new_ } from \"./globals.js\";");
         await Assert.That(reader).Contains("return new_;");
     }
 

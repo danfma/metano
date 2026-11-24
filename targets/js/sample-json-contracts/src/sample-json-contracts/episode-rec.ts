@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import type { Title } from "./title";
+import type { Title } from "./title.js";
 
 let EpisodeRec$rt: ClassType<EpisodeRec> | undefined;
 

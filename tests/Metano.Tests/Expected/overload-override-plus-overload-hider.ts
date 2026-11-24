@@ -1,5 +1,5 @@
 import { isBool, isInt32 } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Hider extends Base {
   constructor() {

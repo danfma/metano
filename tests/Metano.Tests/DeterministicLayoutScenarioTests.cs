@@ -28,12 +28,10 @@ public class DeterministicLayoutScenarioTests
     [Test]
     public async Task ContractsLibrary_EmitsStableFullNamespaceLayout_NoStaleRoot()
     {
-        var result = TranspileHelper.Transpile(
-            ContractsSource,
-            importAlias: "web-server-contracts"
-        );
+        var result = TranspileHelper.Transpile(ContractsSource);
 
         await Assert.That(result).ContainsKey("vigiata/contracts/profiles/user-profile.ts");
+
         await Assert
             .That(result)
             .ContainsKey("vigiata/contracts/serialization/contracts-serializer-context.ts");
@@ -45,16 +43,11 @@ public class DeterministicLayoutScenarioTests
     }
 
     [Test]
-    public async Task CrossNamespaceReference_UsesFullNamespaceAliasFile()
+    public async Task CrossNamespaceReference_UsesRelativeFileImport()
     {
-        var result = TranspileHelper.Transpile(
-            ContractsSource,
-            importAlias: "web-server-contracts"
-        );
+        var result = TranspileHelper.Transpile(ContractsSource);
 
         var serializer = result["vigiata/contracts/serialization/contracts-serializer-context.ts"];
-        await Assert
-            .That(serializer)
-            .Contains("from \"#web-server-contracts/vigiata/contracts/profiles/user-profile\"");
+        await Assert.That(serializer).Contains("from \"../profiles/user-profile.js\"");
     }
 }

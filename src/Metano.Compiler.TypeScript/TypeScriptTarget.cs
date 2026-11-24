@@ -61,10 +61,10 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public bool StripInterfacePrefix { get; init; }
 
     /// <summary>
-    /// Optional isolated subpath-imports alias for internal imports. <c>null</c> keeps
-    /// the default <c>#</c>. When set (e.g. <c>contracts</c>), generated internal imports
-    /// use <c>#contracts/...</c> and the package.json gets only the alias-scoped keys,
-    /// leaving a host project's own <c>#</c> untouched. Set via <c>--import-alias</c>.
+    /// Optional isolated subpath-imports alias. Generated internal imports are always
+    /// relative (spec 004 FR-011); when set (e.g. <c>contracts</c>), the package.json
+    /// gets alias-scoped <c>#contracts/*</c> entries for hand-written code, leaving a
+    /// host project's own <c>#</c> untouched. Set via <c>--import-alias</c>.
     /// </summary>
     public string? ImportAlias { get; init; }
 
@@ -78,7 +78,9 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// written before the flip of spec 012, when <c>long</c> could still map
     /// to <c>number</c> (<c>int64=Number</c>), never matches. Likewise
     /// <c>enums=const-v1</c>: a cache written before spec 011 FR-044, when a
-    /// numeric enum was a TS <c>enum</c>, never matches.
+    /// numeric enum was a TS <c>enum</c>, never matches. <c>specifiers=relative-js</c>
+    /// keeps a cache written with <c>#/…</c> internal imports from being reused
+    /// (spec 004 FR-017).
     /// </summary>
     public string ConfigurationFingerprint =>
         BuildConfigurationFingerprint(NamespaceBarrels, StripInterfacePrefix, ImportAlias);
@@ -101,7 +103,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             $"stripInterfacePrefix={stripInterfacePrefix}",
             $"importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)}",
             "int64=bigint",
-            "enums=const-v1"
+            "enums=const-v1",
+            "specifiers=relative-js"
         );
 
     /// <summary>
@@ -132,7 +135,6 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         {
             NamespaceBarrels = NamespaceBarrels,
             StripInterfacePrefix = StripInterfacePrefix,
-            ImportAlias = ImportAlias,
             CacheOutputDir = outputDir,
             CacheFilePrefix = filePrefix,
             CacheConfigurationFingerprint = BuildCacheFingerprint(
@@ -144,7 +146,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
 
         var crossPackageDependencies = transformer.CrossPackageDependencies;
 
-        var printer = new Printer();
+        var printer = new Printer(moduleSpecifiers: transformer.ModuleSpecifiers);
         var generated = new List<GeneratedFile>(sourceFiles.Count);
         foreach (var file in sourceFiles)
         {

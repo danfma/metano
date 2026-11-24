@@ -30,7 +30,7 @@ namespace Metano.Compiler.TypeScript.AST;
 /// </summary>
 public sealed record TsImport(
     string[] Names,
-    string From,
+    TsModuleSpecifier From,
     bool TypeOnly = false,
     bool IsDefault = false,
     IReadOnlySet<string>? TypeOnlyNames = null,

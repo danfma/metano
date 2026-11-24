@@ -1,6 +1,6 @@
 import { HashCode, UUID, isInt32, isString, valueEquals } from "metano-runtime";
-import { Inner } from "./inner";
-import { Mood } from "./mood";
+import { Inner } from "./inner.js";
+import { Mood } from "./mood.js";
 
 export class Day {
   protected static readonly byDayN = /* @__PURE__ */ Symbol("Day(int n)");

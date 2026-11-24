@@ -20,7 +20,7 @@ export function first(...args: unknown[]): any {
   throw new Error("No matching overload for first");
 }
 
-import { firstDefault, firstFallback } from "./seqs";
+import { firstDefault, firstFallback } from "./seqs.js";
 
 export class Caller {
   constructor() { }
@@ -34,5 +34,5 @@ export class Caller {
   }
 }
 
-export { Caller } from "./caller";
-export { first, firstDefault, firstFallback } from "./seqs";
+export { Caller } from "./caller.js";
+export { first, firstDefault, firstFallback } from "./seqs.js";

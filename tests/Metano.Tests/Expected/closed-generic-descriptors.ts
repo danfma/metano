@@ -94,11 +94,11 @@ export class Gift {
 }
 
 // boxes/index.ts
-export { Box } from "./box";
-export { Cell } from "./cell";
-export { Gift } from "./gift";
-export { Pair } from "./pair";
-export { Probe } from "./probe";
+export { Box } from "./box.js";
+export { Cell } from "./cell.js";
+export { Gift } from "./gift.js";
+export { Pair } from "./pair.js";
+export { Probe } from "./probe.js";
 
 // boxes/pair.ts
 import type { ClassType } from "metano-runtime";
@@ -130,10 +130,10 @@ export class Pair<TFirst, TSecond> {
 
 // boxes/probe.ts
 import { DecimalType, Int32Type, StringType, castTo, getRuntimeType, specialize, type RuntimeType } from "metano-runtime";
-import { Box } from "./box";
-import { Cell } from "./cell";
-import { Gift } from "./gift";
-import { Pair } from "./pair";
+import { Box } from "./box.js";
+import { Cell } from "./cell.js";
+import { Gift } from "./gift.js";
+import { Pair } from "./pair.js";
 
 export class Probe {
   constructor() { }

@@ -1,7 +1,7 @@
 import { formatDouble, isInt32, isString } from "metano-runtime";
-import { Circle } from "./circle";
-import type { Shape } from "./shape";
-import { Square } from "./square";
+import { Circle } from "./circle.js";
+import type { Shape } from "./shape.js";
+import { Square } from "./square.js";
 
 export class Describer {
   constructor() { }

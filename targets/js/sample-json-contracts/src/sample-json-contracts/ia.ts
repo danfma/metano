@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { IBase } from "./i-base";
+import { IBase } from "./i-base.js";
 
 let IA$rt: ClassType<IA> | undefined;
 

@@ -1,4 +1,4 @@
-import { Point } from "./point";
+import { Point } from "./point.js";
 import { createElement } from "inferno-create-element";
 
 export class View {

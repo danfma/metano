@@ -251,9 +251,11 @@ public class DelegateEventTests
         // once in the emitted text.
         await Assert.That(output).Contains("__r.tick.bind(__r)");
         await Assert.That(output).Contains(")(this.getCache().service)");
+
         var occurrences = System
             .Text.RegularExpressions.Regex.Matches(output, @"this\.getCache\(\)")
             .Count;
+
         await Assert.That(occurrences).IsEqualTo(1);
     }
 
@@ -529,7 +531,7 @@ public class DelegateEventTests
             """
         );
 
-        await AssertImportsName(result["app.ts"], "IWidget", "./i-widget");
+        await AssertImportsName(result["app.ts"], "IWidget", "./i-widget.js");
         await Assert.That(result["app.ts"]).Contains("() => IWidget");
     }
 
@@ -549,7 +551,7 @@ public class DelegateEventTests
             """
         );
 
-        await AssertImportsName(result["app.ts"], "IWidget", "./i-widget");
+        await AssertImportsName(result["app.ts"], "IWidget", "./i-widget.js");
     }
 
     [Test]
@@ -569,7 +571,7 @@ public class DelegateEventTests
         );
 
         var output = result["slot.ts"];
-        await AssertImportsName(output, "IWidget", "./i-widget");
+        await AssertImportsName(output, "IWidget", "./i-widget.js");
         await Assert.That(output).Contains("[string, IWidget]");
     }
 
@@ -579,6 +581,7 @@ public class DelegateEventTests
             .Split('\n')
             .Where(line => line.Contains($"{{ {name} }}") && line.Contains($"\"{path}\""))
             .ToList();
+
         await Assert.That(importLines.Count).IsEqualTo(1);
     }
 
@@ -627,12 +630,14 @@ public class DelegateEventTests
             using Metano.Annotations;
             {csharpSource}
             """;
+
         var syntaxTree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
             source,
             new Microsoft.CodeAnalysis.CSharp.CSharpParseOptions(
                 Microsoft.CodeAnalysis.CSharp.LanguageVersion.Preview
             )
         );
+
         var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
             "DartTestAssembly",
             [syntaxTree],
@@ -646,6 +651,7 @@ public class DelegateEventTests
             .GetDiagnostics()
             .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
             .ToList();
+
         if (errors.Count > 0)
             throw new InvalidOperationException(
                 "C# compilation failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
@@ -655,12 +661,15 @@ public class DelegateEventTests
             compilation,
             Metano.Annotations.TargetLanguage.Dart
         );
+
         var transformer = new Metano.Compiler.Dart.Transformation.DartTransformer(ir, compilation);
         var files = transformer.TransformAll();
         var printer = new Metano.Compiler.Dart.Printer();
         var result = new Dictionary<string, string>();
+
         foreach (var file in files)
             result[file.FileName] = printer.Print(file);
+
         return (result, transformer.Diagnostics);
     }
 }

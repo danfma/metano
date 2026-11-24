@@ -1,9 +1,9 @@
 import { bigintFromDynamic, BooleanType, castTo, charFromDynamic, decimalSourceFromDynamic, numberFromDynamic, StringType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import { Color$runtimeType, type Color } from "./color";
-import { IHasArea$runtimeType, type IHasArea } from "./i-has-area";
-import { Point } from "./point";
-import { Shape } from "./shape";
+import { Color$runtimeType, type Color } from "./color.js";
+import { IHasArea$runtimeType, type IHasArea } from "./i-has-area.js";
+import { Point } from "./point.js";
+import { Shape } from "./shape.js";
 
 export class Casts {
   constructor() { }

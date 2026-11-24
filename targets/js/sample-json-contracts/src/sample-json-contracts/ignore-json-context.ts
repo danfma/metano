@@ -1,10 +1,10 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { IgnAbs } from "./ign-abs";
-import { IgnAbsDer } from "./ign-abs-der";
-import { IgnBase } from "./ign-base";
-import { IgnDer } from "./ign-der";
+import { IgnAbsDer } from "./ign-abs-der.js";
+import { IgnAbs } from "./ign-abs.js";
+import { IgnBase } from "./ign-base.js";
+import { IgnDer } from "./ign-der.js";
 
 let IgnoreJsonContext$rt: ClassType<IgnoreJsonContext> | undefined;
 

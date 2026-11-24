@@ -3,12 +3,12 @@ import { UUID } from "metano-runtime";
 import { Dictionary, HashSet, List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import { EpisodeId } from "./episode-id";
-import { EpisodeSummary } from "./episode-summary";
-import { Leaf } from "./leaf";
-import { Level } from "./level";
-import { Mood } from "./mood";
-import { ShotTiming } from "./shot-timing";
+import { EpisodeId } from "./episode-id.js";
+import { EpisodeSummary } from "./episode-summary.js";
+import { Leaf } from "./leaf.js";
+import { Level } from "./level.js";
+import { Mood } from "./mood.js";
+import { ShotTiming } from "./shot-timing.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

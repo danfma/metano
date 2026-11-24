@@ -71,7 +71,7 @@ public class NestedCaseOwnerValueImportTests
         var output = result["label.ts"];
 
         await Assert.That(output).Contains($"instanceof {owner}.Fresh");
-        await Assert.That(output).Contains($"import {{ {owner} }} from \"./{file}\";");
+        await Assert.That(output).Contains($"import {{ {owner} }} from \"./{file}.js\";");
         await Assert.That(output).DoesNotContain($"import type {{ {owner} }}");
     }
 
@@ -87,7 +87,7 @@ public class NestedCaseOwnerValueImportTests
         var output = result["probe.ts"];
 
         await Assert.That(output).Contains($"instanceof {owner}.Fresh");
-        await Assert.That(output).Contains($"import {{ {owner} }} from \"./{file}\";");
+        await Assert.That(output).Contains($"import {{ {owner} }} from \"./{file}.js\";");
         await Assert.That(output).DoesNotContain($"import type {{ {owner} }}");
     }
 
@@ -108,7 +108,7 @@ public class NestedCaseOwnerValueImportTests
         var output = result["factory.ts"];
 
         await Assert.That(output).Contains("new NestedSource.Reused(from)");
-        await Assert.That(output).Contains("import { NestedSource } from \"./nested-source\";");
+        await Assert.That(output).Contains("import { NestedSource } from \"./nested-source.js\";");
     }
 
     [Test]
@@ -136,6 +136,6 @@ public class NestedCaseOwnerValueImportTests
         var output = result["defaults.ts"];
 
         await Assert.That(output).Contains("Source.Fresh.instance");
-        await Assert.That(output).Contains("import { Source } from \"./source\";");
+        await Assert.That(output).Contains("import { Source } from \"./source.js\";");
     }
 }

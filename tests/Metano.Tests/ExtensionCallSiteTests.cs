@@ -112,7 +112,7 @@ public class ExtensionCallSiteTests
         var caller = result["app/calc.ts"];
         await Assert.That(caller).Contains("twice(n)");
         await Assert.That(caller).DoesNotContain("double(n)");
-        await Assert.That(caller).Contains("import { twice } from \"./int-ext\";");
+        await Assert.That(caller).Contains("import { twice } from \"./int-ext.js\";");
     }
 
     [Test]
@@ -138,7 +138,7 @@ public class ExtensionCallSiteTests
 
         var caller = result["app/calc.ts"];
         await Assert.That(caller).Contains("squared(n)");
-        await Assert.That(caller).Contains("import { squared } from \"./int-ext\";");
+        await Assert.That(caller).Contains("import { squared } from \"./int-ext.js\";");
     }
 
     [Test]
@@ -249,6 +249,7 @@ public class ExtensionCallSiteTests
         var ms0021 = diagnostics.FirstOrDefault(d =>
             d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.ExtensionHelperNameClash
         );
+
         await Assert.That(ms0021).IsNotNull();
         await Assert.That(ms0021!.Message).Contains("squared");
     }

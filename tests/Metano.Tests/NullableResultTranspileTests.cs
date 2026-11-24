@@ -109,7 +109,7 @@ public class NullableResultTranspileTests
 
         var chains = files["chains.ts"];
 
-        await Assert.That(chains).Contains("import { getTitle, type Item } from \"./item\";");
+        await Assert.That(chains).Contains("import { getTitle, type Item } from \"./item.js\";");
         await Assert.That(chains).Contains("return getTitle(item);");
     }
 
@@ -122,7 +122,7 @@ public class NullableResultTranspileTests
 
         await Assert
             .That(files["chains.ts"])
-            .Contains("import { getTitle, type Tag } from \"./tag\";");
+            .Contains("import { getTitle, type Tag } from \"./tag.js\";");
     }
 
     [Test]
@@ -152,7 +152,7 @@ public class NullableResultTranspileTests
         var chains = files["chains.ts"];
 
         await Assert.That(chains).Contains("return Outer.dbl(n);");
-        await Assert.That(chains).Contains("import { Outer } from \"./outer\";");
+        await Assert.That(chains).Contains("import { Outer } from \"./outer.js\";");
     }
 
     [Test]

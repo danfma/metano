@@ -10,17 +10,17 @@ import {
 import type { ClassType } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import { ActivityFeed } from "#/sample-issue-tracker/issues/domain/activity-feed";
-import { Comment } from "#/sample-issue-tracker/issues/domain/comment";
-import { IssueActivity } from "#/sample-issue-tracker/issues/domain/issue-activity";
-import { IssueActivityKind } from "#/sample-issue-tracker/issues/domain/issue-activity-kind";
-import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
-import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
-import { IssueSnapshot } from "#/sample-issue-tracker/issues/domain/issue-snapshot";
-import { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
-import { IssueType } from "#/sample-issue-tracker/issues/domain/issue-type";
-import { SnowflakeId } from "#/sample-issue-tracker/shared-kernel/snowflake-id";
-import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
+import { ActivityFeed } from "./issues/domain/activity-feed.js";
+import { Comment } from "./issues/domain/comment.js";
+import { IssueActivityKind } from "./issues/domain/issue-activity-kind.js";
+import { IssueActivity } from "./issues/domain/issue-activity.js";
+import { IssueId } from "./issues/domain/issue-id.js";
+import { IssuePriority } from "./issues/domain/issue-priority.js";
+import { IssueSnapshot } from "./issues/domain/issue-snapshot.js";
+import { IssueStatus } from "./issues/domain/issue-status.js";
+import { IssueType } from "./issues/domain/issue-type.js";
+import { SnowflakeId } from "./shared-kernel/snowflake-id.js";
+import { UserId } from "./shared-kernel/user-id.js";
 
 let JsonContext$rt: ClassType<JsonContext> | undefined;
 

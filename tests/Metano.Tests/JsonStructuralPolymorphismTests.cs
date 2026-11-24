@@ -211,7 +211,7 @@ public class JsonStructuralPolymorphismTests
 
         await Assert
             .That(files["test-app/line.ts"])
-            .Contains("import { isDot, type Dot } from \"./dot\";");
+            .Contains("import { isDot, type Dot } from \"./dot.js\";");
     }
 
     // Point covers Point3, so Point3 is tested first; listed first, that is
@@ -261,7 +261,7 @@ public class JsonStructuralPolymorphismTests
         );
 
         await Assert.That(files[ContextPath]).Contains("test: Shape.isCircle,");
-        await Assert.That(files[ContextPath]).Contains("import { Shape } from \"./shape\";");
+        await Assert.That(files[ContextPath]).Contains("import { Shape } from \"./shape.js\";");
         await Assert.That(files["test-app/shape.ts"]).Contains("export function isCircle(");
     }
 

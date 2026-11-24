@@ -1,5 +1,5 @@
 import { typeInitializer } from "metano-runtime";
-import { Counter } from "./counter";
+import { Counter } from "./counter.js";
 
 export class FieldOrder {
   static readonly #$init = /* @__PURE__ */ typeInitializer("FieldOrder", () => {
