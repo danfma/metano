@@ -13,8 +13,10 @@
  * as their result is determined.
  */
 import type { IEqualityComparer } from "../collections/default-comparer.ts";
+import { HashCore } from "../collections/hash-core.ts";
 import { HashSet } from "../collections/hash-set.ts";
 import { compareKeys } from "./compare-keys.ts";
+import { bucketsOf, groupingsOf } from "./grouping.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
 import type {
   AppendOp,
@@ -23,6 +25,7 @@ import type {
   DistinctOp,
   ExceptOp,
   IntersectOp,
+  JoinOp,
   OrderByDescendingOp,
   OrderByOp,
   PrependOp,
@@ -40,7 +43,6 @@ import type {
   WhereOp,
   ZipOp,
   GroupByOp,
-  Grouping,
 } from "./types.ts";
 
 /**
@@ -454,35 +456,96 @@ export function thenByDescending<T, K>(
 /**
  * Groups elements by a key. Yields one <see cref="Grouping{K, T}"/> per
  * distinct key — an Iterable carrying the shared key on `key` plus the
- * items in source order. Materializes the source to bucket items but
- * each enumeration of the result re-runs the bucketing.
+ * items in source order — in the order the keys are first seen. Keys are
+ * equal as .NET's `EqualityComparer<K>.Default` (or `comparer`) says. Materializes
+ * the source to bucket items but each enumeration of the result re-runs the bucketing.
  */
 export function groupBy<T, K>(
   keySelector: (item: T) => K,
+  comparer?: IEqualityComparer<NoInfer<K>> | null,
   queryable?: QueryableMeta,
 ): GroupByOp<T, K> {
   return {
     kind: "groupBy",
     keySelector,
+    comparer,
     queryable,
     apply: (source) => ({
+      // A generator, so the source is read on the first `next()`, as .NET's GroupBy does. With the
+      // default comparison the bucketing runs in this generator body, where V8 keeps it as fast as
+      // a native `Map` loop; a user comparer goes through the shared `bucketsOf`.
       *[Symbol.iterator]() {
-        const buckets = new Map<K, T[]>();
-        for (const item of source) {
-          const k = keySelector(item);
-          let bucket = buckets.get(k);
-          if (bucket === undefined) {
-            bucket = [];
-            buckets.set(k, bucket);
-          }
-          bucket.push(item);
+        if (comparer) {
+          yield* groupingsOf(bucketsOf(source, keySelector, comparer));
+
+          return;
         }
-        for (const [key, items] of buckets) {
-          // `Grouping` is `Iterable<T> & { key }` — wrap the bucket
-          // array (Iterable) with the key field via Object.assign so
-          // consumers can `for…of` the grouping AND read `.key`.
-          const grouping = Object.assign(items, { key }) as unknown as Grouping<K, T>;
-          yield grouping;
+
+        const buckets = new HashCore<K, T[]>();
+        const entries = buckets._entries;
+
+        for (const item of source) {
+          const key = keySelector(item);
+
+          if (typeof key === "object" && key !== null) {
+            buckets.append(key, item);
+
+            continue;
+          }
+
+          const bucket = entries.get(key);
+
+          if (bucket === undefined) {
+            entries.set(key, [item]);
+          } else {
+            bucket.push(item);
+          }
+        }
+
+        yield* groupingsOf(buckets);
+      },
+    }),
+  };
+}
+
+/**
+ * `Join(inner, outerKeySelector, innerKeySelector, resultSelector[, comparer])`: for each
+ * outer element, in order, one result per inner element of an equal key, in inner order.
+ * A `null` key matches nothing. The inner source is read once the first outer element is, and an
+ * inner with no key ends the join there.
+ */
+export function join<T, U, K, R>(
+  inner: Iterable<U>,
+  outerKeySelector: (item: T) => K,
+  innerKeySelector: (item: U) => K,
+  resultSelector: (outer: T, inner: U) => R,
+  comparer?: IEqualityComparer<NoInfer<K>> | null,
+): JoinOp<T, U, K, R> {
+  return {
+    kind: "join",
+    inner,
+    outerKeySelector,
+    innerKeySelector,
+    resultSelector,
+    comparer,
+    apply: (source) => ({
+      *[Symbol.iterator]() {
+        let matches: HashCore<K, U[]> | undefined;
+
+        for (const outer of source) {
+          if (matches === undefined) {
+            matches = bucketsOf(inner, innerKeySelector, comparer, undefined, true);
+
+            // .NET reads one outer element, and stops there when the inner has no key.
+            if (matches.size === 0) return;
+          }
+
+          const key = outerKeySelector(outer);
+          const bucket = key === null || key === undefined ? undefined : matches.get(key);
+
+          if (bucket !== undefined) {
+            for (const item of bucket) yield resultSelector(outer, item);
+          }
         }
       },
     }),

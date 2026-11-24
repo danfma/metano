@@ -4119,6 +4119,9 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractIndexOrRangeAccess(node, receiverSyntax, arguments) is { } indexOrRangeAccess)
             return indexOrRangeAccess;
 
+        if (RewriteLookupIndexer(node, receiverSyntax) is { } lookupIndexer)
+            return lookupIndexer;
+
         var target = Extract(receiverSyntax);
 
         // Treat the first argument as the index; multi-arg indexers are uncommon.

@@ -110,6 +110,9 @@ export type {
   ToListTerm,
   ToDictionaryTerm,
   ToHashSetTerm,
+  ToLookupTerm,
+  SequenceEqualTerm,
+  JoinOp,
 } from "./types.ts";
 
 export {
@@ -134,6 +137,7 @@ export {
   thenBy,
   thenByDescending,
   groupBy,
+  join,
   zip,
   defaultIfEmpty,
 } from "./operators.ts";
@@ -145,6 +149,8 @@ export {
   toList,
   toDictionary,
   toHashSet,
+  toLookup,
+  sequenceEqual,
   first,
   firstOrDefault,
   last,
@@ -182,6 +188,8 @@ export {
   minUInt64Of,
   sumInt64,
 } from "./int64-terminals.ts";
+
+export { Lookup } from "./lookup.ts";
 
 export { averageDecimal, averageNullableDecimal, sumDecimal } from "./decimal-terminals.ts";
 export type { DecimalConstructor, DecimalValue } from "./decimal-terminals.ts";

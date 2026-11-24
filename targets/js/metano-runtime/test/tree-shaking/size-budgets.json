@@ -27,6 +27,36 @@
       "maxGzip": 512
     },
     {
+      "name": "LINQ contains (value equality, #664)",
+      "entry": "entries/linq-contains.js",
+      "maxGzip": 852,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 774 B / esbuild 752 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
+      "name": "LINQ groupBy (value equality, #664)",
+      "entry": "entries/linq-group-by.js",
+      "maxGzip": 2150,
+      "$comment": "W7-4 (#664), measured size + ~5%: bun 2053 B / esbuild 2020 B (the default-comparison loop lives once, in the generator, which V8 keeps as fast as main). The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
+      "name": "LINQ toLookup (value equality, #664)",
+      "entry": "entries/linq-to-lookup.js",
+      "maxGzip": 2156,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 1960 B / esbuild 1933 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
+      "name": "LINQ sequenceEqual (value equality, #664)",
+      "entry": "entries/linq-sequence-equal.js",
+      "maxGzip": 1633,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 1485 B / esbuild 1444 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
+      "name": "LINQ join (value equality, #664)",
+      "entry": "entries/linq-join.js",
+      "maxGzip": 2122,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 1929 B / esbuild 1898 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
       "name": "isType + getRuntimeType + one class descriptor",
       "entry": "entries/runtime-type-of-class.js",
       "maxGzip": 2294,
@@ -381,9 +411,11 @@
     "system/linq/decimal-terminals",
     "system/linq/expr-tree-visitor",
     "system/linq/expr-tree",
+    "system/linq/grouping",
     "system/linq/index",
     "system/linq/int64-terminals",
     "system/linq/linq",
+    "system/linq/lookup",
     "system/linq/operators",
     "system/linq/terminals",
     "system/linq/types",
