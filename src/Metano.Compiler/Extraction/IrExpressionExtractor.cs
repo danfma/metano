@@ -2236,7 +2236,8 @@ public sealed partial class IrExpressionExtractor
         if (UntestableTypeTest(isTest, typeSyntax, type, binds: false) is { } untestable)
             return untestable;
 
-        return new IrIsPatternExpression(
+        return BuildIsPattern(
+            isTest.Left,
             Extract(isTest.Left),
             new IrTypePattern(type) { InputType = StaticTypeOf(isTest.Left) }
         );

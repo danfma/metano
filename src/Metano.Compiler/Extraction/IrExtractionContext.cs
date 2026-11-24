@@ -72,6 +72,16 @@ public sealed record IrExtractionContext(
     internal bool KeepsReflectionSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
+    /// Whether the target keeps a pattern that binds nothing in the form the
+    /// extraction gave it before #735 (Dart): the subject is not captured in
+    /// a synthesized designator when the pattern reads it more than once,
+    /// since that target has no assignment-in-test form for it, so its output
+    /// stays as it was.
+    /// </summary>
+    internal bool KeepsUncapturedPatternSubjects =>
+        Target == Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
     /// Whether the target's BCL collections are its native ones (Dart until
     /// spec 011 FR-038, D28): such a target gets the pre-011c lowering of every
     /// collection construct (the 2.x element-access reads, writes and

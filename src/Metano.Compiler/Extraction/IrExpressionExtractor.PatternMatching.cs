@@ -19,26 +19,53 @@ public sealed partial class IrExpressionExtractor
     /// <see cref="IsStableSubject">stable</see>, the subject is captured first
     /// by a synthesized <c>var</c> designator: <c>F() is Circle c</c> becomes
     /// <c>F() is var $subject0 and Circle c</c>, which is exactly its C#
-    /// meaning, and the rest of the pattern reads the captured local. (A
-    /// pattern that binds nothing can evaluate its subject once within the
-    /// expression itself, which backends do on their own.)
+    /// meaning, and the rest of the pattern reads the captured local. A
+    /// pattern that binds nothing but reads its subject more than once
+    /// (<c>F() is &gt;= '0' and &lt;= '9'</c>) captures it the same way, unless
+    /// the subject is a repeatable read (<see cref="NeedsCapturedSubject"/>).
     /// </summary>
-    private IrIsPatternExpression ExtractIsPattern(IsPatternExpressionSyntax isPattern)
-    {
-        var subject = Extract(isPattern.Expression);
-        var pattern = ExtractPattern(isPattern.Pattern);
-
-        if (
-            !IrPatternDesignators.Declares(pattern)
-            || IsStableSubject(isPattern.Expression, subject)
-        )
-            return new IrIsPatternExpression(subject, pattern);
-
-        return new IrIsPatternExpression(
-            subject,
-            CapturedFirst(ExpressionType(isPattern.Expression), pattern)
+    private IrIsPatternExpression ExtractIsPattern(IsPatternExpressionSyntax isPattern) =>
+        BuildIsPattern(
+            isPattern.Expression,
+            Extract(isPattern.Expression),
+            ExtractPattern(isPattern.Pattern)
         );
-    }
+
+    /// <summary>
+    /// The <c>is</c> node of <paramref name="pattern"/> over
+    /// <paramref name="subject"/> (the lowering of <paramref name="syntax"/>),
+    /// capturing the subject first when <see cref="NeedsCapturedSubject"/>.
+    /// </summary>
+    private IrIsPatternExpression BuildIsPattern(
+        ExpressionSyntax syntax,
+        IrExpression subject,
+        IrPattern pattern
+    ) =>
+        NeedsCapturedSubject(syntax, subject, pattern)
+            ? new IrIsPatternExpression(subject, CapturedFirst(ExpressionType(syntax), pattern))
+            : new IrIsPatternExpression(subject, pattern);
+
+    /// <summary>
+    /// Whether the subject runs once, in a synthesized designator, before the
+    /// pattern reads it. A pattern that declares locals needs it for a
+    /// subject that is not <see cref="IsStableSubject">stable</see>. A pattern
+    /// that binds nothing needs it only when it reads the subject more than
+    /// once (<see cref="IrEvaluationTraits.ReadsSubjectOnce"/>) and the
+    /// subject is not a
+    /// <see cref="IrEvaluationTraits.IsRepeatableRead">repeatable read</see>
+    /// (a string or array element read is: <c>text[i] is &gt;= '0' and &lt;= '9'</c>
+    /// reads it twice).
+    /// </summary>
+    private bool NeedsCapturedSubject(
+        ExpressionSyntax syntax,
+        IrExpression subject,
+        IrPattern pattern
+    ) =>
+        IrPatternDesignators.Declares(pattern)
+            ? !IsStableSubject(syntax, subject)
+            : !_context.KeepsUncapturedPatternSubjects
+                && !IrEvaluationTraits.ReadsSubjectOnce(pattern)
+                && !IrEvaluationTraits.IsRepeatableRead(subject);
 
     /// <summary>
     /// <c>var $subjectN and pattern</c>: captures the matched value in a

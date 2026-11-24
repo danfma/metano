@@ -55,6 +55,46 @@ public static class IrEvaluationTraits
         };
 
     /// <summary>
+    /// Whether a lowering may read this expression more than once and get the
+    /// same value each time, without running user code: a
+    /// <see cref="IsSideEffectFree">side-effect-free</see> expression, or an
+    /// element access of an array or a <c>string</c> whose receiver and index
+    /// are themselves repeatable. A user-defined indexer or a collection
+    /// class's <c>get</c> may run code or throw, so it is not repeatable.
+    /// </summary>
+    public static bool IsRepeatableRead(IrExpression expression) =>
+        expression switch
+        {
+            IrElementAccess
+            {
+                TargetType: IrArrayTypeRef or IrPrimitiveTypeRef { Primitive: IrPrimitive.String }
+            } element => IsRepeatableRead(element.Target) && IsRepeatableRead(element.Index),
+            IrUnaryExpression { Operator: IrUnaryOp.NonNullAssertion } assertion =>
+                IsRepeatableRead(assertion.Operand),
+            _ => IsSideEffectFree(expression),
+        };
+
+    /// <summary>
+    /// Whether the test a pattern performs reads its subject at most once: a
+    /// constant or relational comparison, <c>_</c>, a type test other than
+    /// the two-read <see cref="IrRuntimeTypeTest.FixedTuple"/> shape, or the
+    /// negation of one of these. Any other pattern reads the subject (or its
+    /// members) repeatedly, so a subject that is not
+    /// <see cref="IsRepeatableRead">repeatable</see> must be captured first.
+    /// </summary>
+    public static bool ReadsSubjectOnce(IrPattern pattern) =>
+        pattern switch
+        {
+            IrConstantPattern or IrRelationalPattern or IrDiscardPattern => true,
+            IrLogicalPattern { Operator: IrLogicalOp.Not } notPattern => ReadsSubjectOnce(
+                notPattern.Left
+            ),
+            IrTypePattern { Designator: null } typePattern => IrRuntimeTypeTest.Of(typePattern.Type)
+                is not IrRuntimeTypeTest.FixedTuple,
+            _ => false,
+        };
+
+    /// <summary>
     /// Whether a null-conditional guard may repeat this receiver textually
     /// instead of binding it: a <see cref="IsReusableReceiver">reusable
     /// receiver</see> that reads no <see cref="IrConditionalReceiver"/>.
