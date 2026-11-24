@@ -18,7 +18,9 @@ export class Describer {
   constructor() { }
 
   static describe(status: JobStatus): string {
-    return (($s) => {
+    {
+      let $s = status;
+
       if ($s instanceof Queued) {
         return "queued";
       }
@@ -42,11 +44,13 @@ export class Describer {
       }
 
       throw new SwitchExpressionException($s);
-    })(status);
+    }
   }
 
   static stage(status: JobStatus): string {
-    return (($s) => {
+    {
+      let $s = status;
+
       if ($s instanceof Queued) {
         return "waiting";
       }
@@ -60,11 +64,13 @@ export class Describer {
       }
 
       throw new SwitchExpressionException($s);
-    })(status);
+    }
   }
 
   static kind(shape: Shape): string {
-    return (($s) => {
+    {
+      let $s = shape;
+
       if ($s instanceof Circle) {
         return "circle";
       }
@@ -74,11 +80,13 @@ export class Describer {
       }
 
       throw new SwitchExpressionException($s);
-    })(shape);
+    }
   }
 
   static count<T>(tree: Tree<T>, T$type: RuntimeType<T>): number {
-    return (($s) => {
+    {
+      let $s = tree;
+
       if ($s instanceof Leaf) {
         return 1;
       }
@@ -91,11 +99,13 @@ export class Describer {
       }
 
       throw new SwitchExpressionException($s);
-    })(tree);
+    }
   }
 
   static source(source: ShotSource): string {
-    return (($s) => {
+    {
+      let $s = source;
+
       if ($s instanceof ShotSource.Fresh) {
         return "fresh";
       }
@@ -107,11 +117,13 @@ export class Describer {
       }
 
       throw new SwitchExpressionException($s);
-    })(source);
+    }
   }
 
   static generic<TStatus extends JobStatus>(status: TStatus): string {
-    return (($s) => {
+    {
+      let $s = status;
+
       if ($s instanceof Queued) {
         return "queued";
       }
@@ -125,7 +137,7 @@ export class Describer {
       }
 
       throw new SwitchExpressionException($s);
-    })(status);
+    }
   }
 
   static isFresh(value: Object): boolean {

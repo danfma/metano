@@ -600,6 +600,7 @@ public class JsonUnmirroredOptionTests
         );
 
         await Assert.That(diagnostics).Count().IsEqualTo(1);
+
         await Assert
             .That(diagnostics[0].Message)
             .StartsWith("'Box<T>.Size' has [JsonNumberHandling]");

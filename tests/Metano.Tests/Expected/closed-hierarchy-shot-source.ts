@@ -24,6 +24,16 @@ export abstract class ShotSource {
   with(overrides?: Partial<ShotSource>): ShotSource {
     return copyRecordWith<ShotSource>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return "";
+  }
+
+  toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `ShotSource { ${members} }` : "ShotSource { }";
+  }
 }
 
 export declare namespace ShotSource {
@@ -51,6 +61,16 @@ class ShotSource$Fresh extends ShotSource {
   override with(overrides?: Partial<ShotSource$Fresh>): ShotSource$Fresh {
     return copyRecordWith<ShotSource$Fresh>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    return super.$printMembers?.() ?? "";
+  }
+
+  override toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `Fresh { ${members} }` : "Fresh { }";
+  }
 }
 
 class ShotSource$Reused extends ShotSource {
@@ -72,5 +92,15 @@ class ShotSource$Reused extends ShotSource {
 
   override with(overrides?: Partial<ShotSource$Reused>): ShotSource$Reused {
     return copyRecordWith<ShotSource$Reused>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}From = ${this.from}`;
+  }
+
+  override toString(): string {
+    return `Reused { ${this.$printMembers()} }`;
   }
 }
