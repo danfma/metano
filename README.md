@@ -189,8 +189,9 @@ dotnet metano-typescript -p path/to/YourProject.csproj -o path/to/output/src --c
 ```
 
 The generated `package.json` lists an opt-in `source` condition first in every
-`exports` / `imports` entry, so a Vite dev server or TypeScript project can read
-the generated `.ts` files without building `dist` first (Vite
+`exports` entry (and `imports` entry, written only with `--import-alias`), so a
+Vite dev server or TypeScript project can read the generated `.ts` files
+without building `dist` first (Vite
 `resolve: { conditions: ["source", ...defaultClientConditions] }`, TypeScript
 `"customConditions": ["source"]`). Default resolution keeps using `dist`.
 
@@ -230,6 +231,25 @@ Dart package). A global `MetanoCompilerProject`, `MetanoExtraArgs` or
 form when you enable more than one. Two targets resolving to the same output
 directory fail with `METANOBUILD002`. Install each target's tool in a
 committed `.config/dotnet-tools.json` and run `dotnet tool restore`.
+
+### 3.x: import specifiers
+
+Generated files now import each other by relative `.js` specifiers
+(`./issue-id.js`, `../shared-kernel/user-id.js`) instead of `./issue-id` and
+`#/…/user-id` (spec 004 Amendment A1, #573). The output loads under plain Node
+ESM (22, 24, 26), Bun, TypeScript `nodenext` / `bundler` and Vite with no
+tsconfig `paths`, no resolve hook and no `package.json#imports`.
+
+- Regenerate. No tsconfig change is needed; drop any Node resolve hook you
+  added for the extensionless specifiers.
+- New packages no longer get `#` / `#/*` entries in `package.json#imports`.
+  Existing entries are never deleted, so hand-written code that imports
+  generated files through `#/…` keeps working where it worked before (with
+  tsconfig `paths` under Bun, which rejects `#/` keys). To get a Node-valid
+  shortcut instead, set `--import-alias <name>` (`MetanoImportAlias`): it
+  writes `#<name>/*` with a `bun` condition before `import`.
+- Webpack needs `resolve.extensionAlias` (`".js": [".ts", ".js"]`) and Jest a
+  `moduleNameMapper` to map the `.js` specifiers to the `.ts` sources.
 
 For the experimental Dart backend:
 

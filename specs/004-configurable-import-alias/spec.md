@@ -261,8 +261,10 @@ The isolated alias of this spec moved the problem but did not remove it.
   target; a static initializer read across namespaces (load order); a type-only import.
 - The Node resolve hooks (`targets/js/sample-issue-tracker/test/node/extensionless-imports.ts`,
   `tests/Conformance/tools/node-extensionless.mjs`) are deleted.
-- Packaging smoke (extends spec 007's script): pack `sample-todo` + `sample-todo-service`,
-  then run Node 22/24/26 and tsgo `nodenext` (`skipLibCheck: false`) against the tarballs.
+- Packaging smoke (`scripts/smoke-test-generated-package.sh`, the generated-code sibling
+  of spec 007's runtime script): pack `sample-todo` + `sample-todo-service`, then run
+  Node 22/24/26 and tsgo `nodenext` (`skipLibCheck: false`) against the tarballs. CI runs
+  it, with the runtime smoke, in a Node 22/24/26 matrix.
 
 ### Slice plan
 

@@ -46,4 +46,4 @@ Adopt **Option A — full-namespace layout** for the TypeScript target, plus sel
 - Supersedes the longest-common-prefix layout behavior.
 - Adjusts **ADR-0006 (namespace-first barrel imports)**: barrels remain the *external* import contract, but *internal* generated-to-generated references now resolve to files directly (D3).
 - Builds on **ADR-0021 (incremental cache)**: the cache `OutputHashes` becomes the manifest that drives orphan reconciliation.
-- Composes with the configurable import-alias feature (spec 004): the alias still maps to the output root; subpaths under it are now full-namespace.
+- Composes with the configurable import-alias feature (spec 004): the alias still maps to the output root; subpaths under it are now full-namespace. Since spec 004 Amendment A1 (#573) generated code imports files by relative `.js` specifiers and the alias only names the opt-in `imports` entries.

@@ -447,11 +447,11 @@ builds a directed graph of `importer → imported` edges using the generated
 `currentlyVisiting` stack to detect back-edges. Each distinct cycle is
 reported once as an `MS0005` warning.
 
-The detector recognizes:
-
-- `#` (root barrel import)
-- `#/foo/bar` (subpath barrel import)
-- `./foo` (relative file import, resolved against the importer's directory)
+Edges come from the structured `TsLocalModule` file keys on each import
+(`demo/node`, `demo/shared/index`), not from the rendered specifier text, so
+the detector is independent of how `ModuleSpecifierRenderer` spells the path
+(relative `.js` since spec 004 Amendment A1). The `MS0005` chain shows those
+package-relative file keys.
 
 External imports (`metano-runtime`, `@js-temporal/polyfill`, etc.) are skipped.
 
@@ -462,8 +462,9 @@ merges) the `package.json` for the output directory. Reads cross-package
 dependencies from `TypeMappingContext.UsedCrossPackages` (populated as
 `BclExportTypeOverrides` + `IrTypeOriginResolver` resolve BCL and
 cross-package references), preserves user-written fields (name, scripts,
-dev deps) on re-runs, and emits `imports` and `exports` entries aligned
-with the generated file layout.
+dev deps) on re-runs, and emits `exports` entries aligned with the
+generated file layout (plus `imports` entries only with `--import-alias`;
+generated code imports its own files by relative `.js` specifiers).
 
 The writer is TypeScript-specific. The `metano-dart` CLI currently writes
 source files only.
