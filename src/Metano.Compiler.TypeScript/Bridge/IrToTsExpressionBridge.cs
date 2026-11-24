@@ -526,7 +526,7 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>The UTF-16 code units of <paramref name="text"/>, each a one-unit string: <c>text.split("")</c>.</summary>
-    internal static TsCallExpression CodeUnitsOf(TsExpression text) =>
+    private static TsCallExpression CodeUnitsOf(TsExpression text) =>
         new(new TsPropertyAccess(text, "split"), [new TsStringLiteral("")]);
 
     /// <summary>

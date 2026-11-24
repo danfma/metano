@@ -42,14 +42,12 @@ public static class IrToTsStatementBridge
         if (!fe.IsAwait && fe.CollectionType is IrCollectionTypeRef { Kind: IrCollectionKind.List })
             return MapListForEach(fe, context);
 
-        // C# `foreach (var x in xs) { … }` → TS `for (const x of xs) { … }`;
-        // `await foreach` → `for await (…)` (#625). A string walks its UTF-16
-        // code units, as C# does (#695): its own iterator yields code points.
-        var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
-
         if (fe.CollectionType is IrPrimitiveTypeRef { Primitive: IrPrimitive.String })
-            collection = IrToTsExpressionBridge.CodeUnitsOf(collection);
+            return MapStringForEach(fe, context);
 
+        // C# `foreach (var x in xs) { … }` → TS `for (const x of xs) { … }`;
+        // `await foreach` → `for await (…)` (#625).
+        var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
         var body = MapBody(fe.Body, context);
         var loopVariable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
         var loop = fe.IsAwait ? "for await" : "for";
@@ -116,6 +114,53 @@ public static class IrToTsStatementBridge
             $"    const {loopVariable} = {items}[{index}]!;"
         );
 
+        return new TsRawStatement(BlockWrappedLoop(header, body))
+        {
+            EmbeddedExpressions = [collection, throwModified],
+            EmbeddedScopes = [new TsEmbeddedScope([loopVariable], body)],
+        };
+    }
+
+    /// <summary>
+    /// <c>foreach</c> over a <c>string</c> (#695): C# walks its UTF-16 code
+    /// units, where a JS string's own iterator yields code points, so the
+    /// loop indexes the string, bound once as C# evaluates the collection
+    /// once. No array is built and no iterator is allocated. The element
+    /// read is asserted (<c>$s[$i]!</c>): the index is in range, which
+    /// <c>noUncheckedIndexedAccess</c> cannot see.
+    /// </summary>
+    private static TsStatement MapStringForEach(IrForEachStatement fe, IrToTsBridgeContext context)
+    {
+        var names = TsTemporaries.Reserve(context, ["$s", "$i"], out var bodyContext);
+        var (text, index) = (names[0], names[1]);
+
+        var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
+        var loopVariable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
+
+        var body = MapBody(fe.Body, bodyContext);
+
+        var header = string.Join(
+            "\n",
+            "{",
+            $"  const {text} = {PrintExpression(collection)};",
+            $"  for (let {index} = 0; {index} < {text}.length; {index}++) {{",
+            $"    const {loopVariable} = {text}[{index}]!;"
+        );
+
+        return new TsRawStatement(BlockWrappedLoop(header, body))
+        {
+            EmbeddedExpressions = [collection],
+            EmbeddedScopes = [new TsEmbeddedScope([loopVariable], body)],
+        };
+    }
+
+    /// <summary>
+    /// The text of a lowered loop opened by <paramref name="header"/> inside
+    /// its own block (<c>{ … for (…) {</c>): the body indented one more
+    /// level, then the loop and the block closed.
+    /// </summary>
+    private static string BlockWrappedLoop(string header, IReadOnlyList<TsStatement> body)
+    {
         var printedBody = RenderIndentedBody(body).TrimEnd('\n');
 
         var indentedBody = string.Join(
@@ -123,13 +168,7 @@ public static class IrToTsStatementBridge
             printedBody.Split('\n').Select(line => line.Length == 0 ? line : "  " + line)
         );
 
-        return new TsRawStatement(
-            (indentedBody.Length == 0 ? header : header + "\n" + indentedBody) + "\n  }\n}"
-        )
-        {
-            EmbeddedExpressions = [collection, throwModified],
-            EmbeddedScopes = [new TsEmbeddedScope([loopVariable], body)],
-        };
+        return (indentedBody.Length == 0 ? header : header + "\n" + indentedBody) + "\n  }\n}";
     }
 
     private static TsStatement MapFor(IrForStatement fs, IrToTsBridgeContext context)

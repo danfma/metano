@@ -612,4 +612,26 @@ describe("linq over a string", () => {
     expect(linq(text, count())).toBe(3);
     expect(linq(text, select((unit: string) => unit.charCodeAt(0)), last())).toBe(0xde00);
   });
+
+  test("reads the string lazily, without copying it into an array", () => {
+    const text = "\u{1F600}".repeat(1_000_000);
+    const split = String.prototype.split;
+    let splits = 0;
+
+    String.prototype.split = function (this: string, ...args: never[]) {
+      splits++;
+
+      return split.apply(this, args);
+    } as typeof split;
+
+    try {
+      expect(linq(text, first())).toBe("\ud83d");
+      expect(linq(text, any())).toBe(true);
+      expect(linq(text, take(2), count())).toBe(2);
+    } finally {
+      String.prototype.split = split;
+    }
+
+    expect(splits).toBe(0);
+  });
 });
