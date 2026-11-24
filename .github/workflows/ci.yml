@@ -143,3 +143,31 @@ jobs:
 
       - name: Biome check
         run: bunx biome check .
+
+  # Spec 004 Amendment A1 (FR-012, FR-015): the packed runtime and the packed
+  # generated packages (sample-todo + its cross-package consumer) load under
+  # plain Node ESM on every supported line, with no resolve hook.
+  node-smoke:
+    name: Node ${{ matrix.node }} packaging smoke
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22", "24", "26"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: metano-runtime packaging smoke test
+        run: bash scripts/smoke-test-runtime-package.sh
+
+      - name: Generated-package smoke test
+        run: bash scripts/smoke-test-generated-package.sh
