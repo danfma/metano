@@ -23,6 +23,7 @@ internal sealed class UnsupportedUnionRule(List<MetanoDiagnostic> diagnostics)
     : ITranspiledReferenceRule
 {
     private readonly List<MetanoDiagnostic> _diagnostics = diagnostics;
+
     private readonly HashSet<(SyntaxTree File, ISymbol Union)> _reported = new(
         new ReportKeyComparer()
     );
