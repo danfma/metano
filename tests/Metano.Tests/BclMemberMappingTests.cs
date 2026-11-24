@@ -49,12 +49,29 @@ public class BclMemberMappingTests
     [Arguments("IsSeparator", "charIsSeparator")]
     [Arguments("IsControl", "charIsControl")]
     [Arguments("IsWhiteSpace", "charIsWhiteSpace")]
+    [Arguments("IsAscii", "charIsAscii")]
+    [Arguments("IsAsciiDigit", "charIsAsciiDigit")]
+    [Arguments("IsAsciiLetter", "charIsAsciiLetter")]
+    [Arguments("IsAsciiLetterLower", "charIsAsciiLetterLower")]
+    [Arguments("IsAsciiLetterUpper", "charIsAsciiLetterUpper")]
+    [Arguments("IsAsciiLetterOrDigit", "charIsAsciiLetterOrDigit")]
+    [Arguments("IsAsciiHexDigit", "charIsAsciiHexDigit")]
+    [Arguments("IsAsciiHexDigitLower", "charIsAsciiHexDigitLower")]
+    [Arguments("IsAsciiHexDigitUpper", "charIsAsciiHexDigitUpper")]
     public async Task CharCategoryTest_LowersToItsRuntimeHelper(string method, string helper)
     {
         var output = Transpile($"public static bool Test(char c) => char.{method}(c);");
 
         await Assert.That(output).Contains($"return {helper}(c);");
         await Assert.That(output).Contains($"import {{ {helper} }} from \"metano-runtime\";");
+    }
+
+    [Test]
+    public async Task CharIsBetween_LowersToItsRuntimeHelper()
+    {
+        var output = Transpile("public static bool Test(char c) => char.IsBetween(c, 'a', 'f');");
+
+        await Assert.That(output).Contains("return charIsBetween(c, \"a\", \"f\");");
     }
 
     [Test]

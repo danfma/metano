@@ -1304,6 +1304,7 @@ an expression or a `metano-runtime` helper; an overload that is not listed stays
 | C# | TypeScript |
 |----|----|
 | `char.IsLetter(c)`, `IsDigit`, `IsLetterOrDigit`, `IsNumber`, `IsUpper`, `IsLower`, `IsPunctuation`, `IsSymbol`, `IsSeparator`, `IsControl`, `IsWhiteSpace` | `charIsLetter(c)` ... `charIsWhiteSpace(c)`: Unicode general categories as .NET reads them (the engine's Unicode version). The `(string, int)` overloads stay unmapped. |
+| `char.IsAscii(c)`, `IsAsciiDigit`, `IsAsciiLetter`, `IsAsciiLetterLower`, `IsAsciiLetterUpper`, `IsAsciiLetterOrDigit`, `IsAsciiHexDigit`, `IsAsciiHexDigitLower`, `IsAsciiHexDigitUpper`, `IsBetween(c, min, max)` | `charIsAscii(c)` ... `charIsBetween(c, min, max)`: code-unit comparisons, as .NET does. |
 | `BigInteger.Zero`, `One`, `MinusOne` | `0n`, `1n`, `BigInt(-1)` |
 | `b.IsZero`, `IsOne`, `IsEven` | `(b === 0n)`, `(b === 1n)`, `(b % 2n === 0n)` |
 | `Convert.ToDouble(x)` for `int`-sized integers, `double`, `float` | `x` |

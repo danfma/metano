@@ -72,3 +72,53 @@ export function charIsControl(c: string): boolean {
 export function charIsWhiteSpace(c: string): boolean {
   return WHITE_SPACE.test(c);
 }
+
+/** `char.IsAscii(c)`: a code unit below U+0080. */
+export function charIsAscii(c: string): boolean {
+  return c.charCodeAt(0) < 0x80;
+}
+
+/** `char.IsAsciiDigit(c)`: `0`-`9`. */
+export function charIsAsciiDigit(c: string): boolean {
+  return c >= "0" && c <= "9";
+}
+
+/** `char.IsAsciiLetterLower(c)`: `a`-`z`. */
+export function charIsAsciiLetterLower(c: string): boolean {
+  return c >= "a" && c <= "z";
+}
+
+/** `char.IsAsciiLetterUpper(c)`: `A`-`Z`. */
+export function charIsAsciiLetterUpper(c: string): boolean {
+  return c >= "A" && c <= "Z";
+}
+
+/** `char.IsAsciiLetter(c)`: `a`-`z` or `A`-`Z`. */
+export function charIsAsciiLetter(c: string): boolean {
+  return charIsAsciiLetterLower(c) || charIsAsciiLetterUpper(c);
+}
+
+/** `char.IsAsciiLetterOrDigit(c)`. */
+export function charIsAsciiLetterOrDigit(c: string): boolean {
+  return charIsAsciiLetter(c) || charIsAsciiDigit(c);
+}
+
+/** `char.IsAsciiHexDigitLower(c)`: `0`-`9` or `a`-`f`. */
+export function charIsAsciiHexDigitLower(c: string): boolean {
+  return charIsAsciiDigit(c) || (c >= "a" && c <= "f");
+}
+
+/** `char.IsAsciiHexDigitUpper(c)`: `0`-`9` or `A`-`F`. */
+export function charIsAsciiHexDigitUpper(c: string): boolean {
+  return charIsAsciiDigit(c) || (c >= "A" && c <= "F");
+}
+
+/** `char.IsAsciiHexDigit(c)`: `0`-`9`, `a`-`f` or `A`-`F`. */
+export function charIsAsciiHexDigit(c: string): boolean {
+  return charIsAsciiHexDigitLower(c) || charIsAsciiHexDigitUpper(c);
+}
+
+/** `char.IsBetween(c, min, max)`: `min <= c <= max` by code unit. */
+export function charIsBetween(c: string, min: string, max: string): boolean {
+  return c >= min && c <= max;
+}
