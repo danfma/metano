@@ -178,7 +178,7 @@ Declarative array-tuple / callable shapes + tuple deconstruction (no hand-writte
 
 ## Node-resolvable import specifiers (#573)
 
-Implemented. Generated internal imports are relative and `.js`-suffixed, so the output loads under plain Node ESM (22, 24, 26), Bun and TypeScript `nodenext` with no resolve hook, no tsconfig `paths` and no `package.json#imports`. `--import-alias` stays opt-in and writes a valid map (no bare `#`, `bun` condition first). Spec: [specs/004-configurable-import-alias/ Amendment A1](../../004-configurable-import-alias/spec.md) (FR-011–FR-017; FR-016 is a future extension option).
+Implemented. Generated internal imports are relative and `.js`-suffixed, so the output loads under plain Node ESM (22, 24, 26), Bun and TypeScript `nodenext` with no resolve hook, no tsconfig `paths` and no `package.json#imports`. `--import-alias` stays opt-in and writes a valid map (no bare `#`, a `bun` condition before `import`). Spec: [specs/004-configurable-import-alias/ Amendment A1](../../004-configurable-import-alias/spec.md) (FR-011–FR-017; FR-016 is a future extension option).
 
 | Area | Feature | Target | Status | Code area | Test | Notes |
 | --- | --- | --- | --- | --- | --- | --- |

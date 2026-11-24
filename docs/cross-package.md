@@ -347,14 +347,16 @@ with `-p:`) may not re-run the transpile target, whose inputs are the compile
 items and the project file. Touch the `.csproj` or delete the output
 directory's `.metano-stamp` after changing it.
 
-Two requirements of this layout:
+Requirements of this layout:
 
-- **Relative `.js` imports between the generated sources.** They import each
-  other by relative `.js` specifiers (spec 004 Amendment A1), which TypeScript
-  maps to the `.ts` files under `bundler` and `nodenext` alike. The TypeScript
-  6.0 minimum this layout once had came from the earlier `#/...` subpath
-  imports (5.9.3 reported `TS2307` on them) and no longer applies to the
-  generated code.
+- **TypeScript 6.0 or newer.** The consumer type-checks the generated `.ts`
+  sources with its own TypeScript. TypeScript 5.9.3 rejects generated generic
+  code in the sample-issue-tracker sources (`TS2322`: `OperationResult<null>` is
+  not assignable to `OperationResult<T>`); 6.0.3 accepts it. The generated
+  sources import each other by relative `.js` specifiers (spec 004 Amendment
+  A1), which every TypeScript version maps to the `.ts` files under `bundler`
+  and `nodenext`, so the `TS2307` that 5.9.3 once reported on the old `#/...`
+  imports no longer occurs.
 - **A fresh-clone order**, described above: `dotnet build` first, then
   `bun install`.
 - **Every consumer needs the condition.** The generated `exports` have no
