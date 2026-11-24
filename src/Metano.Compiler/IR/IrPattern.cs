@@ -48,7 +48,14 @@ public sealed record IrConstantPattern(IrExpression Value) : IrPattern
 /// </summary>
 /// <param name="Name">The local's name.</param>
 /// <param name="Type">The local's declared type.</param>
-public sealed record IrPatternDesignator(string Name, IrTypeRef Type);
+public sealed record IrPatternDesignator(string Name, IrTypeRef Type)
+{
+    /// <summary>
+    /// The extraction made this local up to capture a subject it must read
+    /// once (<c>$subject0</c>); the C# source declares no such variable.
+    /// </summary>
+    public bool IsSynthesized { get; init; }
+}
 
 /// <summary>Type pattern: <c>x is Foo</c> / <c>x is Foo f</c>.
 /// When <see cref="Designator"/> is non-null the match also binds the value

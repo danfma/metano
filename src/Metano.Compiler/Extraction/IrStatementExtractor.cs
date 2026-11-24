@@ -631,13 +631,15 @@ public sealed class IrStatementExtractor(
     /// The clause's <c>when (…)</c> condition. A filter no target can place
     /// (it declares a variable or passes an <c>out</c> argument) extracts to
     /// the unsupported placeholder; the reporter then decides what MS0001 says
-    /// for the target, for the clauses a chain keeps.
+    /// for the target, for the clauses a chain keeps. A subject capture the
+    /// extraction synthesized is not such a variable: the statement lowering
+    /// declares it ahead of the <c>try</c>, in the enclosing function.
     /// </summary>
     private IrExpression ExtractCatchFilter(CatchFilterClauseSyntax filter)
     {
         var condition = _expressions.Extract(filter.FilterExpression);
 
-        return ExpressionVariableLowering.DeclaresExpressionVariables(condition)
+        return ExpressionVariableLowering.DeclaresSourceVariables(condition)
             ? new IrUnsupportedExpression(UnsupportedCatchClauseReporter.FilterVariablesKind)
             : condition;
     }

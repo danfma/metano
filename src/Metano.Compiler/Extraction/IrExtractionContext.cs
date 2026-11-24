@@ -72,6 +72,15 @@ public sealed record IrExtractionContext(
     internal bool KeepsReflectionSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
+    /// Whether the target can assign a local inside a test expression and go
+    /// on testing (an assignment in a comma expression:
+    /// <c>($subject0 = next(), true) &amp;&amp; …</c>), so a pattern that binds
+    /// nothing can capture a subject it reads more than once in a synthesized
+    /// designator (#735). Dart has no such form and keeps the uncaptured one.
+    /// </summary>
+    internal bool HasAssignmentInTestForm => Target != Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
     /// Whether the target's BCL collections are its native ones (Dart until
     /// spec 011 FR-038, D28): such a target gets the pre-011c lowering of every
     /// collection construct (the 2.x element-access reads, writes and

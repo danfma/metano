@@ -1,5 +1,7 @@
 export function second(pair: [string, number]): number {
-  return (($s) => {
+  {
+    let $s = pair;
+
     if ($s != null && $s[0] === "a") {
       const n = $s[1];
 
@@ -7,5 +9,5 @@ export function second(pair: [string, number]): number {
     }
 
     return 0;
-  })(pair);
+  }
 }

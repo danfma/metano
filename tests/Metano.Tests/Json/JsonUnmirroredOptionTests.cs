@@ -204,6 +204,130 @@ public class JsonUnmirroredOptionTests
         );
     }
 
+    // The built-in converter over a [StringEnum] writes the member names the
+    // descriptor writes (#734), so nothing diverges on the wire.
+    [Test]
+    [Arguments("JsonStringEnumConverter")]
+    [Arguments("JsonStringEnumConverter<Mood>")]
+    public async Task BuiltinStringEnumConverterOnAStringEnum_IsNotReported(string converter)
+    {
+        var diagnostics = UnmirroredOf(
+            $$"""
+            [Transpile, StringEnum]
+            [JsonConverter(typeof({{converter}}))]
+            public enum Mood { Calm, Loud }
+
+            [Transpile]
+            public sealed record Song(string Title, List<Mood> Moods);
+
+            [Transpile]
+            [JsonSerializable(typeof(Song))]
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task BuiltinStringEnumConverterOnAStringEnumMember_IsNotReported()
+    {
+        var diagnostics = UnmirroredOf(
+            """
+            [Transpile, StringEnum]
+            public enum Mood { Calm, Loud }
+
+            [Transpile]
+            public sealed class Song
+            {
+                [JsonConverter(typeof(JsonStringEnumConverter))]
+                public Mood? Mood { get; set; }
+            }
+
+            [Transpile]
+            [JsonSerializable(typeof(Song))]
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    // A numeric enum's descriptor writes numbers, the converter names.
+    [Test]
+    public async Task BuiltinStringEnumConverterOnANumericEnum_IsStillReported()
+    {
+        await AssertSingleWarning(
+            """
+            [Transpile]
+            [JsonConverter(typeof(JsonStringEnumConverter))]
+            public enum Mood { Calm, Loud }
+
+            [Transpile]
+            public sealed record Song(string Title, Mood Mood);
+
+            [Transpile]
+            [JsonSerializable(typeof(Song))]
+            """,
+            "'Mood' has [JsonConverter]: the TypeScript context converts it with its built-in "
+                + "descriptor, without the custom converter.",
+            "JsonConverter(typeof(JsonStringEnumConverter))"
+        );
+    }
+
+    // A member renamed on one side only writes different text on each side:
+    // [JsonStringEnumMemberName] renames what STJ writes, [Name] what the
+    // descriptor writes.
+    [Test]
+    [Arguments("[JsonStringEnumMemberName(\"calm-x\")]")]
+    [Arguments("[Name(\"calm\")]")]
+    public async Task BuiltinStringEnumConverterOnARenamedStringEnumMember_IsStillReported(
+        string rename
+    )
+    {
+        await AssertSingleWarning(
+            $$"""
+            [Transpile, StringEnum]
+            [JsonConverter(typeof(JsonStringEnumConverter))]
+            public enum Mood { {{rename}} Calm, Loud }
+
+            [Transpile]
+            public sealed record Song(string Title, Mood Mood);
+
+            [Transpile]
+            [JsonSerializable(typeof(Song))]
+            """,
+            "'Mood' has [JsonConverter]: the TypeScript context converts it with its built-in "
+                + "descriptor, without the custom converter.",
+            "JsonConverter(typeof(JsonStringEnumConverter))"
+        );
+    }
+
+    // A subclass can fix a naming policy the descriptor does not apply.
+    [Test]
+    public async Task StringEnumConverterSubclassOnAStringEnum_IsStillReported()
+    {
+        await AssertSingleWarning(
+            """
+            public sealed class CamelMood : JsonStringEnumConverter
+            {
+                public CamelMood() : base(JsonNamingPolicy.CamelCase) { }
+            }
+
+            [Transpile, StringEnum]
+            [JsonConverter(typeof(CamelMood))]
+            public enum Mood { Calm, Loud }
+
+            [Transpile]
+            public sealed record Song(string Title, Mood Mood);
+
+            [Transpile]
+            [JsonSerializable(typeof(Song))]
+            """,
+            "'Mood' has [JsonConverter]: the TypeScript context converts it with its built-in "
+                + "descriptor, without the custom converter.",
+            "JsonConverter(typeof(CamelMood))"
+        );
+    }
+
     // A [Branded] type's descriptor writes the wrapped value, as the
     // converters such types carry do (DECIDED-25).
     [Test]

@@ -543,6 +543,17 @@ internal sealed partial class ExpressionVariableLowering
     internal static bool DeclaresExpressionVariables(IrExpression expression) =>
         ContainsOutArgumentCall(expression) || IrPatternDesignators.DeclaredIn(expression).Any();
 
+    /// <summary>
+    /// Whether <paramref name="expression"/> declares a variable the C# source
+    /// names: it makes an out-argument call or an <c>is</c> pattern in it
+    /// declares a designator, outside nested lambdas. A subject capture the
+    /// extraction synthesized (<see cref="IrPatternDesignator.IsSynthesized"/>)
+    /// does not count.
+    /// </summary>
+    internal static bool DeclaresSourceVariables(IrExpression expression) =>
+        ContainsOutArgumentCall(expression)
+        || IrPatternDesignators.DeclaredIn(expression).Any(designator => !designator.IsSynthesized);
+
     private static bool ContainsOutArgumentCall(IrExpression expression) =>
         OutCallsIn(expression).Any();
 

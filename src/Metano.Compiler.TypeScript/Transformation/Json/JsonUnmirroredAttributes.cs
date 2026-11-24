@@ -18,7 +18,8 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// <c>[JsonConverter]</c> on a <c>[Branded]</c> / <c>[InlineWrapper]</c> type,
 /// whose descriptor writes the wrapped value as such converters do.
 /// <c>[JsonStringEnumMemberName]</c> only matters under a string enum
-/// converter, which is itself reported. The C# <c>required</c> modifier on a
+/// converter, which is itself reported unless it is the built-in one over a
+/// <c>[StringEnum]</c> (<see cref="BuiltinStringEnumConverter"/>). The C# <c>required</c> modifier on a
 /// nullable member is reported like <c>[JsonRequired]</c>.
 /// </summary>
 internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
@@ -123,12 +124,7 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
                     + "properties of the object and collects unmapped ones into it, the "
                     + "TypeScript context leaves it out."
             ),
-            AttributeWarningOf(
-                member,
-                JsonSerializationAttributes.Converter,
-                $"'{name}' has [JsonConverter]: the TypeScript context converts it as its type, "
-                    + "without the custom converter."
-            ),
+            MemberConverterWarningOf(member, name),
             AttributeWarningOf(
                 member,
                 JsonSerializationAttributes.NumberHandling,
@@ -333,13 +329,45 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
     private static MetanoDiagnostic? TypeConverterWarningOf(INamedTypeSymbol type) =>
         SymbolHelper.HasBranded(type)
             ? null
-            : AttributeWarningOf(
+            : ConverterWarningOf(
                 type,
-                JsonSerializationAttributes.Converter,
+                type,
                 $"'{UnmirroredJsonWarning.TypeName(type)}' has [JsonConverter]: the TypeScript "
                     + "context converts it with its built-in descriptor, without the custom "
                     + "converter."
             );
+
+    private static MetanoDiagnostic? MemberConverterWarningOf(ISymbol member, string name) =>
+        ConverterWarningOf(
+            member,
+            SerializedTypeOf(member),
+            $"'{name}' has [JsonConverter]: the TypeScript context converts it as its type, "
+                + "without the custom converter."
+        );
+
+    /// <summary>
+    /// The <c>[JsonConverter]</c> warning of <paramref name="symbol"/>, none
+    /// when the converter is the built-in string-enum one over a
+    /// <c>[StringEnum]</c> (see <see cref="BuiltinStringEnumConverter"/>).
+    /// </summary>
+    private static MetanoDiagnostic? ConverterWarningOf(
+        ISymbol symbol,
+        ITypeSymbol? target,
+        string message
+    ) =>
+        JsonSerializationAttributes.Find(symbol, JsonSerializationAttributes.Converter)
+            is { } attribute
+        && !(target is not null && BuiltinStringEnumConverter.Matches(attribute, target))
+            ? UnmirroredJsonWarning.Create(message, UnmirroredJsonWarning.At(attribute))
+            : null;
+
+    private static ITypeSymbol? SerializedTypeOf(ISymbol member) =>
+        member switch
+        {
+            IPropertySymbol property => property.Type,
+            IFieldSymbol field => field.Type,
+            _ => null,
+        };
 
     /// <summary>
     /// Every type a descriptor of the context names: the entries, and each

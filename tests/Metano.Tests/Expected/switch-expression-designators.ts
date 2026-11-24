@@ -8,7 +8,9 @@ export class ClipDescription {
   constructor() { }
 
   static of(clip: Clip): string {
-    return (($s) => {
+    {
+      let $s = clip;
+
       if ($s instanceof ImageClip) {
         const image = $s;
 
@@ -22,6 +24,6 @@ export class ClipDescription {
       }
 
       throw new ArgumentOutOfRangeException("clip");
-    })(clip);
+    }
   }
 }

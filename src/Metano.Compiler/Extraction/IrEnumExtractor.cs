@@ -25,12 +25,13 @@ public static class IrEnumExtractor
             if (!member.HasConstantValue)
                 continue;
 
-            var nameOverride = SymbolHelper.GetNameOverride(member);
             var attributes = IrAttributeExtractor.Extract(member);
 
             // For string enums, the "value" is the name override or the member name.
             // For numeric enums, the value is the constant numeric value.
-            object? value = isStringEnum ? (nameOverride ?? member.Name) : member.ConstantValue;
+            object? value = isStringEnum
+                ? SymbolHelper.StringEnumValueOf(member)
+                : member.ConstantValue;
 
             members.Add(new IrEnumMember(member.Name, value, attributes));
         }
