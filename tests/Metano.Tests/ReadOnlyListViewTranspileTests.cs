@@ -465,7 +465,7 @@ public class ReadOnlyListViewTranspileTests
 
         const string expected = """
             import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-            import { ReadOnlyJsArrayBag } from "./read-only-js-array-bag";
+            import { ReadOnlyJsArrayBag } from "./read-only-js-array-bag.js";
 
             export class ReadOnlyJsArrayBagContext extends SerializerContext {
               private static readonly _default = /* @__PURE__ */ new ReadOnlyJsArrayBagContext() as ReadOnlyJsArrayBagContext;
