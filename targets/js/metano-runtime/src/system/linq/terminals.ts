@@ -620,8 +620,9 @@ export function contains<T>(
     value,
     comparer,
     apply: (source) => {
-      // A primitive other than NaN is equal to exactly what `===` says, with no comparer.
-      if (!comparer && (typeof value !== "object" || value === null) && !Number.isNaN(value)) {
+      // A primitive other than NaN is equal to exactly what `===` says, with no comparer. `null`
+      // is left out: generated code can hold `undefined` where C# has null.
+      if (!comparer && value != null && typeof value !== "object" && !Number.isNaN(value)) {
         for (const element of source) if (element === value) return true;
         return false;
       }

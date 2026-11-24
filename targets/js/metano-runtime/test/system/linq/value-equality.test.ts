@@ -54,6 +54,14 @@ describe("contains", () => {
     expect(linq([new Decimal("1.5")], contains(new Decimal("1.50")))).toBe(true);
   });
 
+  test("finds null where a missing field reads undefined", () => {
+    const notes = [{ name: "a" }].map((dto) => (dto as { note?: string | null }).note);
+
+    expect(linq(notes, contains(null))).toBe(true);
+    expect(linq(notes, contains("x"))).toBe(false);
+    expect(linq([null], contains(null))).toBe(true);
+  });
+
   test("keeps reference equality for a class without value equality", () => {
     const first = new Plain(1);
 

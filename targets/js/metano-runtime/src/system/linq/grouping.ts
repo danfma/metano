@@ -31,18 +31,12 @@ export function bucketsOf<T, K, V = T>(
 ): HashCore<K, V[]> {
   const buckets = new HashCore<K, V[]>(nullSafe(comparer));
 
-  if (elementSelector === undefined && !skipNullKeys) {
-    return comparer === null || comparer === undefined
-      ? (bucketByDefault(
-          source,
-          keySelector,
-          buckets as unknown as HashCore<K, T[]>,
-        ) as unknown as HashCore<K, V[]>)
-      : (bucketAll(
-          source,
-          keySelector,
-          buckets as unknown as HashCore<K, T[]>,
-        ) as unknown as HashCore<K, V[]>);
+  if (elementSelector === undefined && !skipNullKeys && comparer) {
+    return bucketAll(
+      source,
+      keySelector,
+      buckets as unknown as HashCore<K, T[]>,
+    ) as unknown as HashCore<K, V[]>;
   }
 
   for (const item of source) {
@@ -68,38 +62,6 @@ function bucketAll<T, K>(
 ): HashCore<K, T[]> {
   for (const item of source) {
     buckets.append(keySelector(item), item);
-  }
-
-  return buckets;
-}
-
-/**
- * The elements bucketed under `EqualityComparer<K>.Default`: a key that is a primitive is its
- * own `Map` key, so it goes straight to the entries; any other key takes the core's own path.
- */
-function bucketByDefault<T, K>(
-  source: Iterable<T>,
-  keySelector: (item: T) => K,
-  buckets: HashCore<K, T[]>,
-): HashCore<K, T[]> {
-  const entries = buckets._entries;
-
-  for (const item of source) {
-    const key = keySelector(item);
-
-    if (typeof key === "object" && key !== null) {
-      buckets.append(key, item);
-
-      continue;
-    }
-
-    const bucket = entries.get(key);
-
-    if (bucket === undefined) {
-      entries.set(key, [item]);
-    } else {
-      bucket.push(item);
-    }
   }
 
   return buckets;

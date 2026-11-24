@@ -1,3 +1,5 @@
+using Metano.Annotations;
+
 namespace Conformance;
 
 public class SePlain
@@ -18,6 +20,9 @@ public class SeEq
     public override int GetHashCode() => V;
 }
 
+[PlainObject]
+public record SeNote(string Name, string? Note = null);
+
 public sealed class SeLengthComparer : IEqualityComparer<string?>
 {
     public bool Equals(string? x, string? y) => x == y;
@@ -32,6 +37,8 @@ public sealed class SeLengthComparer : IEqualityComparer<string?>
 /// </summary>
 public static class SearchEqualityProbes
 {
+    static int _reads;
+
     static string B(params bool[] values) => string.Join(",", values);
 
     // The pipe form has no `lookup[key]` (MS0001): read a group by its key instead.
@@ -55,6 +62,13 @@ public static class SearchEqualityProbes
             e.Contains(new(1)),
             r.Contains(new("a", 2))
         );
+    }
+
+    public static string ContainsNullFromMissingField()
+    {
+        IEnumerable<string?> notes = new List<SeNote> { new("a") }.Select(d => d.Note);
+
+        return B(notes.Contains(null), notes.Contains("x"));
     }
 
     public static string ContainsNumbers()
@@ -211,8 +225,6 @@ public static class SearchEqualityProbes
 
         return string.Join(",", byValue) + "|" + string.Join(",", byLength);
     }
-
-    static int _reads;
 
     static IEnumerable<int> Counted(int count)
     {
