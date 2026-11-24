@@ -185,4 +185,17 @@ public static class RoslynTypeQueries
             || fullName.StartsWith("System.Collections.Generic.Queue")
             || fullName.StartsWith("System.Collections.Generic.Stack");
     }
+
+    /// <summary>
+    /// True when <paramref name="type"/> is a C# 15 <c>closed</c> class, or a type
+    /// parameter constrained to one: the shapes for which C# proves a switch
+    /// exhaustive once every direct subtype has an arm (spec 010 FR-C2).
+    /// </summary>
+    public static bool IsClosedHierarchy(ITypeSymbol? type) =>
+        type switch
+        {
+            INamedTypeSymbol named => named.IsClosed,
+            ITypeParameterSymbol parameter => parameter.ConstraintTypes.Any(IsClosedHierarchy),
+            _ => false,
+        };
 }

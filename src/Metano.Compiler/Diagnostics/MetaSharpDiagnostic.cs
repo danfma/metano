@@ -380,6 +380,13 @@ public static class DiagnosticCodes
     /// #268).</summary>
     public const string UnmirroredJsonOption = "MS0037";
 
+    /// <summary>MS0038 — a C# 15 union the run would transpile. Interim reason only
+    /// (spec 010 FR-012a, decision W7-2): every union type (a <c>union</c> declaration
+    /// or a hand-written <c>[Union]</c> type) is rejected at its declaration until the
+    /// union slices land, because the struct path would emit an empty wrapper. An
+    /// error; the run writes no output.</summary>
+    public const string UnsupportedUnionShape = "MS0038";
+
     /// <summary>MS0044 — without <c>--package-root</c>, the TypeScript CLI found no
     /// <c>package.json</c> inside the output's workspace, and the default root (the
     /// parent of the output directory) lies outside it. An error: the generated files

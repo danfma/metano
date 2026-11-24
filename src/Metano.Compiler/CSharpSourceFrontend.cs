@@ -197,6 +197,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             );
 
             ValidateJsxRenderablePositions(compilation, assemblyWideTranspile, target, diagnostics);
+
+            UnionDeclarationValidator.Validate(
+                compilation,
+                assemblyWideTranspile,
+                target,
+                diagnostics
+            );
         }
 
         var packageInfo = compilation is null
