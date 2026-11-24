@@ -27,6 +27,7 @@
 2. The tested type is a non-transpilable class with no runtime class (`[External]` without a constructor, a BCL type outside FR-013 / FR-001 / the temporal set), including a BCL exception outside FR-013's list at a `catch` / `is` / `as` site (FR-014: no widening to `Exception`). *Implemented for the BCL exceptions by #651* (`Extraction/ExceptionRuntimeClassReporter.cs`, through the `IrExtractionContext.HasExceptionRuntimeClass` port; also at a type pattern and a switch arm); the other cases still report MS0001.
 3. A `[PlainObject]` for which `TypeGuardBuilder` produces no guard.
 4. An interface from a referenced package whose descriptor the package did not emit (OD-6 (b) only).
+5. *(Folded from spec 010 `MS0040` by decision W7-2.)* An untestable C# 15 union case: a delegate, an `Iterable<T>` sequence, a non-transpilable class, a structural case with no possible guard, or a type parameter still open at the test site (spec 010 FR-014). Not implemented until the spec 010 union slices land.
 
 Example: `'o is Action<int>' cannot be lowered: delegates have no runtime type test in TypeScript (spec 011 FR-021).`
 
@@ -38,6 +39,7 @@ Example: `'o is Action<int>' cannot be lowered: delegates have no runtime type t
 **MS0047 — PlainObjectShapeOverlap** (Warning).
 
 1. Another `[PlainObject]` type assignable to the tested expression's static type covers the tested type (009 FR-019 rule 3 relation). The message names both types, the shared members and that the guard answers structurally.
+2. *(Folded from spec 010 `MS0039` by decision W7-2.)* Two cases of a C# 15 union have overlapping erased JS value domains (spec 010 FR-013); the output is emitted and the first matching arm or case wins (FR-040). Reported at the union declaration, or at the first reference of a constructed generic instance. Not implemented until the spec 010 union slices land.
 
 Example: `'o is UserDto' is structural: 'NamedDto' { Name, Age } also satisfies the shape { Name }, so a NamedDto value tests as UserDto.`
 
