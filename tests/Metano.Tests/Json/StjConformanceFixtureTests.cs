@@ -757,6 +757,15 @@ public class StjConformanceFixtureTests
                 () => Heat.Warm,
                 async value => await Assert.That(value).IsEqualTo(Heat.Warm)
             ),
+            // A member renamed on one side only keeps the converter reported.
+            ["V14d"] = Roundtrip(
+                () => Mood.Calm,
+                async value => await Assert.That(value).IsEqualTo(Mood.Calm)
+            ),
+            ["V14e"] = Roundtrip(
+                () => Tone.Mild,
+                async value => await Assert.That(value).IsEqualTo(Tone.Mild)
+            ),
             ["V15"] = Roundtrip(
                 () => new HashSet<string> { "a", "b" },
                 async value => await Assert.That(((HashSet<string>)value!).Count).IsEqualTo(2)

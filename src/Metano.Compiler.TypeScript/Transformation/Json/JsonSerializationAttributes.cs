@@ -37,6 +37,8 @@ internal static class JsonSerializationAttributes
 
     public const string SourceGenerationOptions = "JsonSourceGenerationOptionsAttribute";
 
+    public const string StringEnumMemberName = "JsonStringEnumMemberNameAttribute";
+
     public const string UnmappedMemberHandling = "JsonUnmappedMemberHandlingAttribute";
 
     private const string IgnoreShortName = "JsonIgnore";

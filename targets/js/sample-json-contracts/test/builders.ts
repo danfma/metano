@@ -36,6 +36,7 @@ import { IS } from "#/sample-json-contracts/is";
 import { Level } from "#/sample-json-contracts/level";
 import { LevelMapHolder } from "#/sample-json-contracts/level-map-holder";
 import { MixedClass } from "#/sample-json-contracts/mixed-class";
+import { Mood } from "#/sample-json-contracts/mood";
 import { NLeaf } from "#/sample-json-contracts/n-leaf";
 import { NMid } from "#/sample-json-contracts/n-mid";
 import { Nums } from "#/sample-json-contracts/nums";
@@ -57,6 +58,7 @@ import { SqB } from "#/sample-json-contracts/sq-b";
 import { Stats } from "#/sample-json-contracts/stats";
 import { Timeline } from "#/sample-json-contracts/timeline";
 import { Title } from "#/sample-json-contracts/title";
+import { Tone } from "#/sample-json-contracts/tone";
 import { UBaseX } from "#/sample-json-contracts/u-base-x";
 import { UFailX } from "#/sample-json-contracts/u-fail-x";
 import { UNearA } from "#/sample-json-contracts/u-near-a";
@@ -455,6 +457,8 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   V14: { build: () => Flavor.Sweet, assertRead: (value) => expect(value).toBe("Sweet") },
   V14b: { build: () => Spice.Hot, assertRead: (value) => expect(value).toBe("Hot") },
   V14c: { build: () => Heat.Warm, assertRead: (value) => expect(value).toBe(1) },
+  V14d: { build: () => Mood.Calm, assertRead: (value) => expect(value).toBe("Calm") },
+  V14e: { build: () => Tone.Mild, assertRead: (value) => expect(value).toBe("mild") },
   V15: {
     build: () => HashSet.of(["a", "b"]),
     assertRead: (value) => {

@@ -273,6 +273,34 @@ public class JsonUnmirroredOptionTests
         );
     }
 
+    // A member renamed on one side only writes different text on each side:
+    // [JsonStringEnumMemberName] renames what STJ writes, [Name] what the
+    // descriptor writes.
+    [Test]
+    [Arguments("[JsonStringEnumMemberName(\"calm-x\")]")]
+    [Arguments("[Name(\"calm\")]")]
+    public async Task BuiltinStringEnumConverterOnARenamedStringEnumMember_IsStillReported(
+        string rename
+    )
+    {
+        await AssertSingleWarning(
+            $$"""
+            [Transpile, StringEnum]
+            [JsonConverter(typeof(JsonStringEnumConverter))]
+            public enum Mood { {{rename}} Calm, Loud }
+
+            [Transpile]
+            public sealed record Song(string Title, Mood Mood);
+
+            [Transpile]
+            [JsonSerializable(typeof(Song))]
+            """,
+            "'Mood' has [JsonConverter]: the TypeScript context converts it with its built-in "
+                + "descriptor, without the custom converter.",
+            "JsonConverter(typeof(JsonStringEnumConverter))"
+        );
+    }
+
     // A subclass can fix a naming policy the descriptor does not apply.
     [Test]
     public async Task StringEnumConverterSubclassOnAStringEnum_IsStillReported()

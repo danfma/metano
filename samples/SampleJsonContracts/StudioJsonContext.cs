@@ -73,6 +73,8 @@ namespace SampleJsonContracts;
 [JsonSerializable(typeof(Flavor))]
 [JsonSerializable(typeof(Spice))]
 [JsonSerializable(typeof(Heat))]
+[JsonSerializable(typeof(Mood))]
+[JsonSerializable(typeof(Tone))]
 [JsonSerializable(typeof(Perms))]
 [JsonSerializable(typeof(Tiny))]
 [JsonSerializable(typeof(Dashboard))]

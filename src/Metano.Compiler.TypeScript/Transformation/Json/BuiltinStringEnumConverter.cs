@@ -12,8 +12,11 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// descriptor reads only the exact names, while the converter also reads a
 /// name in another case, an integer and a comma-separated list: a payload
 /// the descriptor writes always reads on both sides, so nothing is reported.
-/// A numeric enum, whose descriptor writes numbers, and any other converter
-/// type, including a subclass, are not matched.
+/// The match also needs every member written as the same text on both sides:
+/// a <c>[JsonStringEnumMemberName]</c> changes what the converter writes and
+/// a <c>[Name]</c> changes what the descriptor writes, so either one keeps
+/// the converter reported. A numeric enum, whose descriptor writes numbers,
+/// and any other converter type, including a subclass, are not matched.
 /// </summary>
 internal static class BuiltinStringEnumConverter
 {
@@ -30,9 +33,23 @@ internal static class BuiltinStringEnumConverter
         if (!SymbolHelper.HasStringEnum(enumType))
             return false;
 
+        if (!WritesMemberNamesOnBothSides(enumType))
+            return false;
+
         return attribute.ConstructorArguments is [{ Value: INamedTypeSymbol converter }]
             && IsBuiltinConverterOver(converter, enumType);
     }
+
+    private static bool WritesMemberNamesOnBothSides(ITypeSymbol enumType) =>
+        enumType
+            .GetMembers()
+            .OfType<IFieldSymbol>()
+            .Where(member => member.HasConstantValue)
+            .All(WritesItsNameOnBothSides);
+
+    private static bool WritesItsNameOnBothSides(IFieldSymbol member) =>
+        !JsonSerializationAttributes.Has(member, JsonSerializationAttributes.StringEnumMemberName)
+        && SymbolHelper.StringEnumValueOf(member) == member.Name;
 
     private static ITypeSymbol UnwrapNullable(ITypeSymbol type) =>
         type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } n

@@ -467,6 +467,26 @@
     "divergence": "[JsonConverter(typeof(JsonStringEnumConverter))] over a numeric enum (MS0037): STJ writes the name, the descriptor the number"
   },
   {
+    "id": "V14d",
+    "context": "StudioJsonContext",
+    "getter": "mood",
+    "direction": "roundtrip",
+    "json": "\"Calm\"",
+    "stjJson": "\"calm-x\"",
+    "crossReadable": false,
+    "divergence": "[JsonStringEnumMemberName] under the built-in converter over a [StringEnum] (MS0037): STJ writes the member-name text, the descriptor the C# name"
+  },
+  {
+    "id": "V14e",
+    "context": "StudioJsonContext",
+    "getter": "tone",
+    "direction": "roundtrip",
+    "json": "\"mild\"",
+    "stjJson": "\"Mild\"",
+    "crossReadable": false,
+    "divergence": "[Name] on a [StringEnum] member under the built-in converter (MS0037): STJ writes the C# name, the descriptor the [Name] text"
+  },
+  {
     "id": "V13a",
     "context": "StudioJsonContext",
     "getter": "perms",

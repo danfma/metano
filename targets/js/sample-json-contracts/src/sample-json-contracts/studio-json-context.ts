@@ -52,6 +52,7 @@ import { LevelMapHolder } from "./level-map-holder";
 import { MixedBase } from "./mixed-base";
 import { MixedClass } from "./mixed-class";
 import { isMixedPoint, type MixedPoint } from "./mixed-point";
+import { Mood } from "./mood";
 import { NBase } from "./n-base";
 import { NLeaf } from "./n-leaf";
 import { NMid } from "./n-mid";
@@ -73,6 +74,7 @@ import { SqB } from "./sq-b";
 import { Timeline } from "./timeline";
 import { Tiny } from "./tiny";
 import { Title } from "./title";
+import { Tone } from "./tone";
 import { UBaseA } from "./u-base-a";
 import { UBaseH } from "./u-base-h";
 import { UFail } from "./u-fail";
@@ -150,6 +152,8 @@ export class StudioJsonContext extends SerializerContext {
   private _flavor?: ValueSpec<Flavor>;
   private _spice?: ValueSpec<Spice>;
   private _heat?: ValueSpec<Heat>;
+  private _mood?: ValueSpec<Mood>;
+  private _tone?: ValueSpec<Tone>;
   private _perms?: ValueSpec<Perms>;
   private _tiny?: ValueSpec<Tiny>;
   private _dashboard?: TypeSpec<Dashboard>;
@@ -1320,6 +1324,22 @@ export class StudioJsonContext extends SerializerContext {
       descriptor: { kind: "numericEnum", values: Heat, typeName: "SampleJsonContracts.Heat" },
       valueType: true,
       typeName: "SampleJsonContracts.Heat",
+    }));
+  }
+
+  get mood(): ValueSpec<Mood> {
+    return (this._mood ??= this.createValueSpec({
+      descriptor: { kind: "enum", values: Mood, typeName: "SampleJsonContracts.Mood" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Mood",
+    }));
+  }
+
+  get tone(): ValueSpec<Tone> {
+    return (this._tone ??= this.createValueSpec({
+      descriptor: { kind: "enum", values: Tone, typeName: "SampleJsonContracts.Tone" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Tone",
     }));
   }
 
