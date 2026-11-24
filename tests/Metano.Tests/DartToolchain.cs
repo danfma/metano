@@ -7,10 +7,12 @@ internal static class DartToolchain
     public static bool IsAvailable()
     {
         var path = Environment.GetEnvironmentVariable("PATH");
+
         if (string.IsNullOrEmpty(path))
             return false;
 
         var executable = OperatingSystem.IsWindows() ? "dart.exe" : "dart";
+
         return path.Split(Path.PathSeparator)
             .Any(dir =>
                 !string.IsNullOrWhiteSpace(dir) && File.Exists(Path.Combine(dir, executable))
@@ -69,6 +71,7 @@ internal static class DartToolchain
                 await File.WriteAllTextAsync(Path.Combine(tempDir, name), content);
 
             var analyze = await RunAsync(["analyze"], tempDir);
+
             if (analyze.ExitCode != 0)
                 throw new InvalidOperationException($"dart analyze failed:\n{analyze.Output}");
         }
@@ -100,10 +103,12 @@ internal static class DartToolchain
             await File.WriteAllTextAsync(Path.Combine(tempDir, "main.dart"), mainDart);
 
             var analyze = await RunAsync(["analyze"], tempDir);
+
             if (analyze.ExitCode != 0)
                 throw new InvalidOperationException($"dart analyze failed:\n{analyze.Output}");
 
             var run = await RunAsync(["run", "main.dart"], tempDir);
+
             if (run.ExitCode != 0)
                 throw new InvalidOperationException($"dart run failed:\n{run.Output}");
 
@@ -119,6 +124,7 @@ internal static class DartToolchain
     private static async Task WritePackageConfigAsync(string tempDir)
     {
         var runtimeDir = FindMetanoRuntimeDir();
+
         if (runtimeDir is null)
             return;
 
@@ -149,6 +155,7 @@ internal static class DartToolchain
         while (dir is not null)
         {
             var candidate = Path.Combine(dir.FullName, "targets", "dart", "metano_runtime");
+
             if (Directory.Exists(candidate))
                 return candidate;
 

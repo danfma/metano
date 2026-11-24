@@ -101,8 +101,10 @@ public sealed class Printer
     {
         if (v.IsLate)
             sb.Append("late ");
+
         if (v.IsFinal)
             sb.Append("final ");
+
         sb.Append(FormatType(v.Type)).Append(' ').Append(v.Name);
 
         if (v.Initializer is not null)
@@ -117,6 +119,7 @@ public sealed class Printer
     private static void PrintTopLevelGetter(StringBuilder sb, DartTopLevelGetter g)
     {
         sb.Append(FormatType(g.ReturnType)).Append(" get ").Append(g.Name);
+
         if (g.Body is not null)
             IrBodyPrinter.PrintBody(sb, g.Body, indentLevel: 0);
         else
@@ -130,6 +133,7 @@ public sealed class Printer
             .Append('(')
             .Append(FormatType(s.ValueType))
             .Append(" value)");
+
         if (s.Body is not null)
             IrBodyPrinter.PrintBody(sb, s.Body, indentLevel: 0);
         else

@@ -531,6 +531,7 @@ public sealed partial class IrExpressionExtractor
                 $"An explicit argument has unexpected syntax '{argument.Syntax?.Kind()}'."
             ),
         };
+
         var parameter = argument.Parameter!;
 
         if (!parameter.IsParams)

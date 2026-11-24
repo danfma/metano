@@ -374,6 +374,7 @@ public class DartGroupDFixesTests
             }
             """
         );
+
         await Assert.That(output).IsEqualTo("OK");
     }
 
@@ -417,9 +418,11 @@ public class DartGroupDFixesTests
 
         await Assert.That(diagnostics).IsEmpty();
         var dart = files["gens.dart"];
+
         await Assert
             .That(dart)
             .Contains("(int __arg1, int __arg0) => Gens.make<int>(__arg0, __arg1)");
+
         await Assert
             .That(dart)
             .Contains("(Acc __target, int __arg1, int __arg0) => __target.pair(__arg0, __arg1)");

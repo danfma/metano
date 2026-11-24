@@ -40,6 +40,7 @@ public static class IrToDartClassBridge
             ir.BaseType is not null && !IsUnextendableDartCollection(ir.BaseType)
                 ? IrToDartTypeMapper.Map(ir.BaseType)
                 : null;
+
         // Filter out C# BCL interfaces (IEquatable, IComparable, ...) that records and
         // structs implicitly implement — they have no Dart equivalent and would produce
         // unresolvable references. User-defined interfaces pass through untouched.

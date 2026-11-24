@@ -31,6 +31,7 @@ public sealed class DartIrRewriter
     private readonly DeclarativeMappingRegistry _registry;
     private readonly IReadOnlySet<string> _flattenedStaticClassNames;
     private readonly IDartOverloadNames _overloads;
+
     private readonly IReadOnlyDictionary<
         (string DeclaringType, string MemberName),
         string
@@ -59,6 +60,7 @@ public sealed class DartIrRewriter
         _registry = registry;
         _flattenedStaticClassNames = flattenedStaticClassNames ?? new HashSet<string>();
         _overloads = overloads ?? NoDartOverloadNames.Instance;
+
         _privateMemberRenames = privateMemberRenames
             ?? new Dictionary<(string DeclaringType, string MemberName), string>();
     }

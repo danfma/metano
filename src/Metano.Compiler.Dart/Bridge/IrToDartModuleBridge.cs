@@ -64,6 +64,7 @@ public static class IrToDartModuleBridge
                         Initializer: rewriter.Rewrite(field.Initializer)
                     )
                 );
+
                 break;
 
             case IrPropertyDeclaration prop when !(prop.Semantics?.HasGetterBody ?? false):
@@ -79,6 +80,7 @@ public static class IrToDartModuleBridge
                         Initializer: rewriter.Rewrite(prop.Initializer)
                     )
                 );
+
                 break;
 
             case IrPropertyDeclaration prop:
@@ -100,6 +102,7 @@ public static class IrToDartModuleBridge
                         )
                     );
                 }
+
                 break;
         }
     }

@@ -276,6 +276,7 @@ internal static class DartEvaluationOrder
             ReturnType: null,
             [new IrReturnStatement(inner)]
         );
+
         var args = bindings.Select(value => new IrArgument(value)).ToList();
 
         return new IrCallExpression(lambda, args);

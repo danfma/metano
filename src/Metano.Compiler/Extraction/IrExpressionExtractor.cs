@@ -2841,9 +2841,11 @@ public sealed partial class IrExpressionExtractor
 
         var origin = BuildOrigin(_semantic.GetSymbolInfo(member.Node).Symbol);
         var receiverType = _semantic.GetTypeInfo(member.Receiver).Type;
+
         var targetType = receiverType is not null
             ? MapTypeWithReifiedScope(receiverType, member.Receiver)
             : null;
+
         var memberAccess = new IrMemberAccess(target, name, origin) { TargetType = targetType };
         return WrapMethodGroupForDelegate(member.Node, symbol, memberAccess);
     }
@@ -4455,6 +4457,7 @@ public sealed partial class IrExpressionExtractor
         }
 
         var receiverType = _semantic.GetTypeInfo(extensionAccess.Receiver).Type;
+
         IReadOnlyList<IrArgument> helperArgs =
         [
             new IrArgument(

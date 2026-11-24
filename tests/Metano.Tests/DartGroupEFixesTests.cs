@@ -359,6 +359,7 @@ public class DartGroupEFixesTests
             }
             """
         );
+
         await Assert.That(output).IsEqualTo("OK");
     }
 
@@ -407,6 +408,7 @@ public class DartGroupEFixesTests
             }
             """
         );
+
         await Assert.That(output).IsEqualTo("OK");
     }
 
