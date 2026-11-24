@@ -20,7 +20,9 @@ export class Probe {
       return "green";
     }
 
-    return (($s) => {
+    {
+      const $s = o;
+
       if (unboxFor($s, Color$runtimeType) === Color.Red) {
         return "red";
       }
@@ -32,7 +34,7 @@ export class Probe {
       }
 
       return `${t.name} ${s ?? ""} ${formatBoolean(eq)} ${enumText(c, Color$runtimeType)}`;
-    })(o);
+    }
   }
 
   static raw(): List<Color> {

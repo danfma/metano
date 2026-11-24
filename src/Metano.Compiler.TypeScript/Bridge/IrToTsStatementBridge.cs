@@ -370,6 +370,9 @@ public static class IrToTsStatementBridge
                 inlineCode,
                 context
             ),
+            IrReturnStatement { Value: IrSwitchExpression sw }
+                when IrToTsExpressionBridge.TryMapSwitchReturn(sw, context) is { } switchReturn =>
+                switchReturn,
             IrReturnStatement ret => new TsReturnStatement(
                 ret.Value is not null ? IrToTsExpressionBridge.Map(ret.Value, context) : null
             ),

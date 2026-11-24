@@ -77,7 +77,9 @@ export class Probe {
   }
 
   static kind(o: Object): number {
-    return (($s) => {
+    {
+      const $s = o;
+
       if (isPoint($s)) {
         return 1;
       }
@@ -89,7 +91,7 @@ export class Probe {
       }
 
       return 0;
-    })(o);
+    }
   }
 
   static hasLabel(o: Object): boolean {

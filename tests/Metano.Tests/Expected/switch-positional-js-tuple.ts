@@ -4,7 +4,9 @@ export class Pairs {
   constructor() { }
 
   static of(pair: Pair): string {
-    return (($s) => {
+    {
+      const $s = pair;
+
       if ($s != null && $s[0] === 0) {
         const label = $s[1];
 
@@ -12,6 +14,6 @@ export class Pairs {
       }
 
       return "";
-    })(pair);
+    }
   }
 }

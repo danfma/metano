@@ -551,7 +551,7 @@ public class SwitchPatternTranspileTests
     public async Task SwitchExpression_NonStableScrutinee_EvaluatesItOnce()
     {
         // The ternary fast path repeats the scrutinee in every test, so a
-        // call goes through the IIFE, which receives it as one argument.
+        // call is bound once to `$s`.
         var result = TranspileHelper.Transpile(
             ShapeHierarchy
                 + """
@@ -575,7 +575,7 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["geo/maker.ts"];
-        await Assert.That(output).Contains("})(Maker.make());");
+        await Assert.That(output).Contains("const $s = Maker.make();");
         await Assert.That(output.Split("Maker.make()").Length - 1).IsEqualTo(1);
         await Assert.That(output).Contains("if ($s instanceof Circle) {");
         await Assert.That(output).Contains("if ($s instanceof Square) {");
@@ -637,7 +637,7 @@ public class SwitchPatternTranspileTests
     }
 
     [Test]
-    public async Task SwitchExpression_AwaitInIifeArm_EmitsAwaitedAsyncIife()
+    public async Task SwitchExpression_AwaitInIifeArm_EmitsAwaitedStatements()
     {
         var result = TranspileHelper.Transpile(
             ShapeHierarchy
@@ -663,7 +663,7 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["geo/loader.ts"];
-        await Assert.That(output).Contains("return await (async ($s) => {");
+        await Assert.That(output).Contains("const $s = s;");
 
         await Assert
             .That(output)

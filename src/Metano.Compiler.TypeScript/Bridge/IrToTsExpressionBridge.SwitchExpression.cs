@@ -35,6 +35,30 @@ public static partial class IrToTsExpressionBridge
             ? LowerSwitchAsTernary(sw, context)
             : LowerSwitchAsIife(sw, context);
 
+    /// <summary>
+    /// <c>return value switch { ... };</c> without a closure (#735): when the
+    /// switch cannot lower to a ternary chain, the return becomes a block
+    /// that binds the scrutinee once and walks the arms as <c>if</c>s that
+    /// each return or throw: <c>{ const $s = value; if (...) { return ...; } throw ...; }</c>.
+    /// The block keeps <c>$s</c> and the arm designators out of the enclosing
+    /// scope. <c>null</c> when the switch lowers as an expression.
+    /// </summary>
+    internal static TsStatement? TryMapSwitchReturn(
+        IrSwitchExpression sw,
+        IrToTsBridgeContext context
+    )
+    {
+        if (CanLowerSwitchAsTernary(sw))
+            return null;
+
+        var scrutinee = new TsIdentifier(ScrutineeParameterName);
+
+        return new TsBlockStatement([
+            new TsVariableDeclaration(ScrutineeParameterName, Map(sw.Scrutinee, context)),
+            .. BuildSwitchArmStatements(sw, scrutinee, context),
+        ]);
+    }
+
     private static bool CanLowerSwitchAsTernary(IrSwitchExpression sw) =>
         sw.Arms.Count > 0
         && sw.Arms[^1] is { Pattern: IrDiscardPattern, WhenClause: null }
@@ -111,6 +135,20 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var scrutinee = new TsIdentifier(ScrutineeParameterName);
+
+        return BuildSwitchIife(sw, BuildSwitchArmStatements(sw, scrutinee, context), context);
+    }
+
+    /// <summary>
+    /// The arms as statements that return or throw: every arm before the
+    /// first catch-all, then the catch-all or the non-exhaustive throw.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> BuildSwitchArmStatements(
+        IrSwitchExpression sw,
+        TsExpression scrutinee,
+        IrToTsBridgeContext context
+    )
+    {
         var conditionalArms = sw.Arms.TakeWhile(arm => !IsCatchAllArm(arm));
         var catchAll = sw.Arms.FirstOrDefault(IsCatchAllArm);
 
@@ -122,7 +160,7 @@ public static partial class IrToTsExpressionBridge
             ? [BuildNonExhaustiveSwitchThrow(scrutinee)]
             : LowerSwitchArmBody(catchAll, scrutinee, context);
 
-        return BuildSwitchIife(sw, [.. conditionalStatements, .. tail], context);
+        return [.. conditionalStatements, .. tail];
     }
 
     /// <summary>

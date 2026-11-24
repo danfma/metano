@@ -333,13 +333,13 @@ public class IrToTsBodyBridgeTests
     }
 
     [Test]
-    public async Task SwitchExpression_WithoutDiscardFallback_LowersToIifeWithThrow()
+    public async Task SwitchExpression_WithoutDiscardFallback_LowersToStatementsWithThrow()
     {
         // No catch-all → C#'s switch is non-exhaustive and throws at runtime.
-        // The bridge preserves that semantics by emitting an IIFE whose
+        // The bridge preserves that semantics by emitting statements whose
         // trailing statement throws on no match.
         var ts = PrintMethodFromIr("int Classify(int n) => n switch { 0 => 10, 1 => 20 };");
-        await Assert.That(ts).Contains("(($s) => {");
+        await Assert.That(ts).Contains("const $s = n;");
         await Assert.That(ts).Contains("if ($s === 0)");
         await Assert.That(ts).Contains("return 10;");
 
