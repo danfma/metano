@@ -78,7 +78,7 @@ public sealed partial class IrExpressionExtractor
     {
         var type = _semantic.GetTypeInfo(operand).Type;
 
-        ReportPlainObjectText(operand, type);
+        ReportUnprintableText(operand, type);
 
         return DefaultText(
             Extract(operand),
@@ -177,7 +177,7 @@ public sealed partial class IrExpressionExtractor
         IMethodSymbol? method
     )
     {
-        ReportPlainObjectToString(invocation, method);
+        ReportUnprintableToString(invocation, method);
 
         if (
             !DefaultTextSites.IsInvocation(method)

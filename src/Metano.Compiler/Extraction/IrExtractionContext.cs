@@ -101,6 +101,18 @@ public sealed record IrExtractionContext(
         Analysis.ReifiedTypeParameterAnalysis.Disabled;
 
     /// <summary>
+    /// The port through which a target says that it cannot print a value of a
+    /// type at a default-text site (an interpolation hole, a concatenation
+    /// operand, a <c>ToString()</c> that binds to <c>object</c>'s or a record's
+    /// synthesized one): it returns the reason, which the extractor reports as
+    /// <c>MS0001</c> (a warning) at the site, or <c>null</c> when the target
+    /// prints the type. TypeScript answers for a <c>[PlainObject]</c> type, which
+    /// has no class (baseline FR-094.4). <c>null</c>, the default, for a target
+    /// that prints every type (Dart): nothing is reported.
+    /// </summary>
+    public Func<INamedTypeSymbol, string?>? UnprintableTextReason { get; init; }
+
+    /// <summary>
     /// <see cref="KeepsNativeCollections"/> for a code path that holds only the
     /// target language (the type mapper, the overload-group reporters).
     /// </summary>

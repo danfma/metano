@@ -1455,8 +1455,10 @@ Product requirements added after the migration (normative; each one is traced by
   2. *Cross-package base.* A derived record reads its base's text as
      `super.$printMembers?.() ?? ""`, so a base package generated before this requirement (no
      `$printMembers`) prints only the derived members at run time instead of throwing
-     (W7-4); type-checking against such a base still fails (`override`), and the release note
-     asks for the base package to be regenerated.
+     (W7-4). The tolerance is run time only: a library whose records derive from a record of
+     another package MUST regenerate that base package, because an old base and a new derived
+     record (or the reverse) do not type-check together (TS4113, TS2339, TS4114); the release
+     note says so.
   3. *Cycles.* There is no cycle detection (it would cost every record a per-call check and an
      import). A record that reaches itself through its members overflows the stack with a
      JavaScript `RangeError` (.NET's `PrintMembers` throws
@@ -1466,7 +1468,8 @@ Product requirements added after the migration (normative; each one is traced by
      `toString()` and prints `[object Object]`. A value of such a type written at a default-text
      site (an interpolation hole, a string concatenation operand, or a `ToString()` call that
      binds to `object`'s or the record's synthesized `ToString`) MUST report `MS0001` (a
-     warning; loud over silent, W7-4). A `[PlainObject]` member of a record prints
+     warning; loud over silent, W7-4). The TypeScript target decides and words it, through
+     the core's `UnprintableTextReason` port; Dart sets no answer and reports nothing. A `[PlainObject]` member of a record prints
      `[object Object]` inside the record's text without a diagnostic: no source site asks for it.
   5. *Cost (spec 011 NFR-008).* Class methods are not tree-shaken, so every used record keeps
      its `toString` and the formatters its member types need (`formatDouble` / `formatSingle`

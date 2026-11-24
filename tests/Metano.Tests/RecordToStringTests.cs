@@ -253,6 +253,27 @@ public class RecordToStringTests
     }
 
     [Test]
+    public async Task PlainObjectAtATextSite_ReportsNothingOnDart()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileDart(
+            """
+            using Metano.Annotations;
+
+            [Transpile, PlainObject]
+            public record Dto(int A);
+
+            [Transpile]
+            public static class Use
+            {
+                public static string Text(Dto dto) => $"x {dto}" + dto + dto.ToString();
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Any(d => d.Message.Contains("[PlainObject]"))).IsFalse();
+    }
+
+    [Test]
     public async Task CrossPackageBase_IsReadTolerantly()
     {
         var files = TranspileHelper.TranspileWithLibrary(
