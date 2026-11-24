@@ -29,8 +29,8 @@
     {
       "name": "LINQ contains (value equality, #664)",
       "entry": "entries/linq-contains.js",
-      "maxGzip": 852,
-      "$comment": "W7-4 (#664), measured size + 10%: bun 774 B / esbuild 752 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+      "maxGzip": 956,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 869 B after the round-1/2 === fast path for primitives (null/undefined/NaN excluded); first measured 774 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
     },
     {
       "name": "LINQ groupBy (value equality, #664)",
