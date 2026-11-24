@@ -1348,7 +1348,11 @@ public sealed record IrSwitchExpression(IrExpression Scrutinee, IReadOnlyList<Ir
 /// <param name="WhenClause">Optional <c>when</c> guard expression — evaluated
 /// only after the pattern matches.</param>
 /// <param name="Result">The expression the arm evaluates to when it wins.</param>
-public sealed record IrSwitchArm(IrPattern Pattern, IrExpression? WhenClause, IrExpression Result);
+public sealed record IrSwitchArm(IrPattern Pattern, IrExpression? WhenClause, IrExpression Result)
+{
+    /// <summary>An unguarded arm whose pattern always matches (<c>_</c>, <c>var x</c>).</summary>
+    public bool IsCatchAll => WhenClause is null && Pattern.AlwaysMatches;
+}
 
 // -- Non-destructive update --
 

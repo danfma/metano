@@ -198,4 +198,12 @@ public static class RoslynTypeQueries
             ITypeParameterSymbol parameter => parameter.ConstraintTypes.Any(IsClosedHierarchy),
             _ => false,
         };
+
+    /// <summary>
+    /// True when <paramref name="type"/> is a C# 15 union type: a <c>union</c>
+    /// declaration or a hand-written <c>[Union]</c> type implementing <c>IUnion</c>,
+    /// from source or from metadata alike (Roslyn's <see cref="ITypeSymbol.IsUnion"/>).
+    /// The one rule spec 010 FR-012a reads, at declarations and at use sites.
+    /// </summary>
+    public static bool IsUnionType(ITypeSymbol? type) => type is { IsUnion: true };
 }

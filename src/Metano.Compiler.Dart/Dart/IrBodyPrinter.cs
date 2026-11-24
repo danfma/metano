@@ -789,10 +789,7 @@ public static class IrBodyPrinter
     /// such a switch needs a throwing default to compile (spec 010 FR-C2).
     /// </summary>
     private static bool NeedsNonExhaustiveTail(IrSwitchExpression sw) =>
-        sw.ScrutineeIsClosed && !sw.Arms.Any(IsCatchAllArm);
-
-    private static bool IsCatchAllArm(IrSwitchArm arm) =>
-        arm.WhenClause is null && arm.Pattern is IrDiscardPattern or IrVarPattern;
+        sw.ScrutineeIsClosed && !sw.Arms.Any(arm => arm.IsCatchAll);
 
     /// <summary>
     /// Renders the `...` rest element inside a Dart list pattern. When the

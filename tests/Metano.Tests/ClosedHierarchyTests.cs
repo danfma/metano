@@ -39,6 +39,19 @@ public class ClosedHierarchyTests
 
         """;
 
+    /// <summary>
+    /// The library union is reached only through <c>Pets.Make()</c>'s signature: no
+    /// union name is spelled in the consumer.
+    /// </summary>
+    private const string ConsumerOfLibraryUnion = """
+        [assembly: TranspileAssembly]
+
+        public static class Reader
+        {
+            public static object? Read() => Pets.Make().Value;
+        }
+        """;
+
     private const string HierarchySource = """
         [assembly: TranspileAssembly]
 
@@ -388,6 +401,115 @@ public class ClosedHierarchyTests
         await Assert
             .That(diagnostics.Select(d => d.Code))
             .DoesNotContain(DiagnosticCodes.UnsupportedUnionShape);
+    }
+
+    [Test]
+    public async Task SameAssemblyUnionWithoutTranspile_IsRejectedAtItsUse()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            public union Pet(int, string);
+
+            [Transpile]
+            public static class Owner
+            {
+                public static object? Read(Pet pet) => pet.Value;
+
+                public static Pet Make() => 5;
+            }
+            """ + UnionPolyfill
+        );
+
+        await AssertSingleUseRejection(diagnostics, "Pet");
+    }
+
+    [Test]
+    public async Task UnionNestedInTranspiledOwner_IsRejectedAtItsUse()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public static class Owner
+            {
+                public union Inner(int, bool);
+
+                public static Inner Make() => 5;
+            }
+            """ + UnionPolyfill
+        );
+
+        await AssertSingleUseRejection(diagnostics, "Owner.Inner");
+    }
+
+    [Test]
+    public async Task UnionFromEmitPackageLibrary_IsRejectedAtItsUse()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("lib")]
+
+            public union Pet(int, string);
+
+            public static class Pets
+            {
+                public static Pet Make() => 5;
+            }
+            """ + UnionPolyfill,
+            ConsumerOfLibraryUnion
+        );
+
+        await AssertSingleUseRejection(diagnostics, "Pet");
+    }
+
+    [Test]
+    public async Task UnionFromPlainReferencedAssembly_IsRejectedAtItsUse()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            """
+            public union Pet(int, string);
+
+            public static class Pets
+            {
+                public static Pet Make() => 5;
+            }
+            """ + UnionPolyfill,
+            ConsumerOfLibraryUnion
+        );
+
+        await AssertSingleUseRejection(diagnostics, "Pet");
+    }
+
+    [Test]
+    public async Task DartUnionUse_IsRejectedWithMs0038()
+    {
+        var diagnostics = DartTranspileHelper.FrontendDiagnostics(
+            """
+            public union Pet(int, string);
+
+            [Transpile]
+            public static class Owner
+            {
+                public static object? Read(Pet pet) => pet.Value;
+            }
+            """ + UnionPolyfill
+        );
+
+        await Assert
+            .That(diagnostics.Select(d => d.Code))
+            .Contains(DiagnosticCodes.UnsupportedUnionShape);
+    }
+
+    private static async Task AssertSingleUseRejection(
+        IReadOnlyList<MetanoDiagnostic> diagnostics,
+        string union
+    )
+    {
+        var rejection = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedUnionShape);
+
+        await Assert.That(rejection.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(rejection.Message).Contains($"Union type '{union}'");
+        await Assert.That(rejection.Location).IsNotNull();
     }
 
     [Test]
