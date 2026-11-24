@@ -42,8 +42,19 @@ describe("decimalTextFromDouble", () => {
     [Math.fround(1.1), 7, "1.1"],
     [-2.5, 15, "-2.5"],
     [123456789012345680000, 15, "123456789012346000000"],
+    [1000000000000005, 15, "1000000000000000"],
+    [1000000000000025, 15, "1000000000000020"],
+    [1e-30, 15, "0"],
+    [5e-29, 15, "0"],
+    [-0, 15, "0"],
   ] as const)("(decimal)%p keeps %p significant digits: %p", (value, digits, expected) => {
     expect(new Decimal(decimalTextFromDouble(value, digits)).toString()).toBe(expected);
+  });
+
+  test("caps the scale at 28 decimal places", () => {
+    expect(decimalTextFromDouble(1.2345678901234567e-20, 15)).toBe(
+      "0.0000000000000000000123456789",
+    );
   });
 
   test.each([NaN, Infinity, -Infinity, 8e28])("(decimal)%p throws OverflowException", (value) => {
