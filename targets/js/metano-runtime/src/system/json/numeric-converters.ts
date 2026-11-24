@@ -61,6 +61,9 @@ const passthroughConverter: ValueConverter = {
 /** The CLR name of a C# `char`, which reads as a one-code-unit `string`. */
 const CHAR_TYPE_NAME = "System.Char";
 
+/** The CLR name of a C# `float`, whose values read rounded to single precision. */
+const SINGLE_TYPE_NAME = "System.Single";
+
 /**
  * A `primitive`: values pass through both ways, except that a JSON string
  * for a numeric `numberType` is read by System.Text.Json's grammar when the
@@ -79,6 +82,10 @@ export function primitiveConverterOf(
     return charConverterOf(errorTypeName);
   }
 
+  if (numberType === SINGLE_TYPE_NAME) {
+    return singleConverterOf(readOptions, errorTypeName);
+  }
+
   if (numberType === undefined || !readsNumbersFromStrings(readOptions)) {
     return passthroughConverter;
   }
@@ -94,6 +101,40 @@ export function primitiveConverterOf(
 
       if (number === undefined) {
         throw cannotConvert(numberType, errorTypeName);
+      }
+
+      return number;
+    },
+  };
+}
+
+/**
+ * A `float`: a JSON number reads rounded to single precision, as
+ * System.Text.Json parses it into a `Single` (#695), and a string reads
+ * through the number grammar (which rounds too) when the context reads
+ * numbers from strings. Writes pass through.
+ */
+function singleConverterOf(
+  readOptions: JsonReadOptions | undefined,
+  errorTypeName: ErrorTypeName,
+): ValueConverter {
+  const readsStrings = readsNumbersFromStrings(readOptions);
+
+  return {
+    serialize: passthroughConverter.serialize,
+    deserialize: (value: unknown) => {
+      if (typeof value === "number") {
+        return Math.fround(value);
+      }
+
+      if (typeof value !== "string" || !readsStrings) {
+        return value;
+      }
+
+      const number = readNumberTextAsNumber(value, SINGLE_TYPE_NAME);
+
+      if (number === undefined) {
+        throw cannotConvert(SINGLE_TYPE_NAME, errorTypeName);
       }
 
       return number;

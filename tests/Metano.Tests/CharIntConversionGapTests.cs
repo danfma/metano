@@ -87,6 +87,8 @@ public class CharIntConversionGapTests
             public static float Total(float[] xs) => xs.Sum();
             public static float Mean(float[] xs) => xs.Average();
             public static double DoubleTotal(double[] xs) => xs.Sum();
+            public static float Parse(string s) => float.Parse(s);
+            public static bool TryParse(string s, out float f) => float.TryParse(s, out f);
             public static decimal PostfixExtension(Box b) => b.Amount++;
             public static decimal PrefixExtension(Box b) => ++b.Amount;
         }
@@ -168,6 +170,8 @@ public class CharIntConversionGapTests
     [Arguments("return a * 2;")]
     [Arguments("return Math.fround(linq(xs, sum()));")]
     [Arguments("return Math.fround(linq(xs, average()));")]
+    [Arguments("return parseFloat32(s);")]
+    [Arguments("tryParseFloat32(s)")]
     public async Task Single_RoundsEveryInexactResult(string expected)
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);

@@ -258,12 +258,23 @@ describe("numbers from strings — floating point", () => {
     expectRejects("System.Double", [...FLOATING_POINT_REJECTED, "1.7976931348623159e308"]);
   });
 
-  test("Single reads the same grammar and keeps the double value", () => {
+  test("Single reads the same grammar, rounded to single precision", () => {
     expectReads("System.Single", [
-      ...FLOATING_POINT_READ,
-      ["3.4028235e38", 3.4028235e38],
-      ["0.1", 0.1],
+      ...FLOATING_POINT_READ.map(([text, value]): [string, number] => [text, Math.fround(value)]),
+      ["3.4028235e38", 3.4028234663852886e38],
+      ["0.1", Math.fround(0.1)],
     ]);
+  });
+
+  test("Single rounds a JSON number token to single precision", () => {
+    const single: TypeDescriptor = { kind: "primitive", numberType: "System.Single" };
+    const value = JsonSerializer.deserialize(0.1, { descriptor: single }) as number;
+
+    expect(value).toBe(Math.fround(0.1));
+    expect(Math.fround(value * 1)).toBe(value);
+    const text = JSON.stringify(JsonSerializer.serialize(value, { descriptor: single }));
+
+    expect(JsonSerializer.deserializeText(text, { descriptor: single })).toBe(value);
   });
 
   test("Single rejects a value beyond its own range", () => {
@@ -280,10 +291,10 @@ describe("numbers from strings — floating point", () => {
   // all parse to it; only the exact text tells them apart (measured).
   test("Single decides the overflow threshold by the exact text", () => {
     expectReads("System.Single", [
-      ["3.4028235677973366e38", 3.4028235677973366e38],
-      ["-3.4028235677973366e38", -3.4028235677973366e38],
-      ["3.40282356779733661e38", 3.40282356779733661e38],
-      ["340282356779733661637539395458142568447", 3.4028235677973366e38],
+      ["3.4028235677973366e38", 3.4028234663852886e38],
+      ["-3.4028235677973366e38", -3.4028234663852886e38],
+      ["3.40282356779733661e38", 3.4028234663852886e38],
+      ["340282356779733661637539395458142568447", 3.4028234663852886e38],
     ]);
 
     expectRejects("System.Single", [

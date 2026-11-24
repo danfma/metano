@@ -542,4 +542,47 @@ public static class CharIntGapProbes
             + "|"
             + new string("a\uD83D\uDE00".Take(2).ToArray()).Length;
     }
+
+    // Round 2 (#695): every source of a float value holds single precision.
+
+    public static string FloatParse()
+    {
+        float p = float.Parse("0.1", System.Globalization.CultureInfo.InvariantCulture);
+        float q = float.Parse("16777217");
+        float.TryParse("0.7", out var r);
+        bool bad = float.TryParse("x", out var z);
+        return (p * 1f == p)
+            + "|"
+            + ((double)p).ToString("R")
+            + "|"
+            + ((double)q).ToString("R")
+            + "|"
+            + ((double)r).ToString("R")
+            + "|"
+            + (r + 0f == r)
+            + "|"
+            + bad
+            + "|"
+            + z
+            + "|"
+            + (p.ToString() == "0.1");
+    }
+
+    public static string FloatOtherSources()
+    {
+        long l = 16777217L;
+        decimal m = 0.1m;
+        float a = (float)l;
+        float b = (float)m;
+        float c = System.Convert.ToSingle(l);
+        return (a * 1f == a)
+            + "|"
+            + ((double)a).ToString("R")
+            + "|"
+            + (b * 1f == b)
+            + "|"
+            + ((double)b).ToString("R")
+            + "|"
+            + ((double)c).ToString("R");
+    }
 }

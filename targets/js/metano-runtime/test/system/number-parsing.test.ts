@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { tryParseBoolean, tryParseFloat64, tryParseInt32 } from "#/system/number-parsing.ts";
+import {
+  parseFloat32,
+  tryParseBoolean,
+  tryParseFloat32,
+  tryParseFloat64,
+  tryParseInt32,
+} from "#/system/number-parsing.ts";
 
 describe("tryParseInt32", () => {
   test("parses a signed integer surrounded by whitespace", () => {
@@ -60,6 +66,16 @@ describe("tryParseFloat64", () => {
     expect(tryParseFloat64("1.2.3")).toEqual([false, 0]);
     expect(tryParseFloat64("0x10")).toEqual([false, 0]);
     expect(tryParseFloat64(" ")).toEqual([false, 0]);
+  });
+});
+
+/** `float.Parse` / `float.TryParse` on .NET 10 return the single nearest the text. */
+describe("parseFloat32", () => {
+  test("rounds to single precision", () => {
+    expect(parseFloat32("0.1")).toBe(0.10000000149011612);
+    expect(tryParseFloat32("16777217")).toEqual([true, 16777216]);
+    expect(tryParseFloat32("1e39")).toEqual([true, Infinity]);
+    expect(tryParseFloat32("x")).toEqual([false, 0]);
   });
 });
 
