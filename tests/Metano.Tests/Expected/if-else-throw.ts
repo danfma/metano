@@ -25,4 +25,8 @@ export class Pair {
   with(overrides?: Partial<Pair>): Pair {
     return copyRecordWith<Pair>(this, overrides);
   }
+
+  toString(): string {
+    return `Pair { A = ${this.a}, B = ${this.b} }`;
+  }
 }

@@ -28,9 +28,12 @@ public class RecordValueEqualityTests
         );
 
         var output = result["money.ts"];
+        // `formatText` prints the amount in the record's text (baseline FR-093).
         await Assert
             .That(output)
-            .Contains("import { HashCode, copyRecordWith, valueEquals } from \"metano-runtime\"");
+            .Contains(
+                "import { HashCode, copyRecordWith, formatText, valueEquals } from \"metano-runtime\""
+            );
         await Assert.That(output).Contains("valueEquals(this.amount, other.amount)");
         // Plain primitives stay on `===` so the cheap path keeps working.
         await Assert.That(output).Contains("this.currency === other.currency");

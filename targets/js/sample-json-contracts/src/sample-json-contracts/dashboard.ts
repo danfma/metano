@@ -45,4 +45,8 @@ export class Dashboard {
   with(overrides?: Partial<Dashboard>): Dashboard {
     return copyRecordWith<Dashboard>(this, overrides);
   }
+
+  toString(): string {
+    return `Dashboard { Title = ${this.title}, Main = ${this.main ?? ""} }`;
+  }
 }

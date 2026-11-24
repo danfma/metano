@@ -1,4 +1,4 @@
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, formatDouble, valueEquals } from "metano-runtime";
 import { Shape } from "./shape";
 
 export class Circle extends Shape {
@@ -24,5 +24,15 @@ export class Circle extends Shape {
 
   override with(overrides?: Partial<Circle>): Circle {
     return copyRecordWith<Circle>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Radius = ${formatDouble(this.radius)}`;
+  }
+
+  override toString(): string {
+    return `Circle { ${this.$printMembers()} }`;
   }
 }

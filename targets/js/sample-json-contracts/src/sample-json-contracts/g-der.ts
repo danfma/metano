@@ -40,4 +40,14 @@ export class GDer extends GBase<number> {
   override with(overrides?: Partial<GDer>): GDer {
     return copyRecordWith<GDer>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Extra = ${this.extra}`;
+  }
+
+  override toString(): string {
+    return `GDer { ${this.$printMembers()} }`;
+  }
 }

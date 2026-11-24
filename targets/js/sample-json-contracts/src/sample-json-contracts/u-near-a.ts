@@ -43,4 +43,14 @@ export class UNearA extends UNear {
   override with(overrides?: Partial<UNearA>): UNearA {
     return copyRecordWith<UNearA>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}B = ${this.b}`;
+  }
+
+  override toString(): string {
+    return `UNearA { ${this.$printMembers()} }`;
+  }
 }

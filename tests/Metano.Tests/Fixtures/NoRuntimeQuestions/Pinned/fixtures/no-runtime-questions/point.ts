@@ -26,4 +26,12 @@ export class Point {
   with(overrides?: Partial<Point>): Point {
     return copyRecordWith<Point>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `X = ${this.x}, Y = ${this.y}`;
+  }
+
+  toString(): string {
+    return `Point { ${this.$printMembers()} }`;
+  }
 }

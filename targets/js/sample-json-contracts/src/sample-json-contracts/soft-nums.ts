@@ -1,7 +1,15 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  enumText,
+  formatDouble,
+  formatText,
+  valueEquals,
+  type ClassType,
+} from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
-import type { Color } from "./color";
+import { Color$runtimeType, type Color } from "./color";
 
 let SoftNums$rt: ClassType<SoftNums> | undefined;
 
@@ -51,5 +59,9 @@ export class SoftNums {
 
   with(overrides?: Partial<SoftNums>): SoftNums {
     return copyRecordWith<SoftNums>(this, overrides);
+  }
+
+  toString(): string {
+    return `SoftNums { N = ${this.n ?? ""}, D = ${formatText(this.d)}, X = ${formatDouble(this.x)}, C = ${enumText(this.c, Color$runtimeType)} }`;
   }
 }

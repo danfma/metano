@@ -45,4 +45,14 @@ export class Group extends Clip {
   override with(overrides?: Partial<Group>): Group {
     return copyRecordWith<Group>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Name = ${this.name}, Members = ${this.members}`;
+  }
+
+  override toString(): string {
+    return `Group { ${this.$printMembers()} }`;
+  }
 }

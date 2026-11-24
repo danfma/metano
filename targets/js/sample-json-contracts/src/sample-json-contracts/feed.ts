@@ -41,4 +41,8 @@ export class Feed {
   with(overrides?: Partial<Feed>): Feed {
     return copyRecordWith<Feed>(this, overrides);
   }
+
+  toString(): string {
+    return `Feed { Latest = ${this.latest} }`;
+  }
 }

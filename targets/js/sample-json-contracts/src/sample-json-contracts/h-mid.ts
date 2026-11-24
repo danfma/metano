@@ -43,4 +43,14 @@ export class HMid extends HBase {
   override with(overrides?: Partial<HMid>): HMid {
     return copyRecordWith<HMid>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}B = ${this.b}`;
+  }
+
+  override toString(): string {
+    return `HMid { ${this.$printMembers()} }`;
+  }
 }

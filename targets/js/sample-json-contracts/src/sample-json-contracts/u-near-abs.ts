@@ -39,4 +39,14 @@ export abstract class UNearAbs extends UNear {
   override with(overrides?: Partial<UNearAbs>): UNearAbs {
     return copyRecordWith<UNearAbs>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    return super.$printMembers?.() ?? "";
+  }
+
+  override toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `UNearAbs { ${members} }` : "UNearAbs { }";
+  }
 }

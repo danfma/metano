@@ -47,6 +47,10 @@ export class SPoint {
     return copyRecordWith<SPoint>(this, overrides);
   }
 
+  toString(): string {
+    return `SPoint { X = ${this.x}, Y = ${this.y} }`;
+  }
+
   static $default(): SPoint {
     return Object.assign(Object.create(SPoint.prototype), { x: 0, y: 0 });
   }

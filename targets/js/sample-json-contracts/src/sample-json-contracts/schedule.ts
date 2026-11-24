@@ -1,6 +1,12 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  formatTimeSpan,
+  valueEquals,
+  type ClassType,
+} from "metano-runtime";
 
 let Schedule$rt: ClassType<Schedule> | undefined;
 
@@ -53,5 +59,13 @@ export class Schedule {
 
   with(overrides?: Partial<Schedule>): Schedule {
     return copyRecordWith<Schedule>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `At = ${this.at}, Starts = ${this.starts}, Day = ${this.day}, Duration = ${formatTimeSpan(this.duration)}, Moment = ${this.moment}`;
+  }
+
+  toString(): string {
+    return `Schedule { ${this.$printMembers()} }`;
   }
 }

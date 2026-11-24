@@ -34,4 +34,14 @@ export abstract class IBase {
   with(overrides?: Partial<IBase>): IBase {
     return copyRecordWith<IBase>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return "";
+  }
+
+  toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `IBase { ${members} }` : "IBase { }";
+  }
 }

@@ -43,4 +43,8 @@ export class InitRec {
   with(overrides?: Partial<InitRec>): InitRec {
     return copyRecordWith<InitRec>(this, overrides);
   }
+
+  toString(): string {
+    return `InitRec { A = ${this.a}, Note = ${this.note ?? ""} }`;
+  }
 }

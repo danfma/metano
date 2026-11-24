@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import type { Level } from "./level";
+import { HashCode, copyRecordWith, enumText, type ClassType } from "metano-runtime";
+import { Level$runtimeType, type Level } from "./level";
 
 let HolderLevel$rt: ClassType<HolderLevel> | undefined;
 
@@ -39,5 +39,13 @@ export class HolderLevel {
 
   with(overrides?: Partial<HolderLevel>): HolderLevel {
     return copyRecordWith<HolderLevel>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Level = ${enumText(this.level, Level$runtimeType)}`;
+  }
+
+  toString(): string {
+    return `HolderLevel { ${this.$printMembers()} }`;
   }
 }

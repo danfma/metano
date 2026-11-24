@@ -1459,8 +1459,9 @@ Product requirements added after the migration (normative; each one is traced by
      asks for the base package to be regenerated.
   3. *Cycles.* There is no cycle detection (it would cost every record a per-call check and an
      import). A record that reaches itself through its members overflows the stack with a
-     JavaScript `RangeError` (.NET: `InsufficientExecutionStackException`, which ends the
-     process); `toException` keeps it catchable as an `Exception`. Documented divergence.
+     JavaScript `RangeError` (.NET's `PrintMembers` throws
+     `InsufficientExecutionStackException`); `toException` keeps it catchable as an
+     `Exception`. Documented divergence (W7-4: no mapping).
   4. *`[PlainObject]` at a text site.* A `[PlainObject]` type has no class, so it has no
      `toString()` and prints `[object Object]`. A value of such a type written at a default-text
      site (an interpolation hole, a string concatenation operand, or a `ToString()` call that

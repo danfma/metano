@@ -1,5 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  formatDouble,
+  valueEquals,
+  type ClassType,
+} from "metano-runtime";
 import { IShape$runtimeType, type IShape } from "./i-shape";
 
 let Other$rt: ClassType<Other> | undefined;
@@ -39,5 +45,9 @@ export class Other implements IShape {
 
   with(overrides?: Partial<Other>): Other {
     return copyRecordWith<Other>(this, overrides);
+  }
+
+  toString(): string {
+    return `Other { Side = ${formatDouble(this.side)} }`;
   }
 }

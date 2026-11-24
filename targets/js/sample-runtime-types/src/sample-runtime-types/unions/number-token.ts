@@ -1,5 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  formatDouble,
+  valueEquals,
+  type ClassType,
+} from "metano-runtime";
 import { Token, type TokenKind } from "./token";
 
 let NumberToken$rt: ClassType<NumberToken> | undefined;
@@ -42,6 +48,16 @@ export class NumberToken extends Token {
 
   override with(overrides?: Partial<NumberToken>): NumberToken {
     return copyRecordWith<NumberToken>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Value = ${formatDouble(this.value)}`;
+  }
+
+  override toString(): string {
+    return `NumberToken { ${this.$printMembers()} }`;
   }
 }
 

@@ -1,6 +1,13 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
-import { HashCode, copyRecordWith, defaultEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  defaultEquals,
+  formatBoolean,
+  objectText,
+  type ClassType,
+} from "metano-runtime";
 
 let OperationResult$rt: ClassType<OperationResult<unknown>> | undefined;
 
@@ -62,5 +69,13 @@ export class OperationResult<T> {
 
   with(overrides?: Partial<OperationResult<T>>): OperationResult<T> {
     return copyRecordWith<OperationResult<T>>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Success = ${formatBoolean(this.success)}, Value = ${objectText(this.value ?? "")}, ErrorCode = ${this.errorCode ?? ""}, ErrorMessage = ${this.errorMessage ?? ""}, HasValue = ${formatBoolean(this.hasValue)}`;
+  }
+
+  toString(): string {
+    return `OperationResult { ${this.$printMembers()} }`;
   }
 }

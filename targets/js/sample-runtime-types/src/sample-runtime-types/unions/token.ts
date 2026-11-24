@@ -58,4 +58,12 @@ export abstract class Token {
   with(overrides?: Partial<Token>): Token {
     return copyRecordWith<Token>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `Kind = ${this.kind}`;
+  }
+
+  toString(): string {
+    return `Token { ${this.$printMembers()} }`;
+  }
 }

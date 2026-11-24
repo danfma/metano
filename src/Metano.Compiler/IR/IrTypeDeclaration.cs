@@ -87,6 +87,12 @@ public sealed record IrClassDeclaration(
     public bool HasParameterlessCtor { get; init; }
 
     /// <summary>
+    /// The facts behind the record's .NET text (baseline FR-093); <c>null</c> for
+    /// a type without record value equality.
+    /// </summary>
+    public IrRecordPrinting? Printing { get; init; }
+
+    /// <summary>
     /// The constructed root <paramref name="method"/> is anchored on: a branch
     /// of that root's runtime dispatcher, not a fast path; <c>null</c> otherwise.
     /// </summary>

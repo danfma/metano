@@ -44,4 +44,14 @@ export class NLeaf extends NMid {
   override with(overrides?: Partial<NLeaf>): NLeaf {
     return copyRecordWith<NLeaf>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}C = ${this.c}`;
+  }
+
+  override toString(): string {
+    return `NLeaf { ${this.$printMembers()} }`;
+  }
 }

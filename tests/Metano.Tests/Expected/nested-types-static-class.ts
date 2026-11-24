@@ -26,6 +26,10 @@ class ShotSchedule$ShotEntry {
   with(overrides?: Partial<ShotSchedule$ShotEntry>): ShotSchedule$ShotEntry {
     return copyRecordWith<ShotSchedule$ShotEntry>(this, overrides);
   }
+
+  toString(): string {
+    return `ShotEntry { Name = ${this.name ?? ""}, Frames = ${this.frames} }`;
+  }
 }
 
 const ShotSchedule$Kind = {
@@ -55,6 +59,10 @@ class ShotSchedule$Slot {
 
   with(overrides?: Partial<ShotSchedule$Slot>): ShotSchedule$Slot {
     return copyRecordWith<ShotSchedule$Slot>(this, overrides);
+  }
+
+  toString(): string {
+    return `Slot { Index = ${this.index} }`;
   }
 }
 
@@ -88,6 +96,10 @@ class ShotSchedule$Deep$Leaf {
 
   with(overrides?: Partial<ShotSchedule$Deep$Leaf>): ShotSchedule$Deep$Leaf {
     return copyRecordWith<ShotSchedule$Deep$Leaf>(this, overrides);
+  }
+
+  toString(): string {
+    return `Leaf { N = ${this.n} }`;
   }
 }
 

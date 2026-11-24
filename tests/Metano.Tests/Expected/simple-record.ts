@@ -18,4 +18,8 @@ export class Point {
   with(overrides?: Partial<Point>): Point {
     return copyRecordWith<Point>(this, overrides);
   }
+
+  toString(): string {
+    return `Point { X = ${this.x}, Y = ${this.y} }`;
+  }
 }

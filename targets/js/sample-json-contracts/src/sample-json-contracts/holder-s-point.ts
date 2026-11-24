@@ -40,4 +40,12 @@ export class HolderSPoint {
   with(overrides?: Partial<HolderSPoint>): HolderSPoint {
     return copyRecordWith<HolderSPoint>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `S = ${this.s}`;
+  }
+
+  toString(): string {
+    return `HolderSPoint { ${this.$printMembers()} }`;
+  }
 }

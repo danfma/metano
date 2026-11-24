@@ -39,4 +39,14 @@ export class SilenceClip extends Clip {
   override with(overrides?: Partial<SilenceClip>): SilenceClip {
     return copyRecordWith<SilenceClip>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    return super.$printMembers?.() ?? "";
+  }
+
+  override toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `SilenceClip { ${members} }` : "SilenceClip { }";
+  }
 }

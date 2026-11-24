@@ -41,4 +41,8 @@ export class LevelMapHolder {
   with(overrides?: Partial<LevelMapHolder>): LevelMapHolder {
     return copyRecordWith<LevelMapHolder>(this, overrides);
   }
+
+  toString(): string {
+    return `LevelMapHolder { ByLevel = ${this.byLevel} }`;
+  }
 }

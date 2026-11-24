@@ -22,4 +22,8 @@ export class Coord {
   with(overrides?: Partial<Coord>): Coord {
     return copyRecordWith<Coord>(this, overrides);
   }
+
+  toString(): string {
+    return `Coord { X = ${this.x}, Y = ${this.y} }`;
+  }
 }

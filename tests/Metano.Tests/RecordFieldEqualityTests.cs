@@ -27,7 +27,9 @@ public class RecordFieldEqualityTests
         var reading = files["reading.ts"];
 
         await Assert.That(reading).Contains("valueEquals(this.x, other.x)");
-        await Assert.That(reading).Contains("import { HashCode, copyRecordWith, valueEquals }");
+        // The record's text adds the double / float formatter (baseline FR-093).
+        await Assert.That(reading).Contains("import { HashCode, copyRecordWith, format");
+        await Assert.That(reading).Contains(", valueEquals } from \"metano-runtime\"");
         await Assert.That(reading).DoesNotContain("this.x === other.x");
     }
 

@@ -49,4 +49,8 @@ export class Timeline {
   with(overrides?: Partial<Timeline>): Timeline {
     return copyRecordWith<Timeline>(this, overrides);
   }
+
+  toString(): string {
+    return `Timeline { Name = ${this.name}, Main = ${this.main}, Clips = ${this.clips} }`;
+  }
 }

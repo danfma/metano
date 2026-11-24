@@ -21,6 +21,14 @@ export class Inner {
   with(overrides?: Partial<Inner>): Inner {
     return copyRecordWith<Inner>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `N = ${this.n}`;
+  }
+
+  toString(): string {
+    return `Inner { ${this.$printMembers()} }`;
+  }
 }
 
 export class Part {
@@ -39,5 +47,13 @@ export class Part {
 
   with(overrides?: Partial<Part>): Part {
     return copyRecordWith<Part>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Item = ${this.item ?? ""}`;
+  }
+
+  toString(): string {
+    return `Part { ${this.$printMembers()} }`;
   }
 }
