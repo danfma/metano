@@ -9,7 +9,9 @@ namespace Metano.Tests;
 /// walked by code unit, the throwing <c>int</c> remainder and
 /// <c>Math.Abs</c>, the <c>decimal</c> / <c>float</c> conversions of a
 /// <c>double</c>, and the numeric step a cast applies before a user
-/// conversion, and a nested enum's <c>default</c>. The values run against .NET in <c>tests/Conformance</c>
+/// conversion, a nested enum's <c>default</c>, the single-precision rounding
+/// of <c>float</c> arithmetic, and the value of an extension property's
+/// <c>++</c>. The values run against .NET in <c>tests/Conformance</c>
 /// (<c>CharIntGapProbes</c>).
 /// </summary>
 public class CharIntConversionGapTests
@@ -53,6 +55,43 @@ public class CharIntConversionGapTests
         }
 
         [Transpile]
+        public class Box
+        {
+            public decimal M;
+        }
+
+        [Transpile]
+        public static class BoxExtensions
+        {
+            extension(Box b)
+            {
+                public decimal Amount { get => b.M; set => b.M = value; }
+            }
+        }
+
+        [Transpile]
+        public static class Singles
+        {
+            public static float Times(float a) => a * 3f;
+            public static float Chain(float a, float b) => a * b + a / b;
+            public static float Compound(float a) { a += 0.1f; return a; }
+            public static float CompoundRemainder(float a, float d) { a %= d; return a; }
+            public static float Step(float a) { a++; return a; }
+            public static float PostStep(float a) { var old = a++; return old; }
+            public static float? Lifted(float? a, float b) => a * b;
+            public static float Negate(float a) => -a;
+            public static float Remainder(float a, float b) => a % b;
+            public static float FromInt(int i) => i;
+            public static float FromShort(short s) => s;
+            public static double Widened(float a) => a * 2.0;
+            public static float Total(float[] xs) => xs.Sum();
+            public static float Mean(float[] xs) => xs.Average();
+            public static double DoubleTotal(double[] xs) => xs.Sum();
+            public static decimal PostfixExtension(Box b) => b.Amount++;
+            public static decimal PrefixExtension(Box b) => ++b.Amount;
+        }
+
+        [Transpile]
         public static class Gaps
         {
             public static char? NullableIncrement(char? c) { c++; return c; }
@@ -86,7 +125,8 @@ public class CharIntConversionGapTests
     [Arguments("const a = [c.charCodeAt(0), 98];")]
     [Arguments("return cs.join(\"\");")]
     [Arguments("return c.repeat(n);")]
-    [Arguments("for (const ch of s.split(\"\")) {")]
+    [Arguments("for (let $i = 0; $i < $s.length; $i++) {")]
+    [Arguments("const ch = $s[$i]!;")]
     [Arguments("return absInt32(x);")]
     [Arguments("return intRem(a, b);")]
     [Arguments("return a % 10;")]
@@ -103,6 +143,46 @@ public class CharIntConversionGapTests
 
         await Assert.That(files["gaps.ts"]).Contains(expected);
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task StringForeach_IndexesTheStringWithoutCopyingIt()
+    {
+        var files = TranspileHelper.Transpile(Source);
+
+        await Assert.That(files["gaps.ts"]).Contains("const $s = s;");
+        await Assert.That(files["gaps.ts"]).DoesNotContain("split(");
+    }
+
+    [Test]
+    [Arguments("return Math.fround(a * 3);")]
+    [Arguments("return Math.fround(Math.fround(a * b) + Math.fround(a / b));")]
+    [Arguments("a = Math.fround(a + 0.10000000149011612);")]
+    [Arguments("a %= d;")]
+    [Arguments("a = Math.fround(a + 1);")]
+    [Arguments("return a == null ? null : Math.fround(a * b);")]
+    [Arguments("return -a;")]
+    [Arguments("return a % b;")]
+    [Arguments("return Math.fround(i);")]
+    [Arguments("return s;")]
+    [Arguments("return a * 2;")]
+    [Arguments("return Math.fround(linq(xs, sum()));")]
+    [Arguments("return Math.fround(linq(xs, average()));")]
+    public async Task Single_RoundsEveryInexactResult(string expected)
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
+
+        await Assert.That(files["singles.ts"]).Contains(expected);
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+    }
+
+    [Test]
+    public async Task ExtensionPropertyIncrement_YieldsTheValueWhenUsed()
+    {
+        var files = TranspileHelper.Transpile(Source);
+
+        await Assert.That(files["singles.ts"]).Contains("amount$set(b, ");
+        await Assert.That(files["singles.ts"]).DoesNotContain("return amount$set(");
     }
 
     [Test]

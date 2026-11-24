@@ -1323,11 +1323,12 @@ an expression or a `metano-runtime` helper; an overload that is not listed stays
 | `int.MaxValue`, `char.MaxValue` and the other limits of `byte`, `sbyte`, `short`, `ushort`, `int`, `uint`, `char` | the folded literal (`2147483647`, `"￿"` read as `65535`); before, `Int32.maxValue` threw a `ReferenceError` |
 | `new string(chars)` / `new string(c, n)` | `chars.join("")` / `c.repeat(n)`; the range, span and pointer overloads stay unmapped (`MS0001`) |
 | `int[] a = { c, 'b' };` | the array literal `[c.charCodeAt(0), 98]` |
-| `foreach (var c in s)` and LINQ over a `string` | the UTF-16 code units (`s.split("")`; `linq` splits a string source), so a surrogate pair is two elements, as in .NET |
+| `foreach (var c in s)` and LINQ over a `string` | the UTF-16 code units, so a surrogate pair is two elements, as in .NET: `foreach` indexes the string (`for (let $i = 0; $i < $s.length; $i++) { const c = $s[$i]!; … }`, the string bound once), and `linq` reads a string source through a lazy code-unit iterator, so `First`/`Any`/`Take` stop early and no array is copied |
 | `c++`, `c += k` on a `char?` | lifted: `null` stays `null`, a value steps its code |
 | `(char)m` (`decimal`) | `String.fromCharCode(charCodeFromDecimal(m))`: truncates, throws `OverflowException` outside 0–65535 |
-| `(decimal)d` / `(decimal)f` | `new Decimal(decimalTextFromDouble(d, 15))` / `(f, 7)`: rounded to the significant digits .NET 10 keeps (`(decimal)(0.1 + 0.2)` is `0.3`); NaN, the infinities and values beyond `decimal.MaxValue` throw `OverflowException` |
-| `(float)d` | `Math.fround(d)` |
+| `(decimal)d` / `(decimal)f` | `new Decimal(decimalTextFromDouble(d, 15))` / `(f, 7)`: rounded to the significant digits .NET 10 keeps, half to even, at most 28 decimal places (`(decimal)(0.1 + 0.2)` is `0.3`, `(decimal)1000000000000005.0` is `1000000000000000`, `(decimal)1e-30` is `0`); NaN, the infinities and values beyond `decimal.MaxValue` throw `OverflowException` |
+| `(float)d`, `(float)i`, `float f = i` (`double`, `int`, `uint`) | `Math.fround(d)` |
+| `float` `a + b`, `-`, `*`, `/`, the same compound assignments, `++` / `--` (lifted forms included), and LINQ `Sum` / `Average` over `float` | rounded to single precision: `Math.fround(a * b)`, `f = Math.fround(f + 1)`, `Math.fround(linq(xs, sum$rt()))`, so a `float` computed by arithmetic equals the same value cast to `float`; `%`, `%=` and unary `-` are exact and stay native. A `float?` `Sum` / `Average` is not rounded yet |
 | `a % b` on `int` / `uint` with a divisor that is not a constant | `intRem(a, b)`: throws `DivideByZeroException` for `0` and `OverflowException` for `int.MinValue % -1`; a constant divisor keeps `%` |
 | `a / b` on `int` | `intDiv(a, b)` now also throws `OverflowException` for `int.MinValue / -1` |
 | `Math.Abs(int)` | `absInt32(x)`: throws `OverflowException` for `int.MinValue` |

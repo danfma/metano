@@ -69,7 +69,7 @@ internal static class IrToTsNumericConversionBridge
         if (IrNumericConversion.IsIntegerToDecimal(from, to))
             return DecimalOfInteger(value);
 
-        if (IrNumericConversion.IsDoubleToSingle(from, to))
+        if (IrNumericConversion.IsRoundedToSingle(from, to))
             return Global("Math.fround", value);
 
         if (IrNumericConversion.IsBinaryFloatingPointToDecimal(from, to))

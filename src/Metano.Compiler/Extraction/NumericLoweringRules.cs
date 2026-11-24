@@ -34,10 +34,14 @@ namespace Metano.Compiler.Extraction;
 /// (<c>a + b</c> → <c>a.plus(b)</c>) and <c>BuildDecimalEquality</c> do not
 /// read it yet and run for every target, Dart included (a latent Dart gap,
 /// deferred).</param>
-/// <param name="RoundsSinglePrecision">Whether a <c>double</c> cast to
-/// <c>float</c> is rounded to single precision (#695): the target holds both
-/// in one 64-bit binary type, as JavaScript's <c>number</c> is. Dart keeps
-/// its output as it was.</param>
+/// <param name="RoundsSinglePrecision">Whether a <c>float</c> value is kept
+/// in single precision (#695), as the target holds both binary types in one
+/// 64-bit type (JavaScript's <c>number</c>): a <c>double</c>, <c>int</c> or
+/// <c>uint</c> converted to <c>float</c> is rounded
+/// (<see cref="IrNumericConversion.IsRoundedToSingle"/>), and so is every
+/// inexact <c>float</c> arithmetic result and store
+/// (<see cref="SinglePrecisionRounding"/>). Dart keeps its output as it
+/// was.</param>
 /// <param name="UsesEnumUnderlyingIntegers">Whether numeric enum conversions,
 /// arithmetic and folded constants use their underlying integer endpoints
 /// (spec 011 FR-044, #701 and #708). Dart keeps its enum output as it was
@@ -78,12 +82,14 @@ internal sealed record NumericLoweringRules(
     /// <c>char</c> read as a <c>double</c> / <c>float</c> or, when the target
     /// lowers char codes, as any number (FR-071), or an integer of 32 bits
     /// or fewer read as a <c>decimal</c> when the target lowers decimal
-    /// values (FR-080).
+    /// values (FR-080), or an <c>int</c> / <c>uint</c> read as a
+    /// <c>float</c> when the target rounds single precision (#695).
     /// </summary>
     public bool NeedsImplicitNode(IrNumericEndpoint from, IrNumericEndpoint to) =>
         CrossesSixtyFourBits(from, to)
         || IsLoweredCharRead(from, to)
-        || IsLoweredToDecimal(from, to);
+        || IsLoweredToDecimal(from, to)
+        || IsLoweredToSingle(from, to);
 
     /// <summary>
     /// Whether a conversion from <paramref name="from"/> to
@@ -95,7 +101,7 @@ internal sealed record NumericLoweringRules(
     /// the target lowers char codes, made of an integer or a <c>decimal</c> (FR-071, FR-072, #695), a
     /// <c>decimal</c> made of such an integer or of a <c>double</c> /
     /// <c>float</c> when the target lowers decimal values (FR-080, #695), and
-    /// a <c>double</c> rounded to a <c>float</c> when the target rounds
+    /// a <c>double</c>, <c>int</c> or <c>uint</c> rounded to a <c>float</c> when the target rounds
     /// single precision (#695), and the conversions of
     /// <see cref="NumericEndpoints.CrossesSixtyFourBits"/>.
     /// </summary>
@@ -112,7 +118,7 @@ internal sealed record NumericLoweringRules(
             || IrNumericConversion.IsDecimalToBinaryFloatingPoint(source, target)
             || IrNumericConversion.IsDecimalToNarrowInteger(source, target)
             || IsLoweredToDecimal(source, target)
-            || (RoundsSinglePrecision && IrNumericConversion.IsDoubleToSingle(source, target))
+            || IsLoweredToSingle(source, target)
             || CrossesSixtyFourBits(source, target);
     }
 
@@ -130,6 +136,9 @@ internal sealed record NumericLoweringRules(
             IrNumericConversion.IsIntegerToDecimal(from, to)
             || IrNumericConversion.IsBinaryFloatingPointToDecimal(from, to)
         );
+
+    private bool IsLoweredToSingle(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        RoundsSinglePrecision && IrNumericConversion.IsRoundedToSingle(from, to);
 
     private bool IsLoweredCharRead(IrNumericEndpoint from, IrNumericEndpoint to) =>
         IrNumericConversion.IsCharRead(from, to) && (LowersCharCodes || to.Kind.IsFloatingPoint());

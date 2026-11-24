@@ -103,7 +103,6 @@ StringProbes.cases                    none  ToUpperInvariant("ß") gives SS in J
 StringProbes.emptyAndNullArgs         none  "abc".Contains(null) does not throw ArgumentNullException
 StringProbes.trimSpecial              none  JavaScript trims U+FEFF, .NET does not
 TextProbes.generic                    none  generic float text loses Single type identity; bool and double default text now matches
-TextProbes.floatMath                  none  float equality after a float computation
 TextProbes.recordToString             #664  record ToString prints [object Object]
 LazyDirectProbes.baseModuleFirst      none  importing the base module of a lazy static constructor cycle directly (not through the barrel) hits the extends TDZ; follow-up: automatic co-location of cycle members (FR-066 option C, to be filed)
 LazyFieldProbes.structDefaultDoesNotTrigger #291  `new S()` of a struct runs its declared constructor instead of the default value; the lazy static constructor still runs at the first instance method call

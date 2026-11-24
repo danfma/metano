@@ -60,6 +60,7 @@ public sealed partial class IrExpressionExtractor
     private bool RequiresReadModifyWrite(IrBinaryOp op, AssignmentExpressionSyntax assign) =>
         HasNoTargetCompoundOperator(op)
         || NeedsOverflowReduction(assign)
+        || RoundsToSingle(_semantic.GetOperation(assign))
         || NeedsSixtyFourBitReadModifyWrite(op, assign)
         || NeedsLogicalShiftReadModifyWrite(op, assign)
         || IsDecimalCompound(op, assign);

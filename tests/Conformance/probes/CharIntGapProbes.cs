@@ -398,4 +398,148 @@ public static class CharIntGapProbes
         d["k"]++;
         return e + "|" + (int)e + "|" + $"{d["k"]}" + "|" + default(CharIntGapOuter.Inner);
     }
+
+    // Round 1 (#695): float arithmetic rounds to single precision as a
+    // `(float)` cast does, a string walks its code units without a copy, a
+    // `(decimal)double` ties to even, and an extension `++` yields its value.
+
+    public static string FloatMix()
+    {
+        float a = 0.1f;
+        float c = a * 3f;
+        float b = (float)(a * 3.0);
+        double dd = 0.7;
+        float x = (float)dd;
+        float y = x + 0f;
+        return (c == b) + "|" + (x == y) + "|" + (x == 0.7f);
+    }
+
+    public static string FloatChain()
+    {
+        float a = 0.1f,
+            b = 0.2f,
+            c = 0.3f;
+        float r = a * b + a / c - b;
+        double wide = a * 3.0;
+        return ((double)r).ToString("R")
+            + "|"
+            + (a + b == c)
+            + "|"
+            + ((double)(a + b)).ToString("R")
+            + "|"
+            + wide.ToString("R");
+    }
+
+    public static string FloatCompound()
+    {
+        float f = 0.1f;
+        f += 0.2f;
+        f *= 3f;
+        f /= 7f;
+        f -= 0.01f;
+        float m = 5.5f;
+        m %= 2f;
+        float[] arr = { 0.1f };
+        arr[0] += 0.2f;
+        var dict = new Dictionary<string, float> { ["k"] = 0.1f };
+        dict["k"] += 0.2f;
+        return ((double)f).ToString("R")
+            + "|"
+            + m
+            + "|"
+            + ((double)arr[0]).ToString("R")
+            + "|"
+            + ((double)dict["k"]).ToString("R");
+    }
+
+    static float? NullableSingle(bool some) => some ? 0.1f : null;
+
+    public static string FloatIncrement()
+    {
+        float f = 16777216f;
+        f++;
+        float g = 0.1f;
+        float old = g++;
+        float pre = ++g;
+        float? n = NullableSingle(true);
+        n++;
+        float? none = NullableSingle(false);
+        none++;
+        return ((double)f).ToString("R")
+            + "|"
+            + ((double)old).ToString("R")
+            + "|"
+            + ((double)pre).ToString("R")
+            + "|"
+            + ((double)n!.Value).ToString("R")
+            + "|"
+            + (none == null);
+    }
+
+    public static string FloatFromInt()
+    {
+        int i = 16777217;
+        uint u = 4294967295u;
+        float f = i;
+        float g = (float)u;
+        return ((double)f).ToString("R") + "|" + ((double)g).ToString("R") + "|" + (f == 16777216f);
+    }
+
+    public static string FloatLinq()
+    {
+        float[] xs = { 0.1f, 0.2f, 0.3f };
+        float sum = xs.Sum();
+        float avg = xs.Average();
+        return ((double)sum).ToString("R") + "|" + ((double)avg).ToString("R");
+    }
+
+    public static string DecimalTies()
+    {
+        double a = 1000000000000005.0,
+            b = 1000000000000025.0,
+            t = 1e-30,
+            u = 1.2345678901234567e-20,
+            h = 5e-29;
+        float f = 1.25e-7f;
+        return (decimal)a
+            + "|"
+            + (decimal)b
+            + "|"
+            + (decimal)t
+            + "|"
+            + (decimal)u
+            + "|"
+            + (decimal)h
+            + "|"
+            + (decimal)f
+            + "|"
+            + (decimal)(-0.0);
+    }
+
+    public static string DecimalExtPostfix()
+    {
+        var b = new CharIntGapBox { M = 1.5m };
+        var old = b.Amount++;
+        var neu = ++b.Amount;
+        var down = b.Amount--;
+        return old + "|" + neu + "|" + down + "|" + b.M;
+    }
+
+    public static string StringWalkCopy()
+    {
+        string s = "a\uD83D\uDE00b";
+        var sb = "";
+        foreach (var ch in s)
+        {
+            s = "changed";
+            sb += (int)ch + ",";
+        }
+        return sb
+            + "|"
+            + "xy\uD83D".First()
+            + "|"
+            + "\uDE00z".Any()
+            + "|"
+            + new string("a\uD83D\uDE00".Take(2).ToArray()).Length;
+    }
 }

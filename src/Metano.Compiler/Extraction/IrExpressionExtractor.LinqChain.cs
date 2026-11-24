@@ -94,16 +94,24 @@ public sealed partial class IrExpressionExtractor
 
         stages.Reverse();
         var source = Extract(sourceSyntax);
+        var resultType = _semantic.GetTypeInfo(outermost).Type;
+
         // Build-time fusion of adjacent stages (#207). Idempotent on
         // chains the rules don't match — returns the original instance.
-        return IrLinqChainFuser.Fuse(
+        var chain = IrLinqChainFuser.Fuse(
             new IrLinqChain(source, stages)
             {
-                ResultType = _semantic.GetTypeInfo(outermost).Type is { } resultType
-                    ? MapNonNullType(resultType)
-                    : null,
+                ResultType = resultType is not null ? MapNonNullType(resultType) : null,
             }
         );
+
+        return SinglePrecisionRounding.RoundsAggregate(
+            stages[^1].Operator,
+            resultType,
+            _context.NumericLowering
+        )
+            ? SinglePrecisionRounding.Round(chain)
+            : chain;
     }
 
     /// <summary>
