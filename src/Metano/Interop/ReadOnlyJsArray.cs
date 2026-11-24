@@ -16,7 +16,9 @@ namespace Metano.Interop;
 /// mirroring <see cref="ReadOnlySpan{T}"/>), exposing <see cref="Length"/> and a
 /// get-only indexer as plain members, and carries a <see cref="JsonConverterAttribute"/>
 /// so System.Text.Json reads and writes it as a JSON array (trimmed and
-/// NativeAOT apps register the element type with <c>[JsonSerializable(typeof(T))]</c>). TypeScript emits
+/// NativeAOT apps register the element type with <c>[JsonSerializable(typeof(T))]</c>,
+/// and NativeAOT apps also register <see cref="ReadOnlyJsArrayJsonConverter{T}"/> for a
+/// value-type element). TypeScript emits
 /// <c>readonly T[]</c>, exposing only non-mutating <c>ReadonlyArray</c> members;
 /// <see cref="JsArray{T}"/> and <c>T[]</c> convert to it implicitly and nothing is
 /// emitted. On .NET it wraps an <see cref="IReadOnlyList{T}"/> directly (or a
@@ -167,8 +169,8 @@ public sealed class ReadOnlyJsArrayJsonConverterFactory : JsonConverterFactory
         catch (NotSupportedException error)
         {
             throw new NotSupportedException(
-                $"ReadOnlyJsArray<{elementType.Name}> needs "
-                    + $"ReadOnlyJsArrayJsonConverter<{elementType.Name}> registered in "
+                $"ReadOnlyJsArray<{elementType}> needs "
+                    + $"ReadOnlyJsArrayJsonConverter<{elementType}> registered in "
                     + "JsonSerializerOptions.Converters or JsonSourceGenerationOptions.Converters "
                     + "under NativeAOT.",
                 error

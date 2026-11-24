@@ -66,6 +66,10 @@ public class JsonUnmirroredOptionTests
     [Arguments("IncludeFields = true", "IncludeFields")]
     [Arguments("UseStringEnumConverter = true", "UseStringEnumConverter")]
     [Arguments("Converters = new[] { typeof(JsonStringEnumConverter) }", "Converters")]
+    [Arguments(
+        "Converters = new[] { typeof(Metano.Interop.ReadOnlyJsArrayJsonConverter<int>), typeof(JsonStringEnumConverter) }",
+        "Converters"
+    )]
     [Arguments("ReferenceHandler = JsonKnownReferenceHandler.Preserve", "ReferenceHandler")]
     [Arguments("DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase", "DictionaryKeyPolicy")]
     [Arguments("ReadCommentHandling = JsonCommentHandling.Skip", "ReadCommentHandling")]
@@ -149,6 +153,7 @@ public class JsonUnmirroredOptionTests
     [Arguments("AllowDuplicateProperties = true")]
     [Arguments("ReferenceHandler = JsonKnownReferenceHandler.Unspecified")]
     [Arguments("Converters = new System.Type[0]")]
+    [Arguments("Converters = new[] { typeof(Metano.Interop.ReadOnlyJsArrayJsonConverter<int>) }")]
     [Arguments("MaxDepth = 64")]
     [Arguments("MaxDepth = 0")]
     public async Task MirroredOrDefaultOption_IsNotReported(string options)
