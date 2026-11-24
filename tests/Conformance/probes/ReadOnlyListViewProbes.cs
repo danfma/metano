@@ -5,6 +5,9 @@ using System.Text.Json.Serialization;
 using Metano.Annotations;
 using Metano.Interop;
 
+// Probe-local mappings: the product maps neither the static JsonSerializer
+// calls nor JsonSerializerContext.Default (it emits `default_`, while the
+// generated context exposes `static get default()`; tracked in #741).
 [assembly: MapMethod(
     typeof(JsonSerializer),
     nameof(JsonSerializer.Serialize),

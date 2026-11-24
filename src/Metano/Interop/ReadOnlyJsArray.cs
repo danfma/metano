@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,7 +15,8 @@ namespace Metano.Interop;
 /// Implements only <see cref="IEnumerable{T}"/> (not <see cref="IReadOnlyList{T}"/>,
 /// mirroring <see cref="ReadOnlySpan{T}"/>), exposing <see cref="Length"/> and a
 /// get-only indexer as plain members, and carries a <see cref="JsonConverterAttribute"/>
-/// so System.Text.Json reads and writes it as a JSON array. TypeScript emits
+/// so System.Text.Json reads and writes it as a JSON array (trimmed and
+/// NativeAOT apps register the element type with <c>[JsonSerializable(typeof(T))]</c>). TypeScript emits
 /// <c>readonly T[]</c>, exposing only non-mutating <c>ReadonlyArray</c> members;
 /// <see cref="JsArray{T}"/> and <c>T[]</c> convert to it implicitly and nothing is
 /// emitted. On .NET it wraps an <see cref="IReadOnlyList{T}"/> directly (or a
@@ -143,6 +145,13 @@ public sealed class ReadOnlyJsArrayJsonConverterFactory : JsonConverterFactory
         && typeToConvert.GetGenericTypeDefinition() == typeof(ReadOnlyJsArray<>);
 
     /// <inheritdoc />
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050:RequiresDynamicCode",
+        Justification = "The converter is a sealed generic class with no static generic virtual "
+            + "calls; NativeAOT instantiates it over the element types the app's "
+            + "JsonSerializerContext already roots (FR-056a requires them to be registered)."
+    )]
     public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
         var elementType = typeToConvert.GetGenericArguments()[0];
@@ -209,22 +218,46 @@ public sealed class ReadOnlyJsArrayJsonConverterFactory : JsonConverterFactory
             if (options.TryGetTypeInfo(typeof(T), out var typeInfo))
                 return (JsonTypeInfo<T>)typeInfo;
 
-            var fallback = FallbackOptions.GetValue(options, static source =>
-            {
-                var copy = new JsonSerializerOptions(source)
-                {
-                    TypeInfoResolver = source.TypeInfoResolver is null
-                        ? new DefaultJsonTypeInfoResolver()
-                        : JsonTypeInfoResolver.Combine(
-                            source.TypeInfoResolver,
-                            new DefaultJsonTypeInfoResolver()
-                        ),
-                };
+            if (!JsonSerializer.IsReflectionEnabledByDefault)
+                return (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
 
-                return copy;
-            });
+            return ResolveThroughReflection(options);
+        }
+
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026:RequiresUnreferencedCode",
+            Justification = "Reached only when JsonSerializer.IsReflectionEnabledByDefault is "
+                + "true; trimmed and AOT apps default it to false and take the "
+                + "GetTypeInfo path, which reports unregistered element types."
+        )]
+        [UnconditionalSuppressMessage(
+            "AOT",
+            "IL3050:RequiresDynamicCode",
+            Justification = "Reached only when JsonSerializer.IsReflectionEnabledByDefault is "
+                + "true; trimmed and AOT apps default it to false."
+        )]
+        private static JsonTypeInfo<T> ResolveThroughReflection(JsonSerializerOptions options)
+        {
+            var fallback = FallbackOptions.GetValue(options, CreateReflectionOptions);
 
             return (JsonTypeInfo<T>)fallback.GetTypeInfo(typeof(T));
+        }
+
+        [RequiresUnreferencedCode(
+            "Uses DefaultJsonTypeInfoResolver for unregistered element types."
+        )]
+        [RequiresDynamicCode("Uses DefaultJsonTypeInfoResolver for unregistered element types.")]
+        private static JsonSerializerOptions CreateReflectionOptions(JsonSerializerOptions source)
+        {
+            var reflection = new DefaultJsonTypeInfoResolver();
+
+            return new JsonSerializerOptions(source)
+            {
+                TypeInfoResolver = source.TypeInfoResolver is null
+                    ? reflection
+                    : JsonTypeInfoResolver.Combine(source.TypeInfoResolver, reflection),
+            };
         }
     }
 }
