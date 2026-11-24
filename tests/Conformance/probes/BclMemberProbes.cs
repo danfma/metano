@@ -93,7 +93,22 @@ public static class BclMemberProbes
 
     public static string CharAsciiTests()
     {
-        var chars = new[] { 'a', 'F', 'g', 'Z', '0', '9', '_', 'é', '\u007F', '\u0080', '٣', ' ' };
+        var chars = new[]
+        {
+            'a',
+            'c',
+            'F',
+            'g',
+            'Z',
+            '0',
+            '9',
+            '_',
+            'é',
+            '\u007F',
+            '\u0080',
+            '٣',
+            ' ',
+        };
         var text = new StringBuilder();
 
         foreach (var c in chars)
@@ -108,6 +123,7 @@ public static class BclMemberProbes
                 .Append(char.IsAsciiHexDigitLower(c) ? 'x' : '-')
                 .Append(char.IsAsciiHexDigitUpper(c) ? 'X' : '-')
                 .Append(char.IsBetween(c, 'a', 'f') ? 'b' : '-')
+                .Append(char.IsBetween(c, 'f', 'a') ? 'r' : '-')
                 .Append(' ');
         }
 

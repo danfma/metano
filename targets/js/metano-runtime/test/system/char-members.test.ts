@@ -57,4 +57,10 @@ describe("charIsBetween", () => {
     expect(charIsBetween("f", "a", "f")).toBe(true);
     expect(charIsBetween("g", "a", "f")).toBe(false);
   });
+
+  test("wraps around like .NET when min is greater than max", () => {
+    expect(charIsBetween("z", "f", "a")).toBe(true);
+    expect(charIsBetween("0", "f", "a")).toBe(true);
+    expect(charIsBetween("c", "f", "a")).toBe(false);
+  });
 });

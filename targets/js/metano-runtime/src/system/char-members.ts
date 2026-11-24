@@ -118,7 +118,14 @@ export function charIsAsciiHexDigit(c: string): boolean {
   return charIsAsciiHexDigitLower(c) || charIsAsciiHexDigitUpper(c);
 }
 
-/** `char.IsBetween(c, min, max)`: `min <= c <= max` by code unit. */
+/**
+ * `char.IsBetween(c, min, max)`: .NET computes `(uint)(c - min) <= (uint)(max - min)`
+ * by code unit, so the range wraps around when `min > max`.
+ */
 export function charIsBetween(c: string, min: string, max: string): boolean {
-  return c >= min && c <= max;
+  const start = min.charCodeAt(0);
+  const offset = (c.charCodeAt(0) - start) >>> 0;
+  const width = (max.charCodeAt(0) - start) >>> 0;
+
+  return offset <= width;
 }
