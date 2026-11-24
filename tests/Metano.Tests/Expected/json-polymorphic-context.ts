@@ -1,5 +1,5 @@
 import { List, type IReadOnlyList } from "metano-runtime/system/collections";
-import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
+import { NotSupportedException, SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
 import { ALeaf } from "./a-leaf";
 import { AMid } from "./a-mid";
 import { AB } from "./ab";
@@ -329,7 +329,7 @@ export class JsonContext extends SerializerContext {
       runtimeType: () => AMid.$runtimeType,
       base: this.aB,
       factory: () => {
-        throw new Error("Cannot construct abstract type 'AMid'.");
+        throw new NotSupportedException("Deserialization of interface or abstract types is not supported. Type 'TestApp.AMid'.");
       },
       properties: [
         {

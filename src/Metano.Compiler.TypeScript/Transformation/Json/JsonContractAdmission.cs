@@ -26,6 +26,21 @@ internal sealed class JsonContractAdmission(TypeScriptTransformContext context)
         && IsTranspiledInDeclaringAssembly(named.OriginalDefinition);
 
     /// <summary>
+    /// Whether the closure claims a spec for a type a <c>ref</c> descriptor
+    /// points at: an object contract, or a transpiled non-polymorphic
+    /// interface a member is typed as. System.Text.Json writes such a member
+    /// through the interface's declared properties and throws when it reads
+    /// an object into it (#502), so its spec carries the wire properties and a
+    /// throwing factory, as an abstract class's does. A
+    /// <c>[JsonSerializable]</c> root of one stays rejected
+    /// (<see cref="ObjectRootRejectionReasonOf"/>).
+    /// </summary>
+    public bool HasRefSpec(ITypeSymbol type) =>
+        HasObjectContract(type)
+        || type is INamedTypeSymbol { TypeKind: TypeKind.Interface } named
+            && IsTranspiledInDeclaringAssembly(named.OriginalDefinition);
+
+    /// <summary>
     /// Whether the TS type of an object contract is a class the spec can name
     /// in <c>type: T</c> and construct: <c>[PlainObject]</c> types lower to
     /// TS interfaces, and a C# interface (FR-018) has no constructor either.

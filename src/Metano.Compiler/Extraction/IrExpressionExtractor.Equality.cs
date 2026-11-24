@@ -92,7 +92,9 @@ public sealed partial class IrExpressionExtractor
     /// another numeric type (<c>d == 0</c>) becomes a <c>decimal</c> value, so
     /// the value comparison sees two decimals. For a target that converts
     /// every integer read as a <c>decimal</c> (FR-080), an operand the
-    /// extraction already converted is that value.
+    /// extraction already converted is that value, and so is a literal
+    /// already classified as a decimal (<c>d == 0</c>). A target whose
+    /// decimal literal is a plain number (Dart) keeps the construction.
     /// </summary>
     private IrExpression ExtractAsDecimal(ExpressionSyntax operand)
     {
@@ -118,7 +120,9 @@ public sealed partial class IrExpressionExtractor
 
     private bool IsConvertedToDecimal(IrExpression value) =>
         _context.NumericLowering.ComputesDecimalByMethods
-        && value is IrNumericConversion { To.Kind: IrNumericKind.Decimal };
+        && value
+            is IrLiteral { Kind: IrLiteralKind.Decimal }
+                or IrNumericConversion { To.Kind: IrNumericKind.Decimal };
 
     private static IrExpression ToDecimal(IrExpression number) =>
         new IrNewExpression(new IrPrimitiveTypeRef(IrPrimitive.Decimal), [new IrArgument(number)]);
@@ -180,8 +184,8 @@ public sealed partial class IrExpressionExtractor
         bool negated
     )
     {
-        if (IsLiftedTupleOperand(tuple.LeftOperand) || IsLiftedTupleOperand(tuple.RightOperand))
-            return ReportUnsupported(bin, "nullable tuple equality");
+        var isLifted =
+            IsLiftedTupleOperand(tuple.LeftOperand) || IsLiftedTupleOperand(tuple.RightOperand);
 
         var left = TupleOperandOf(bin.Left);
         var right = TupleOperandOf(bin.Right);
@@ -196,13 +200,16 @@ public sealed partial class IrExpressionExtractor
             );
         }
 
-        if (ExceedsFlatArity(left) || ExceedsFlatArity(right))
+        if (ExceedsFlatArity(Unwrapped(left)) || ExceedsFlatArity(Unwrapped(right)))
         {
             return ReportUnsupported(
                 bin,
                 $"tuple equality over more than {SymbolHelper.MaxFlatTupleArity} elements"
             );
         }
+
+        if (isLifted)
+            return LiftedTupleEquality(left, right, negated);
 
         if (left.AllLeavesSideEffectFree() && right.AllLeavesSideEffectFree())
             return CompareTupleOperands(left, right, negated);

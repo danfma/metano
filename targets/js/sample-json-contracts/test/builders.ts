@@ -4,18 +4,20 @@ import { Temporal } from "@js-temporal/polyfill";
 import { Decimal } from "decimal.js";
 
 import { UUID } from "metano-runtime";
-import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
+import { Dictionary, HashSet, ImmutableArray, List } from "metano-runtime/system/collections";
 
 import { Account } from "#/sample-json-contracts/account";
 import { Blob } from "#/sample-json-contracts/blob";
 import type { Clip } from "#/sample-json-contracts/clip";
 import { Color } from "#/sample-json-contracts/color";
+import { Dashboard } from "#/sample-json-contracts/dashboard";
 import { DBer } from "#/sample-json-contracts/d-ber";
 import { DBase } from "#/sample-json-contracts/d-base";
 import { EpisodeRec } from "#/sample-json-contracts/episode-rec";
 import { EpisodeSummary } from "#/sample-json-contracts/episode-summary";
 import { Feed } from "#/sample-json-contracts/feed";
 import { Flavor } from "#/sample-json-contracts/flavor";
+import { Gauge } from "#/sample-json-contracts/gauge";
 import { GDer } from "#/sample-json-contracts/g-der";
 import { Group } from "#/sample-json-contracts/group";
 import { GuidMapHolder } from "#/sample-json-contracts/guid-map-holder";
@@ -23,9 +25,11 @@ import { HLeaf } from "#/sample-json-contracts/h-leaf";
 import { HMid } from "#/sample-json-contracts/h-mid";
 import { IA } from "#/sample-json-contracts/ia";
 import { IgnBase } from "#/sample-json-contracts/ign-base";
+import { ImmHolder } from "#/sample-json-contracts/imm-holder";
 import { ImageClip } from "#/sample-json-contracts/image-clip";
 import { InitRec } from "#/sample-json-contracts/init-rec";
 import { Int64Box } from "#/sample-json-contracts/int64-box";
+import { Int64Containers } from "#/sample-json-contracts/int64-containers";
 import { IntMapHolder } from "#/sample-json-contracts/int-map-holder";
 import { IS } from "#/sample-json-contracts/is";
 import { Level } from "#/sample-json-contracts/level";
@@ -39,6 +43,7 @@ import { OrdBase } from "#/sample-json-contracts/ord-base";
 import { Other } from "#/sample-json-contracts/other";
 import { OtherB } from "#/sample-json-contracts/other-b";
 import { Page } from "#/sample-json-contracts/page";
+import { Perms } from "#/sample-json-contracts/perms";
 import { Schedule } from "#/sample-json-contracts/schedule";
 import { SPoint } from "#/sample-json-contracts/s-point";
 import { SBase } from "#/sample-json-contracts/s-base";
@@ -430,6 +435,21 @@ export const caseBuilders: Record<string, CaseBuilder> = {
     build: () => Temporal.Duration.from({ hours: 1, minutes: 2, seconds: 3 }),
   },
   V13: { build: () => 1, assertRead: (value) => expect(value).toBe(1) },
+  // #369: a numeric enum reads any integer of its underlying type.
+  V13a: {
+    build: () => Perms.Read | Perms.Write,
+    assertRead: (value) => expect(value).toBe(Perms.Read | Perms.Write),
+  },
+  V13b: { build: () => 42, assertRead: (value) => expect(value).toBe(42) },
+  V13c: { build: () => 200, assertRead: (value) => expect(value).toBe(200) },
+  // #502: a member typed as a non-polymorphic interface.
+  V13f: { build: () => new Dashboard("t", new Gauge(5, "kg")) },
+  V13g: { assertRead: (value) => expect((value as Dashboard).main).toBeNull() },
+  // #713: ImmutableArray<T> is a struct.
+  V13i: {
+    build: () => new ImmHolder(ImmutableArray.of([1, 2])),
+    assertRead: (value) => expect([...(value as ImmHolder).items]).toEqual([1, 2]),
+  },
   V14: { build: () => Flavor.Sweet, assertRead: (value) => expect(value).toBe("Sweet") },
   V15: {
     build: () => HashSet.of(["a", "b"]),
@@ -708,6 +728,12 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   T22: {
     assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30+02:00[+02:00]"),
   },
+  // #512: the accepted variants first measured only on the runtime side.
+  T49: { assertRead: (value) => expect(String(value)).toBe("00:00:00") },
+  T50: { assertRead: (value) => expect(String(value)).toBe("03:04:05") },
+  T51: {
+    assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30-02:00[-02:00]"),
+  },
   T41: {
     assertRead: (value) => expect(String(value)).toBe("2024-01-31T10:20:30.9999999"),
   },
@@ -764,9 +790,13 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   OK4: {
     assertRead: (value) => expect((value as { c: string }).c).toBe("a"),
   },
-  // The 64-bit rows of spec 012 (slice 012e) run on the System.Text.Json
-  // side only (#605 moves them here); I2 runs on both sides: the generated
-  // fields are bigint values, which write and read the same digits.
+  // The 64-bit rows of spec 012 (slices 012e, 012h) run on both sides
+  // (#605): the generated fields are bigint values, written as their exact
+  // digits; every read goes through deserializeText, which keeps a 64-bit
+  // token's digits and shape as System.Text.Json reads them (FR-053).
+  I1: {
+    build: () => new Int64Box(1152921504606846977n, 18446744073709551615n, null),
+  },
   I2: {
     build: () => new Int64Box(42n, 7n, null),
     assertRead: (value) => {
@@ -778,7 +808,57 @@ export const caseBuilders: Record<string, CaseBuilder> = {
 
       expect(box.parent).toBeNull();
     },
+    viaText: true,
   },
+  I3: {
+    build: () =>
+      new Int64Containers(
+        [-9223372036854775808n, 9223372036854775807n],
+        Dictionary.assign<bigint, string>([
+          [9223372036854775807n, "a"],
+          [-3n, "b"],
+        ]),
+        Dictionary.assign<bigint, string>([[18446744073709551615n, "u"]]),
+      ),
+  },
+  I4: { viaText: true },
+  I5: { viaText: true },
+  I6: { viaText: true },
+  I7: { viaText: true },
+  I8: { viaText: true },
+  I9: { viaText: true },
+  I10: { viaText: true },
+  I11: { viaText: true },
+  I12: {
+    assertRead: (value) => {
+      const containers = expectClass(value, Int64Containers);
+
+      expect(containers.byName.get(5n)).toBe("b");
+
+      expect(containers.byName.get(0n)).toBe("c");
+    },
+    viaText: true,
+  },
+  I13: { viaText: true },
+  I14: { viaText: true },
+  I15: { viaText: true },
+  I16: { viaText: true },
+  I17: { viaText: true },
+  I18: { viaText: true },
+  I19: {
+    assertRead: (value) => {
+      const box = expectClass(value, Int64Box);
+
+      expect(box.id).toBe(9007199254740993n);
+
+      expect(box.mask).toBe(18446744073709551615n);
+
+      expect(box.parent).toBe(-9223372036854775808n);
+    },
+    viaText: true,
+  },
+  I20: { assertRead: (value) => expect(value).toBe(0n), viaText: true },
+  I21: { viaText: true },
 };
 
 /** Every builder key must have a manifest row (drift fails the test). */

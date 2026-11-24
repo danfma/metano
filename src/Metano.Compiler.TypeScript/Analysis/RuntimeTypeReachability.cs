@@ -960,8 +960,7 @@ internal sealed partial class RuntimeTypeReachability
             !type.IsStatic
             && !SymbolHelper.HasPlainObject(type)
             && !SymbolHelper.HasJsTuple(type)
-            && !SymbolHelper.HasBranded(type)
-            && !SymbolHelper.HasInlineWrapper(type)
+            && !SymbolHelper.IsPrimitiveBackedBranded(type)
             && !SymbolHelper.HasExternal(type)
             && !SymbolHelper.IsJsxComponent(type);
     }

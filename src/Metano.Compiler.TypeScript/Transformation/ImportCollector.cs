@@ -152,6 +152,12 @@ public sealed class ImportCollector(
         _currentFileName = fileName ?? GetFileName(currentType);
         CollectReferencedTypeNames(statements, sink);
 
+        // A function or variable the module declares binds its name here, so
+        // no other module's export of that name is imported over it (a private
+        // helper beside another class's exported function of its name).
+        var moduleScopeNames = ModuleScopeFunctionAndVariableNames(statements).ToHashSet(Ordinal);
+        referencedTypes.ExceptWith(moduleScopeNames);
+
         // C# `using X = Y;` aliases substitute the canonical type name with
         // the user's alias on every emitted token. The walker therefore sees
         // the alias text only; recover the canonical via the per-file scope
@@ -693,7 +699,7 @@ public sealed class ImportCollector(
             ownersByModuleExport,
             currentNs,
             currentFileName,
-            importedNames,
+            importedNames.Union(moduleScopeNames).ToHashSet(Ordinal),
             AddLocal
         );
 
@@ -717,6 +723,7 @@ public sealed class ImportCollector(
         {
             var seenTemplateExternals =
                 new HashSet<(string Name, string From, bool IsDefault, string? EmittedName)>();
+
             foreach (var ext in templateExternals)
             {
                 var bindingName = ext.EmittedName ?? ext.Name;
@@ -727,11 +734,18 @@ public sealed class ImportCollector(
                 )
                     continue;
 
-                var aliases = BuildExternalImportAliases(ext);
-
+                // A default import binds whatever local name the file spells — the
+                // facade's own name (#553) — so it takes no alias.
                 imports.Add(
-                    new TsImport([ext.Name], ext.From, IsDefault: ext.IsDefault, Aliases: aliases)
+                    ext.IsDefault
+                        ? new TsImport([bindingName], ext.From, IsDefault: true)
+                        : new TsImport(
+                            [ext.Name],
+                            ext.From,
+                            Aliases: BuildExternalImportAliases(ext)
+                        )
                 );
+
                 importedNames.Add(bindingName);
                 if (ext.Version is { Length: > 0 } version)
                     _typeMappingContext.CrossPackageDependencies.Record(ext.From, version);
@@ -1131,8 +1145,18 @@ public sealed class ImportCollector(
             var isCurrentFile =
                 ownerRef.Namespace == currentNs && ownerRef.FileName == currentFileName;
 
-            if (isCurrentFile || !importedNames.Add(exportName))
+            if (isCurrentFile)
                 continue;
+
+            // The name is already bound — imported from another module or declared
+            // here — so importing this owner's member under it would silently read
+            // the other binding.
+            if (!importedNames.Add(exportName))
+            {
+                ReportModuleExportShadowed(exportName, owners.Min!);
+
+                continue;
+            }
 
             var ownerPath = _context.PathNaming.ComputeRelativeImportPath(
                 currentNs,
@@ -1143,6 +1167,17 @@ public sealed class ImportCollector(
             addLocal(ownerPath, exportName, false);
         }
     }
+
+    private void ReportModuleExportShadowed(string exportName, string owner) =>
+        _context.ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.ExtensionHelperNameClash,
+                $"'{exportName}' of {owner} is read in a file that already binds "
+                    + $"'{exportName}' to another import or declaration. Rename one of the "
+                    + "two members in C# so both can be read."
+            )
+        );
 
     private void ReportModuleExportClash(string exportName, IEnumerable<string> owners) =>
         _context.ReportDiagnostic(
@@ -1724,6 +1759,54 @@ public sealed class ImportCollector(
     private void CollectFromEmbeddedScope(TsEmbeddedScope scope, ImportCollectionSink sink) =>
         CollectInScope(scope.BoundNames, scope.Statements, scope.Expressions, sink);
 
+    /// <summary>The names the module's top-level functions and variables declare.</summary>
+    private static IEnumerable<string> ModuleScopeFunctionAndVariableNames(
+        IEnumerable<TsTopLevel> statements
+    ) =>
+        statements
+            .Select(statement =>
+                statement switch
+                {
+                    TsFunction function => function.Name,
+                    TsTopLevelStatement { Inner: TsVariableDeclaration variable } => variable.Name,
+                    _ => null,
+                }
+            )
+            .OfType<string>();
+
+    /// <summary>
+    /// Registers what a bare identifier outside any local binding may import:
+    /// <list type="bullet">
+    ///   <item>a project type used as a value — an enum object passed to a descriptor
+    ///     spec, or the owner of a nested case a pattern tests (<c>instanceof
+    ///     Owner.Case</c>, a dotted identifier whose root names the owner, which a
+    ///     <c>[Name]</c> may spell in lowercase);</item>
+    ///   <item>a method group of a <c>[NoContainer]</c> static method, which lowers to
+    ///     its bare lowercase function name (#179);</item>
+    ///   <item>a guard used as a value (a strict guard's <c>variants</c> thunk, spec
+    ///     011 FR-029), imported as a call imports it.</item>
+    /// </list>
+    /// </summary>
+    private void CollectFromBareIdentifier(string name, ImportCollectionSink sink)
+    {
+        if (NamesTypeValue(ImportCollectionSink.RootOf(name)))
+        {
+            sink.AddValueReference(name);
+
+            return;
+        }
+
+        var importsAsCall =
+            _context.NoContainerFunctionExports.ContainsKey(name)
+            || _context.TryResolveGuardImport(name, out _);
+
+        if (!importsAsCall)
+            return;
+
+        sink.Names.Add(name);
+        sink.ValueNames.Add(name);
+    }
+
     /// <summary>
     /// Walks <paramref name="statements"/> and <paramref name="expressions"/> with
     /// <paramref name="boundNames"/> bound as locals (a <c>catch</c> parameter, a
@@ -1785,34 +1868,7 @@ public sealed class ImportCollector(
                 // A parameter, local, loop variable or caught value: never an export.
                 break;
             case TsIdentifier bareId:
-                // Bare identifiers starting with uppercase may reference transpilable
-                // types used as values (e.g., enum objects passed to descriptor specs,
-                // or a nested case tested by `instanceof Owner.Case`).
-                if (bareId.Name.Length > 0 && char.IsUpper(bareId.Name[0]))
-                {
-                    sink.AddValueReference(bareId.Name);
-                }
-                // Method-group reference to a [NoContainer] static method lowers
-                // to a bare lowercase identifier (delegate position, lambda
-                // capture, callback arg). The resolution loop below routes the
-                // name through `NoContainerFunctionExports` to emit the right
-                // import line; without registering it here the loop never sees
-                // it. (#179)
-                else if (
-                    bareId.Name.Length > 0
-                    && _context.NoContainerFunctionExports.ContainsKey(bareId.Name)
-                )
-                {
-                    names.Add(bareId.Name);
-                    valueNames.Add(bareId.Name);
-                }
-                // A guard used as a value (a strict guard's `variants` thunk,
-                // spec 011 FR-029) imports it as a call does.
-                else if (_context.TryResolveGuardImport(bareId.Name, out _))
-                {
-                    names.Add(bareId.Name);
-                    valueNames.Add(bareId.Name);
-                }
+                CollectFromBareIdentifier(bareId.Name, sink);
                 break;
             case TsNewExpression newExpr:
                 if (newExpr.Callee is TsIdentifier localId && sink.IsLocallyBound(localId.Name))
@@ -2246,7 +2302,7 @@ internal sealed class ImportCollectionSink(
         ValueNames.Add(root);
     }
 
-    private static string RootOf(string name)
+    public static string RootOf(string name)
     {
         var dot = name.IndexOf('.');
 

@@ -5,6 +5,7 @@ using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Transformation;
+using Metano.Packaging;
 using Microsoft.CodeAnalysis;
 
 namespace Metano;

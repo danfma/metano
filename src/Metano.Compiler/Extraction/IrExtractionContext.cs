@@ -21,6 +21,8 @@ public sealed record IrExtractionContext(
     LocalNaming? LocalNaming = null
 )
 {
+    private readonly bool _keepsCallEvaluationOrder;
+
     /// <summary>
     /// What the overload groups depend on besides the symbols (spec 013
     /// FR-039): the language target and the names it emits synthesized
@@ -79,6 +81,17 @@ public sealed record IrExtractionContext(
     /// (spec 011 data-model § 2, W4-31).
     /// </summary>
     internal bool KeepsNativeCollections => KeepsNativeCollectionsFor(Target);
+
+    /// <summary>
+    /// Whether the target keeps C#'s argument evaluation order on calls and
+    /// constructions. Redirecting <c>: this(...)</c> chains still follow
+    /// <see cref="KeepsArgumentEvaluationOrder"/>.
+    /// </summary>
+    public bool KeepsCallEvaluationOrder
+    {
+        get => KeepsArgumentEvaluationOrder || _keepsCallEvaluationOrder;
+        init => _keepsCallEvaluationOrder = value;
+    }
 
     /// <summary>
     /// Post-extraction fixpoint analysis of reified type parameters (spec 011

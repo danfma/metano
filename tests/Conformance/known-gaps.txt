@@ -26,6 +26,15 @@ StageHImmutableBindingProbes.immutableConstraintMethodGroup  #335  W4-C34: an im
 StageHImmutableBindingProbes.immutableGenericConstraint  #335  W4-C34: an immutable collection bound to a mutable-interface-constrained type parameter reports MS0001 and throws, instead of silently dropping the mutation
 StageHImmutableBindingProbes.immutableArrayBuilderCountSetter  #335  011h: ImmutableArray<T>.Builder.Count = n is reported (MS0001) and throws an unsupported-expression error when run (the runtime cannot produce default(T))
 
+CollectionEqualityProbes.distinctComparer  #687  Distinct(comparer) is an unsupported LINQ overload (MS0001); a comparer on a LINQ stage needs a runtime signature for the stage
+CollectionEqualityProbes.listEquals  #710  list.Equals(other) emits `list.equals`, which no runtime collection has; the instance object.Equals lowering stays general (dynamic and generic receivers keep `x.equals(y)`)
+CollectionEqualityProbes.asListCast  #710  a cast of a set, dictionary, queue or stack to IList<T> passes through (.NET: InvalidCastException); a check must tell the list targets from ICollection<T> at the call site
+CollectionEqualityProbes.immutableListEmptyAddRange  #712  an empty ImmutableList's AddRange(list) returns a new list (.NET returns the source when it is the same closed type)
+CollectionEqualityProbes.negativeZeroKeys  #710  a -0 double key of a Dictionary or HashSet is stored as +0 (the native Map normalizes it)
+CollectionEqualityProbes.recordToString  #664  a record has no synthesized toString (the PrintMembers text); needs a design for derived records
+CollectionEqualityProbes.recordStructToString  #664  a record struct has no synthesized toString (the PrintMembers text)
+W6DelegateProbes.invokeGroupAcrossParamsShapesIsLoud  none  Group G round 1: a delegate Invoke method group between a params and a non-params delegate reports MS0001 and throws, instead of miscounting the arguments silently (.NET: 3 3)
+
 AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
 AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call
@@ -67,7 +76,6 @@ DecimalProbes.compound                #662  decimal.js drops the decimal scale (
 DecimalProbes.divZero                 none  decimal division by zero does not throw DivideByZeroException
 DecimalProbes.typeTests               none  `is int` on a number that holds a whole value
 DefaultProbes.arrays                  #688  array-creation expression unsupported
-DefaultProbes.isDefault               #686  EqualityComparer<T>.Default is unmapped
 DefaultProbes.*                       #291  default(T) of a struct, enum, tuple, BCL value or type parameter
 EqualityProbes.genericArray           #688  a tuple is a plain array, so arrays behind object/T compare element by element
 EqualityProbes.objectArrays           #688  a tuple is a plain array, so arrays behind object/T compare element by element
@@ -85,7 +93,6 @@ ParseProbes.offsets                   #686  DateTimeOffset members are unmapped
 ParseProbes.timeSpans                 #686  TimeSpan members are unmapped
 ParseProbes.doubleOk                  none  double.Parse of an invalid text returns Infinity instead of throwing
 Round2Probes.exCtorArgs               #651  BCL exception identity and messages
-Round3Probes.decimalRoutes            #686  decimal.ToDouble is unmapped
 Round3Probes.mathCalls                #686  Math.PI is unmapped
 Round3Probes.timeProps                #686  TimeSpan members are unmapped
 StringProbes.chars                    #686  string.Concat over chars is unmapped
@@ -112,3 +119,9 @@ InteropProbes.inlineCodeStatement     none  by design (FR-031: Js.Code is TS-onl
 InteropProbes.unsafeCastWrong         none  by design (OD-15: UnsafeCast is checked on .NET, unchecked in TS)
 RuntimeTypeShapeProbes.plainObjectIsStructural  none  a [PlainObject] test is structural (spec 011 FR-020): another plain object with every member the guard requires tests as the type too, and MS0047 warns at the test
 RuntimeTypeShapeProbes.closedGenericName  none  the runtime's specialize() names a closed generic "RtBox`1<Int32>"; .NET's Type.Name of a closed generic is the open name "RtBox`1" (runtime follow-up)
+UnmodeledCollectionProbes.throwsSortedSet none  W6-K #581: ImmutableSortedSet collection expression is not modelled; MS0001 and a loud throw instead of the unsorted array (.NET: 1,2,3)
+UnmodeledCollectionProbes.throwsStack none  W6-K #581: ImmutableStack collection expression is not modelled; MS0001 and a loud throw instead of the unreversed array (.NET: 3,2,1)
+UnmodeledCollectionProbes.throwsFrozenSet none  W6-K #581: FrozenSet collection expression is not modelled; MS0001 and a loud throw instead of an array without dedup or Count (.NET: 2)
+UnmodeledCollectionProbes.throwsBag none  W6-K #581: a multi-element ConcurrentBag collection expression is not modelled; MS0001 and a loud throw (.NET: 1,2)
+UnmodeledCollectionProbes.throwsUserAdd none  W6-K #581: a user collection type's own Add is not lowered; MS0001 and a loud throw instead of skipping Add (.NET: 10,20)
+UnmodeledCollectionProbes.throwsHiddenAdd none  W6-K #581: a user subclass that hides List<T>.Add with its own is not lowered; MS0001 and a loud throw instead of skipping Add (.NET: 101,102)

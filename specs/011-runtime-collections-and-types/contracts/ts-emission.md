@@ -42,7 +42,7 @@ const again = Array.from(xs);
 const shared = List.adopt(copy);
 ```
 
-No reflection import: this compilation asks no runtime question about any collection kind (FR-008). The golden `collections-type-arguments.ts` adds one `o is List<string>` to the same source and pins the result: `List.of([1, 2], [Int32Type])`, `new Queue<number>()` unchanged (no question about `Queue`), `Dictionary.assign([["a", new Point(1, 2)]], [StringType, UnknownType])` (`Point` is not reached), and `import { Int32Type, StringType, UnknownType } from "metano-runtime/system/reflection"`.
+No reflection import: this compilation asks no runtime question about any collection kind (FR-008). The golden `collections-type-arguments.ts` adds one `o is List<string>` to the same source and pins the result: `List.of([1, 2], [Int32Type])`, `new Queue<number>()` unchanged (no question about `Queue`), `Dictionary.assign<string, Point>([["a", new Point(1, 2)]])` unchanged (no question about `Dictionary`), and `import { Int32Type, isType, StringType } from "metano-runtime"`.
 
 ### Collection tests and JSON reachability (D31; `collections-type-arguments.ts`, `json-runtime-type.ts`)
 

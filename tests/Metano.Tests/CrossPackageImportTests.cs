@@ -1,5 +1,6 @@
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.TypeScript;
+using Metano.Packaging;
 
 namespace Metano.Tests;
 

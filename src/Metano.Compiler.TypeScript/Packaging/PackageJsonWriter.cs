@@ -5,7 +5,7 @@ using Metano.Compiler.Diagnostics;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Transformation;
 
-namespace Metano;
+namespace Metano.Packaging;
 
 /// <summary>
 /// Generates and updates the consumer's package.json with <c>imports</c>, <c>exports</c>,
@@ -19,6 +19,8 @@ namespace Metano;
 /// </summary>
 public static class PackageJsonWriter
 {
+    internal const string PackageJsonFileName = "package.json";
+
     private const string PeerDependenciesSection = "peerDependencies";
 
     private static readonly string[] DependencySections =
@@ -92,10 +94,11 @@ public static class PackageJsonWriter
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
-        var packageJsonPath = Path.Combine(packageRoot, PackageRootResolver.PackageJsonFileName);
+        var packageJsonPath = Path.Combine(packageRoot, PackageJsonFileName);
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
         var (outputPrefix, prefixDiagnostic) = OutputPrefix.Resolve(srcRoot, srcRelative);
+
         if (prefixDiagnostic is not null)
             diagnostics.Add(prefixDiagnostic);
 
@@ -115,10 +118,12 @@ public static class PackageJsonWriter
         // but may still need the "#" import alias for internal barrel imports.
         // When outputPrefix is set, the root barrel is at {prefix}/index.ts.
         var rootIndexName = outputPrefix.Length > 0 ? $"{outputPrefix}/index.ts" : "index.ts";
+
         var hasRootIndex = files.Any(f =>
             NormalizePath(f.FileName).Equals(rootIndexName, StringComparison.Ordinal)
             || NormalizePath(f.FileName).Equals("index.ts", StringComparison.Ordinal)
         );
+
         var imports = BuildImports(
             srcRelative,
             distDirRelativeToPackageRoot,
@@ -129,6 +134,7 @@ public static class PackageJsonWriter
         );
 
         JsonObject root;
+
         if (File.Exists(packageJsonPath))
         {
             var existing = File.ReadAllText(packageJsonPath);
@@ -272,6 +278,7 @@ public static class PackageJsonWriter
             return;
 
         var existingName = root["name"]?.GetValue<string>();
+
         if (existingName is null)
         {
             root["name"] = authoritativePackageName;
@@ -432,6 +439,7 @@ public static class PackageJsonWriter
     {
         if (root.ContainsKey(key))
             return;
+
         root[key] = value;
     }
 
@@ -440,6 +448,7 @@ public static class PackageJsonWriter
     {
         if (root.ContainsKey(key))
             return;
+
         root[key] = value;
     }
 
@@ -496,6 +505,7 @@ public static class PackageJsonWriter
         {
             if (generated.ContainsKey(entryKey))
                 continue;
+
             if (IsTranspilerEmittedExportEntry(entryValue, transpilerDistPrefix))
                 existing.Remove(entryKey);
         }
@@ -599,6 +609,7 @@ public static class PackageJsonWriter
 
         var types = ReadStringField(obj, "types");
         var import = ReadStringField(obj, "import");
+
         if (types is null || import is null)
             return false;
 
@@ -619,6 +630,7 @@ public static class PackageJsonWriter
     {
         if (obj[fieldName] is not JsonValue value)
             return null;
+
         return value.TryGetValue<string>(out var s) ? s : null;
     }
 

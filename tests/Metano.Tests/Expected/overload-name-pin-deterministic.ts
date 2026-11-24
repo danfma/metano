@@ -10,26 +10,18 @@ export class Money {
   constructor(value: number);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyText) {
-      const text = args[1] as string;
-
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyCents) {
-      const value = args[1] as number;
-
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
-      const text = args[0] as string;
-
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const value = args[0] as number;
-
       return;
     }
 

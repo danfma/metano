@@ -12,28 +12,24 @@ export class Cash {
   constructor(cents: number);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Cash.byCashAmount) {
-      const amount = args[1] as Decimal;
       this.how = "amount";
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Cash.byCashCents) {
-      const cents = args[1] as number;
       this.how = "cents";
 
       return;
     }
 
     if (args.length === 1 && isDecimal(args[0])) {
-      const amount = args[0] as Decimal;
       this.how = "amount";
 
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const cents = args[0] as number;
       this.how = "cents";
 
       return;
@@ -86,26 +82,18 @@ export class Fee {
   constructor(label: string);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Fee.byFeeCents$) {
-      const cents = args[1] as number;
-
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Fee.byFeeLabel) {
-      const label = args[1] as string;
-
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const cents = args[0] as number;
-
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
-      const label = args[0] as string;
-
       return;
     }
 

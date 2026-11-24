@@ -107,7 +107,17 @@ public sealed record IrConstructorDeclaration(
 public sealed record IrConstructorChain(
     IReadOnlyList<IrArgument> Arguments,
     IrConstructorDeclaration Target
-);
+)
+{
+    /// <summary>
+    /// The indices into <see cref="Arguments"/> of the elements C# packs into
+    /// the target's <c>params</c> array when the chain passes it in expanded
+    /// form (<c>: this(1, 2, 3)</c>; empty for <c>: this()</c>), in element
+    /// order; <c>null</c> when the chain passes the array itself or the target
+    /// has no <c>params</c> array.
+    /// </summary>
+    public IReadOnlyList<int>? ExpandedParamsArguments { get; init; }
+}
 
 /// <summary>
 /// A constructor parameter that may be promoted to a property and/or captured
@@ -141,7 +151,15 @@ public sealed record IrConstructorParameter(
     string? CapturedFieldName = null,
     IrVisibility? PromotedVisibility = null,
     string? EmittedName = null
-);
+)
+{
+    /// <summary>
+    /// The C# name of the property the parameter is promoted to (<c>Of</c> for
+    /// <c>class Btn(int of) { public int Of { get; } = of; }</c>), which the member
+    /// is declared under; <c>null</c> when the parameter is not promoted.
+    /// </summary>
+    public string? PromotedPropertyName { get; init; }
+}
 
 /// <summary>
 /// How a constructor parameter is promoted to a class member.

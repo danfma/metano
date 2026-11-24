@@ -81,7 +81,8 @@ public static class IrToDartInterfaceBridge
         var parameters = method
             .Parameters.Select(p => new DartParameter(
                 IrToDartNamingPolicy.ToParameterName(p.Name),
-                IrToDartTypeMapper.Map(p.Type)
+                IrToDartTypeMapper.Map(p.Type),
+                DefaultValue: p.DefaultValue
             ))
             .ToList();
 

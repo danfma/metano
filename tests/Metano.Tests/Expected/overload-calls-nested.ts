@@ -26,7 +26,6 @@ export class Owner {
   constructor(flag: boolean);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Owner.byOwnerId) {
-      const id = args[1] as number;
       this.how = "id";
 
       return;
@@ -40,14 +39,12 @@ export class Owner {
     }
 
     if (typeof args[0] === "symbol" && args[0] === Owner.byOwnerFlag) {
-      const flag = args[1] as boolean;
       this.how = "flag";
 
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const id = args[0] as number;
       this.how = "id";
 
       return;
@@ -61,7 +58,6 @@ export class Owner {
     }
 
     if (args.length === 1 && isBool(args[0])) {
-      const flag = args[0] as boolean;
       this.how = "flag";
 
       return;

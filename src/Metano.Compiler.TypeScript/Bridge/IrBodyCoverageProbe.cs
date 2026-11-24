@@ -136,6 +136,9 @@ public static class IrBodyCoverageProbe
             IrTemplateExpression tpl => (tpl.Receiver is null || IsCoveredExpression(tpl.Receiver))
                 && tpl.Arguments.All(IsCoveredExpression),
             IrArrayLiteral arr => arr.Elements.All(IsCoveredExpression),
+            IrObjectLiteral objectLiteral => objectLiteral.Properties.All(property =>
+                IsCoveredExpression(property.Value)
+            ),
             IrArrayCreation creation => IsCoveredExpression(creation.Length)
                 && IsCoveredExpression(creation.ElementDefault),
             IrTupleLiteral tuple => tuple.Elements.All(IsCoveredExpression),

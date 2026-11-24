@@ -10,7 +10,16 @@ public abstract record IrTypeDeclaration(
     IrVisibility Visibility,
     IReadOnlyList<IrTypeParameter>? TypeParameters = null,
     IReadOnlyList<IrAttribute>? Attributes = null
-);
+)
+{
+    /// <summary>
+    /// For a class, struct or interface nested in generic types, the type
+    /// parameters of those containers, outermost first, which C# lets the nested
+    /// type use without declaring them (<c>Gen&lt;T&gt;.Sub</c> reads
+    /// <c>T</c>); <c>null</c> when no container is generic.
+    /// </summary>
+    public IReadOnlyList<IrTypeParameter>? ContainerTypeParameters { get; init; }
+}
 
 /// <summary>
 /// A class, struct, or record declaration.
@@ -103,7 +112,20 @@ public sealed record IrConstructedRoot(
     IrOverloadRef Root,
     IReadOnlyList<IrMethodDeclaration> Constructions,
     bool IsInherited
-);
+)
+{
+    /// <summary>
+    /// Per construction, in the order of <see cref="Constructions"/>: the
+    /// method that implements it outside the root's runtime dispatcher (an
+    /// inherited method, or an override of a base method the type's base does
+    /// not dispatch under the root), which the dispatcher reaches by its own
+    /// name (#594); <c>null</c> for a construction a method of the type
+    /// anchored on the root implements, or that nothing emitted implements.
+    /// Empty when <see cref="IsInherited"/>: the base's dispatcher handles
+    /// what the type does not implement.
+    /// </summary>
+    public IReadOnlyList<IrOverloadRef?> Forwards { get; init; } = [];
+}
 
 /// <summary>
 /// One member that takes part in a record's value equality.

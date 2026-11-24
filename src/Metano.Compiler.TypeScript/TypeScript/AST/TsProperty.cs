@@ -8,5 +8,6 @@ public sealed record TsProperty(
     TsType Type,
     bool Readonly = false,
     TsAccessibility Accessibility = TsAccessibility.Public,
-    bool Optional = false
+    bool Optional = false,
+    TsJSDoc? JSDoc = null
 );

@@ -10,7 +10,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <c>Conv(int x)</c> and <c>Conv(string x)</c>, so <c>convX</c> is a runtime
 /// dispatcher over the class's implementations, with one signature per
 /// construction. Each branch holds its implementation's body (NFR-003): no
-/// per-implementation fast path is emitted. A class whose base already
+/// per-implementation fast path is emitted. A construction implemented
+/// outside the dispatcher, by an inherited method or an override of a base
+/// method (<see cref="IrConstructedRoot.Forwards"/>, #594), gets a branch that
+/// calls that method by its own name. A class whose base already
 /// declares the name overrides it and forwards the constructions it does not
 /// implement to <c>super</c>.
 /// </summary>
@@ -30,15 +33,22 @@ internal static class IrToTsConstructedRootDispatcherBridge
     )
     {
         var typeOverrides = context.TypeOverrides;
-        var sorted = OverloadDispatchOrder.Sort(implementations, m => m.Parameters);
-        var isAsync = sorted.Any(method => method.Semantics.IsAsync);
         var classScope = new TypeCheckScope(classTypeParameters, typeOverrides)
         {
             RuntimeTypes = context.RuntimeTypes,
         };
 
+        var branches = implementations
+            .Select(method => new RootBranch(method, () =>
+                BuildBranch(method, classScope, context)
+            ))
+            .Concat(ForwardBranchesOf(root, classScope));
+
+        var sorted = OverloadDispatchOrder.Sort(branches, branch => branch.Signature.Parameters);
+        var isAsync = implementations.Any(method => method.Semantics.IsAsync);
+
         var body = sorted
-            .Select(method => (TsStatement)BuildBranch(method, classScope, context))
+            .Select(branch => (TsStatement)branch.Build())
             .Append(
                 root.IsInherited
                     ? IrToTsOverloadDispatcherBridge.ForwardToBase(name, root.Constructions)
@@ -50,7 +60,7 @@ internal static class IrToTsConstructedRootDispatcherBridge
             name,
             IrToTsOverloadDispatcherBridge.DispatcherParameters(),
             IrToTsOverloadDispatcherBridge.ResolveCommonReturnType(
-                [.. root.Constructions, .. sorted],
+                [.. root.Constructions, .. implementations],
                 isAsync,
                 typeOverrides
             ),
@@ -63,6 +73,32 @@ internal static class IrToTsConstructedRootDispatcherBridge
             Override: root.IsInherited
         );
     }
+
+    /// <summary>
+    /// One branch per construction implemented outside the dispatcher: it
+    /// tests the construction's parameters and calls the implementation
+    /// (<c>return this.convInt32(args[0] as number);</c>).
+    /// </summary>
+    private static IEnumerable<RootBranch> ForwardBranchesOf(
+        IrConstructedRoot root,
+        TypeCheckScope classScope
+    ) =>
+        root
+            .Constructions.Zip(root.Forwards)
+            .Select(pair =>
+                pair.Second is { } implementation
+                && TsOverloadCallSites.ImplementationNameOf(implementation) is { } target
+                    ? new RootBranch(pair.First, () =>
+                        IrToTsOverloadDispatcherBridge.BuildDelegatingBranch(
+                            pair.First,
+                            target,
+                            new TsIdentifier("this"),
+                            classScope
+                        )
+                    )
+                    : null
+            )
+            .OfType<RootBranch>();
 
     private static TsMethodOverload SignatureOf(
         IrMethodDeclaration construction,
@@ -134,4 +170,10 @@ internal static class IrToTsConstructedRootDispatcherBridge
             argument
         );
     }
+
+    /// <summary>
+    /// A branch of the dispatcher: the parameters it tests, which order it
+    /// among the others, and how to build it.
+    /// </summary>
+    private sealed record RootBranch(IrMethodDeclaration Signature, Func<TsIfStatement> Build);
 }

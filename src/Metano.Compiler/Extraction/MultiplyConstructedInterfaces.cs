@@ -151,7 +151,17 @@ public static class MultiplyConstructedInterfaces
                         .Select(construction => SignatureIn(construction, member, context))
                         .ToList(),
                     isInherited
-                );
+                )
+                {
+                    Forwards = isInherited
+                        ? []
+                        :
+                        [
+                            .. constructions.Select(construction =>
+                                ForwardOf(type, ConstructedMember(construction, member), context)
+                            ),
+                        ],
+                };
             }
         }
     }
@@ -160,16 +170,63 @@ public static class MultiplyConstructedInterfaces
         INamedTypeSymbol construction,
         IMethodSymbol member,
         IrExtractionContext context
-    )
-    {
-        var constructed = construction
+    ) =>
+        IrMethodExtractor.ExtractForeignSignature(ConstructedMember(construction, member), context);
+
+    private static IMethodSymbol ConstructedMember(
+        INamedTypeSymbol construction,
+        IMethodSymbol member
+    ) =>
+        construction
             .GetMembers(member.Name)
             .OfType<IMethodSymbol>()
             .First(candidate =>
                 SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, member)
             );
 
-        return IrMethodExtractor.ExtractForeignSignature(constructed, context);
+    /// <summary>
+    /// The emitted method that implements <paramref name="constructed"/> in
+    /// <paramref name="type"/> outside the root's dispatcher
+    /// (<see cref="IrConstructedRoot.Forwards"/>); <c>null</c> when the type
+    /// anchors its implementation on the root, or when no emitted class
+    /// method implements it.
+    /// </summary>
+    private static IrOverloadRef? ForwardOf(
+        INamedTypeSymbol type,
+        IMethodSymbol constructed,
+        IrExtractionContext context
+    )
+    {
+        if (
+            type.FindImplementationForInterfaceMember(constructed)
+            is not IMethodSymbol implementation
+        )
+            return null;
+
+        var definition = implementation.OriginalDefinition;
+
+        if (MethodOverloadGroups.GroupOf(definition, context.GroupingPolicy) is not { } group)
+            return null;
+
+        var isOwn = SymbolEqualityComparer.Default.Equals(
+            definition.ContainingType,
+            type.OriginalDefinition
+        );
+
+        var anchorsOnTheRoot =
+            group.MemberOf(definition)?.Anchor?.Root is DeclaredRoot { Method: var root }
+            && SymbolEqualityComparer.Default.Equals(
+                root.OriginalDefinition,
+                constructed.OriginalDefinition
+            );
+
+        if (isOwn && anchorsOnTheRoot)
+            return null;
+
+        if (!isOwn && !EmittedTypes.IsEmittedBase(definition.ContainingType, context.Target))
+            return null;
+
+        return MethodOverloadGroups.RefOf(definition, context.GroupingPolicy);
     }
 
     /// <summary>

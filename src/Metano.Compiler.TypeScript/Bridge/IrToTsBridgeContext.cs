@@ -22,8 +22,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// (<c>decimal</c> → <c>Decimal</c>) the overload dispatchers apply to the
 /// parameter types and runtime checks they emit, matching the class
 /// emitter's own signatures. Required, so a class emission cannot forget it;
-/// <c>null</c> (outside class emission, see <see cref="For"/>) keeps the
-/// default mapping.</param>
+/// <c>null</c> (outside class emission, see <see cref="For"/>) falls back to
+/// the running transform's overrides (<see cref="IrToTsTypeMapper.BclOverrides"/>,
+/// #525).</param>
 internal sealed record IrToTsBridgeContext(
     DeclarativeMappingRegistry? Bcl,
     PerClassBackingFieldScope ClassFields,
@@ -53,10 +54,29 @@ internal sealed record IrToTsBridgeContext(
     /// </summary>
     public TsTypeParameterScope TypeParameters { get; init; } = TsTypeParameterScope.Empty;
 
+    /// <summary>
+    /// The identifier <c>this</c> lowers to: <c>this</c> itself, or the
+    /// explicit receiver parameter of a free function that stands for an
+    /// instance member (the <c>self</c> of a <c>[PlainObject]</c> helper), so
+    /// every <c>this</c> of the body — in any statement or expression — names
+    /// the receiver (#652).
+    /// </summary>
+    public string ThisReceiver { get; private init; } = "this";
+
     public IrToTsBridgeContext WithTypeParameters(TsTypeParameterScope scope) =>
         this with
         {
             TypeParameters = scope,
+        };
+
+    /// <summary>
+    /// The context of a free function whose instance receiver is the
+    /// parameter <paramref name="receiver"/> (see <see cref="ThisReceiver"/>).
+    /// </summary>
+    public IrToTsBridgeContext WithThisReceiver(string receiver) =>
+        this with
+        {
+            ThisReceiver = receiver,
         };
 
     /// <summary>
@@ -114,7 +134,8 @@ internal sealed record IrToTsBridgeContext(
     /// The root context of one file group's transform: the context of a
     /// position outside class emission (module functions, plain objects,
     /// branded structs, static operators, JSX components, entry-point bodies),
-    /// where no backing field is ever recognized and no type override applies,
+    /// where no backing field is ever recognized and the type mapper applies
+    /// the transform's ambient type overrides,
     /// carrying the group's <paramref name="casts"/> and the transform's
     /// <paramref name="runtimeTypes"/>. A class emission derives
     /// its own context from it.

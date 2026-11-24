@@ -88,7 +88,7 @@ public static partial class IrToTsExpressionBridge
 
         var memberTests = pattern.Subpatterns.Select(sub =>
             BuildBindingPatternTestOrNull(
-                PropertyPatternMemberAccess(value, sub),
+                PropertyPatternMemberAccess(value, sub, context),
                 sub.Pattern,
                 context
             )
@@ -228,12 +228,7 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var bindings = EnumeratePatternBindings(
-                subject,
-                pattern,
-                context.RuntimeTypes.BoxingEnabled
-            )
-            .ToList();
+        var bindings = EnumeratePatternBindings(subject, pattern, context).ToList();
 
         var lowered = Map(guard, context);
 
@@ -263,6 +258,6 @@ public static partial class IrToTsExpressionBridge
         TsExpression subject,
         IrPatternCaseLabel label,
         IReadOnlySet<string> reassigned,
-        bool unboxes
-    ) => BuildPatternBindings(subject, label.Pattern, reassigned, unboxes);
+        IrToTsBridgeContext context
+    ) => BuildPatternBindings(subject, label.Pattern, reassigned, context);
 }

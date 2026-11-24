@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Packaging;
 
 namespace Metano.Tests;
 
@@ -71,9 +72,11 @@ public class EmitPackageTests
         var pkg = ReadJson(tempDir);
         var imports = pkg["imports"] as JsonObject;
         await Assert.That(imports).IsNotNull();
+
         await Assert
             .That((imports!["#"] as JsonObject)!["default"]?.GetValue<string>())
             .IsEqualTo("./src/index.ts");
+
         await Assert
             .That((imports["#/*"] as JsonObject)!["default"]?.GetValue<string>())
             .IsEqualTo("./src/*.ts");
@@ -85,6 +88,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """{ "name": "sample-todo", "private": true }"""
@@ -116,6 +120,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """{ "name": "old-name", "private": true }"""
@@ -135,6 +140,7 @@ public class EmitPackageTests
         await Assert
             .That(diags.Any(d => d.Code == DiagnosticCodes.CrossPackageResolution))
             .IsTrue();
+
         await Assert.That(diags.Any(d => d.Severity == MetanoDiagnosticSeverity.Warning)).IsTrue();
     }
 
@@ -146,6 +152,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -158,6 +165,7 @@ public class EmitPackageTests
             ["sample-todo"] = "workspace:*",
             ["@scope/lib"] = "^1.2.3",
         };
+
         PackageJsonWriter.UpdateOrCreate(
             tempDir,
             srcDir,
@@ -184,6 +192,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -192,6 +201,7 @@ public class EmitPackageTests
         );
 
         var deps = new Dictionary<string, string> { ["sample-todo"] = "^1.5.0" };
+
         PackageJsonWriter.UpdateOrCreate(
             tempDir,
             srcDir,
@@ -200,6 +210,7 @@ public class EmitPackageTests
         );
 
         var pkg = ReadJson(tempDir);
+
         await Assert
             .That((pkg["dependencies"] as JsonObject)!["sample-todo"]?.GetValue<string>())
             .IsEqualTo("^1.5.0");
@@ -211,6 +222,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """{ "name": "hand-written", "private": true }"""
@@ -389,6 +401,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -431,6 +444,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -496,6 +510,7 @@ public class EmitPackageTests
         await Assert.That(exports.ContainsKey(".")).IsFalse();
         // Dist paths include the prefix
         var rootEntry = exports["./domain"] as JsonObject;
+
         await Assert
             .That(rootEntry!["types"]?.GetValue<string>())
             .IsEqualTo("./dist/domain/index.d.ts");
@@ -618,6 +633,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """{ "name": "consumer", "type": "commonjs" }"""
@@ -663,6 +679,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -696,6 +713,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -734,6 +752,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -776,6 +795,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -813,6 +833,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -854,6 +875,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -893,6 +915,7 @@ public class EmitPackageTests
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
+
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -955,11 +978,14 @@ public class EmitPackageTests
         // Default keys are NOT emitted when an alias is set.
         await Assert.That(imports.ContainsKey("#/*")).IsFalse();
         await Assert.That(imports.ContainsKey("#")).IsFalse();
+
         // Targets are scoped to the output subfolder.
         var wildcard = imports["#contracts/*"] as JsonObject;
+
         await Assert
             .That(wildcard!["default"]?.GetValue<string>())
             .IsEqualTo("./src/abc/contracts/*.ts");
+
         await Assert
             .That(wildcard["types"]?.GetValue<string>())
             .IsEqualTo("./dist/abc/contracts/*.d.ts");

@@ -17,11 +17,94 @@ public static class IrToDartModuleBridge
         IReadOnlyList<IrModuleFunction> functions,
         DartOverloadClaims claims,
         List<DartTopLevel> statements,
+        DartIrRewriter rewriter,
+        IReadOnlyList<IrMemberDeclaration>? variables = null
+    )
+    {
+        foreach (var variable in variables ?? [])
+            AddVariable(variable, statements, rewriter);
+
+        foreach (var fn in functions)
+            statements.Add(ConvertFunction(fn, NameOf(fn, claims), rewriter));
+    }
+
+    internal static string VariableNameOf(IrMemberDeclaration member)
+    {
+        var name = IrToDartNamingPolicy.ToMemberName(member.Name, member.Attributes);
+
+        if (
+            member.Visibility == IrVisibility.Private
+            && IrToDartNamingPolicy.FindNameOverride(member.Attributes) is null
+            && !name.StartsWith('_')
+        )
+        {
+            return "_" + name;
+        }
+
+        return name;
+    }
+
+    private static void AddVariable(
+        IrMemberDeclaration variable,
+        List<DartTopLevel> statements,
         DartIrRewriter rewriter
     )
     {
-        foreach (var fn in functions)
-            statements.Add(ConvertFunction(fn, NameOf(fn, claims), rewriter));
+        var name = VariableNameOf(variable);
+
+        switch (variable)
+        {
+            case IrFieldDeclaration field:
+                statements.Add(
+                    new DartTopLevelVariable(
+                        Name: name,
+                        Type: IrToDartTypeMapper.Map(field.Type),
+                        IsFinal: field.IsReadonly,
+                        IsLate: field.Type is not IrNullableTypeRef && field.Initializer is null,
+                        Initializer: rewriter.Rewrite(field.Initializer)
+                    )
+                );
+
+                break;
+
+            case IrPropertyDeclaration prop when !(prop.Semantics?.HasGetterBody ?? false):
+                var isFinal =
+                    prop.Accessors is IrPropertyAccessors.GetOnly or IrPropertyAccessors.GetInit;
+
+                statements.Add(
+                    new DartTopLevelVariable(
+                        Name: name,
+                        Type: IrToDartTypeMapper.Map(prop.Type),
+                        IsFinal: isFinal,
+                        IsLate: prop.Type is not IrNullableTypeRef && prop.Initializer is null,
+                        Initializer: rewriter.Rewrite(prop.Initializer)
+                    )
+                );
+
+                break;
+
+            case IrPropertyDeclaration prop:
+                statements.Add(
+                    new DartTopLevelGetter(
+                        Name: name,
+                        ReturnType: IrToDartTypeMapper.Map(prop.Type),
+                        Body: rewriter.Rewrite(prop.GetterBody)
+                    )
+                );
+
+                if (prop.Semantics?.HasSetterBody ?? false)
+                {
+                    statements.Add(
+                        new DartTopLevelSetter(
+                            Name: name,
+                            ValueType: IrToDartTypeMapper.Map(prop.Type),
+                            Body: rewriter.Rewrite(prop.SetterBody)
+                        )
+                    );
+                }
+
+                break;
+        }
     }
 
     private static string NameOf(IrModuleFunction fn, DartOverloadClaims claims) =>

@@ -11,10 +11,16 @@ namespace Metano.Compiler.Dart.Bridge;
 /// </summary>
 internal static class DartConstructorChainArguments
 {
-    public static IReadOnlyList<IrArgument> Of(IrConstructorChain chain, DartIrRewriter rewriter) =>
-        Positional(chain)
+    public static IReadOnlyList<IrArgument> Of(IrConstructorChain chain, DartIrRewriter rewriter)
+    {
+        var positional = Positional(chain);
+
+        DartEvaluationOrder.ReportIfOpaqueDefault(positional);
+
+        return positional
             .Select(argument => argument with { Value = rewriter.Rewrite(argument.Value)! })
             .ToList();
+    }
 
     private static IReadOnlyList<IrArgument> Positional(IrConstructorChain chain)
     {

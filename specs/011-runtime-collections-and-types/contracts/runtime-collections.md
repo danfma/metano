@@ -48,7 +48,7 @@ Every module is under `targets/js/metano-runtime/src/system/collections/`, is si
 | `checks.ts` | the ambient `__METANO_CHECKS__` declaration (§ Production checks) and a type `MetanoChecks` that carries it into every entry's declarations | type only |
 | `hash-core.ts` | `HashCore` (internal): the keyed store shared by `Dictionary`, `HashSet`, (011h) `ConcurrentDictionary` and `immutable-storage.ts` (§ Equality and comparison) | no (internal; reached by 011h through the `./system/collections/*` wildcard) |
 | `set-algebra.ts` | the `ISet` / `IReadOnlySet` algorithms over `SetLike<T>` (internal), written by R for `HashSet` and shared by 011h's sets | no (internal) |
-| `list-helpers.ts`, `dictionary-helpers.ts`, `immutable-collection.ts` | legacy, unchanged (§ Legacy symbols) | yes, until removed |
+| `dictionary-helpers.ts` | legacy `getValueOrDefault` only (§ Legacy symbols); `list-helpers.ts` and `immutable-collection.ts` are deleted | yes, until removed |
 
 **Generated code imports** every collection value and type from the barrel `metano-runtime/system/collections` (types with the per-name `type` qualifier: `import { List, throwModified, type Span } from "metano-runtime/system/collections"`), and the type-argument descriptors from `metano-runtime/system/reflection`. The root barrel `metano-runtime` keeps re-exporting the collections barrel; no exported name collides with another root export (checked in R1 by a test that imports every barrel).
 
@@ -770,11 +770,11 @@ The 2.x compiler emits these; the runtime keeps them, unchanged in behaviour, un
 
 | Symbol | Module | Kept as | Removed by |
 |---|---|---|---|
-| `listRemove` | `list-helpers.ts` | is | C (flip) |
-| `immutableInsert`, `immutableRemoveAt`, `immutableRemove` | `list-helpers.ts` | is (used by `ImmutableCollections.cs`) | H (011h compiler half) |
-| `addEntry` (free function over a native `Map`) | `dictionary-helpers.ts` | is | C (flip) |
-| `tryGetValue`, `getValueOrDefault` (free functions over a native `Map`) | `dictionary-helpers.ts` | is (the 011h receivers still lower through them over a native `Map` until 011h; W4-31) | H |
-| `ImmutableCollection` | `immutable-collection.ts` | is | H |
+| `listRemove` | `list-helpers.ts` | deleted | C (flip) |
+| `immutableInsert`, `immutableRemoveAt`, `immutableRemove` | `list-helpers.ts` | deleted | H (011h compiler half) |
+| `addEntry` (free function over a native `Map`) | `dictionary-helpers.ts` | deleted | C (flip) |
+| `tryGetValue`, `getValueOrDefault` (free functions over a native `Map`) | `dictionary-helpers.ts` | `tryGetValue` deleted; `getValueOrDefault` is (the 011h receivers still lower through them over a native `Map` until 011h; W4-31) | H |
+| `ImmutableCollection` | `immutable-collection.ts` | deleted | H |
 | `HashSet.size`, `has`, `delete`, `values()`, `forEach` | `hash-set.ts` | members of the reworked class, `@deprecated`, delegating to `count` / `contains` / `remove` / the iterator | C (flip) |
 | `HashSet` constructor `(items?)` | `hash-set.ts` | source-compatible: `items` stays the first parameter | — |
 | `MapDescriptor` / JSON kind `map` | `system/json` | is | C (flip: the context emits `dictionary`) |

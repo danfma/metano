@@ -420,3 +420,12 @@ Each question has a recommendation; the plan proceeds with it unless the maintai
 - #432 / baseline FR-049 (landed) — the constructor accessibility.
 - ADR-0008 (superseded in part), ADR-0013, ADR-0009.
 - #475 — related (NFR-006 carve-out), not a prerequisite.
+
+## Wave 6 notes (3.0.x fixes)
+
+Behaviour fixed after 3.0.0 on the dispatcher shapes of this spec; no requirement changes.
+
+- **FR-036 and root forwarding (#594).** An override of a dispatched base emits `override convInt32` and root forwarding dispatchers (core fact `IrConstructedRoot.Forwards`, init-only). An override leaves the root dispatcher only when its dispatched base root is not anchored on that root, so a single-root override emits no duplicate dispatcher (no TS2393).
+- **Dispatcher bindings (#464, #565, #595).** Constructor dispatcher branches bind only the arguments they read; the claim pass reserves the interface names and forwarders a type was missing.
+- **Optional parameters (#449).** `[Optional]` with no default lowers to `default(T)`; an `object` with no default is `null` (C# gives `Type.Missing`).
+- **Open.** An overloaded extension-block member emits two `export function` with the same name (#566 item 3, needs the module bridge); an override of a non-dispatched base next to new overloads emits two members (older); ordering a dispatcher by better conversion target (#475) needs design, since a JS number cannot tell `float` from `double` or `sbyte` from `byte` by value.

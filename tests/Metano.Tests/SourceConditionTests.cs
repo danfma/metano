@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Packaging;
 
 namespace Metano.Tests;
 

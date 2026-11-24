@@ -1,4 +1,5 @@
 using Metano.Compiler.Diagnostics;
+using Metano.Packaging;
 
 namespace Metano.Tests;
 
@@ -279,6 +280,22 @@ public class PackageRootResolverTests
         );
 
         await AssertResolved(resolution, AboveWorkspace, "app", "app");
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    public async Task BlankExplicitPackageRoot_CountsAsUnset(string blank)
+    {
+        WritePackageJson("app");
+
+        var resolution = PackageRootResolver.Resolve(
+            PathOf("app/src"),
+            PathOf("app/App.csproj"),
+            explicitPackageRoot: blank
+        );
+
+        await AssertResolved(resolution, "app", "app/src", "src");
     }
 
     [Test]

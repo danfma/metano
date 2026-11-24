@@ -83,14 +83,11 @@ public class ModuleFunctionClaimGoldenTests
             result["priv-host.ts"]
         );
 
-        // The call sites name the claimed fast paths; the container qualifier
-        // they keep is the pre-existing #554.
+        // The call sites name the claimed fast paths, flattened like any
+        // module function's (#554).
         await Assert
             .That(result["use.ts"])
-            .Contains(
-                "return ((3 * 3) + IgnHost.plainInt32(1) + EmHost.loneInt32(1) "
-                    + "+ PrivHost.hiddenInt32(1)) | 0;"
-            );
+            .Contains("return ((3 * 3) + plainInt32(1) + loneInt32(1) + hiddenInt32(1)) | 0;");
     }
 
     /// <summary>
@@ -132,10 +129,8 @@ public class ModuleFunctionClaimGoldenTests
             result["block-only.ts"]
         );
 
-        // The container qualifier on the plain call is the pre-existing #554.
-        await Assert
-            .That(result["use.ts"])
-            .Contains("return (twice(\"x\") + BlockOnly.plainInt32(1)) | 0;");
+        // The plain call flattens like any module function's (#554).
+        await Assert.That(result["use.ts"]).Contains("return (twice(\"x\") + plainInt32(1)) | 0;");
     }
 
     /// <summary>
@@ -257,9 +252,9 @@ public class ModuleFunctionClaimGoldenTests
 
     /// <summary>
     /// The facade rewriter and the claim pass read one definition of the
-    /// name a facade binds (<see cref="SymbolHelper.ImportBindingOf"/>), so
-    /// even a reserved-word name — not escaped yet, #555 — is reserved
-    /// exactly as the import binds it.
+    /// name a facade binds (<see cref="SymbolHelper.ImportBindingOf"/>), and
+    /// TypeScript escapes a reserved-word one the same way at the import and
+    /// in the claim (#555).
     /// </summary>
     [Test]
     public async Task ImportFacade_ReservedWordName_ReservesTheBindingTheImportUses()
@@ -296,7 +291,7 @@ public class ModuleFunctionClaimGoldenTests
 
         await Assert
             .That(result["use.ts"])
-            .Contains($"import {{ remove as {binding} }} from \"ext-lib\";");
+            .Contains($"import {{ remove as {binding}_ }} from \"ext-lib\";");
     }
 
     private static IReadOnlyList<string> ShadowMessages(

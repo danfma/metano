@@ -116,7 +116,7 @@ public static partial class IrToTsExpressionBridge
                 initialization,
                 context
             ),
-            IrThisExpression => new TsIdentifier("this"),
+            IrThisExpression => new TsIdentifier(context.ThisReceiver),
             IrBaseExpression => new TsIdentifier("super"),
             IrMemberAccess ma => MapMemberAccess(ma, context),
             IrElementAccess ea => MapElementAccess(ea, context),
@@ -493,16 +493,36 @@ public static partial class IrToTsExpressionBridge
     /// <summary>
     /// A C# tuple is a positional JS array. An array literal infers an array
     /// of the element union, so the literal is asserted to its tuple type to
-    /// keep per-position types.
+    /// keep per-position types. A <c>null</c> element at a position the
+    /// tuple type declares non-nullable (a reference element of an oblivious
+    /// or <c>default</c> tuple, <c>(0, null)</c> as <c>(int, string)</c>) is
+    /// asserted <c>null!</c>, since <c>null</c> is not comparable to it.
     /// </summary>
     private static TsExpression MapTupleLiteral(IrTupleLiteral tuple, IrToTsBridgeContext context)
     {
-        var array = new TsArrayLiteral(tuple.Elements.Select(e => Map(e, context)).ToList());
+        var array = new TsArrayLiteral(
+            tuple
+                .Elements.Select(
+                    (element, index) => Map(AssertedTupleElement(tuple, element, index), context)
+                )
+                .ToList()
+        );
 
         return tuple.Type is { } type
             ? new TsCastExpression(array, IrToTsTypeMapper.Map(type))
             : array;
     }
+
+    private static IrExpression AssertedTupleElement(
+        IrTupleLiteral tuple,
+        IrExpression element,
+        int index
+    ) =>
+        element is IrLiteral { Kind: IrLiteralKind.Null }
+        && tuple.Type?.Elements.ElementAtOrDefault(index) is { } elementType
+        && elementType is not IrNullableTypeRef
+            ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, element, IsPrefix: false)
+            : element;
 
     /// <summary>
     /// A C# tuple lowers to a positional array, where a nested tuple and a C#
@@ -842,18 +862,15 @@ public static partial class IrToTsExpressionBridge
         // namespace contract the runtime ambient declarations expose
         // (e.g. `Js.document` over the runtime's actual `document`
         // global). Instance access (ill-formed on a static class)
-        // falls through to the normal property-access path.
+        // falls through to the normal property-access path. A static
+        // method of an extension container flattens too: TypeScript emits
+        // that class as a module of functions (#554).
         if (
-            ma.Origin is { IsStatic: true, IsDeclaringTypeNoContainer: true } containerless
+            ma.Origin is { } containerless
+            && FlattensToModuleMember(containerless)
             && ma.Target is IrTypeReference container
         )
-        {
-            // A field or property is a module variable of the container's file
-            // (#314): carry the owner so another file imports it from there.
-            return containerless.IsTranspiledDataMember
-                ? ModuleExportReference(memberName, container)
-                : new TsIdentifier(memberName);
-        }
+            return ModuleMemberReference(containerless, memberName, container);
 
         return new TsPropertyAccess(loweredTarget, memberName);
     }
@@ -1013,8 +1030,13 @@ public static partial class IrToTsExpressionBridge
             BoundArgumentPrefix
         );
 
-        var template = new TsTemplate(
+        var (text, externalImports) = TsImportFacadeBinding.Escape(
             tpl.Template,
+            tpl.ExternalImports
+        );
+
+        var template = new TsTemplate(
+            text,
             tpl.Receiver is null ? null : Map(tpl.Receiver, context),
             ordered.Arguments
         )
@@ -1023,7 +1045,7 @@ public static partial class IrToTsExpressionBridge
                 ? tArgs.Select(t => TsTypeArgName(t) ?? "unknown").ToList()
                 : [],
             RuntimeImports = tpl.RequiredImports ?? [],
-            ExternalImports = tpl.ExternalImports ?? [],
+            ExternalImports = externalImports,
             ReceiverType = tpl.ReceiverType is IrNamedTypeRef receiverType
                 ? CanonicalTypeValue(receiverType)
                 : null,
@@ -1508,7 +1530,7 @@ public static partial class IrToTsExpressionBridge
             && (sem.IsIgnored || sem.IsExternal || sem.RendersAsJsxElement)
         )
             return null;
-        return IrToTsTypeMapper.Map(p.Type, context.TypeOverrides);
+        return IrToTsTypeMapper.MapParameterType(p, context.TypeOverrides);
     }
 
     /// <summary>
@@ -1912,7 +1934,8 @@ public static partial class IrToTsExpressionBridge
         var mappedParameters = lambda
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                LowerLambdaParameterType(p, context)
+                LowerLambdaParameterType(p, context),
+                Rest: p.IsRestParams
             ))
             .ToList();
 
@@ -2653,6 +2676,7 @@ public static partial class IrToTsExpressionBridge
                 fastPath,
                 moduleExport.OwnerTypeName
             ),
+            TsTypeReference packageExport => new TsTypeReference(fastPath, packageExport.Origin),
             _ => new TsIdentifier(fastPath),
         };
     }
@@ -2693,7 +2717,8 @@ public static partial class IrToTsExpressionBridge
 
     private static bool KeepsTypeArguments(IrNewExpression ne) =>
         ne.Type is IrSetTypeRef or IrMapTypeRef or IrCollectionTypeRef
-        || ne is { Arguments.Count: 0, Type: IrNamedTypeRef { TypeArguments.Count: > 0 } };
+        || ne is { Arguments.Count: 0, Type: IrNamedTypeRef { TypeArguments.Count: > 0 } }
+        || ne.Type is IrNamedTypeRef { ContainerTypeArguments.Count: > 0 };
 
     private static IReadOnlyList<TsType>? ConstructedTypeArgumentsOf(
         IrTypeRef type,
@@ -2703,7 +2728,8 @@ public static partial class IrToTsExpressionBridge
         IReadOnlyList<IrTypeRef>? typeArguments = type switch
         {
             IrCollectionTypeRef collection => collection.TypeArguments,
-            IrNamedTypeRef { TypeArguments: { Count: > 0 } named } => named,
+            IrNamedTypeRef named
+                when IrToTsTypeMapper.AllTypeArgumentsOf(named) is { Count: > 0 } all => all,
             IrSetTypeRef set => [set.ElementType],
             IrMapTypeRef map => [map.KeyType, map.ValueType],
             _ => null,

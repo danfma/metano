@@ -366,10 +366,9 @@ public class OverloadCallMethodSiteGoldenTests
     /// its namespace — a dispatched group of plain public statics claims
     /// fast paths exactly like the classic extensions beside it. Both
     /// halves judge the declaration (a reduced call-site form resolves
-    /// through the same declaration keys), and a non-public overload never
-    /// joins the barrel: the private <c>Fold(long)</c> shapes the group's
-    /// suffixes but emits no function and claims no fast path (spec 013
-    /// FR-032).
+    /// through the same declaration keys). A private overload joins its group
+    /// but stays local to the module: the private <c>Fold(long)</c> emits an
+    /// unexported fast path its own class's calls can reach (#609).
     /// </summary>
     [Test]
     public async Task ExtensionContainer_DispatchedPlainStatics_ClaimFastPathsToo()
@@ -402,9 +401,8 @@ public class OverloadCallMethodSiteGoldenTests
         // The single extension stays a plain module function of its own.
         await Assert.That(module).Contains("export function twice(x: number): number {");
 
-        // The private overload shapes the spellings but never joins: no
-        // function, no claimed fast path.
-        await Assert.That(module).DoesNotContain("foldBig");
+        // The private overload emits an unexported fast path.
+        await Assert.That(module).Contains("\nfunction foldBig(big: bigint): number {");
     }
 
     /// <summary>
@@ -466,12 +464,12 @@ public class OverloadCallMethodSiteGoldenTests
             result["mixed.ts"]
         );
 
-        // The callers call the claimed names; the container qualifier they
-        // keep is the pre-existing #554, so the file is not pinned whole.
+        // The callers call the claimed names, flattened and imported (#554).
         var calls = result["use-mixed.ts"];
 
-        await Assert.That(calls).Contains("return Mixed.foldX$(1);");
-        await Assert.That(calls).Contains("return Mixed.foldS(\"ab\");");
+        await Assert.That(calls).Contains("import { foldS, foldX$ } from \"./mixed\";");
+        await Assert.That(calls).Contains("return foldX$(1);");
+        await Assert.That(calls).Contains("return foldS(\"ab\");");
     }
 
     /// <summary>

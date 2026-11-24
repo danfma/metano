@@ -406,7 +406,7 @@ Rules:
   `key: { kind: "primitive", numberType: "System.Int32" }`); a `bool`, enum, `Guid` or temporal
   key adds its CLR `typeName`, and a numeric enum key its underlying `numberType` (`key: { kind:
   "numericEnum", values: Level, numberType: "System.Int32", typeName: "MyApp.Level" }`); the `decimal` descriptor carries no `numberType` (its converter reads the context
-  option) and, in every context, names its type: `{ kind: "decimal", type: Decimal }` (DECIDED-23 f).
+  option) and, in every context, names its type and its CLR name: `{ kind: "decimal", type: Decimal, typeName: "System.Decimal" }` (DECIDED-23 f, #471).
 - `JsonReadOptions` is a type-only import.
 
 

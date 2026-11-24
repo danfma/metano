@@ -20,56 +20,48 @@ export class Money {
   constructor(id: bigint);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyAmount) {
-      const amount = args[1] as Decimal;
       this.how = "amount";
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyCents) {
-      const cents = args[1] as number;
       this.how = "cents";
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyCode) {
-      const code = args[1] as string;
       this.how = "code";
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Money.byMoneyId) {
-      const id = args[1] as bigint;
       this.how = "id";
 
       return;
     }
 
     if (args.length === 1 && isDecimal(args[0])) {
-      const amount = args[0] as Decimal;
       this.how = "amount";
 
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      const cents = args[0] as number;
       this.how = "cents";
 
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
-      const code = args[0] as string;
       this.how = "code";
 
       return;
     }
 
     if (args.length === 1 && isInt64(args[0])) {
-      const id = args[0] as bigint;
       this.how = "id";
 
       return;

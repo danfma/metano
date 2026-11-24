@@ -87,7 +87,7 @@ export class ProductDemo {
             right: {
               kind: "capture",
               name: "minPrice",
-              type: { name: "number" },
+              type: { name: "Decimal" },
             },
           },
           captures: { minPrice: minPrice },

@@ -41,7 +41,8 @@ public sealed class DartTransformer
         _rewriter = new DartIrRewriter(
             DeclarativeMappingRegistry.FromIr(ir),
             ContainerlessTypeNames(ir),
-            _overloadClaims
+            _overloadClaims,
+            PrivateModuleVariableRenames(ir)
         );
     }
 
@@ -61,6 +62,7 @@ public sealed class DartTransformer
         new(Compilation: _compilation, GroupingPolicy: DartGroupingPolicy.Instance)
         {
             EmitsConstructorSelectors = DartTypeShapes.EmitsNamedConstructors,
+            KeepsCallEvaluationOrder = true,
         };
 
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
@@ -90,6 +92,8 @@ public sealed class DartTransformer
 
         var files = new List<DartSourceFile>();
         var transpilable = DiscoverTranspilableTypes();
+
+        new DartModuleVariableValidator(_compilation, transpilable, ReportDiagnostic).Validate();
 
         // Map of emitted type name (PascalCase) → file name (snake_case.dart) so bridges
         // can emit relative imports for same-package references. Duplicate simple names
@@ -169,16 +173,18 @@ public sealed class DartTransformer
                     // utility-module shape) instead of a class of static methods.
                     if (DartTypeShapes.LowersToTopLevelFunctions(type))
                     {
+                        var variables = IrModuleVariableExtractor.Extract(type, Extraction);
                         var functions = IrModuleFunctionExtractor.Extract(type, Extraction);
 
                         IrToDartModuleBridge.Convert(
                             functions,
                             ClaimsOf(type),
                             statements,
-                            _rewriter
+                            _rewriter,
+                            variables
                         );
 
-                        ScanFunctionsInto(runtimeRequirements, functions);
+                        ScanModuleInto(runtimeRequirements, variables, functions);
                         break;
                     }
 
@@ -188,6 +194,7 @@ public sealed class DartTransformer
                     ReportUnnamedOverloads(classIr, type.Name, classClaims.Shape);
                     ReportMultiplyConstructedInterfaces(type);
                     ReportStaticConstructor(type, classIr);
+                    ReportCollectionBaseType(type, classIr);
                     ReportChainedConstructorsWithBodies(type, classIr, classClaims.Shape);
                     IrToDartClassBridge.Convert(classIr, classClaims, statements, _rewriter);
                     ScanInto(runtimeRequirements, classIr);
@@ -303,6 +310,23 @@ public sealed class DartTransformer
                 )
             );
         }
+    }
+
+    private void ReportCollectionBaseType(INamedTypeSymbol type, IrClassDeclaration classIr)
+    {
+        if (!IrToDartClassBridge.IsUnextendableDartCollection(classIr.BaseType))
+            return;
+
+        ReportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"Dart target: '{type.Name}' cannot extend a built-in collection type "
+                    + "(Dart's Map/List/Set have no generative constructor); the extends clause "
+                    + "is omitted.",
+                type.Locations.FirstOrDefault()
+            )
+        );
     }
 
     /// <summary>
@@ -442,6 +466,56 @@ public sealed class DartTransformer
     /// Tracking issue: add an <c>IrRuntimeRequirementScanner.Scan(IReadOnlyList&lt;IrModuleFunction&gt;)</c>
     /// overload so callers don't fabricate IR shells just to satisfy the entry point.
     /// </summary>
+    private static IReadOnlyDictionary<
+        (string DeclaringType, string MemberName),
+        string
+    > PrivateModuleVariableRenames(IrCompilation ir)
+    {
+        var result = new Dictionary<(string DeclaringType, string MemberName), string>();
+
+        foreach (var entry in ir.TranspilableTypeEntries ?? [])
+        {
+            if (!DartTypeShapes.LowersToTopLevelFunctions(entry.Symbol))
+                continue;
+
+            var fullName = entry.Symbol.GetStableFullName();
+
+            foreach (var variable in IrModuleVariableExtractor.Extract(entry.Symbol))
+            {
+                if (variable.Visibility != IrVisibility.Private)
+                    continue;
+
+                var dartName = IrToDartModuleBridge.VariableNameOf(variable);
+
+                if (dartName != IrToDartNamingPolicy.ToParameterName(variable.Name))
+                    result[(fullName, variable.Name)] = dartName;
+            }
+        }
+
+        return result;
+    }
+
+    private static void ScanModuleInto(
+        HashSet<IrRuntimeRequirement> sink,
+        IReadOnlyList<IrMemberDeclaration> variables,
+        IReadOnlyList<IrModuleFunction> functions
+    )
+    {
+        if (variables.Count > 0)
+        {
+            var shellClass = new IrClassDeclaration(
+                Name: string.Empty,
+                Visibility: IrVisibility.Public,
+                Semantics: new IrTypeSemantics(),
+                Members: variables
+            );
+
+            ScanInto(sink, shellClass);
+        }
+
+        ScanFunctionsInto(sink, functions);
+    }
+
     private static void ScanFunctionsInto(
         HashSet<IrRuntimeRequirement> sink,
         IReadOnlyList<IrModuleFunction> functions

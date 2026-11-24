@@ -177,6 +177,28 @@ where .NET answers `true`. The compiler reports `MS0001` at that test instead, a
 throws at run time. An overload dispatcher's branch for such a parameter still tests the
 runtime classes only.
 
+### Additions after 3.0.0
+
+| C# | TypeScript |
+|----|----|
+| `Array.Sort(a)`, `MemoryExtensions.Sort(span)` | `sortArray(a)` / `sortArrayByKeys(...)` (.NET ordering, not JS text order) |
+| `Array.IndexOf(a, v)`, `LastIndexOf`, span `Contains` / `IndexOf` / `LastIndexOf` | `arrayIndexOf` / `arrayLastIndexOf` / `arrayContains` (value equality, NaN found) |
+| `StringComparer.Ordinal` / `OrdinalIgnoreCase` | runtime singletons (lazy, tree-shakable) |
+| `StringBuilder`, `Lazy<T>`, `TaskCompletionSource<T>` | runtime classes of the same name (`Lazy` ignores `LazyThreadSafetyMode`) |
+| `KeyValuePair.Create(k, v)`, `EqualityComparer<T>.Default` | mapped |
+| `BigInteger.Zero/One/MinusOne`, `IsZero/IsOne/IsEven` | `0n` / `1n` / `-1n` and the matching predicates |
+| `char.Is*` (11 predicates), `Convert.ToDouble` (int-sized, `double`, `float`, `decimal`, `bool`, `string`), `decimal.ToDouble` | mapped |
+| `int.CompareTo` | `int`, `uint`, `double`, `float` give -1/0/1 (NaN first); `short`, `ushort`, `byte`, `sbyte`, `char` give the difference, as .NET |
+| LINQ `ElementAt`, `ElementAtOrDefault`, `DefaultIfEmpty`, `Distinct(comparer)` | `elementAt`, `elementAtOrDefault`, `defaultIfEmpty`, `distinct(comparer)` |
+
+Not mapped, reported with `MS0001`: `ElementAt(Index)`, `Array.IndexOf(a, v, start, count)`,
+`Array.Sort(a, index, length)`. Known gaps: `(decimal)double` emits the raw double; a record has no
+`toString`; `-0` dictionary keys and `list.Equals` differ from .NET; `ReadOnlyDictionary`,
+`FrozenDictionary`, `nint` / `nuint` members and the non-generic `TaskCompletionSource` are unmapped.
+A cast of a set, queue or dictionary to `IList<T>` passes through (known gap, #710). Other numeric details:
+`decimal` in a module function, a branded type or a JSX body is spelled `Decimal`; `decimal` to a
+narrow integer is `narrowFromDecimal(d, 32, true)`; a record hashes a tuple-typed member by its elements, while `HashCode.add` still hashes an array by reference.
+
 ### Lists and arrays
 
 | C# | TypeScript |
@@ -409,6 +431,7 @@ built-in only does reference equality, which would lose C# semantics.
 |----|----|
 | `Tuple<T1, T2>` / `ValueTuple<T1, T2>` / `(T1, T2)` | `[T1, T2]` |
 | `KeyValuePair<K, V>` | `[K, V]` |
+| `KeyValuePair.Create(k, v)` | `[k, v] as [K, V]` |
 
 ### IGrouping and other LINQ shapes
 
@@ -450,7 +473,7 @@ const result = linq(
 `where`, `select`, `selectMany`, `orderBy`, `orderByDescending`, `thenBy`,
 `thenByDescending`, `take`, `takeWhile`, `skip`, `skipWhile`, `distinct`,
 `distinctBy`, `groupBy`, `concat`, `reverse`, `zip`, `append`, `prepend`, `union`,
-`intersect`, `except`
+`intersect`, `except`, `defaultIfEmpty`
 
 `union`, `intersect` and `except` yield distinct elements compared by value, in
 .NET's order (#657).
@@ -460,7 +483,7 @@ const result = linq(
 `toArray`, `toMap` (from `ToDictionary`), `toSet` (from `ToHashSet`), `first`,
 `firstOrDefault`, `last`, `lastOrDefault`, `single`, `singleOrDefault`, `any`,
 `all`, `count`, `sum`, `average`, `min`, `max`, `minBy`, `maxBy`, `contains`,
-`aggregate`
+`aggregate`, `elementAt`, `elementAtOrDefault`
 
 The `OrDefault` terminals take `(predicate?, defaultValue?)`. The compiler passes
 `default(T)` for a non-nullable value element (`xs.FirstOrDefault()` over `int` is
@@ -472,8 +495,10 @@ default no literal spells (a user struct, a tuple, `KeyValuePair` (so
 `[StringEnum]` without a zero member) keeps `null` and reports `MS0001` (#621). A
 type parameter that is not constrained to `struct` (unconstrained, `where T :
 notnull`, `where T : IComparable<T>`, `where T : Enum` alone) also yields `null`,
-without a warning. `ElementAt`, `ElementAtOrDefault` and `DefaultIfEmpty` have no
-lowering (#617).
+without a warning. `ElementAt`, `ElementAtOrDefault` and `DefaultIfEmpty` lower to
+`elementAt(index)`, `elementAtOrDefault(index, defaultValue?)` and
+`defaultIfEmpty(defaultValue?)`, with the same `default(T)` rule (#617);
+`ElementAt(^1)` (an `Index`) reports `MS0001`.
 
 `Sum`, `Average`, `Min`, `Max`, `MinBy` and `MaxBy` are chosen by the element type
 (FR-056, #618, #657): `min` / `max` / `minBy` / `maxBy` throw
@@ -500,7 +525,10 @@ are the same overloads):
 | `SelectMany` | `(selector)` |
 | `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending`, `GroupBy`, `DistinctBy`, `MinBy`, `MaxBy` | `(keySelector)` |
 | `Take`, `Skip` | `(count)` |
-| `Distinct`, `Reverse`, `ToArray`, `ToList`, `ToHashSet` | `()` |
+| `Distinct` | `()`, `(comparer)` |
+| `Reverse`, `ToArray`, `ToList`, `ToHashSet` | `()` |
+| `DefaultIfEmpty` | `()`, `(defaultValue)` |
+| `ElementAt`, `ElementAtOrDefault` | `(index)` |
 | `Concat` | `(second)` |
 | `Append`, `Prepend` | `(element)` |
 | `Zip` | `(second, resultSelector)` |
@@ -516,9 +544,9 @@ Every other overload reports `MS0001` (a warning) at the method name and
 lowers to an expression that throws at run time: for example `Aggregate(func)`,
 `Aggregate(seed, func, resultSelector)`, `GroupBy` with an element or result
 selector, the tuple `Zip(second)`, `Take(range)`, `SelectMany` with a result
-selector (#648). No runtime operator takes a comparer, so a comparer argument
+selector (#648). Only `Distinct` takes a comparer (#687), so any other comparer argument
 (`IEqualityComparer<T>` / `IComparer<T>`, as in `OrderBy(k, comparer)`,
-`ToDictionary(k, comparer)`, `Contains(x, comparer)`, `Distinct(comparer)`,
+`ToDictionary(k, comparer)`, `Contains(x, comparer)`,
 `Min(comparer)`) reports `MS0001` at the argument, unless it is the `null`
 constant (`null`, `default`, `(IComparer<int>?)null`): that asks for the
 default comparison and lowers as the comparer-less overload. A comparer that is
@@ -529,7 +557,7 @@ when the tree would land in another argument's slot
 (`queryable.ToDictionary(k)`, where `toMap` would read it as the value
 selector). A `System.Linq` method with neither a pipe operator nor a
 declarative mapping for the overload called (`Join`, `GroupJoin`, `ToLookup`,
-`SequenceEqual`, `Cast`, `OfType`, `ElementAt`, …) reports `MS0001`, in the
+`SequenceEqual`, `Cast`, `OfType`, …) reports `MS0001`, in the
 extension and in the static form, instead of becoming a member call (where
 `xs.Join(…)` reached `Array.prototype.join`). The static form
 (`Enumerable.Aggregate(xs, …)`) of an unimplemented overload reports the same
@@ -559,6 +587,7 @@ native array methods directly:
 | `ValueTask<T>` | `Promise<T>` |
 | `Task.CompletedTask` | `Promise.resolve()` |
 | `Task.FromResult(x)` | `Promise.resolve(x)` |
+| `new TaskCompletionSource<T>()` | `new TaskCompletionSource<T>()` (`metano-runtime`; `.Task` is `.task`) |
 | `async Task<T> Foo()` | `async foo(): Promise<T>` |
 | `await expr` | `await expr` |
 
@@ -1266,3 +1295,23 @@ changes with the source.
 
 - [Attribute Reference](attributes.md) — `[MapMethod]`, `[Emit]`, `[Import]` details
 - [Architecture Overview](architecture.md) — how the mapping registry works internally
+
+## Characters, text builders and other members
+
+Members that had no mapping and printed a reference nothing declares (#686, #584, #617, #403). Each lowers to
+an expression or a `metano-runtime` helper; an overload that is not listed stays unmapped and reports `MS0001`.
+
+| C# | TypeScript |
+|----|----|
+| `char.IsLetter(c)`, `IsDigit`, `IsLetterOrDigit`, `IsNumber`, `IsUpper`, `IsLower`, `IsPunctuation`, `IsSymbol`, `IsSeparator`, `IsControl`, `IsWhiteSpace` | `charIsLetter(c)` ... `charIsWhiteSpace(c)`: Unicode general categories as .NET reads them (the engine's Unicode version). The `(string, int)` overloads stay unmapped. |
+| `BigInteger.Zero`, `One`, `MinusOne` | `0n`, `1n`, `BigInt(-1)` |
+| `b.IsZero`, `IsOne`, `IsEven` | `(b === 0n)`, `(b === 1n)`, `(b % 2n === 0n)` |
+| `Convert.ToDouble(x)` for `int`-sized integers, `double`, `float` | `x` |
+| `Convert.ToDouble(decimal)`, `decimal.ToDouble(d)` | `d.toNumber()` |
+| `Convert.ToDouble(bool)`, `Convert.ToDouble(string)` | `(b ? 1 : 0)`, `convertStringToDouble(s)` (`null` is `0`, bad text throws `FormatException`) |
+| `EqualityComparer<T>.Default` | `defaultEqualityComparerFor()`: value equality for records, structs and boxes |
+| `a.CompareTo(b)` for `int`, `uint`, `double`, `float` | `compareNumber(a, b)`: `-1`, `0`, `1`; `NaN` sorts first |
+| `a.CompareTo(b)` for `short`, `ushort`, `byte`, `sbyte`, `char` | `(a - b)` (the difference, as .NET returns it); a `char` compares by code unit |
+| `new StringBuilder(...)`, `Append` (text, `char`, integers, `bool`, `double`, `float`, `object`, `char` repeated), `AppendLine`, `Insert(int, string)`, `Remove`, `Replace`, `Clear`, `Length`, `ToString()`, `ToString(start, length)` | `StringBuilder` of `metano-runtime`; `AppendLine` adds `\n`. The `char[]`, span, `StringBuilder`, `AppendFormat` overloads, the indexer and `Capacity` stay unmapped. |
+| `new Lazy<T>(factory)`, `.Value`, `.IsValueCreated` | `Lazy<T>` of `metano-runtime`: the factory runs once, its exception is cached, a factory reading its own value throws `InvalidOperationException`. The `bool` argument is dropped. |
+| `new TaskCompletionSource<T>()`, `SetResult`, `SetException`, `SetCanceled`, `TrySet*`, `.Task` | `TaskCompletionSource<T>` of `metano-runtime` (a promise settled from outside) |

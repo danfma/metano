@@ -1,3 +1,4 @@
+import type { IEqualityComparer } from "../collections/default-comparer.ts";
 import type { Dictionary } from "../collections/dictionary.ts";
 import type { HashSet } from "../collections/hash-set.ts";
 import type { List } from "../collections/list.ts";
@@ -46,7 +47,8 @@ export type OperatorKind =
   | "thenBy"
   | "thenByDescending"
   | "groupBy"
-  | "zip";
+  | "zip"
+  | "defaultIfEmpty";
 
 export type TerminalKind =
   | "toArray"
@@ -71,7 +73,9 @@ export type TerminalKind =
   | "maxBy"
   | "average"
   | "contains"
-  | "aggregate";
+  | "aggregate"
+  | "elementAt"
+  | "elementAtOrDefault";
 
 /**
  * Common shape every composition operator shares: a discriminator (`kind`)
@@ -132,6 +136,7 @@ export interface SkipWhileOp<T> extends OperatorBase<T, T> {
 
 export interface DistinctOp<T> extends OperatorBase<T, T> {
   readonly kind: "distinct";
+  readonly comparer?: IEqualityComparer<T> | null;
 }
 
 export interface DistinctByOp<T, K> extends OperatorBase<T, T> {
@@ -209,6 +214,15 @@ export interface ZipOp<T, U, R> extends OperatorBase<T, R> {
 }
 
 /**
+ * `DefaultIfEmpty`: the source, or `defaultValue` alone when the source is empty. `D` is the
+ * miss value: `null` for a reference or nullable element, the element type otherwise.
+ */
+export interface DefaultIfEmptyOp<T, D extends T | null = T | null> extends OperatorBase<T, T | D> {
+  readonly kind: "defaultIfEmpty";
+  readonly defaultValue: D;
+}
+
+/**
  * Group elements by a key. Each yielded item is an
  * <see cref="Grouping{K, T}"/> — an Iterable that also exposes the
  * shared key. Bundlers can drop the operator if the consumer never
@@ -247,7 +261,8 @@ export type AnyOperator =
   | ThenByOp<unknown, unknown>
   | ThenByDescendingOp<unknown, unknown>
   | GroupByOp<unknown, unknown>
-  | ZipOp<unknown, unknown, unknown>;
+  | ZipOp<unknown, unknown, unknown>
+  | DefaultIfEmptyOp<unknown>;
 
 /**
  * Common shape every terminal shares. `apply` walks the source and
@@ -307,6 +322,20 @@ export interface FirstOrDefaultTerm<T, D extends T | null = T | null>
   readonly predicate?: (item: T) => boolean;
   readonly defaultValue: D;
   readonly queryable?: QueryableMeta;
+}
+
+/** `ElementAt(index)`: throws `ArgumentOutOfRangeException` when `index` is outside the source. */
+export interface ElementAtTerm<T> extends TerminalBase<T, T> {
+  readonly kind: "elementAt";
+  readonly index: number;
+}
+
+/** `ElementAtOrDefault(index)`: `defaultValue` when `index` is outside the source. */
+export interface ElementAtOrDefaultTerm<T, D extends T | null = T | null>
+  extends TerminalBase<T, T | D> {
+  readonly kind: "elementAtOrDefault";
+  readonly index: number;
+  readonly defaultValue: D;
 }
 
 export interface LastTerm<T> extends TerminalBase<T, T> {
@@ -463,6 +492,8 @@ export type AnyTerminal =
   | ToHashSetTerm<unknown>
   | FirstTerm<unknown>
   | FirstOrDefaultTerm<unknown>
+  | ElementAtTerm<unknown>
+  | ElementAtOrDefaultTerm<unknown>
   | LastTerm<unknown>
   | LastOrDefaultTerm<unknown>
   | SingleTerm<unknown>

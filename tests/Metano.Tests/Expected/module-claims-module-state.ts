@@ -1,8 +1,8 @@
 import { isInt32, isString } from "metano-runtime";
 
+export const QuxX: number = 4;
 export let fooX: number = 1;
 let bazX: number = 3;
-export const QuxX: number = 4;
 
 export function fooX$(x: number): number {
   return (x + fooX) | 0;

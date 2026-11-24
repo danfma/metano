@@ -280,6 +280,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         ).Collect(roots);
 
         ReportUnmirroredSettings(contextType, properties, contract, report);
+        ReportPropertyNameCollisions(contextType, properties, contract, report);
+        ReportUnclaimedMemberTypes(properties, admission, contract, report);
 
         return new JsonContextPlan(
             names,
@@ -290,9 +292,44 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         );
     }
 
+    /// <summary>Reports <c>MS0001</c> for every member whose type the context cannot claim (#713).</summary>
+    private static void ReportUnclaimedMemberTypes(
+        JsonPropertyCollector properties,
+        JsonContractAdmission admission,
+        JsonContract contract,
+        Action<MetanoDiagnostic> report
+    )
+    {
+        var errors = new JsonUnclaimedMemberTypes(properties, admission).ErrorsOf(contract.Entries);
+
+        foreach (var error in errors)
+            report(error);
+    }
+
+    /// <summary>Reports <c>MS0072</c> for every contract whose properties share a JSON name (#442).</summary>
+    private static void ReportPropertyNameCollisions(
+        INamedTypeSymbol contextType,
+        JsonPropertyCollector properties,
+        JsonContract contract,
+        Action<MetanoDiagnostic> report
+    )
+    {
+        var caseInsensitive = JsonOptionsReader
+            .ReadOptionsOf(contextType)
+            .PropertyNameCaseInsensitive;
+
+        var errors = new JsonPropertyNameCollisions(properties, caseInsensitive).ErrorsOf(
+            contract.Entries
+        );
+
+        foreach (var error in errors)
+            report(error);
+    }
+
     /// <summary>
     /// Reports <c>MS0037</c> for every context option and every attribute of
-    /// the closure the generated context does not mirror (FR-046).
+    /// the closure the generated context does not mirror (FR-046), and for
+    /// every native integer slot System.Text.Json cannot serialize (#561).
     /// </summary>
     private static void ReportUnmirroredSettings(
         INamedTypeSymbol contextType,
@@ -303,7 +340,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     {
         var warnings = JsonUnmirroredContextOptions
             .WarningsOf(contextType)
-            .Concat(new JsonUnmirroredAttributes(properties).WarningsOf(contract.Entries));
+            .Concat(new JsonUnmirroredAttributes(properties).WarningsOf(contract.Entries))
+            .Concat(new JsonNativeIntegerWarnings(properties).WarningsOf(contract.Entries));
 
         foreach (var warning in warnings)
             report(warning);

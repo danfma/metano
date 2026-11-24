@@ -11,30 +11,24 @@ export class Bag<T> {
   constructor(item: T);
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Bag.byBagItem) {
-      const item = args[1] as T;
       this.log = "item";
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Bag.byBagItemCount) {
-      const item = args[1] as T;
-      const count = args[2] as number;
       this.log = "count";
 
       return;
     }
 
     if (args.length === 2 && isInt32(args[1])) {
-      const item = args[0] as T;
-      const count = args[1] as number;
       this.log = "count";
 
       return;
     }
 
     if (args.length === 1) {
-      const item = args[0] as T;
       this.log = "item";
 
       return;

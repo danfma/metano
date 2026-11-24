@@ -91,6 +91,18 @@ public static class DartImportCollector
 
                 WalkBody(fn.Body, ctx);
                 break;
+            case DartTopLevelVariable v:
+                WalkType(v.Type, ctx);
+                WalkExpression(v.Initializer, ctx);
+                break;
+            case DartTopLevelGetter g:
+                WalkType(g.ReturnType, ctx);
+                WalkBody(g.Body, ctx);
+                break;
+            case DartTopLevelSetter s:
+                WalkType(s.ValueType, ctx);
+                WalkBody(s.Body, ctx);
+                break;
             case DartTypedef td:
                 // Delegate-derived typedefs alias a function signature; both the
                 // return and parameter types pull imports. Type-parameter
@@ -133,6 +145,9 @@ public static class DartImportCollector
         WalkBody(constructor.Body, ctx);
 
         foreach (var argument in constructor.Redirect?.Arguments ?? [])
+            WalkExpression(argument.Value, ctx);
+
+        foreach (var argument in constructor.SuperCall?.Arguments ?? [])
             WalkExpression(argument.Value, ctx);
     }
 

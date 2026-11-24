@@ -59,19 +59,17 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The step <c>1</c> in the operand's numeric representation: a
-    /// <c>BigInteger</c> is a <c>bigint</c>, which JS does not mix with a
-    /// <c>number</c>, and so is a 64-bit integer (a <c>1n</c> literal of its
-    /// kind), a 64-bit enum held as its integer included (#701).
+    /// <c>BigInteger</c> literal for a <c>BigInteger</c> (#604), and a 64-bit
+    /// literal of its kind for a 64-bit integer, a 64-bit enum held as its
+    /// integer included (#701), since JS does not mix a <c>bigint</c> with a
+    /// <c>number</c>.
     /// </summary>
     private IrExpression OneOf(ExpressionSyntax operand)
     {
         var type = _semantic.GetTypeInfo(operand).Type;
 
         if (type.UnderlyingValueType().IsBigInteger())
-            return new IrCallExpression(
-                new IrTypeReference("BigInt"),
-                [new IrArgument(OneLiteral)]
-            );
+            return new IrLiteral("1", IrLiteralKind.BigInteger);
 
         return
             _context.NumericLowering.RepresentationOf(NumericEndpoints.Of(type)) is { } endpoint

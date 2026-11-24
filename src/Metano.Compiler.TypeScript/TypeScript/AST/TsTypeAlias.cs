@@ -4,5 +4,6 @@ public sealed record TsTypeAlias(
     string Name,
     TsType Type,
     bool Exported = true,
-    IReadOnlyList<TsTypeParameter>? TypeParameters = null
+    IReadOnlyList<TsTypeParameter>? TypeParameters = null,
+    TsJSDoc? JSDoc = null
 ) : TsTopLevel;

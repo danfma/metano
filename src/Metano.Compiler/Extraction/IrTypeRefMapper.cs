@@ -135,7 +135,7 @@ public static class IrTypeRefMapper
             }
 
             // BigInteger
-            if (fullName == "System.Numerics.BigInteger")
+            if (named.IsBigInteger())
                 return new IrPrimitiveTypeRef(IrPrimitive.BigInteger);
 
             // Date/time types
@@ -303,9 +303,12 @@ public static class IrTypeRefMapper
             var origin = originResolver.ResolveThroughOutermost(named);
             var semantics = BuildNamedTypeSemantics(named, target);
 
+            var containerArguments = ContainerTypeArgumentsOf(named, originResolver, target);
+
             if (named.TypeArguments.Length > 0)
             {
                 var args = named.TypeArguments.Select(a => Map(a, originResolver, target)).ToList();
+
                 return new IrNamedTypeRef(
                     BuildQualifiedName(named, target),
                     GetNamespace(named),
@@ -313,7 +316,10 @@ public static class IrTypeRefMapper
                     origin,
                     semantics,
                     PrivateNestedSegmentCount(named)
-                );
+                )
+                {
+                    ContainerTypeArguments = containerArguments,
+                };
             }
 
             return new IrNamedTypeRef(
@@ -322,7 +328,10 @@ public static class IrTypeRefMapper
                 Origin: origin,
                 Semantics: semantics,
                 PrivateNestedSegments: PrivateNestedSegmentCount(named)
-            );
+            )
+            {
+                ContainerTypeArguments = containerArguments,
+            };
         }
 
         // Type parameters (T, K, V)
@@ -473,14 +482,14 @@ public static class IrTypeRefMapper
         if (named.TypeKind == TypeKind.Delegate)
             return new IrNamedTypeSemantics(IrNamedTypeKind.Delegate);
 
-        // Inline wrappers collapse to a branded primitive at runtime. The
-        // underlying primitive comes from the first real field / property.
-        if (SymbolHelper.HasBranded(named))
+        // Inline wrappers collapse to a branded primitive at runtime. A
+        // wrapper over anything a brand cannot intersect lowers as the record
+        // or struct it is (#288), so it takes the arms below.
+        if (SymbolHelper.IsPrimitiveBackedBranded(named))
         {
-            var primitive = DetectBrandedUnderlyingPrimitive(named);
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Branded,
-                BrandedUnderlyingPrimitive: primitive,
+                BrandedUnderlyingPrimitive: BrandedUnderlyingPrimitiveOf(named),
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named),
@@ -792,7 +801,7 @@ public static class IrTypeRefMapper
 
     /// <summary>
     /// A transpiled record or struct the walk enters field by field: not a
-    /// branded wrapper (one value) nor an enum.
+    /// primitive-backed branded wrapper (one value) nor an enum.
     /// </summary>
     private static bool IsWalkedValueType(
         ITypeSymbol type,
@@ -800,7 +809,7 @@ public static class IrTypeRefMapper
     ) =>
         type is INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Struct } named
         && (named.IsRecord || named.TypeKind is TypeKind.Struct)
-        && !SymbolHelper.HasBranded(named)
+        && !SymbolHelper.IsPrimitiveBackedBranded(named)
         && IsTranspilableType(named, target);
 
     /// <summary>
@@ -883,22 +892,17 @@ public static class IrTypeRefMapper
             .SelectMany(current => current.GetMembers().OfType<IFieldSymbol>())
             .Where(field => !field.IsStatic && !field.IsConst);
 
-    private static IrPrimitive? DetectBrandedUnderlyingPrimitive(INamedTypeSymbol wrapper)
-    {
-        var field = wrapper
-            .GetMembers()
-            .OfType<IFieldSymbol>()
-            .FirstOrDefault(f => !f.IsImplicitlyDeclared);
-        if (field is not null && Map(field.Type) is IrPrimitiveTypeRef p)
-            return p.Primitive;
-        var prop = wrapper
-            .GetMembers()
-            .OfType<IPropertySymbol>()
-            .FirstOrDefault(p => !p.IsImplicitlyDeclared);
-        if (prop is not null && Map(prop.Type) is IrPrimitiveTypeRef pp)
-            return pp.Primitive;
-        return null;
-    }
+    /// <summary>
+    /// The primitive a primitive-backed <c>[Branded]</c> wrapper brands, read
+    /// from its single value member (<see cref="SymbolHelper.GetBrandedValueType"/>),
+    /// the rule the declaration side reads too. A static member of the wrapper's
+    /// own type (<c>static readonly UId Zero</c>) is never the value member.
+    /// </summary>
+    private static IrPrimitive? BrandedUnderlyingPrimitiveOf(INamedTypeSymbol wrapper) =>
+        SymbolHelper.GetBrandedValueType(wrapper.OriginalDefinition) is { } valueType
+        && Map(valueType) is IrPrimitiveTypeRef { Primitive: var primitive }
+            ? primitive
+            : null;
 
     /// <summary>
     /// Whether <paramref name="type"/> is an exception with no declaration on
@@ -972,8 +976,13 @@ public static class IrTypeRefMapper
             return true;
         if (SymbolHelper.HasIgnore(named, target))
             return false;
-        if (named.DeclaredAccessibility != Accessibility.Public)
+
+        if (
+            named.DeclaredAccessibility != Accessibility.Public
+            && !IsNestedInTranspilableContainer(named, target)
+        )
             return false;
+
         var asm = named.ContainingAssembly;
         if (asm is null)
             return false;
@@ -982,6 +991,38 @@ public static class IrTypeRefMapper
                 a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
             );
     }
+
+    /// <summary>
+    /// The type arguments of the generic containers of <paramref name="named"/>
+    /// (<see cref="IrNamedTypeRef.ContainerTypeArguments"/>), or <c>null</c>.
+    /// </summary>
+    private static IReadOnlyList<IrTypeRef>? ContainerTypeArgumentsOf(
+        INamedTypeSymbol named,
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        var arguments = GenericContainers.TypeArgumentsOf(named);
+
+        return arguments.Count > 0
+            ? arguments.Select(argument => Map(argument, originResolver, target)).ToList()
+            : null;
+    }
+
+    /// <summary>
+    /// A named, source-declared nested type of any accessibility whose container is
+    /// itself transpilable: part of the container's emitted surface, as the
+    /// <c>[assembly: TranspileAssembly]</c> inclusion rule has it (#264), so a
+    /// reference to it — a base class among them — is kept (#422).
+    /// </summary>
+    private static bool IsNestedInTranspilableContainer(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        named.ContainingType is { } container
+        && !string.IsNullOrEmpty(named.Name)
+        && !named.IsImplicitlyDeclared
+        && IsTranspilableType(container, target);
 
     private static IrFunctionTypeRef MapDelegateType(
         INamedTypeSymbol delegateType,

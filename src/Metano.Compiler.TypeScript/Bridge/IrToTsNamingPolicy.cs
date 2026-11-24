@@ -171,7 +171,23 @@ public static class IrToTsNamingPolicy
     /// <see cref="ToFunctionName(string, IReadOnlyList{IrAttribute})"/>.
     /// </summary>
     public static string ToFunctionName(IrModuleFunction function) =>
-        ToGroupFunctionName(function.Name, function.Attributes, function.OverloadName);
+        FindMemberNameOverride(function.Attributes, function.OverloadName) is { } overrideName
+            ? overrideName + AccessorSuffixOf(function.Name)
+            : TypeScriptNaming.ToCamelCase(function.Name);
+
+    /// <summary>
+    /// The <c>$get</c> / <c>$set</c> an extension property's accessor function
+    /// carries in its IR name (<see cref="IrExtensionConventions"/>), which a
+    /// <c>[Name]</c> on the property keeps: the call site reads
+    /// <c>renamed$get(x)</c>, and the getter and setter of a renamed property
+    /// would otherwise declare one name twice. Empty for any other function.
+    /// </summary>
+    private static string AccessorSuffixOf(string irName) =>
+        irName.EndsWith(IrExtensionConventions.PropertyGetterSuffix, StringComparison.Ordinal)
+            ? IrExtensionConventions.PropertyGetterSuffix
+        : irName.EndsWith(IrExtensionConventions.PropertySetterSuffix, StringComparison.Ordinal)
+            ? IrExtensionConventions.PropertySetterSuffix
+        : "";
 
     /// <summary>
     /// <see cref="ToFunctionName(IrModuleFunction)"/> for a static method a
