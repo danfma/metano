@@ -39,4 +39,12 @@ export abstract class IgnAbs {
   with(overrides?: Partial<IgnAbs>): IgnAbs {
     return copyRecordWith<IgnAbs>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `V = ${this.v}`;
+  }
+
+  toString(): string {
+    return `IgnAbs { ${this.$printMembers()} }`;
+  }
 }

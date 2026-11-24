@@ -1,5 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  formatDouble,
+  valueEquals,
+  type ClassType,
+} from "metano-runtime";
 
 let Stats$rt: ClassType<Stats> | undefined;
 
@@ -46,5 +52,9 @@ export class Stats {
 
   with(overrides?: Partial<Stats>): Stats {
     return copyRecordWith<Stats>(this, overrides);
+  }
+
+  toString(): string {
+    return `Stats { Count = ${this.count}, Ratio = ${formatDouble(this.ratio)}, UserName = ${this.userName} }`;
   }
 }

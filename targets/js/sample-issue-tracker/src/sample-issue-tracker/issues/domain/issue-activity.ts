@@ -69,4 +69,12 @@ export class IssueActivity {
   with(overrides?: Partial<IssueActivity>): IssueActivity {
     return copyRecordWith<IssueActivity>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `Id = ${this.id}, IssueKey = ${this.issueKey ?? ""}, Kind = ${this.kind}, OccurredAtTicks = ${this.occurredAtTicks}, DurationTicks = ${this.durationTicks ?? ""}`;
+  }
+
+  toString(): string {
+    return `IssueActivity { ${this.$printMembers()} }`;
+  }
 }

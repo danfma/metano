@@ -39,4 +39,12 @@ export class SBase {
   with(overrides?: Partial<SBase>): SBase {
     return copyRecordWith<SBase>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `V = ${this.v}`;
+  }
+
+  toString(): string {
+    return `SBase { ${this.$printMembers()} }`;
+  }
 }

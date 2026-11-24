@@ -44,4 +44,14 @@ export class HLeaf extends HMid {
   override with(overrides?: Partial<HLeaf>): HLeaf {
     return copyRecordWith<HLeaf>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}C = ${this.c}`;
+  }
+
+  override toString(): string {
+    return `HLeaf { ${this.$printMembers()} }`;
+  }
 }

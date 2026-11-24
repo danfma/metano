@@ -39,4 +39,12 @@ export abstract class UNear {
   with(overrides?: Partial<UNear>): UNear {
     return copyRecordWith<UNear>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `A = ${this.a}`;
+  }
+
+  toString(): string {
+    return `UNear { ${this.$printMembers()} }`;
+  }
 }

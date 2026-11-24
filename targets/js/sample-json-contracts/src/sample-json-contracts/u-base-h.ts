@@ -39,4 +39,12 @@ export abstract class UBaseH {
   with(overrides?: Partial<UBaseH>): UBaseH {
     return copyRecordWith<UBaseH>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `A = ${this.a}`;
+  }
+
+  toString(): string {
+    return `UBaseH { ${this.$printMembers()} }`;
+  }
 }

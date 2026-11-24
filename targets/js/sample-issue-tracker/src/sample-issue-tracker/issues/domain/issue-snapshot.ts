@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import { HashCode, copyRecordWith, formatText, valueEquals, type ClassType } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
 import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 import type { Comment } from "./comment";
@@ -82,5 +82,13 @@ export class IssueSnapshot {
 
   with(overrides?: Partial<IssueSnapshot>): IssueSnapshot {
     return copyRecordWith<IssueSnapshot>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Id = ${this.id}, Title = ${this.title ?? ""}, Description = ${this.description ?? ""}, Type = ${this.type}, Priority = ${this.priority}, Status = ${this.status}, AssigneeId = ${this.assigneeId ?? ""}, SprintKey = ${this.sprintKey ?? ""}, CreatedAt = ${this.createdAt}, UpdatedAt = ${this.updatedAt}, EstimatedHours = ${formatText(this.estimatedHours)}, Comments = ${this.comments ?? ""}`;
+  }
+
+  toString(): string {
+    return `IssueSnapshot { ${this.$printMembers()} }`;
   }
 }

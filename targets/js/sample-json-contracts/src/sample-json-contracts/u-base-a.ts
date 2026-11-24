@@ -39,4 +39,14 @@ export class UBaseA extends UBaseH {
   override with(overrides?: Partial<UBaseA>): UBaseA {
     return copyRecordWith<UBaseA>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    return super.$printMembers?.() ?? "";
+  }
+
+  override toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `UBaseA { ${members} }` : "UBaseA { }";
+  }
 }

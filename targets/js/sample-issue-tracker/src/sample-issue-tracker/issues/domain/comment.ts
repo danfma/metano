@@ -1,7 +1,13 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { Temporal } from "@js-temporal/polyfill";
-import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  formatBoolean,
+  valueEquals,
+  type ClassType,
+} from "metano-runtime";
 import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
 
 let Comment$rt: ClassType<Comment> | undefined;
@@ -56,5 +62,13 @@ export class Comment {
 
   with(overrides?: Partial<Comment>): Comment {
     return copyRecordWith<Comment>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `AuthorId = ${this.authorId}, Message = ${this.message ?? ""}, CreatedAt = ${this.createdAt}, IsSystem = ${formatBoolean(this.isSystem)}`;
+  }
+
+  toString(): string {
+    return `Comment { ${this.$printMembers()} }`;
   }
 }

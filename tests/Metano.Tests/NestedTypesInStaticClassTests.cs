@@ -552,7 +552,10 @@ public class NestedTypesInStaticClassTests
         var output = result["palette.ts"];
         await Assert.That(output).Contains("class Palette$Tone {");
         await Assert.That(output).Contains("new Palette$Tone(1)");
-        await Assert.That(output).DoesNotContain("Shade");
+        // The record's .NET text keeps its C# name (`Shade { V = 1 }`, baseline FR-093);
+        // no emitted identifier does.
+        await Assert.That(output).DoesNotContain("class Shade");
+        await Assert.That(output).DoesNotContain("Palette$Shade");
     }
 
     [Test]

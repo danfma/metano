@@ -822,6 +822,21 @@ RbBProbes.paramsArray = 2
 RbBProbes.queueStack = TTT
 RbBProbes.toArrayAndBack = TTT
 RbBProbes.typedToObject = T1
+RecordToStringProbes.collections = RtsWithCollections { Name = n, Values = System.Collections.Generic.List`1[System.Int32], Map = System.Collections.Generic.Dictionary`2[System.String,System.Int32] }
+RecordToStringProbes.crossPackageDerived = RtsXDerived { Name = n, Level = 2 }|LPrintBase { Name = b }
+RecordToStringProbes.cycle = InsufficientExecutionStackException
+RecordToStringProbes.derived = RtsDerived { Name = n, Level = 2 }|RtsSealedDerived { Name = s, Ratio = 0.5 }|RtsBase { Name = b }|RtsDerivedEmpty { Name = e }|RtsAfterEmptyBase { A = 1 }
+RecordToStringProbes.flat = RtsItem { Name = a, Qty = 1 }|RtsItem { Name = b, Qty = 2 }|xRtsItem { Name = c, Qty = 3 }
+RecordToStringProbes.joinAndTuple = RtsItem { Name = a, Qty = 1 };RtsItem { Name = b, Qty = 2 }|(RtsItem { Name = a, Qty = 1 }, 2)
+RecordToStringProbes.memberRules = RtsBody { Name = x, Extra = 7, Computed = 42, Field = f }|RtsAccess { A = 1, PrivGet = 5 }|RtsVirtualDerived { V = 2, W = 3 }
+RecordToStringProbes.names = RtsGeneric { Value = 1 }|RtsGeneric { Value =  }|Inner { X = 1 }
+RecordToStringProbes.nested = RtsNested { Inner = RtsItem { Name = a, Qty = 1 }, Note = note, Initial = c }|RtsGeneric { Value = RtsItem { Name = b, Qty = 2 } }
+RecordToStringProbes.nullMembers = RtsNulls { S = , N = , R = , E = , D =  }|RtsNulls { S = s, N = 1, R = RtsItem { Name = a, Qty = 1 }, E = Green, D = 0.5 }
+RecordToStringProbes.numbers = RtsNumbers { F = 0.1, D = 0.3333333333333333, M = 1.50, L = 9007199254740993, U = 18446744073709551615, B = True, E = Green }
+RecordToStringProbes.recordStructs = RtsPoint { X = 1, Y = 2 }|RtsReadOnlyPoint { X = 0.1, Y = 1E-07 }|RtsPoint { X = 0, Y = 3 }
+RecordToStringProbes.sealed = RtsSealedRoot { A = 1, B = b }|RtsSealedEmpty { }|sealed:1|RtsEmpty { }
+RecordToStringProbes.stringsAndChars = RtsText { S = s, C = c, Empty =  }|RtsGeneric { Value = z }
+RecordToStringProbes.userOverride = custom:1|RtsUserDerived { A = 1, B = 2 }|RtsAbstractDerived { A = 1, B = 2 }
 ReifiedClassProbes.derivedClosedAndOpenBase = True|False|True|False|True
 ReifiedClassProbes.genericClassSlotAndIdentity = True|False|True|True|True|False
 ReifiedClassProbes.newConstraintAndDefault = True|0|0|False|True|0

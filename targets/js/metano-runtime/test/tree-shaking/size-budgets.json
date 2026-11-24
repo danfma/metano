@@ -232,6 +232,18 @@
       "$comment": "#694: measured bun 2783 B / esbuild 2732 B; capped at 3 KiB."
     },
     {
+      "name": "record toString (int/string members)",
+      "entry": "entries/record-to-string.js",
+      "maxGzip": 185,
+      "$comment": "#664 (baseline FR-094.5): measured bun 165 B / esbuild 168 B + 10%. The class with its toString and $printMembers; no runtime module."
+    },
+    {
+      "name": "record toString (double member)",
+      "entry": "entries/record-to-string-double.js",
+      "maxGzip": 2637,
+      "$comment": "#664 (baseline FR-094.5): measured bun 2397 B / esbuild 2365 B + 10%. formatDouble (double-format.ts) is paid once per program by the first floating-point record member."
+    },
+    {
       "name": "TimeSpan constant text",
       "entry": "entries/time-span-text.js",
       "maxGzip": 448,

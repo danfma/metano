@@ -45,4 +45,8 @@ export class Gauge implements IGauge {
   with(overrides?: Partial<Gauge>): Gauge {
     return copyRecordWith<Gauge>(this, overrides);
   }
+
+  toString(): string {
+    return `Gauge { Level = ${this.level}, Unit = ${this.unit} }`;
+  }
 }

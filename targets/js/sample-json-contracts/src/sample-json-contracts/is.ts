@@ -40,4 +40,14 @@ export class IS extends IBase {
   override with(overrides?: Partial<IS>): IS {
     return copyRecordWith<IS>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Y = ${this.y}`;
+  }
+
+  override toString(): string {
+    return `IS { ${this.$printMembers()} }`;
+  }
 }

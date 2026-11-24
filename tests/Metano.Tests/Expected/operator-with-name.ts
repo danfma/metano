@@ -26,4 +26,8 @@ export class Vec2 {
   with(overrides?: Partial<Vec2>): Vec2 {
     return copyRecordWith<Vec2>(this, overrides);
   }
+
+  toString(): string {
+    return `Vec2 { X = ${this.x}, Y = ${this.y} }`;
+  }
 }

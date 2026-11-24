@@ -40,4 +40,14 @@ export class IA extends IBase {
   override with(overrides?: Partial<IA>): IA {
     return copyRecordWith<IA>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}X = ${this.x}`;
+  }
+
+  override toString(): string {
+    return `IA { ${this.$printMembers()} }`;
+  }
 }

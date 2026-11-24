@@ -35,4 +35,14 @@ export class UFail {
   with(overrides?: Partial<UFail>): UFail {
     return copyRecordWith<UFail>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return "";
+  }
+
+  toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `UFail { ${members} }` : "UFail { }";
+  }
 }

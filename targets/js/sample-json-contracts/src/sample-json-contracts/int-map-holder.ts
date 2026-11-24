@@ -40,4 +40,8 @@ export class IntMapHolder {
   with(overrides?: Partial<IntMapHolder>): IntMapHolder {
     return copyRecordWith<IntMapHolder>(this, overrides);
   }
+
+  toString(): string {
+    return `IntMapHolder { ByKey = ${this.byKey} }`;
+  }
 }

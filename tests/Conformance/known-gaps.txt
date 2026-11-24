@@ -31,8 +31,6 @@ CollectionEqualityProbes.listEquals  #710  list.Equals(other) emits `list.equals
 CollectionEqualityProbes.asListCast  #710  a cast of a set, dictionary, queue or stack to IList<T> passes through (.NET: InvalidCastException); a check must tell the list targets from ICollection<T> at the call site
 CollectionEqualityProbes.immutableListEmptyAddRange  #712  an empty ImmutableList's AddRange(list) returns a new list (.NET returns the source when it is the same closed type)
 CollectionEqualityProbes.negativeZeroKeys  #710  a -0 double key of a Dictionary or HashSet is stored as +0 (the native Map normalizes it)
-CollectionEqualityProbes.recordToString  #664  a record has no synthesized toString (the PrintMembers text); needs a design for derived records
-CollectionEqualityProbes.recordStructToString  #664  a record struct has no synthesized toString (the PrintMembers text)
 W6DelegateProbes.invokeGroupAcrossParamsShapesIsLoud  none  Group G round 1: a delegate Invoke method group between a params and a non-params delegate reports MS0001 and throws, instead of miscounting the arguments silently (.NET: 3 3)
 
 AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
@@ -68,7 +66,8 @@ DecimalProbes.arithmetic              #662  decimal.js drops the decimal scale (
 DecimalProbes.negatives               #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.rounding                #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 DecimalProbes.trailingZeros           #662  decimal.js drops the decimal scale (1.10m prints 1.1)
-DecimalProbes.records                 #664  record ToString and decimal scale
+DecimalProbes.records                 #662  decimal.js drops the decimal scale of a computed amount (2.20 prints 2.2)
+RecordToStringProbes.cycle            none  baseline FR-094.3: a record that reaches itself overflows with a JavaScript RangeError, caught as Exception (.NET: InsufficientExecutionStackException); no cycle detection by decision W7-4
 IndexProbes.decimalElems              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 LinqProbes.decimalLambda              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
 LinqProbes.minMaxDecimal              #662  decimal.js drops the decimal scale (1.10m prints 1.1)
@@ -104,7 +103,6 @@ StringProbes.emptyAndNullArgs         none  "abc".Contains(null) does not throw 
 StringProbes.trimSpecial              none  JavaScript trims U+FEFF, .NET does not
 TextProbes.generic                    none  generic float text loses Single type identity; bool and double default text now matches
 TextProbes.floatMath                  none  float equality after a float computation
-TextProbes.recordToString             #664  record ToString prints [object Object]
 LazyDirectProbes.baseModuleFirst      none  importing the base module of a lazy static constructor cycle directly (not through the barrel) hits the extends TDZ; follow-up: automatic co-location of cycle members (FR-066 option C, to be filed)
 LazyFieldProbes.structDefaultDoesNotTrigger #291  `new S()` of a struct runs its declared constructor instead of the default value; the lazy static constructor still runs at the first instance method call
 LazyStructProbes.paramsConstructorWithoutArguments #291  `new S()` of a struct whose only constructor takes `params` runs that constructor (its static constructor and field initializers) instead of the default value

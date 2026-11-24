@@ -591,6 +591,7 @@ public sealed class TypeScriptTransformContext(
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
             HasExceptionRuntimeClass = ExceptionClasses.HasRuntimeClass,
+            UnprintableTextReason = TsUnprintableText.ReasonOf,
             EmittedMemberName = IrToTsNamingPolicy.DeclaredNameOf,
             KeepsArgumentEvaluationOrder = true,
             FormatStrings = TsFormatStrings.Instance,

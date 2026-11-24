@@ -18,4 +18,12 @@ export class Shape {
   with(overrides?: Partial<Shape>): Shape {
     return copyRecordWith<Shape>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `X = ${this.x}, Y = ${this.y}`;
+  }
+
+  toString(): string {
+    return `Shape { ${this.$printMembers()} }`;
+  }
 }

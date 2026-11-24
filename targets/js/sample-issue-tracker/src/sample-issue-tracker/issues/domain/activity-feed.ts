@@ -42,4 +42,12 @@ export class ActivityFeed {
   with(overrides?: Partial<ActivityFeed>): ActivityFeed {
     return copyRecordWith<ActivityFeed>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `Entries = ${this.entries ?? ""}`;
+  }
+
+  toString(): string {
+    return `ActivityFeed { ${this.$printMembers()} }`;
+  }
 }

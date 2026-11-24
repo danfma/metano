@@ -28,6 +28,10 @@ internal static class ValueEqualityShapes
         );
     }
 
+    /// <summary>A record emitted as a class, which carries record value equality and text.</summary>
+    public static bool IsRecordEmittedAsClass(INamedTypeSymbol type) =>
+        KindOf(type) is IrValueEqualityKind.Record;
+
     /// <summary>
     /// The declarations C# uses instead of the synthesized <c>Equals(object)</c>:
     /// a record's <c>Equals(R)</c> (<see cref="ReplacesRecordEquals"/>); a struct's

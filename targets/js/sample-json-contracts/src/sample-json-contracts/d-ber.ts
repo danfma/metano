@@ -40,4 +40,14 @@ export class DBer extends DBase {
   override with(overrides?: Partial<DBer>): DBer {
     return copyRecordWith<DBer>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}W = ${this.w}`;
+  }
+
+  override toString(): string {
+    return `DBer { ${this.$printMembers()} }`;
+  }
 }

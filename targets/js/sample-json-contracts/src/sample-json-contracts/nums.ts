@@ -1,8 +1,16 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  enumText,
+  formatDouble,
+  formatText,
+  valueEquals,
+  type ClassType,
+} from "metano-runtime";
 import type { Dictionary, List } from "metano-runtime/system/collections";
 import type { Decimal } from "metano-runtime/system/decimal";
-import type { Color } from "./color";
+import { Color$runtimeType, type Color } from "./color";
 
 let Nums$rt: ClassType<Nums> | undefined;
 
@@ -61,5 +69,9 @@ export class Nums {
 
   with(overrides?: Partial<Nums>): Nums {
     return copyRecordWith<Nums>(this, overrides);
+  }
+
+  toString(): string {
+    return `Nums { N = ${this.n}, M = ${this.m ?? ""}, D = ${formatText(this.d)}, X = ${formatDouble(this.x)}, L = ${this.l}, Map = ${this.map}, C = ${enumText(this.c, Color$runtimeType)} }`;
   }
 }

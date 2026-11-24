@@ -44,4 +44,8 @@ export class EpisodeSummary {
   with(overrides?: Partial<EpisodeSummary>): EpisodeSummary {
     return copyRecordWith<EpisodeSummary>(this, overrides);
   }
+
+  toString(): string {
+    return `EpisodeSummary { Id = ${this.id}, Title = ${this.title} }`;
+  }
 }

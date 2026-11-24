@@ -40,4 +40,8 @@ export class ImmHolder {
   with(overrides?: Partial<ImmHolder>): ImmHolder {
     return copyRecordWith<ImmHolder>(this, overrides);
   }
+
+  toString(): string {
+    return `ImmHolder { Items = ${this.items} }`;
+  }
 }

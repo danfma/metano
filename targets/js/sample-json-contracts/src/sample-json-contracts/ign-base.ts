@@ -39,4 +39,12 @@ export class IgnBase {
   with(overrides?: Partial<IgnBase>): IgnBase {
     return copyRecordWith<IgnBase>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `V = ${this.v}`;
+  }
+
+  toString(): string {
+    return `IgnBase { ${this.$printMembers()} }`;
+  }
 }

@@ -39,4 +39,12 @@ export abstract class NBase {
   with(overrides?: Partial<NBase>): NBase {
     return copyRecordWith<NBase>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `A = ${this.a}`;
+  }
+
+  toString(): string {
+    return `NBase { ${this.$printMembers()} }`;
+  }
 }

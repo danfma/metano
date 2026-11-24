@@ -43,6 +43,16 @@ export class TextToken extends Token {
   override with(overrides?: Partial<TextToken>): TextToken {
     return copyRecordWith<TextToken>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Text = ${this.text}`;
+  }
+
+  override toString(): string {
+    return `TextToken { ${this.$printMembers()} }`;
+  }
 }
 
 export function isTextToken(value: unknown): value is TextToken {

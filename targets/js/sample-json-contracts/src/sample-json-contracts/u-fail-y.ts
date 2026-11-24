@@ -40,4 +40,14 @@ export class UFailY extends UFail {
   override with(overrides?: Partial<UFailY>): UFailY {
     return copyRecordWith<UFailY>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    return super.$printMembers?.() ?? "";
+  }
+
+  override toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `UFailY { ${members} }` : "UFailY { }";
+  }
 }

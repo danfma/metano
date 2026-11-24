@@ -73,6 +73,14 @@ export class Point {
   with(overrides?: Partial<Point>): Point {
     return copyRecordWith<Point>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `X = ${this.x}, Y = ${this.y}`;
+  }
+
+  toString(): string {
+    return `Point { ${this.$printMembers()} }`;
+  }
 }
 
 // fixtures/no-runtime-questions/priority.ts
@@ -85,7 +93,7 @@ export const Priority = {
 export type Priority = typeof Priority[keyof typeof Priority];
 
 // fixtures/no-runtime-questions/todo-item.ts
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, formatBoolean, valueEquals } from "metano-runtime";
 import type { Point } from "./point";
 import { Priority } from "./priority";
 
@@ -119,5 +127,13 @@ export class TodoItem {
 
   with(overrides?: Partial<TodoItem>): TodoItem {
     return copyRecordWith<TodoItem>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Title = ${this.title ?? ""}, Priority = ${this.priority}, Location = ${this.location ?? ""}, IsUrgent = ${formatBoolean(this.isUrgent)}`;
+  }
+
+  toString(): string {
+    return `TodoItem { ${this.$printMembers()} }`;
   }
 }

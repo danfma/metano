@@ -45,4 +45,8 @@ export class EpisodeRec {
   with(overrides?: Partial<EpisodeRec>): EpisodeRec {
     return copyRecordWith<EpisodeRec>(this, overrides);
   }
+
+  toString(): string {
+    return `EpisodeRec { Id = ${this.id}, Note = ${this.note} }`;
+  }
 }

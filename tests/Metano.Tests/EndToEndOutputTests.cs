@@ -111,7 +111,7 @@ public class EndToEndOutputTests
         // An [EmitPackage] library emits the descriptor of every public type
         // (spec 011 D29).
         var expected =
-            "import { HashCode, copyRecordWith, isInt32, valueEquals, type ClassType, type EnumType } from \"metano-runtime\";\n"
+            "import { HashCode, copyRecordWith, enumText, formatText, isInt32, valueEquals, type ClassType, type EnumType } from \"metano-runtime\";\n"
             + "import type { Decimal } from \"metano-runtime/system/decimal\";\n"
             + "\n"
             + "let Issue$rt: ClassType<Issue> | undefined;\n"
@@ -149,6 +149,14 @@ public class EndToEndOutputTests
             + "\n"
             + "  with(overrides?: Partial<Issue>): Issue {\n"
             + "    return copyRecordWith<Issue>(this, overrides);\n"
+            + "  }\n"
+            + "\n"
+            + "  protected $printMembers(): string {\n"
+            + "    return `Title = ${this.title ?? \"\"}, Status = ${enumText(this.status, IssueStatus$runtimeType)}, EstimatedCost = ${formatText(this.estimatedCost)}`;\n"
+            + "  }\n"
+            + "\n"
+            + "  toString(): string {\n"
+            + "    return `Issue { ${this.$printMembers()} }`;\n"
             + "  }\n"
             + "}\n"
             + "\n"

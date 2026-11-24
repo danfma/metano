@@ -3,6 +3,7 @@
 import {
   HashCode,
   copyRecordWith,
+  formatBoolean,
   int32FromDouble,
   valueEquals,
   type ClassType,
@@ -65,5 +66,13 @@ export class PageResult<T> {
 
   with(overrides?: Partial<PageResult<T>>): PageResult<T> {
     return copyRecordWith<PageResult<T>>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Items = ${this.items ?? ""}, TotalCount = ${this.totalCount}, Page = ${this.page ?? ""}, TotalPages = ${this.totalPages}, HasNextPage = ${formatBoolean(this.hasNextPage)}`;
+  }
+
+  toString(): string {
+    return `PageResult { ${this.$printMembers()} }`;
   }
 }

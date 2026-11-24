@@ -43,4 +43,14 @@ export class IgnAbsDer extends IgnAbs {
   override with(overrides?: Partial<IgnAbsDer>): IgnAbsDer {
     return copyRecordWith<IgnAbsDer>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}W = ${this.w}`;
+  }
+
+  override toString(): string {
+    return `IgnAbsDer { ${this.$printMembers()} }`;
+  }
 }

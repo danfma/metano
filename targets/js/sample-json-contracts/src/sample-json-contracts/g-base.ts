@@ -1,5 +1,11 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, defaultEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  defaultEquals,
+  objectText,
+  type ClassType,
+} from "metano-runtime";
 
 let GBase$rt: ClassType<GBase<unknown>> | undefined;
 
@@ -38,5 +44,13 @@ export abstract class GBase<T> {
 
   with(overrides?: Partial<GBase<T>>): GBase<T> {
     return copyRecordWith<GBase<T>>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Value = ${objectText(this.value ?? "")}`;
+  }
+
+  toString(): string {
+    return `GBase { ${this.$printMembers()} }`;
   }
 }

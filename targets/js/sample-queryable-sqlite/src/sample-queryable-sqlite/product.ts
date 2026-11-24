@@ -1,5 +1,12 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
+import {
+  HashCode,
+  copyRecordWith,
+  formatBoolean,
+  formatText,
+  valueEquals,
+  type ClassType,
+} from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
 
 let Product$rt: ClassType<Product> | undefined;
@@ -56,5 +63,9 @@ export class Product {
 
   with(overrides?: Partial<Product>): Product {
     return copyRecordWith<Product>(this, overrides);
+  }
+
+  toString(): string {
+    return `Product { Id = ${this.id}, Name = ${this.name}, DisplayName = ${this.displayName}, UnitPrice = ${formatText(this.unitPrice)}, StockCount = ${this.stockCount}, IsActive = ${formatBoolean(this.isActive)} }`;
   }
 }
