@@ -20,9 +20,9 @@ public sealed class PathNaming(string rootNamespace)
     /// Normalizes a raw <c>--import-alias</c> value into a subpath-imports key prefix.
     /// Blank (null/empty/whitespace) → <c>#</c> (the default). A single leading <c>#</c>
     /// is optional, so both <c>contracts</c> and <c>#contracts</c> yield <c>#contracts</c>.
-    /// This is the single source of truth for the alias key shape, shared by
-    /// <see cref="ModuleSpecifierRenderer"/>, <see cref="CyclicReferenceDetector"/> and
-    /// <c>PackageJsonWriter</c>.
+    /// This is the single source of truth for the alias key shape, shared by the cache
+    /// fingerprint and <c>PackageJsonWriter</c> (generated specifiers never use it, spec
+    /// 004 FR-011).
     /// </summary>
     public static string NormalizeImportAliasPrefix(string? importAlias)
     {

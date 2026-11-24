@@ -66,7 +66,8 @@ public class EmitPackageTests
             tempDir,
             srcDir,
             files,
-            authoritativePackageName: "sample-todo"
+            authoritativePackageName: "sample-todo",
+            importAlias: "app"
         );
 
         var pkg = ReadJson(tempDir);
@@ -74,11 +75,11 @@ public class EmitPackageTests
         await Assert.That(imports).IsNotNull();
 
         await Assert
-            .That((imports!["#"] as JsonObject)!["default"]?.GetValue<string>())
+            .That((imports!["#app"] as JsonObject)!["default"]?.GetValue<string>())
             .IsEqualTo("./src/index.ts");
 
         await Assert
-            .That((imports["#/*"] as JsonObject)!["default"]?.GetValue<string>())
+            .That((imports["#app/*"] as JsonObject)!["default"]?.GetValue<string>())
             .IsEqualTo("./src/*.ts");
     }
 
@@ -330,15 +331,16 @@ public class EmitPackageTests
             tempDir,
             srcDir,
             files,
-            authoritativePackageName: "test-pkg"
+            authoritativePackageName: "test-pkg",
+            importAlias: "app"
         );
 
         var pkg = ReadJson(tempDir);
         var imports = pkg["imports"] as JsonObject;
         await Assert.That(imports).IsNotNull();
         // Transpiler entries added
-        await Assert.That(imports!.ContainsKey("#/*")).IsTrue();
-        await Assert.That(imports.ContainsKey("#")).IsTrue();
+        await Assert.That(imports!.ContainsKey("#app/*")).IsTrue();
+        await Assert.That(imports.ContainsKey("#app")).IsTrue();
         // User-defined entry preserved
         await Assert.That(imports.ContainsKey("#custom/*")).IsTrue();
     }
@@ -529,14 +531,15 @@ public class EmitPackageTests
             tempDir,
             srcDir,
             files,
-            authoritativePackageName: "test-pkg"
+            authoritativePackageName: "test-pkg",
+            importAlias: "app"
         );
 
         var pkg = ReadJson(tempDir);
         var imports = pkg["imports"] as JsonObject;
         await Assert.That(imports).IsNotNull();
 
-        var wildcard = imports!["#/*"] as JsonObject;
+        var wildcard = imports!["#app/*"] as JsonObject;
         await Assert.That(wildcard).IsNotNull();
         // Dist paths include "domain/" prefix
         await Assert.That(wildcard!["types"]?.GetValue<string>()).IsEqualTo("./dist/domain/*.d.ts");
@@ -1032,6 +1035,77 @@ public class EmitPackageTests
         await Assert.That(imports.ContainsKey("#")).IsFalse();
     }
 
+    // ── Opt-in imports map (spec 004 Amendment A1, FR-014) ─────────────
+
+    [Test]
+    public async Task Imports_WithoutAlias_WritesNoImports()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        var files = new[]
+        {
+            new TsSourceFile("index.ts", [], ""),
+            new TsSourceFile("domain/index.ts", [], ""),
+        };
+
+        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "pkg");
+
+        await Assert.That(ReadJson(tempDir).ContainsKey("imports")).IsFalse();
+    }
+
+    [Test]
+    public async Task Imports_WithoutAlias_KeepsEntriesAnEarlierVersionWrote()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        const string legacyImports = """
+            {"#/*":{"source":"./src/*.ts","types":"./dist/*.d.ts","import":"./dist/*.js","default":"./src/*.ts"},"#":{"source":"./src/index.ts","types":"./dist/index.d.ts","import":"./dist/index.js","default":"./src/index.ts"}}
+            """;
+
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            $$"""{ "name": "pkg", "imports": {{legacyImports}} }"""
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "pkg"
+        );
+
+        var imports = ReadJson(tempDir)["imports"]!.ToJsonString();
+
+        await Assert.That(imports).IsEqualTo(JsonNode.Parse(legacyImports)!.ToJsonString());
+    }
+
+    [Test]
+    public async Task Imports_WithAliasAndNoRootBarrel_WritesOnlyTheWildcardKey()
+    {
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files: [new TsSourceFile("domain/index.ts", [], "")],
+            authoritativePackageName: "pkg",
+            importAlias: "app"
+        );
+
+        var imports = (ReadJson(tempDir)["imports"] as JsonObject)!;
+        var keys = string.Join(",", imports.Select(entry => entry.Key));
+
+        await Assert.That(keys).IsEqualTo("#app/*");
+
+        await Assert.That(imports["#app/*"]!["bun"]?.GetValue<string>()).IsEqualTo("./src/*.ts");
+    }
+
     [Test]
     public async Task Imports_NestedOutputWithTrailingSlash_NoDoubleSlash()
     {
@@ -1047,13 +1121,14 @@ public class EmitPackageTests
             tempDir,
             srcDir + Path.DirectorySeparatorChar,
             files,
-            authoritativePackageName: "test-pkg"
+            authoritativePackageName: "test-pkg",
+            importAlias: "app"
         );
 
         var pkg = ReadJson(tempDir);
         var imports = pkg["imports"] as JsonObject;
         await Assert.That(imports).IsNotNull();
-        var wildcard = imports!["#/*"] as JsonObject;
+        var wildcard = imports!["#app/*"] as JsonObject;
         await Assert.That(wildcard!["types"]?.GetValue<string>()).DoesNotContain("//");
         await Assert.That(wildcard["import"]?.GetValue<string>()).DoesNotContain("//");
         await Assert.That(wildcard["default"]?.GetValue<string>()).DoesNotContain("//");
@@ -1190,16 +1265,17 @@ public class EmitPackageTests
             tempDir,
             srcDir,
             files: [new TsSourceFile("index.ts", [], "")],
-            authoritativePackageName: "pkg"
+            authoritativePackageName: "pkg",
+            importAlias: "app"
         );
 
         var imports = ReadJson(tempDir)["imports"] as JsonObject;
-        var wildcard = imports!["#/*"] as JsonObject;
-        var rootAlias = imports["#"] as JsonObject;
+        var wildcard = imports!["#app/*"] as JsonObject;
+        var rootAlias = imports["#app"] as JsonObject;
 
-        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,types,import,default");
+        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,types,bun,import,default");
 
-        await Assert.That(ConditionOrder(rootAlias)).IsEqualTo("source,types,import,default");
+        await Assert.That(ConditionOrder(rootAlias)).IsEqualTo("source,types,bun,import,default");
 
         await Assert.That(wildcard!["source"]?.GetValue<string>()).IsEqualTo("./src/*.ts");
         await Assert.That(rootAlias!["source"]?.GetValue<string>()).IsEqualTo("./src/index.ts");
@@ -1208,9 +1284,9 @@ public class EmitPackageTests
     [Test]
     public async Task Imports_LegacyTranspilerAliasesGainSourceCondition()
     {
-        // `#/*` and `#` still hold the mapping an older transpiler seeded, so
-        // the upgrade adds `source` on top; the consumer-added `bun` condition
-        // keeps its position.
+        // `#app/*` and `#app` still hold the mapping an older transpiler seeded,
+        // so the upgrade adds `source` on top and `bun` right after `types`; a
+        // `bun` condition already present (same target) keeps its position.
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
@@ -1221,13 +1297,13 @@ public class EmitPackageTests
             {
               "name": "consumer",
               "imports": {
-                "#/*": {
+                "#app/*": {
                   "types": "./dist/*.d.ts",
                   "import": "./dist/*.js",
                   "bun": "./src/*.ts",
                   "default": "./src/*.ts"
                 },
-                "#": {
+                "#app": {
                   "types": "./dist/index.d.ts",
                   "import": "./dist/index.js",
                   "default": "./src/index.ts"
@@ -1241,14 +1317,15 @@ public class EmitPackageTests
             tempDir,
             srcDir,
             files: [new TsSourceFile("index.ts", [], "")],
-            authoritativePackageName: "consumer"
+            authoritativePackageName: "consumer",
+            importAlias: "app"
         );
 
         var imports = ReadJson(tempDir)["imports"] as JsonObject;
-        var wildcard = imports!["#/*"] as JsonObject;
-        var rootAlias = imports["#"] as JsonObject;
+        var wildcard = imports!["#app/*"] as JsonObject;
+        var rootAlias = imports["#app"] as JsonObject;
 
-        await Assert.That(ConditionOrder(rootAlias)).IsEqualTo("source,types,import,default");
+        await Assert.That(ConditionOrder(rootAlias)).IsEqualTo("source,types,bun,import,default");
 
         await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,types,import,bun,default");
 
@@ -1270,7 +1347,7 @@ public class EmitPackageTests
             {
               "name": "consumer",
               "imports": {
-                "#/*": { "import": "./dist/*.js", "types": "./dist/*.d.ts", "default": "./src/*.ts" }
+                "#app/*": { "import": "./dist/*.js", "types": "./dist/*.d.ts", "default": "./src/*.ts" }
               }
             }
             """
@@ -1280,12 +1357,13 @@ public class EmitPackageTests
             tempDir,
             srcDir,
             files: [new TsSourceFile("item.ts", [], "")],
-            authoritativePackageName: "consumer"
+            authoritativePackageName: "consumer",
+            importAlias: "app"
         );
 
-        var wildcard = ReadJson(tempDir)["imports"]?["#/*"] as JsonObject;
+        var wildcard = ReadJson(tempDir)["imports"]?["#app/*"] as JsonObject;
 
-        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,import,types,default");
+        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,import,types,bun,default");
     }
 
     [Test]
@@ -1304,8 +1382,8 @@ public class EmitPackageTests
             {
               "name": "host",
               "imports": {
-                "#/*": { "default": "./src/*.ts" },
-                "#": "./src/index.ts"
+                "#app/*": { "default": "./src/*.ts" },
+                "#app": "./src/index.ts"
               }
             }
             """
@@ -1315,13 +1393,14 @@ public class EmitPackageTests
             tempDir,
             srcDir,
             files: [new TsSourceFile("index.ts", [], "")],
-            authoritativePackageName: "host"
+            authoritativePackageName: "host",
+            importAlias: "app"
         );
 
         var imports = ReadJson(tempDir)["imports"] as JsonObject;
 
-        await Assert.That(ConditionOrder(imports!["#/*"] as JsonObject)).IsEqualTo("default");
-        await Assert.That(imports["#"]?.GetValue<string>()).IsEqualTo("./src/index.ts");
+        await Assert.That(ConditionOrder(imports!["#app/*"] as JsonObject)).IsEqualTo("default");
+        await Assert.That(imports["#app"]?.GetValue<string>()).IsEqualTo("./src/index.ts");
     }
 
     [Test]
@@ -1337,7 +1416,7 @@ public class EmitPackageTests
             {
               "name": "consumer",
               "imports": {
-                "#/*": {
+                "#app/*": {
                   "source": "./src-alt/*.ts",
                   "types": "./dist/*.d.ts",
                   "import": "./dist/*.js",
@@ -1352,10 +1431,11 @@ public class EmitPackageTests
             tempDir,
             srcDir,
             files: [new TsSourceFile("item.ts", [], "")],
-            authoritativePackageName: "consumer"
+            authoritativePackageName: "consumer",
+            importAlias: "app"
         );
 
-        var wildcard = ReadJson(tempDir)["imports"]?["#/*"] as JsonObject;
+        var wildcard = ReadJson(tempDir)["imports"]?["#app/*"] as JsonObject;
 
         await Assert.That(wildcard!["source"]?.GetValue<string>()).IsEqualTo("./src-alt/*.ts");
     }
@@ -1368,10 +1448,24 @@ public class EmitPackageTests
         Directory.CreateDirectory(srcDir);
         var files = new[] { new TsSourceFile("index.ts", [], "") };
 
-        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "pkg");
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "pkg",
+            importAlias: "app"
+        );
+
         var firstImports = ReadJson(tempDir)["imports"]!.ToJsonString();
 
-        PackageJsonWriter.UpdateOrCreate(tempDir, srcDir, files, authoritativePackageName: "pkg");
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "pkg",
+            importAlias: "app"
+        );
+
         var secondImports = ReadJson(tempDir)["imports"]!.ToJsonString();
 
         await Assert.That(secondImports).IsEqualTo(firstImports);
@@ -1394,7 +1488,7 @@ public class EmitPackageTests
 
         var wildcard = ReadJson(tempDir)["imports"]?["#contracts/*"] as JsonObject;
 
-        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,types,import,default");
+        await Assert.That(ConditionOrder(wildcard)).IsEqualTo("source,types,bun,import,default");
 
         await Assert
             .That(wildcard!["source"]?.GetValue<string>())
@@ -1410,12 +1504,13 @@ public class EmitPackageTests
             tempDir,
             tempDir,
             files: [new TsSourceFile("index.ts", [], "")],
-            authoritativePackageName: "pkg"
+            authoritativePackageName: "pkg",
+            importAlias: "app"
         );
 
         var pkg = ReadJson(tempDir);
         var rootExport = pkg["exports"]?["."] as JsonObject;
-        var wildcard = pkg["imports"]?["#/*"] as JsonObject;
+        var wildcard = pkg["imports"]?["#app/*"] as JsonObject;
 
         await Assert.That(rootExport!["source"]?.GetValue<string>()).IsEqualTo("./index.ts");
         await Assert.That(wildcard!["source"]?.GetValue<string>()).IsEqualTo("./*.ts");
@@ -1435,7 +1530,7 @@ public class EmitPackageTests
             {
               "name": "consumer",
               "imports": {
-                "#/*": { "types": "./lib/*.d.ts", "import": "./lib/*.js", "default": "./src/*.ts" }
+                "#app/*": { "types": "./lib/*.d.ts", "import": "./lib/*.js", "default": "./src/*.ts" }
               }
             }
             """
@@ -1445,10 +1540,11 @@ public class EmitPackageTests
             tempDir,
             srcDir,
             files: [new TsSourceFile("item.ts", [], "")],
-            authoritativePackageName: "consumer"
+            authoritativePackageName: "consumer",
+            importAlias: "app"
         );
 
-        var wildcard = ReadJson(tempDir)["imports"]?["#/*"] as JsonObject;
+        var wildcard = ReadJson(tempDir)["imports"]?["#app/*"] as JsonObject;
 
         await Assert.That(ConditionOrder(wildcard)).IsEqualTo("types,import,default");
         await Assert.That(wildcard!["types"]?.GetValue<string>()).IsEqualTo("./lib/*.d.ts");

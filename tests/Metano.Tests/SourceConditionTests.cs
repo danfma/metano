@@ -15,6 +15,9 @@ public class SourceConditionTests
 {
     private const string CustomName = "metano-source";
 
+    /// <summary>The import alias that makes the writer emit <c>imports</c> entries (spec 004 FR-014).</summary>
+    private const string Alias = "app";
+
     private readonly List<string> _tempDirs = [];
 
     [After(Test)]
@@ -95,11 +98,11 @@ public class SourceConditionTests
         var unset = WriteFresh(default);
         var explicitDefault = WriteFresh(ConditionOf("source"));
         var exportsOrder = OrderOf(ExportsOf(unset), ".");
-        var importsOrder = OrderOf(ImportsOf(unset), "#/*");
+        var importsOrder = OrderOf(ImportsOf(unset), "#app/*");
 
         await Assert.That(explicitDefault).IsEqualTo(unset);
         await Assert.That(exportsOrder).IsEqualTo("source,types,import");
-        await Assert.That(importsOrder).IsEqualTo("source,types,import,default");
+        await Assert.That(importsOrder).IsEqualTo("source,types,bun,import,default");
     }
 
     [Test]
@@ -119,15 +122,20 @@ public class SourceConditionTests
             .That(exports["./users"]![CustomName]!.GetValue<string>())
             .IsEqualTo("./src/users/index.ts");
 
-        await Assert.That(OrderOf(imports, "#/*")).IsEqualTo($"{CustomName},types,import,default");
-        await Assert.That(imports["#/*"]![CustomName]!.GetValue<string>()).IsEqualTo("./src/*.ts");
+        await Assert
+            .That(OrderOf(imports, "#app/*"))
+            .IsEqualTo($"{CustomName},types,bun,import,default");
 
         await Assert
-            .That(imports["#"]![CustomName]!.GetValue<string>())
+            .That(imports["#app/*"]![CustomName]!.GetValue<string>())
+            .IsEqualTo("./src/*.ts");
+
+        await Assert
+            .That(imports["#app"]![CustomName]!.GetValue<string>())
             .IsEqualTo("./src/index.ts");
 
         await Assert.That(exports["."]!.AsObject().ContainsKey("source")).IsFalse();
-        await Assert.That(imports["#/*"]!.AsObject().ContainsKey("source")).IsFalse();
+        await Assert.That(imports["#app/*"]!.AsObject().ContainsKey("source")).IsFalse();
     }
 
     [Test]
@@ -145,8 +153,8 @@ public class SourceConditionTests
         await Assert.That(OrderOf(ExportsOf(json), ".")).IsEqualTo("bun,source,types,import");
 
         await Assert
-            .That(OrderOf(ImportsOf(json), "#/*"))
-            .IsEqualTo("development,source,types,import,default");
+            .That(OrderOf(ImportsOf(json), "#app/*"))
+            .IsEqualTo("development,source,types,bun,import,default");
     }
 
     [Test]
@@ -171,15 +179,18 @@ public class SourceConditionTests
         await Assert.That(OrderOf(exports, "./users")).IsEqualTo($"{CustomName},types,import");
 
         await Assert
-            .That(OrderOf(imports, "#/*"))
-            .IsEqualTo($"{CustomName},development,types,import,default");
+            .That(OrderOf(imports, "#app/*"))
+            .IsEqualTo($"{CustomName},development,types,bun,import,default");
 
-        await Assert.That(OrderOf(imports, "#")).IsEqualTo($"{CustomName},types,import,default");
+        await Assert
+            .That(OrderOf(imports, "#app"))
+            .IsEqualTo($"{CustomName},types,bun,import,default");
+
         await Assert.That(exports["."]!["bun"]!.GetValue<string>()).IsEqualTo("./src/index.ts");
         await Assert.That(exports["."]!["require"]!.GetValue<string>()).IsEqualTo("./legacy.cjs");
 
         await Assert
-            .That(imports["#/*"]!["development"]!.GetValue<string>())
+            .That(imports["#app/*"]!["development"]!.GetValue<string>())
             .IsEqualTo("./src/*.ts");
     }
 
@@ -198,8 +209,8 @@ public class SourceConditionTests
             .IsEqualTo($"{CustomName},old-source,types,import");
 
         await Assert
-            .That(OrderOf(ImportsOf(json), "#/*"))
-            .IsEqualTo($"{CustomName},old-source,types,import,default");
+            .That(OrderOf(ImportsOf(json), "#app/*"))
+            .IsEqualTo($"{CustomName},old-source,types,bun,import,default");
     }
 
     [Test]
@@ -299,6 +310,7 @@ public class SourceConditionTests
             Barrels(),
             authoritativePackageName: "pkg",
             srcRoot: "src",
+            importAlias: Alias,
             sourceCondition: condition
         );
 
@@ -307,7 +319,7 @@ public class SourceConditionTests
         var json = ReadJson(dir);
 
         ExportsOf(json)["."]!.AsObject().Insert(0, "bun", "./src/index.ts");
-        ImportsOf(json)["#/*"]!.AsObject().Insert(0, "development", "./src/*.ts");
+        ImportsOf(json)["#app/*"]!.AsObject().Insert(0, "development", "./src/*.ts");
         File.WriteAllText(Path.Combine(dir, "package.json"), json.ToJsonString());
     }
 

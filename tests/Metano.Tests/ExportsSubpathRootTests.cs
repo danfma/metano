@@ -153,11 +153,19 @@ public class ExportsSubpathRootTests
     [Test]
     public async Task Root_LeavesImportsAliasUnchanged()
     {
-        var written = WriteExports(Root, "video-studio/domain/episodes/index.ts");
+        var tempDir = CreateTempDir();
 
-        var alias = written.Json["imports"]?["#/*"] as JsonObject;
+        var diagnostics = PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            Path.Combine(tempDir, "src"),
+            Barrels("video-studio/domain/episodes/index.ts"),
+            importAlias: "app",
+            subpathRoot: RootOf(Root)
+        );
 
-        await Assert.That(written.Diagnostics).IsEmpty();
+        var alias = ReadJson(tempDir)["imports"]?["#app/*"] as JsonObject;
+
+        await Assert.That(diagnostics).IsEmpty();
         await Assert.That(alias?["source"]?.GetValue<string>()).IsEqualTo("./src/*.ts");
         await Assert.That(alias?["import"]?.GetValue<string>()).IsEqualTo("./dist/*.js");
     }

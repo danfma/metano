@@ -8,9 +8,9 @@ using Metano.Compiler.TypeScript.Transformation;
 namespace Metano.Packaging;
 
 /// <summary>
-/// Generates and updates the consumer's package.json with <c>imports</c>, <c>exports</c>,
-/// <c>sideEffects</c>, and <c>type</c> fields based on the TypeScript files emitted by the
-/// transpiler.
+/// Generates and updates the consumer's package.json with <c>exports</c>, <c>sideEffects</c>,
+/// <c>type</c> and (only with an import alias) <c>imports</c> fields based on the TypeScript
+/// files emitted by the transpiler.
 ///
 /// Strategy: non-destructive merge. The user's hand-written fields (name, dependencies,
 /// scripts, etc.) are preserved. Transpiler-managed entries inside <c>imports</c> and
@@ -22,6 +22,14 @@ public static class PackageJsonWriter
     internal const string PackageJsonFileName = "package.json";
 
     private const string PeerDependenciesSection = "peerDependencies";
+
+    /// <summary>The import condition Bun resolves first, mapped to the <c>.ts</c> sources.</summary>
+    private const string BunCondition = "bun";
+
+    /// <summary>
+    /// The prefix <see cref="PathNaming.NormalizeImportAliasPrefix"/> gives when no alias is set.
+    /// </summary>
+    private const string UnaliasedPrefix = "#";
 
     private static readonly string[] DependencySections =
     [
@@ -66,7 +74,8 @@ public static class PackageJsonWriter
     /// Default: inferred as the first path segment of the output directory relative to the
     /// package root.</param>
     /// <param name="importAlias">Optional subpath-imports alias (see
-    /// <see cref="PathNaming.NormalizeImportAliasPrefix"/>).</param>
+    /// <see cref="PathNaming.NormalizeImportAliasPrefix"/>). Only a configured alias writes
+    /// <c>imports</c> entries (spec 004 FR-014); generated code never needs them.</param>
     /// <param name="subpathRoot">The package's <c>[EmitPackage(SubpathRoot = …)]</c>: a
     /// namespace prefix stripped from the <c>exports</c> keys only (spec 008). On-disk
     /// targets and <c>imports</c> are unaffected. Default: none.</param>
@@ -114,9 +123,8 @@ public static class PackageJsonWriter
                 sourceCondition
             );
 
-        // Check for a root barrel from the file list — executables skip exports
-        // but may still need the "#" import alias for internal barrel imports.
-        // When outputPrefix is set, the root barrel is at {prefix}/index.ts.
+        // Check for a root barrel from the file list: a configured alias also maps its
+        // bare key to it. When outputPrefix is set, the root barrel is at {prefix}/index.ts.
         var rootIndexName = outputPrefix.Length > 0 ? $"{outputPrefix}/index.ts" : "index.ts";
 
         var hasRootIndex = files.Any(f =>
@@ -157,17 +165,17 @@ public static class PackageJsonWriter
         // or `sideEffects` value back on every regeneration.
         WriteIfMissing(root, "type", "module");
 
-        // Imports follow the same write-if-missing rule as the
-        // scalar fields above: the transpiler seeds its alias keys
-        // (`#` and `#/*` by default, or `#<alias>` and `#<alias>/*`
-        // when --import-alias is set) on first creation, but a
-        // consumer who has retargeted an alias by hand (e.g. pointing
-        // `#/*` at `./lib/*` for a non-default build directory) keeps
-        // that mapping across regenerations. Keys absent from the
-        // existing object are added; an existing key is only touched
-        // when it still holds the transpiler's own mapping, which then
-        // gains any condition introduced since (e.g. `source`).
-        SeedOrUpgradeImports(root, imports, sourceCondition);
+        // Imports exist only for a configured alias (spec 004 FR-014): generated
+        // code imports its files relatively, so no key is seeded without one, and
+        // entries an earlier version wrote (`#`, `#/*`) are never deleted. They
+        // follow the same write-if-missing rule as the scalar fields above: a
+        // consumer who has retargeted an alias by hand (e.g. pointing `#app/*` at
+        // `./lib/*` for a non-default build directory) keeps that mapping across
+        // regenerations. Keys absent from the existing object are added; an
+        // existing key is only touched when it still holds the transpiler's own
+        // mapping, which then gains any condition introduced since (e.g. `source`).
+        if (imports is not null)
+            SeedOrUpgradeImports(root, imports, sourceCondition);
 
         // After the imports: a consumer who retargeted the compiled tree
         // (`#/*` → `./lib/*`) has the side-effect modules listed there too.
@@ -355,8 +363,9 @@ public static class PackageJsonWriter
     }
 
     /// <summary>
-    /// The compiled tree the package's own <c>#/*</c> import (or the configured alias)
-    /// resolves to: its <c>import</c> condition, or the plain string target, without the
+    /// The compiled tree the package's own <c>#&lt;alias&gt;/*</c> import (or the <c>#/*</c>
+    /// an earlier version seeded, when no alias is set) resolves to: its <c>import</c>
+    /// condition, or the plain string target, without the
     /// trailing <c>/*</c> or <c>/*.js</c> (<c>"./lib/*"</c> is <c>lib</c>). <c>null</c>
     /// when the entry has no such target, so the writer's dist directory applies.
     /// </summary>
@@ -541,8 +550,8 @@ public static class PackageJsonWriter
     /// condition (the steady state, identical to builds before the name was configurable),
     /// nor when the configured name is the default itself. Ownership rule: the removed
     /// condition is exactly <c>source</c>, and only when it points at the very <c>.ts</c>
-    /// target the writer emits now, so a retargeted <c>source</c> and every other user
-    /// condition (<c>bun</c>, <c>development</c>, ...) are never touched. The writer
+    /// target the writer emits now, so a retargeted <c>source</c> and every other
+    /// condition (<c>development</c>, <c>require</c>, ...) are never touched. The writer
     /// persists no earlier name, so after a custom-to-custom rename, or a return to the
     /// default, the previous custom key stays for the consumer to delete.
     /// </summary>
@@ -635,14 +644,15 @@ public static class PackageJsonWriter
     }
 
     /// <summary>
-    /// Seeds the <c>imports</c> object with the transpiler's
-    /// <c>#</c> / <c>#/*</c> aliases on first creation. On subsequent
+    /// Seeds the <c>imports</c> object with the configured alias's
+    /// <c>#&lt;alias&gt;</c> / <c>#&lt;alias&gt;/*</c> entries on first creation. On
+    /// subsequent
     /// runs a key the consumer retargeted by hand (for a custom build
     /// dir, alternate dist layout, or wrapper pre-processor) keeps that
     /// mapping — the transpiler only fills in keys the consumer has not
     /// picked yet, and upgrades keys that still hold its own mapping so
     /// manifests written by an older version gain new conditions such
-    /// as <c>source</c>.
+    /// as <c>source</c> and <c>bun</c>.
     /// </summary>
     private static void SeedOrUpgradeImports(
         JsonObject root,
@@ -696,8 +706,8 @@ public static class PackageJsonWriter
     /// <summary>
     /// True when <paramref name="existingEntry"/> still carries the full
     /// mapping an earlier transpiler seeded: every generated condition
-    /// except the source condition (introduced after seeding, and renamable) is present
-    /// and points where the transpiler would point it (the source condition is compared
+    /// except the later ones (the renamable source condition and <c>bun</c>) is present
+    /// and points where the transpiler would point it (a later condition is compared
     /// once the entry declares it). A host-authored alias that
     /// merely overlaps (e.g. only <c>default</c>), a retargeted one, or one
     /// the consumer trimmed is left untouched. Extra consumer conditions
@@ -709,11 +719,12 @@ public static class PackageJsonWriter
         SourceCondition sourceCondition
     )
     {
-        // The source condition counts only once present, so a consumer who
-        // retargeted it keeps that mapping, and a manifest written under another
+        // The source and bun conditions count only once present, so a consumer who
+        // retargeted one keeps that mapping, and a manifest written under another
         // condition name (or by an older version) still holds the mapping.
         var seededConditions = generatedEntry.Where(condition =>
-            condition.Key != sourceCondition.Name || existingEntry.ContainsKey(condition.Key)
+            !IsLaterCondition(condition.Key, sourceCondition)
+            || existingEntry.ContainsKey(condition.Key)
         );
 
         return seededConditions.All(condition =>
@@ -723,13 +734,24 @@ public static class PackageJsonWriter
     }
 
     /// <summary>
-    /// Builds the <c>imports</c> object with conditional exports for the <c>#/*</c> alias.
-    /// Format: an opt-in <c>source</c> condition comes first (resolves straight to the
-    /// .ts sources for tools configured with it, e.g. Vite <c>resolve.conditions</c> or
-    /// TS <c>customConditions</c>), then dist (.js + .d.ts), with the source .ts as the
-    /// <c>default</c> fallback for dev.
+    /// The conditions added to the transpiler's <c>imports</c> entries after they were
+    /// first seeded: the (renamable) source condition and <c>bun</c> (spec 004 FR-014).
     /// </summary>
-    private static JsonObject BuildImports(
+    private static bool IsLaterCondition(string condition, SourceCondition sourceCondition) =>
+        condition == sourceCondition.Name || condition == BunCondition;
+
+    /// <summary>
+    /// Builds the <c>imports</c> object of a configured alias (<c>#&lt;alias&gt;/*</c>, plus
+    /// <c>#&lt;alias&gt;</c> when a root barrel exists); <c>null</c> without one, since
+    /// generated code imports its files relatively (spec 004 FR-014). A bare <c>#</c> or
+    /// <c>#/*</c> key is never written: Node 24, Bun and TypeScript reject the first, and
+    /// Node 24 and Bun the second. Format: an opt-in <c>source</c> condition comes first
+    /// (resolves straight to the .ts sources for tools configured with it, e.g. Vite
+    /// <c>resolve.conditions</c> or TS <c>customConditions</c>), then <c>types</c>, then
+    /// <c>bun</c> (the .ts sources, before <c>import</c>, so Bun never needs a prior
+    /// build), then dist <c>import</c>, with the source .ts as the <c>default</c>.
+    /// </summary>
+    private static JsonObject? BuildImports(
         string srcRelative,
         string distRelative,
         bool hasRootIndex,
@@ -743,10 +765,11 @@ public static class PackageJsonWriter
         var prefix = outputPrefix.TrimEnd('/');
         var distBase = prefix.Length > 0 ? $"{dist}/{prefix}" : dist;
 
-        // Default `#` → keys `#/*` and `#`; a configured alias → `#<alias>/*` and
-        // `#<alias>`. When an alias is set the default `#`/`#/*` keys are never emitted,
-        // so a host project's own `#` alias is left untouched.
         var aliasPrefix = PathNaming.NormalizeImportAliasPrefix(importAlias);
+
+        if (aliasPrefix == UnaliasedPrefix)
+            return null;
+
         var starKey = $"{aliasPrefix}/*";
 
         var imports = new JsonObject
@@ -755,6 +778,7 @@ public static class PackageJsonWriter
             {
                 [sourceCondition.Name] = SourceTarget(src, "*.ts"),
                 ["types"] = $"./{distBase}/*.d.ts",
+                [BunCondition] = SourceTarget(src, "*.ts"),
                 ["import"] = $"./{distBase}/*.js",
                 ["default"] = SourceTarget(src, "*.ts"),
             },
@@ -766,6 +790,7 @@ public static class PackageJsonWriter
             {
                 [sourceCondition.Name] = SourceTarget(src, "index.ts"),
                 ["types"] = $"./{distBase}/index.d.ts",
+                [BunCondition] = SourceTarget(src, "index.ts"),
                 ["import"] = $"./{distBase}/index.js",
                 ["default"] = SourceTarget(src, "index.ts"),
             };
