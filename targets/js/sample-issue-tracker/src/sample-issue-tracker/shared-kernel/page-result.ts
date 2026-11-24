@@ -8,7 +8,7 @@ import {
   type ClassType,
 } from "metano-runtime";
 import type { IReadOnlyList } from "metano-runtime/system/collections";
-import type { PageRequest } from "./page-request";
+import type { PageRequest } from "./page-request.js";
 
 let PageResult$rt: ClassType<PageResult<unknown>> | undefined;
 

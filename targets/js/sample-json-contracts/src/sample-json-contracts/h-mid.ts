@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { HBase } from "./h-base";
+import { HBase } from "./h-base.js";
 
 let HMid$rt: ClassType<HMid> | undefined;
 

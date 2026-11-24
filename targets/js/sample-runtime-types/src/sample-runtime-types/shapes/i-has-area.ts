@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { implementsInterface, type InterfaceType } from "metano-runtime";
-import { AreaDto$runtimeType } from "./area-dto";
+import { AreaDto$runtimeType } from "./area-dto.js";
 
 export interface IHasArea {
   readonly area: number;

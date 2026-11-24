@@ -35,8 +35,6 @@ CollectionEqualityProbes.recordToString  #664  a record has no synthesized toStr
 CollectionEqualityProbes.recordStructToString  #664  a record struct has no synthesized toString (the PrintMembers text)
 W6DelegateProbes.invokeGroupAcrossParamsShapesIsLoud  none  Group G round 1: a delegate Invoke method group between a params and a non-params delegate reports MS0001 and throws, instead of miscounting the arguments silently (.NET: 3 3)
 
-AliasProbes.bclAlias                  #686  using alias of StringBuilder: the BCL type is unmapped
-AliasProbes.*                         #573  Node rejects the `#/` subpath specifier the generated code imports
 CastProbes.castOfT                    #619  Cast<T> emits an unlowered LINQ call
 CastProbes.thisCastFail               #688  coarse cycle rule: casts between classes that import each other lose InvalidCastException
 BoxingProbes.isTests                  none  accepted FR-049 divergence until 011c: a raw integral number on an object operand tests as the enum (object n = 7; n is Color)

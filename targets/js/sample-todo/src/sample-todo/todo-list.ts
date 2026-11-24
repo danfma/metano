@@ -2,8 +2,8 @@
 import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { isString, type ClassType } from "metano-runtime";
 import { any, count, firstOrDefault, linq } from "metano-runtime/system/linq";
-import type { Priority } from "./priority";
-import { TodoItem } from "./todo-item";
+import type { Priority } from "./priority.js";
+import { TodoItem } from "./todo-item.js";
 
 let TodoList$rt: ClassType<TodoList> | undefined;
 

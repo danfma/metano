@@ -18,7 +18,7 @@ export class Box<T> {
 
 // ---
 import { Int32Type, StringType, formatBoolean } from "metano-runtime";
-import { Box } from "./box";
+import { Box } from "./box.js";
 
 export function check(a: Object, b: Object): string {
   return formatBoolean(Box.is(a, Int32Type)) + ":" + formatBoolean(Box.isBoth(a, b, Int32Type, StringType)) + ":" + (Box.typeName(StringType) ?? "");

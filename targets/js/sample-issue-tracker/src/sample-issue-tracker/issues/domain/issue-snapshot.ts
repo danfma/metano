@@ -3,12 +3,12 @@
 import type { Temporal } from "@js-temporal/polyfill";
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
-import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
-import type { Comment } from "./comment";
-import type { IssueId } from "./issue-id";
-import type { IssuePriority } from "./issue-priority";
-import type { IssueStatus } from "./issue-status";
-import type { IssueType } from "./issue-type";
+import type { UserId } from "../../shared-kernel/user-id.js";
+import type { Comment } from "./comment.js";
+import type { IssueId } from "./issue-id.js";
+import type { IssuePriority } from "./issue-priority.js";
+import type { IssueStatus } from "./issue-status.js";
+import type { IssueType } from "./issue-type.js";
 
 let IssueSnapshot$rt: ClassType<IssueSnapshot> | undefined;
 

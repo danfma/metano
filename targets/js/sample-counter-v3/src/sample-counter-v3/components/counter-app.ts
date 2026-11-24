@@ -1,10 +1,10 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Counter } from "#/sample-counter-v3/models/counter";
-import { App } from "#/sample-counter-v3/mvu/app";
-import type { BuildContext } from "#/sample-counter-v3/mvu/build-context";
-import { StatefulWidget } from "#/sample-counter-v3/mvu/stateful-widget";
-import { Button, Column, Heading, Row } from "#/sample-counter-v3/mvu/ui";
-import type { Widget } from "#/sample-counter-v3/mvu/widget";
+import { Counter } from "../models/counter.js";
+import { App } from "../mvu/app.js";
+import type { BuildContext } from "../mvu/build-context.js";
+import { StatefulWidget } from "../mvu/stateful-widget.js";
+import { Button, Column, Heading, Row } from "../mvu/ui.js";
+import type { Widget } from "../mvu/widget.js";
 
 export class CounterApp extends StatefulWidget<Counter> {
   constructor() {

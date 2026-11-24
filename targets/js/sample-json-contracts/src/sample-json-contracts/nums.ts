@@ -2,7 +2,7 @@
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { Dictionary, List } from "metano-runtime/system/collections";
 import type { Decimal } from "metano-runtime/system/decimal";
-import type { Color } from "./color";
+import type { Color } from "./color.js";
 
 let Nums$rt: ClassType<Nums> | undefined;
 

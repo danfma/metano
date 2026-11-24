@@ -1,7 +1,7 @@
 import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
-import { Bag } from "./bag";
-import { Point } from "./point";
-import { Tag } from "./tag";
+import { Bag } from "./bag.js";
+import { Point } from "./point.js";
+import { Tag } from "./tag.js";
 
 export class Factory {
   private readonly _defaults: List<number> = List.of<number>([7, 8]);

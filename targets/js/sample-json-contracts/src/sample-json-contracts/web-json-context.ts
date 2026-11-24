@@ -8,16 +8,16 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "metano-runtime/system/json";
-import { Clip } from "./clip";
-import { Color } from "./color";
-import { Group } from "./group";
-import { IBase } from "./i-base";
-import { IA } from "./ia";
-import { ImageClip } from "./image-clip";
-import { IS } from "./is";
-import { Nums } from "./nums";
-import { SilenceClip } from "./silence-clip";
-import { SoftNums } from "./soft-nums";
+import { Clip } from "./clip.js";
+import { Color } from "./color.js";
+import { Group } from "./group.js";
+import { IBase } from "./i-base.js";
+import { IA } from "./ia.js";
+import { ImageClip } from "./image-clip.js";
+import { IS } from "./is.js";
+import { Nums } from "./nums.js";
+import { SilenceClip } from "./silence-clip.js";
+import { SoftNums } from "./soft-nums.js";
 
 let WebJsonContext$rt: ClassType<WebJsonContext> | undefined;
 

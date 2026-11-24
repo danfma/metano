@@ -56,7 +56,7 @@ export class Extra {
   }
 }
 
-import type { Extra } from "./extra";
+import type { Extra } from "./extra.js";
 
 export class Use {
   constructor() { }

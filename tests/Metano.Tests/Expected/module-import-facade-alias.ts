@@ -1,4 +1,4 @@
-import { fooS, fooY$, otherS, otherX$ } from "./res";
+import { fooS, fooY$, otherS, otherX$ } from "./res.js";
 import { fooY, other as otherX, otherS as thing } from "ext-lib";
 
 export class Use {

@@ -1,8 +1,8 @@
 import { ConcurrentDictionary, Dictionary, HashSet, ImmutableDictionary, ImmutableHashSet, List, SortedSet } from "metano-runtime/system/collections";
-import type { Animal } from "./animal";
-import type { Cat } from "./cat";
-import { Color } from "./color";
-import type { Dog } from "./dog";
+import type { Animal } from "./animal.js";
+import type { Cat } from "./cat.js";
+import { Color } from "./color.js";
+import type { Dog } from "./dog.js";
 
 export class Shelf {
   private readonly _primes: HashSet<number> = HashSet.of<number>([2, 3, 5]);

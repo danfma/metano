@@ -41,13 +41,13 @@ export const IShape$runtimeType: InterfaceType<IShape> = {
 };
 
 // fallbacks/index.ts
-export { Box } from "./box";
-export { IShape$runtimeType } from "./i-shape";
-export type { IShape } from "./i-shape";
-export { Meter } from "./meter";
-export { Mode, Mode$runtimeType } from "./mode";
-export { Reflect } from "./reflect";
-export { Token } from "./token";
+export { Box } from "./box.js";
+export { IShape$runtimeType } from "./i-shape.js";
+export type { IShape } from "./i-shape.js";
+export { Meter } from "./meter.js";
+export { Mode, Mode$runtimeType } from "./mode.js";
+export { Reflect } from "./reflect.js";
+export { Token } from "./token.js";
 
 // fallbacks/meter.ts
 import { HashCode, valueEquals, type ClassType } from "metano-runtime";
@@ -117,11 +117,11 @@ export const Mode$runtimeType: EnumType<Mode> = {
 // fallbacks/reflect.ts
 import { ArrayType, DelegateType, Int32Type, ObjectType, StringType, formatBoolean, getRuntimeType, isAssignableFrom, isType, specialize, type RuntimeType } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
-import { Box } from "./box";
-import { IShape$runtimeType } from "./i-shape";
-import { Meter } from "./meter";
-import { Mode$runtimeType } from "./mode";
-import type { Token } from "./token";
+import { Box } from "./box.js";
+import { IShape$runtimeType } from "./i-shape.js";
+import { Meter } from "./meter.js";
+import { Mode$runtimeType } from "./mode.js";
+import type { Token } from "./token.js";
 
 export class Reflect {
   constructor() { }

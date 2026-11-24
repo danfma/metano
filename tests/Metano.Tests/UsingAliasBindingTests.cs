@@ -144,7 +144,7 @@ public class UsingAliasBindingTests
         var output = result["app/page.ts"];
 
         await Assert.That(output).Contains("import type { Column as ColumnWidget }");
-        await Assert.That(output).Contains("import { Column } from \"./ui\"");
+        await Assert.That(output).Contains("import { Column } from \"./ui.js\"");
         await Assert.That(output).Contains("Column(5)");
     }
 
@@ -298,7 +298,7 @@ public class UsingAliasBindingTests
         await Assert.That(output).Contains("Fmt.make(1)");
         await Assert.That(output).Contains("Fmt.make(2)");
         await Assert.That(output).Contains("Fmt");
-        await Assert.That(output).Contains("from \"./fmt\"");
+        await Assert.That(output).Contains("from \"./fmt.js\"");
     }
 
     [Test]

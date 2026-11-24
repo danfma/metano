@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-export { Button } from "./button";
-export { Column } from "./column";
-export { Heading } from "./heading";
-export { Row } from "./row";
-export { Text } from "./text";
+export { Button } from "./button.js";
+export { Column } from "./column.js";
+export { Heading } from "./heading.js";
+export { Row } from "./row.js";
+export { Text } from "./text.js";

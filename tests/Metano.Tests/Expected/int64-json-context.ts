@@ -1,10 +1,10 @@
 import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import { Boxes } from "./boxes";
-import { EntityId } from "./entity-id";
-import { Quota } from "./quota";
-import { Snowflake } from "./snowflake";
-import { TokenId } from "./token-id";
+import { Boxes } from "./boxes.js";
+import { EntityId } from "./entity-id.js";
+import { Quota } from "./quota.js";
+import { Snowflake } from "./snowflake.js";
+import { TokenId } from "./token-id.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-export { App } from "./app";
-export type { IWidget } from "./i-widget";
-export { StateHolder } from "./state-holder";
-export type { ViewFn } from "./view-fn";
+export { App } from "./app.js";
+export type { IWidget } from "./i-widget.js";
+export { StateHolder } from "./state-holder.js";
+export type { ViewFn } from "./view-fn.js";

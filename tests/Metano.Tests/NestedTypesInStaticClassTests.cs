@@ -96,7 +96,7 @@ public class NestedTypesInStaticClassTests
         var result = TranspileHelper.Transpile(ShotScheduleSource);
 
         var output = result["shot-consumer.ts"];
-        await Assert.That(output).Contains("import { ShotSchedule } from \"./shot-schedule\"");
+        await Assert.That(output).Contains("import { ShotSchedule } from \"./shot-schedule.js\"");
         await Assert.That(output).Contains("return ShotSchedule.Slot.create();");
         await Assert.That(output).Contains("ShotSchedule.kindValue(ShotSchedule.Kind.A)");
         await Assert.That(output).Contains("value instanceof ShotSchedule.Slot");
@@ -108,7 +108,7 @@ public class NestedTypesInStaticClassTests
         var result = TranspileHelper.Transpile(ShotScheduleSource);
 
         var barrel = result["index.ts"];
-        await Assert.That(barrel).Contains("export { ShotSchedule } from \"./shot-schedule\"");
+        await Assert.That(barrel).Contains("export { ShotSchedule } from \"./shot-schedule.js\"");
         await Assert.That(barrel).DoesNotContain("ShotEntry }");
         await Assert.That(barrel).DoesNotContain("ShotSchedule.ShotEntry");
         await Assert.That(barrel).DoesNotContain("export { Kind");
@@ -178,7 +178,7 @@ public class NestedTypesInStaticClassTests
         await Assert.That(output).DoesNotContain("namespace Pairs");
 
         var barrel = result["index.ts"];
-        await Assert.That(barrel).Contains("export { Marker } from \"./marker\"");
+        await Assert.That(barrel).Contains("export { Marker } from \"./marker.js\"");
         await Assert.That(barrel).DoesNotContain("Pairs");
     }
 
@@ -210,7 +210,7 @@ public class NestedTypesInStaticClassTests
 
         await Assert.That(result["pairs.ts"]).Contains("export namespace Pairs {");
         var user = result["pair-user.ts"];
-        await Assert.That(user).Contains("import { Pairs } from \"./pairs\"");
+        await Assert.That(user).Contains("import { Pairs } from \"./pairs.js\"");
         await Assert.That(user).Contains("new Pairs.Pair(1, 2).a");
     }
 
@@ -1112,7 +1112,7 @@ public class NestedTypesInStaticClassTests
         await Assert.That(result["outer.ts"]).Contains("static get Kind(): typeof Outer$Kind {");
         await Assert.That(context).Contains("values: Outer.Kind,");
         await Assert.That(context).Contains("type: Outer.Payload,");
-        await Assert.That(context).Contains("import { Outer } from \"./outer\";");
+        await Assert.That(context).Contains("import { Outer } from \"./outer.js\";");
     }
 
     [Test]

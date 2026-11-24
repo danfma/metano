@@ -1,5 +1,5 @@
 import { isInt32 } from "metano-runtime";
-import { Box } from "./box";
+import { Box } from "./box.js";
 
 export class IntBox extends Box<number> {
   protected static readonly byIntBoxValue = /* @__PURE__ */ Symbol("IntBox(int value)");

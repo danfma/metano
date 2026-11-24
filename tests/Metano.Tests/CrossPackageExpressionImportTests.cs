@@ -241,8 +241,8 @@ public class CrossPackageExpressionImportTests
             """
         )["app/usage.ts"];
 
-        await Assert.That(output).Contains("import { count } from \"#/app/mods/counter\"");
-        await Assert.That(output).Contains("import { Kind } from \"#/app/mods/kind\"");
+        await Assert.That(output).Contains("import { count } from \"./mods/counter.js\"");
+        await Assert.That(output).Contains("import { Kind } from \"./mods/kind.js\"");
         await Assert.That(output).Contains("return count(3);");
         await Assert.That(output).Contains("return Kind.B;");
         await Assert.That(output).DoesNotContain("@acme");
@@ -270,7 +270,7 @@ public class CrossPackageExpressionImportTests
             """
         )["my-lib/usage.ts"];
 
-        await Assert.That(output).Contains("import { Digits } from \"./digits\"");
+        await Assert.That(output).Contains("import { Digits } from \"./digits.js\"");
         await Assert.That(output).Contains("return Digits.split(42);");
         await Assert.That(output).DoesNotContain("myLib");
     }

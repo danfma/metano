@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { ClassType } from "metano-runtime";
-import { IHasArea$runtimeType, type IHasArea } from "./i-has-area";
-import { Shape } from "./shape";
+import { IHasArea$runtimeType, type IHasArea } from "./i-has-area.js";
+import { Shape } from "./shape.js";
 
 let Circle$rt: ClassType<Circle> | undefined;
 

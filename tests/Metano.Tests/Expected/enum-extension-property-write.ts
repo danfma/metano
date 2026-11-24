@@ -1,5 +1,5 @@
-import { shade$get, shade$set } from "./cell-extensions";
-import type { Shade } from "./shade";
+import { shade$get, shade$set } from "./cell-extensions.js";
+import type { Shade } from "./shade.js";
 
 export class Caller {
   constructor() { }

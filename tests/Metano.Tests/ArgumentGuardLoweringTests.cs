@@ -200,7 +200,7 @@ public class ArgumentGuardLoweringTests
             """
         );
 
-        await Assert.That(files["guard.ts"]).Contains("import type { Plain } from \"./plain\";");
+        await Assert.That(files["guard.ts"]).Contains("import type { Plain } from \"./plain.js\";");
     }
 
     /// <summary>

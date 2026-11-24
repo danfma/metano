@@ -1,4 +1,4 @@
-import { plainInt32, plainString, size$get, twice } from "./block-host";
+import { plainInt32, plainString, size$get, twice } from "./block-host.js";
 
 export class UseBlock {
   constructor() { }

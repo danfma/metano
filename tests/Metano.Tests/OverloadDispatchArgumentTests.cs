@@ -163,7 +163,7 @@ public class OverloadDispatchArgumentTests
 
         var output = result["single.ts"];
 
-        await Assert.That(output).Contains("import { Color } from \"./color\";");
+        await Assert.That(output).Contains("import { Color } from \"./color.js\";");
         await Assert.That(output).DoesNotContain("import type { Color }");
     }
 

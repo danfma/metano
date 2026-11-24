@@ -4,7 +4,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// The directed graph of local imports between generated files: each file
-/// (keyed by its relative path without the <c>.ts</c> extension) points at
+/// (keyed by its relative path without the <c>.ts</c> / <c>.tsx</c> extension) points at
 /// every generated file it imports (<see cref="TsLocalModule"/>, whose file
 /// key names the target directly; a namespace barrel is its <c>index</c> file).
 /// Imports from external packages are not edges. The value graph keeps only
@@ -36,11 +36,8 @@ internal sealed class LocalImportGraph
     public static LocalImportGraph ValueImports(IReadOnlyList<TsSourceFile> files) =>
         Build(files, import => !import.TypeOnly);
 
-    /// <summary>The key of <paramref name="file"/>: its relative path without the <c>.ts</c> extension.</summary>
-    public static string KeyOf(TsSourceFile file) =>
-        file.FileName.EndsWith(".ts", StringComparison.Ordinal)
-            ? file.FileName[..^3]
-            : file.FileName;
+    /// <summary>The key of <paramref name="file"/>: its relative path without the <c>.ts</c> / <c>.tsx</c> extension.</summary>
+    public static string KeyOf(TsSourceFile file) => ModulePath.Of(file.FileName);
 
     /// <summary>The files <paramref name="file"/> imports directly.</summary>
     public IReadOnlyList<string> TargetsOf(string file) =>

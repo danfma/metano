@@ -1,5 +1,5 @@
-import { Tag } from "./tag";
-import { UId } from "./u-id";
+import { Tag } from "./tag.js";
+import { UId } from "./u-id.js";
 
 export class Calls {
   constructor() { }

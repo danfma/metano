@@ -6,8 +6,8 @@ namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
 /// TypeScript-specific path / namespace helpers used by both the type emitter and the
-/// import collector, so that subpath imports (<c>#/foo/bar</c>) and on-disk file paths
-/// are computed consistently. Under the full-namespace layout policy (D1, spec 005 /
+/// import collector, so that local module references and on-disk file paths are
+/// computed consistently. Under the full-namespace layout policy (D1, spec 005 /
 /// ADR-0025) <see cref="RootNamespace"/> is empty — nothing is stripped and a type's
 /// path is its complete namespace — so layout never shifts when sibling types change.
 /// The stripping logic is retained for a target that may opt into a non-empty root.

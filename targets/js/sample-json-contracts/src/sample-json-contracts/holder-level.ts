@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import type { Level } from "./level";
+import type { Level } from "./level.js";
 
 let HolderLevel$rt: ClassType<HolderLevel> | undefined;
 

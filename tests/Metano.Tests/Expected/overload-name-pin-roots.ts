@@ -6,7 +6,7 @@ export interface IShape {
 }
 
 import { isInt32 } from "metano-runtime";
-import type { IShape } from "./i-shape";
+import type { IShape } from "./i-shape.js";
 
 export class Square implements IShape {
   constructor() { }
@@ -62,7 +62,7 @@ export class Counter {
   }
 }
 
-import { Counter } from "./counter";
+import { Counter } from "./counter.js";
 
 export class Doubler extends Counter {
   constructor() {
@@ -74,7 +74,7 @@ export class Doubler extends Counter {
   }
 }
 
-import { Counter } from "./counter";
+import { Counter } from "./counter.js";
 
 export class Tripler extends Counter {
   constructor() {
@@ -86,8 +86,8 @@ export class Tripler extends Counter {
   }
 }
 
-import type { Counter } from "./counter";
-import type { IShape } from "./i-shape";
+import type { Counter } from "./counter.js";
+import type { IShape } from "./i-shape.js";
 
 export class Use {
   constructor() { }

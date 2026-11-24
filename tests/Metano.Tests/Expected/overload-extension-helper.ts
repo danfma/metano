@@ -1,5 +1,5 @@
 import { isInt32, isString } from "metano-runtime";
-import { Item } from "./item";
+import { Item } from "./item.js";
 
 export function twiceInt32(item: Item, x: number): number {
   return Math.imul(x, 2);
@@ -23,8 +23,8 @@ export function twice(...args: unknown[]): number {
   throw new Error("No matching overload for twice");
 }
 
-import { twiceInt32, twiceString } from "./ext";
-import type { Item } from "./item";
+import { twiceInt32, twiceString } from "./ext.js";
+import type { Item } from "./item.js";
 
 export class Use {
   constructor() { }

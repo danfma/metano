@@ -2,7 +2,7 @@
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { IReadOnlyList } from "metano-runtime/system/collections";
 import { isInt32, isString } from "metano-runtime";
-import { Estimate } from "./estimate";
+import { Estimate } from "./estimate.js";
 
 export function total(estimates: IReadOnlyList<Estimate>): Estimate {
   let total = Estimate.none;

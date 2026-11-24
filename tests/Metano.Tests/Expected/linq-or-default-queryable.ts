@@ -1,5 +1,5 @@
 import { firstOrDefault, linq } from "metano-runtime/system/linq";
-import type { Person } from "./person";
+import type { Person } from "./person.js";
 
 export class Queries {
   constructor() { }

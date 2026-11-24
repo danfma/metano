@@ -193,7 +193,6 @@ public static class TranspileHelper
         bool useIrBodies = true,
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
-        string? importAlias = null,
         IEnumerable<SyntaxTree>? generatedTrees = null
     )
     {
@@ -207,7 +206,6 @@ public static class TranspileHelper
             UseIrBodiesWhenCovered = useIrBodies,
             NamespaceBarrels = namespaceBarrels,
             StripInterfacePrefix = stripInterfacePrefix,
-            ImportAlias = importAlias,
         };
 
         var files = transformer.TransformAll();
@@ -239,12 +237,11 @@ public static class TranspileHelper
     /// </summary>
     public static Dictionary<string, string> Transpile(
         string csharpSource,
-        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary,
-        string? importAlias = null
+        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary
     )
     {
         var compilation = CompileAssembly(csharpSource, "TestAssembly", outputKind);
-        return TranspileCore(compilation, importAlias: importAlias).Files;
+        return TranspileCore(compilation).Files;
     }
 
     /// <summary>
@@ -369,7 +366,7 @@ public static class TranspileHelper
     public static (
         Dictionary<string, string> Files,
         IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
-    ) TranspileWithDiagnostics(string csharpSource, string? importAlias = null)
+    ) TranspileWithDiagnostics(string csharpSource)
     {
         var compilation = CompileAssembly(
             csharpSource,
@@ -377,7 +374,7 @@ public static class TranspileHelper
             OutputKind.DynamicallyLinkedLibrary
         );
 
-        return TranspileCore(compilation, importAlias: importAlias);
+        return TranspileCore(compilation);
     }
 
     /// <summary>

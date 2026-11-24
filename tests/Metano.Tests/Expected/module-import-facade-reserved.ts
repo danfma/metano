@@ -1,5 +1,5 @@
-import { quxS, quxX$ } from "./q";
-import { barS, barX, bazS, bazX, fooS, fooX$ } from "./res";
+import { quxS, quxX$ } from "./q.js";
+import { barS, barX, bazS, bazX, fooS, fooX$ } from "./res.js";
 import { fooX, quxX } from "ext-lib";
 
 export class Use {

@@ -8,11 +8,5 @@
       "types": "./dist/checked-enums/index.d.ts",
       "default": "./dist/checked-enums/index.js"
     }
-  },
-  "imports": {
-    "#/*": {
-      "bun": "./src/*.ts",
-      "default": "./dist/*.js"
-    }
   }
 }

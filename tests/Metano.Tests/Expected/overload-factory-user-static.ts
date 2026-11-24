@@ -1,4 +1,4 @@
-import { Money } from "./money";
+import { Money } from "./money.js";
 
 export class Coupon extends Money {
   constructor(cents: number) {

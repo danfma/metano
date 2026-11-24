@@ -5,71 +5,54 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <summary>
 /// The single decision point for the text of a module specifier (spec 004
 /// Amendment A1). A <see cref="TsPackageModule"/> prints verbatim; a
-/// <see cref="TsLocalModule"/> is rendered against the file key of the importing
-/// file. Every import and re-export the <see cref="Printer"/> writes, and the order
+/// <see cref="TsLocalModule"/> is rendered relative to the file key of the
+/// importing file and names a concrete file with a <c>.js</c> extension
+/// (<c>./issue-id.js</c>, <c>../../shared-kernel/user-id.js</c>, a barrel as
+/// <c>./app/domain/index.js</c>; FR-011), so the output resolves under plain Node
+/// ESM, Bun, TypeScript <c>nodenext</c>/<c>bundler</c> and Vite with no resolution
+/// map. Every import and re-export the <see cref="Printer"/> writes, and the order
 /// <see cref="ImportCollector"/> sorts local imports in, go through
-/// <see cref="Render"/>.
+/// <see cref="Render"/>; another suffix (spec 004 FR-016, a future option) would
+/// only change <see cref="Extension"/>.
 /// </summary>
-/// <remarks>
-/// Current rendering (pre-FR-011): a module in the importer's directory is
-/// <c>./name</c>; a leaf barrel below the importer's directory is its directory
-/// (<c>./a/b</c>); any other module goes through the subpath-imports alias
-/// (<c>#/a/b/name</c>, or <c>#&lt;alias&gt;/a/b/name</c>).
-/// </remarks>
-public sealed class ModuleSpecifierRenderer(string? importAlias)
+public sealed class ModuleSpecifierRenderer
 {
-    private const string BarrelFileName = "index";
+    /// <summary>The suffix of every local specifier, for <c>.ts</c> and <c>.tsx</c> targets alike.</summary>
+    private const string Extension = ".js";
 
-    /// <summary>The renderer of a run with no import alias.</summary>
-    public static readonly ModuleSpecifierRenderer Default = new(importAlias: null);
-
-    private readonly string _aliasPrefix = PathNaming.NormalizeImportAliasPrefix(importAlias);
+    /// <summary>The one renderer every run shares.</summary>
+    public static readonly ModuleSpecifierRenderer Default = new();
 
     /// <summary>The specifier text for <paramref name="module"/> imported from <paramref name="importerFileKey"/>.</summary>
     public string Render(TsModuleSpecifier module, string importerFileKey) =>
         module switch
         {
             TsPackageModule package => package.Specifier,
-            TsLocalModule local => RenderLocal(local.FileKey, importerFileKey),
+            TsLocalModule local => RelativePath(importerFileKey, local.FileKey) + Extension,
             _ => throw new InvalidOperationException(
                 $"Unhandled module specifier '{module.GetType().Name}'."
             ),
         };
 
-    private string RenderLocal(string targetKey, string importerFileKey)
+    /// <summary>
+    /// The path from the directory of <paramref name="importerFileKey"/> to
+    /// <paramref name="targetKey"/>: <c>./</c> when the target sits in or below that
+    /// directory, one <c>../</c> per directory to climb otherwise.
+    /// </summary>
+    private static string RelativePath(string importerFileKey, string targetKey)
     {
-        var importerDirectory = DirectoryOf(importerFileKey);
-        var targetDirectory = DirectoryOf(targetKey);
+        var importerDirectory = importerFileKey.Split('/')[..^1];
+        var target = targetKey.Split('/');
+        var shared = SharedDirectoryCount(importerDirectory, target);
+        var climb = importerDirectory.Length - shared;
+        var prefix = climb == 0 ? "./" : string.Concat(Enumerable.Repeat("../", climb));
 
-        if (targetDirectory == importerDirectory)
-            return "./" + FileNameOf(targetKey);
-
-        if (IsBarrelBelow(targetKey, targetDirectory, importerDirectory))
-            return "./" + RelativeTo(importerDirectory, targetDirectory);
-
-        return _aliasPrefix + "/" + targetKey;
+        return prefix + string.Join('/', target[shared..]);
     }
 
-    private static bool IsBarrelBelow(
-        string targetKey,
-        string targetDirectory,
-        string importerDirectory
-    ) =>
-        FileNameOf(targetKey) == BarrelFileName
-        && (
-            importerDirectory.Length == 0
-            || targetDirectory.StartsWith(importerDirectory + "/", StringComparison.Ordinal)
-        );
-
-    private static string RelativeTo(string directory, string descendant) =>
-        directory.Length == 0 ? descendant : descendant[(directory.Length + 1)..];
-
-    private static string DirectoryOf(string fileKey)
-    {
-        var slash = fileKey.LastIndexOf('/');
-
-        return slash < 0 ? "" : fileKey[..slash];
-    }
-
-    private static string FileNameOf(string fileKey) => fileKey[(fileKey.LastIndexOf('/') + 1)..];
+    private static int SharedDirectoryCount(string[] importerDirectory, string[] target) =>
+        importerDirectory
+            .Zip(target[..^1])
+            .TakeWhile(segments => segments.First == segments.Second)
+            .Count();
 }

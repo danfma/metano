@@ -1,5 +1,5 @@
 import { isInt32 } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Der extends Base {
   constructor() {

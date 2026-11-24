@@ -1,4 +1,4 @@
-import { LoudGreeter } from "./loud-greeter";
+import { LoudGreeter } from "./loud-greeter.js";
 
 export class Caller {
   constructor() { }

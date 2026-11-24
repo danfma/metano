@@ -4,12 +4,10 @@
  * through a factory while the class body is still being evaluated — and
  * checks that the factories, the fast paths and the dispatchers return what
  * C# returns. Exits non-zero on any mismatch. Run with
- * `bun run build && bun run test:node`, which loads
- * `extensionless-imports.ts` for the generated relative specifiers.
+ * `bun run build && bun run test:node`; the generated relative `.js`
+ * specifiers load under plain Node ESM (spec 004 FR-012).
  */
 
-// Relative imports of the estimate modules alone: Node 24 rejects `#/`
-// subpath specifiers, which the rest of the planning barrel uses.
 import assert from "node:assert/strict";
 import { List } from "metano-runtime/system/collections";
 import { BufferedEstimate } from "../../src/sample-issue-tracker/planning/domain/buffered-estimate.ts";

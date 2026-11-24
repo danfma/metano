@@ -328,6 +328,6 @@ public class StaticExtensionMemberTests
 
         var caller = result["app/caller.ts"];
         await Assert.That(caller).Contains("create(2024, 1, 1)");
-        await Assert.That(caller).Contains("import { create } from \"./date-extensions\";");
+        await Assert.That(caller).Contains("import { create } from \"./date-extensions.js\";");
     }
 }

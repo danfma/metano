@@ -1,8 +1,8 @@
 import { List, listType } from "metano-runtime/system/collections";
 import { Int32Type, StringType, UnknownType, asType, castTo, createInstance, getRuntimeType, isType, type RuntimeType } from "metano-runtime";
 import { first as first$rt, linq } from "metano-runtime/system/linq";
-import { Circle } from "./circle";
-import { Point } from "./point";
+import { Circle } from "./circle.js";
+import { Point } from "./point.js";
 
 export function isA<T>(o: Object, T$type: RuntimeType<T>): boolean {
   return isType(o, T$type);

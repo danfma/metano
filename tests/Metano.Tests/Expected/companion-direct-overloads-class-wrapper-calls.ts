@@ -1,5 +1,5 @@
-import { UId } from "./u-id";
-import { Wrap } from "./wrap";
+import { UId } from "./u-id.js";
+import { Wrap } from "./wrap.js";
 
 export class WrapCalls {
   constructor() { }

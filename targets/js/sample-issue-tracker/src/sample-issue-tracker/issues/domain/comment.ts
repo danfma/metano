@@ -2,7 +2,7 @@
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { Temporal } from "@js-temporal/polyfill";
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
-import { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
+import { UserId } from "../../shared-kernel/user-id.js";
 
 let Comment$rt: ClassType<Comment> | undefined;
 

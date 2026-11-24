@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { DBase } from "./d-base";
+import { DBase } from "./d-base.js";
 
 let DBer$rt: ClassType<DBer> | undefined;
 

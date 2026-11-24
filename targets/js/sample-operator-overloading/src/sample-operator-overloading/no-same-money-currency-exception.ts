@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { enumText, type ClassType } from "metano-runtime";
 import { Exception } from "metano-runtime/system/exceptions/exception";
-import { Currency$runtimeType, type Currency } from "./currency";
+import { Currency$runtimeType, type Currency } from "./currency.js";
 
 let NoSameMoneyCurrencyException$rt: ClassType<NoSameMoneyCurrencyException> | undefined;
 

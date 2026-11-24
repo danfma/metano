@@ -1,4 +1,4 @@
-import type { Holder } from "./holder";
+import type { Holder } from "./holder.js";
 
 export class Access {
   constructor() { }

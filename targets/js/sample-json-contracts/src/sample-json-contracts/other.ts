@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
-import { IShape$runtimeType, type IShape } from "./i-shape";
+import { IShape$runtimeType, type IShape } from "./i-shape.js";
 
 let Other$rt: ClassType<Other> | undefined;
 

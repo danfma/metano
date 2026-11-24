@@ -1,5 +1,5 @@
 import { HashCode, copyRecordWith, defaultEquals } from "metano-runtime";
-import type { IEntity } from "./i-entity";
+import type { IEntity } from "./i-entity.js";
 
 export class Repo<T extends IEntity> {
   constructor(readonly item: T) { }

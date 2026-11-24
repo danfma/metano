@@ -83,18 +83,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public bool StripInterfacePrefix { get; init; }
 
     /// <summary>
-    /// Optional isolated subpath-imports alias for internal imports, forwarded to
-    /// <see cref="ModuleSpecifiers"/> and <see cref="CyclicReferenceDetector"/>. <c>null</c>
-    /// keeps the default <c>#</c> behavior. Set via <c>--import-alias</c>.
-    /// </summary>
-    public string? ImportAlias { get; init; }
-
-    /// <summary>
     /// The single decision point for the text of every module specifier this run
     /// prints, shared by the import collector's ordering and every
     /// <see cref="Printer"/> (spec 004 Amendment A1).
     /// </summary>
-    public ModuleSpecifierRenderer ModuleSpecifiers => field ??= new(ImportAlias);
+    public ModuleSpecifierRenderer ModuleSpecifiers => ModuleSpecifierRenderer.Default;
 
     /// <summary>
     /// Output directory for the active run, supplied by the host
@@ -774,7 +767,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // diagnostics for each distinct cycle. Cycles are reported as warnings — the
         // build proceeds, but the consumer sees the chain in their build log instead
         // of debugging it through tsgo's downstream error.
-        CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic, ImportAlias);
+        CyclicReferenceDetector.DetectAndReport(files, ReportDiagnostic);
 
         ReportExportKeyCollisions(files);
 

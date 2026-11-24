@@ -4,10 +4,11 @@ using Metano.Compiler.TypeScript.Transformation;
 namespace Metano.Tests;
 
 /// <summary>
-/// Tests for the configurable isolated subpath-import alias (<c>--import-alias</c>).
-/// Covers both the unit-level specifier shaping in <see cref="ModuleSpecifierRenderer"/> and the
-/// end-to-end emitted imports, plus the no-regression guarantee when no alias is set.
-/// The package.json side is covered in <see cref="EmitPackageTests"/>.
+/// Tests for the alias normalization of <c>--import-alias</c> and for the relative
+/// <c>.js</c> specifiers generated code uses whatever the alias (spec 004 Amendment
+/// A1): the unit-level shaping in <see cref="ModuleSpecifierRenderer"/> and the
+/// end-to-end emitted imports. The package.json side is covered in
+/// <see cref="EmitPackageTests"/>.
 /// </summary>
 public class ImportAliasTests
 {
@@ -28,56 +29,46 @@ public class ImportAliasTests
         await Assert.That(PathNaming.NormalizeImportAliasPrefix(input)).IsEqualTo(expected);
     }
 
-    // ── In-file specifier with an alias (FR-002) ─────────────────────
+    // ── Relative `.js` specifiers (spec 004 Amendment A1, FR-011) ────
 
-    private static string Render(string? alias, string fromNs, string toNs, string fileName) =>
-        new ModuleSpecifierRenderer(alias).Render(
+    private static string Render(string fromNs, string toNs, string fileName) =>
+        ModuleSpecifierRenderer.Default.Render(
             AppNaming.LocalModule(toNs, fileName),
             AppNaming.FileKey(fromNs, "Importer")
         );
 
     [Test]
-    public async Task ModuleSpecifier_WithAlias_UsesAliasKey()
+    [Arguments("App.Models", "App.Models", "Money", "./money.js")]
+    [Arguments("App.Services", "App.Models", "Money", "../models/money.js")]
+    [Arguments("App.Services", "App", "Root", "../root.js")]
+    [Arguments("App", "App.Models.Deep", "Money", "./models/deep/money.js")]
+    [Arguments("App.A.B.C", "App.A.X", "Money", "../../x/money.js")]
+    [Arguments("App.Ab", "App.A", "Money", "../a/money.js")]
+    public async Task ModuleSpecifier_IsRelativeToTheImporterWithAJsExtension(
+        string fromNs,
+        string toNs,
+        string fileName,
+        string expected
+    )
     {
-        // Cross-namespace → alias-scoped path to the defining file.
-        await Assert
-            .That(Render("contracts", "App.Services", "App.Models", "Money"))
-            .IsEqualTo("#contracts/models/money");
-
-        // Root namespace → alias key + file name.
-        await Assert
-            .That(Render("contracts", "App.Services", "App", "Root"))
-            .IsEqualTo("#contracts/root");
-
-        // Same namespace → relative file import, never aliased.
-        await Assert
-            .That(Render("contracts", "App.Models", "App.Models", "Money"))
-            .IsEqualTo("./money");
+        await Assert.That(Render(fromNs, toNs, fileName)).IsEqualTo(expected);
     }
 
     [Test]
-    public async Task ModuleSpecifier_AliasNormalized_LeadingHashEquivalent()
+    public async Task ModuleSpecifier_Barrel_NamesItsIndexFile()
     {
-        await Assert
-            .That(Render("#contracts", "App.A", "App.B", "T"))
-            .IsEqualTo(Render("contracts", "App.A", "App.B", "T"));
-    }
-
-    [Test]
-    public async Task ModuleSpecifier_BarrelBelowImporter_RendersItsDirectory()
-    {
-        var specifier = new ModuleSpecifierRenderer(null).Render(
+        var specifier = ModuleSpecifierRenderer.Default.Render(
             new TsLocalModule("app/domain/index"),
             "index"
         );
 
-        await Assert.That(specifier).IsEqualTo("./app/domain");
+        await Assert.That(specifier).IsEqualTo("./app/domain/index.js");
     }
 
     [Test]
     public async Task ModuleSpecifier_PackageModule_PrintsVerbatim()
     {
-        var specifier = new ModuleSpecifierRenderer("contracts").Render(
+        var specifier = ModuleSpecifierRenderer.Default.Render(
             new TsPackageModule("pkg/sub"),
             "a/b"
         );
@@ -85,20 +76,7 @@ public class ImportAliasTests
         await Assert.That(specifier).IsEqualTo("pkg/sub");
     }
 
-    // ── No-regression when unset (FR-004 / SC-002) ───────────────────
-
-    [Test]
-    public async Task ModuleSpecifier_NoAlias_UsesDefaultHashKey()
-    {
-        await Assert
-            .That(Render(null, "App.Services", "App.Models", "Money"))
-            .IsEqualTo("#/models/money");
-
-        await Assert.That(Render(null, "App.Services", "App", "Root")).IsEqualTo("#/root");
-        await Assert.That(Render(null, "App.Models", "App.Models", "Money")).IsEqualTo("./money");
-    }
-
-    // ── End-to-end emitted imports (FR-002) ──────────────────────────
+    // ── End-to-end emitted imports (FR-011) ──────────────────────────
 
     private const string TwoNamespaceSource = """
         namespace App.Models
@@ -121,33 +99,13 @@ public class ImportAliasTests
         """;
 
     [Test]
-    public async Task Transpile_WithAlias_EmitsAliasScopedInternalImports()
-    {
-        var files = TranspileHelper.Transpile(TwoNamespaceSource, importAlias: "contracts");
-
-        // The cross-namespace reference resolves through the isolated alias key,
-        // pointing at the defining file under its full namespace.
-        await Assert
-            .That(files.Values.Any(c => c.Contains("from \"#contracts/app/models/money\"")))
-            .IsTrue();
-
-        // The default `#` alias never appears.
-        await Assert.That(files.Values.Any(c => c.Contains("from \"#/"))).IsFalse();
-        await Assert.That(files.Values.Any(c => c.Contains("from \"#\""))).IsFalse();
-    }
-
-    [Test]
-    public async Task Transpile_NoAlias_EmitsDefaultHashImports()
+    public async Task Transpile_EmitsRelativeJsInternalImports()
     {
         var files = TranspileHelper.Transpile(TwoNamespaceSource);
 
-        // Default behavior: internal imports use `#/...` pointing at the file
-        // under its full namespace.
-        await Assert
-            .That(files.Values.Any(c => c.Contains("from \"#/app/models/money\"")))
-            .IsTrue();
+        await Assert.That(files["app/services/wallet.ts"]).Contains("from \"../models/money.js\"");
 
-        // No alias-scoped key leaks in.
-        await Assert.That(files.Values.Any(c => c.Contains("#contracts"))).IsFalse();
+        // No subpath-alias specifier is emitted for an internal edge.
+        await Assert.That(files.Values.Any(c => c.Contains("from \"#"))).IsFalse();
     }
 }

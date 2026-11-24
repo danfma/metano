@@ -1,8 +1,8 @@
 import { List } from "metano-runtime/system/collections";
-import type { Animal } from "./animal";
-import type { Cat } from "./cat";
-import type { Dog } from "./dog";
-import { Holder } from "./holder";
+import type { Animal } from "./animal.js";
+import type { Cat } from "./cat.js";
+import type { Dog } from "./dog.js";
+import { Holder } from "./holder.js";
 
 export class Lists {
   private readonly _field: List<number | null> = List.of<number | null>([1]);

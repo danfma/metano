@@ -1,8 +1,8 @@
 import { List } from "metano-runtime/system/collections";
 import { isInt32 } from "metano-runtime";
-import { Decimal } from "#/other/decimal";
-import type { A } from "./a";
-import type { B } from "./b";
+import type { A } from "./a.js";
+import type { B } from "./b.js";
+import { Decimal } from "./other/decimal.js";
 
 export class Climbs {
   constructor() { }

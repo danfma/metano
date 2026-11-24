@@ -31,7 +31,7 @@ export abstract class Op {
   }
 }
 
-import { Op } from "./op";
+import { Op } from "./op.js";
 
 export class Neg extends Op {
   constructor() {

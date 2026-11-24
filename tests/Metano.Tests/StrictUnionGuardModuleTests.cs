@@ -58,8 +58,8 @@ public class StrictUnionGuardModuleTests
     {
         var guard = TranspileHelper.Transpile(Source)["shapes/shape.guard.ts"];
 
-        await Assert.That(guard).Contains("import { isCircle, type Circle } from \"./circle\";");
-        await Assert.That(guard).Contains("import { isSquare, type Square } from \"./square\";");
+        await Assert.That(guard).Contains("import { isCircle, type Circle } from \"./circle.js\";");
+        await Assert.That(guard).Contains("import { isSquare, type Square } from \"./square.js\";");
 
         await Assert
             .That(guard)
@@ -104,7 +104,7 @@ public class StrictUnionGuardModuleTests
 
         await Assert
             .That(index)
-            .Contains("export { assertShape, isShape } from \"./shape.guard\";");
+            .Contains("export { assertShape, isShape } from \"./shape.guard.js\";");
     }
 
     /// <summary>

@@ -1,5 +1,5 @@
 import { isInt32, isString } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Derived extends Base {
   protected static readonly byDerivedC = /* @__PURE__ */ Symbol("Derived(int c)");
@@ -67,7 +67,7 @@ export class Derived extends Base {
   }
 }
 
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Single extends Base {
   constructor(a: number) {
@@ -75,7 +75,7 @@ export class Single extends Base {
   }
 }
 
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Primary extends Base {
   constructor(x: number) {
@@ -84,7 +84,7 @@ export class Primary extends Base {
 }
 
 import { isInt32 } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Chained extends Base {
   protected static readonly byChainedDefault = /* @__PURE__ */ Symbol("Chained()");
@@ -143,7 +143,7 @@ export class Chained extends Base {
   }
 }
 
-import { Shape } from "./shape";
+import { Shape } from "./shape.js";
 
 export class Circle extends Shape {
   constructor(radius: number) {

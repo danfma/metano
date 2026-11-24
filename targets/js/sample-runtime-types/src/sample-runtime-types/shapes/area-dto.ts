@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { PlainObjectType } from "metano-runtime";
-import type { IHasArea } from "./i-has-area";
+import type { IHasArea } from "./i-has-area.js";
 
 export interface AreaDto extends IHasArea {
   readonly area: number;

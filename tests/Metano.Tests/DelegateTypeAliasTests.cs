@@ -33,6 +33,7 @@ public class DelegateTypeAliasTests
         );
 
         var output = result["app/folder.ts"];
+
         await Assert
             .That(output)
             .Contains("export type Folder = (acc: number, next: number) => number;");
@@ -51,6 +52,7 @@ public class DelegateTypeAliasTests
         );
 
         var output = result["app/converter.ts"];
+
         await Assert
             .That(output)
             .Contains("export type Converter<TIn, TOut> = (value: TIn) => TOut;");
@@ -162,9 +164,11 @@ public class DelegateTypeAliasTests
         );
 
         await Assert.That(files).ContainsKey("notifier.dart");
+
         await Assert
             .That(files["notifier.dart"])
             .Contains("typedef Notifier = void Function(String);");
+
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsFalse();
@@ -276,7 +280,7 @@ public class DelegateTypeAliasTests
 
         await Assert.That(result).ContainsKey("app/events/index.ts");
         var barrel = result["app/events/index.ts"];
-        await Assert.That(barrel).Contains("export type { Handler } from \"./handler\"");
+        await Assert.That(barrel).Contains("export type { Handler } from \"./handler.js\"");
     }
 
     [Test]
@@ -310,9 +314,11 @@ public class DelegateTypeAliasTests
 
         var result = TranspileHelper.TranspileWithLibrary(library, consumer);
         var output = result["app/subscriber.ts"];
+
         await Assert
             .That(output)
             .Contains("import type { Handler } from \"@scope/lib/my-lib/events\"");
+
         await Assert.That(output).Contains("callback: Handler | null = null");
     }
 }

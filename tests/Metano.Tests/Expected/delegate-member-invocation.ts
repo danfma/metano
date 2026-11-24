@@ -1,4 +1,4 @@
-import { Holder } from "./holder";
+import { Holder } from "./holder.js";
 
 export class Calls {
   constructor() { }

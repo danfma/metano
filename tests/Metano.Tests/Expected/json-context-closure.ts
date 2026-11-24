@@ -1,6 +1,6 @@
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { Script } from "./script";
-import { ScriptWord } from "./script-word";
+import { ScriptWord } from "./script-word.js";
+import { Script } from "./script.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

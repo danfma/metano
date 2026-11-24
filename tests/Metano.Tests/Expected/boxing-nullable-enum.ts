@@ -1,5 +1,5 @@
 import { box, boxNullable } from "metano-runtime";
-import { Color$runtimeType, type Color } from "./color";
+import { Color$runtimeType, type Color } from "./color.js";
 
 export class Probe {
   constructor() { }

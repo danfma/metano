@@ -3,11 +3,11 @@ import { UUID } from "metano-runtime";
 import { Dictionary } from "metano-runtime/system/collections";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { Keys } from "./keys";
-import { Level } from "./level";
-import { Mood } from "./mood";
-import { Shade } from "./shade";
-import { Tag } from "./tag";
+import { Keys } from "./keys.js";
+import { Level } from "./level.js";
+import { Mood } from "./mood.js";
+import { Shade } from "./shade.js";
+import { Tag } from "./tag.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

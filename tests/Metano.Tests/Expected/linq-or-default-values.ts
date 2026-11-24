@@ -2,11 +2,11 @@ import { UUID } from "metano-runtime";
 import { List } from "metano-runtime/system/collections";
 import { firstOrDefault, last, lastOrDefault, linq, select, singleOrDefault, where } from "metano-runtime/system/linq";
 import { Decimal } from "metano-runtime/system/decimal";
-import { Color } from "./color";
-import type { Level } from "./level";
-import type { Person } from "./person";
-import { Point } from "./point";
-import type { Profile } from "./profile";
+import { Color } from "./color.js";
+import type { Level } from "./level.js";
+import type { Person } from "./person.js";
+import { Point } from "./point.js";
+import type { Profile } from "./profile.js";
 
 export class Lookups {
   constructor() { }

@@ -1,4 +1,4 @@
-import type { Base } from "./base";
+import type { Base } from "./base.js";
 
 export class Use {
   constructor() { }

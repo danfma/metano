@@ -7,7 +7,7 @@ import {
 } from "metano-runtime/system/collections";
 import type { ClassType } from "metano-runtime";
 import { linq, orderBy, sumInt64, toList, where } from "metano-runtime/system/linq";
-import type { IssueActivity } from "#/sample-issue-tracker/issues/domain/issue-activity";
+import type { IssueActivity } from "../domain/issue-activity.js";
 
 let IssueActivityLog$rt: ClassType<IssueActivityLog> | undefined;
 

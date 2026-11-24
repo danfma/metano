@@ -1,4 +1,4 @@
-import type { Decimal } from "./decimal";
+import type { Decimal } from "./decimal.js";
 
 export class Calculator {
   constructor() { }

@@ -537,7 +537,7 @@ public class ExportsSubpathRootTests
 
         await Assert
             .That(files["video-studio/domain/episodes/episode.ts"])
-            .Contains("from \"#/video-studio/domain/clock\"");
+            .Contains("from \"../clock.js\"");
     }
 
     // ── Per-group cache ────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { List } from "metano-runtime/system/collections";
-import type { Order } from "./order";
+import type { Order } from "./order.js";
 
 export function concatCount(o: Order | null): string {
   return "n" + (o?.items.count ?? "");

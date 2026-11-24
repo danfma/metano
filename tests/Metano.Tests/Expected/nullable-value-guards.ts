@@ -1,5 +1,5 @@
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
-import type { Holder } from "./holder";
+import type { Holder } from "./holder.js";
 
 export function checkedLocal(n: number | null): number {
   if (n != null) {

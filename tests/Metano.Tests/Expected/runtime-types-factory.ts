@@ -9,8 +9,8 @@ export class Blob {
 
 // geometry/circle.ts
 import type { ClassType } from "metano-runtime";
-import { IHasArea$runtimeType, type IHasArea } from "./i-has-area";
-import { Shape } from "./shape";
+import { IHasArea$runtimeType, type IHasArea } from "./i-has-area.js";
+import { Shape } from "./shape.js";
 
 let Circle$rt: ClassType<Circle> | undefined;
 
@@ -61,22 +61,22 @@ export const IHasArea$runtimeType: InterfaceType<IHasArea> = {
 };
 
 // geometry/index.ts
-export { Blob } from "./blob";
-export { Circle } from "./circle";
-export { IHasArea$runtimeType } from "./i-has-area";
-export type { IHasArea } from "./i-has-area";
-export { Program } from "./program";
-export { Shape } from "./shape";
-export { Shapes } from "./shapes";
-export { Square } from "./square";
+export { Blob } from "./blob.js";
+export { Circle } from "./circle.js";
+export { IHasArea$runtimeType } from "./i-has-area.js";
+export type { IHasArea } from "./i-has-area.js";
+export { Program } from "./program.js";
+export { Shape } from "./shape.js";
+export { Shapes } from "./shapes.js";
+export { Square } from "./square.js";
 
 // geometry/program.ts
 import { castTo, formatBoolean, getRuntimeType, isType } from "metano-runtime";
-import { Circle } from "./circle";
-import { IHasArea$runtimeType } from "./i-has-area";
-import type { Shape } from "./shape";
-import { Shapes } from "./shapes";
-import { Square } from "./square";
+import { Circle } from "./circle.js";
+import { IHasArea$runtimeType } from "./i-has-area.js";
+import type { Shape } from "./shape.js";
+import { Shapes } from "./shapes.js";
+import { Square } from "./square.js";
 
 export class Program {
   constructor() { }
@@ -136,9 +136,9 @@ export abstract class Shape {
 }
 
 // geometry/shapes.ts
-import { Circle } from "./circle";
-import type { Shape } from "./shape";
-import { Square } from "./square";
+import { Circle } from "./circle.js";
+import type { Shape } from "./shape.js";
+import { Square } from "./square.js";
 
 export class Shapes {
   constructor() { }
@@ -150,7 +150,7 @@ export class Shapes {
 
 // geometry/square.ts
 import type { ClassType } from "metano-runtime";
-import { Shape } from "./shape";
+import { Shape } from "./shape.js";
 
 let Square$rt: ClassType<Square> | undefined;
 

@@ -1,8 +1,8 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { Priority } from "./priority";
-import { TodoItem } from "./todo-item";
+import { Priority } from "./priority.js";
+import { TodoItem } from "./todo-item.js";
 
 let JsonContext$rt: ClassType<JsonContext> | undefined;
 

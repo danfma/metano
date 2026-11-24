@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { enumFromRaw, enumIsDefined } from "metano-runtime";
-import { Color$runtimeType, type Color } from "./color";
+import { Color$runtimeType, type Color } from "./color.js";
 
 export class Palette {
   constructor() {}

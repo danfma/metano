@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import type { Priority } from "./priority";
+import type { Priority } from "./priority.js";
 
 let TodoItem$rt: ClassType<TodoItem> | undefined;
 

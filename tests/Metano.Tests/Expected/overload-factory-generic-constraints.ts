@@ -1,6 +1,6 @@
 import { isInt32, isType } from "metano-runtime";
-import { Box } from "./box";
-import { IRank$runtimeType, type IRank } from "./i-rank";
+import { Box } from "./box.js";
+import { IRank$runtimeType, type IRank } from "./i-rank.js";
 
 export class SortedBox<T extends IRank<T>> extends Box<T> {
   protected static readonly bySortedBoxValue = /* @__PURE__ */ Symbol("SortedBox(T value)");
@@ -52,7 +52,7 @@ export class SortedBox<T extends IRank<T>> extends Box<T> {
 }
 
 import { isInt32 } from "metano-runtime";
-import { Box } from "./box";
+import { Box } from "./box.js";
 
 export class Pair<K, V> extends Box<K> {
   protected static readonly byPairValue = /* @__PURE__ */ Symbol("Pair(K value)");

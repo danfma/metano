@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { NBase } from "./n-base";
+import { NBase } from "./n-base.js";
 
 let NMid$rt: ClassType<NMid> | undefined;
 

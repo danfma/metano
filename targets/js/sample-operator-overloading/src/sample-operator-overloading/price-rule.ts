@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { formatText, isBool, isDecimal, isInt32, isString } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
-import { Currency } from "./currency";
+import { Currency } from "./currency.js";
 
 export class PriceRule {
   protected static readonly byPriceRulePercent = /* @__PURE__ */ Symbol("PriceRule(int percent)");

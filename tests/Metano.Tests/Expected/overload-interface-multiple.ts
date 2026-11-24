@@ -6,7 +6,7 @@ export interface IConv<T> {
 }
 
 import { isInt32, isString } from "metano-runtime";
-import type { IConv } from "./i-conv";
+import type { IConv } from "./i-conv.js";
 
 export class C implements IConv<number>, IConv<string> {
   constructor() { }

@@ -90,7 +90,7 @@ public class NoContainerModuleStateTests
         );
 
         var output = result["meter.ts"];
-        await Assert.That(output).Contains("import { max, step } from \"./limits\";");
+        await Assert.That(output).Contains("import { max, step } from \"./limits.js\";");
         await Assert.That(output).Contains("return (max + step) | 0;");
     }
 

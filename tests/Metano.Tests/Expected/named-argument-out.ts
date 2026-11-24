@@ -1,8 +1,8 @@
 import { Dictionary } from "metano-runtime/system/collections";
 import { tryParseInt32 } from "metano-runtime";
-import { MoreTags } from "./more-tags";
-import type { OutHost } from "./out-host";
-import { Trace } from "./trace";
+import { MoreTags } from "./more-tags.js";
+import type { OutHost } from "./out-host.js";
+import { Trace } from "./trace.js";
 
 export class OutCalls {
   constructor() { }
@@ -131,8 +131,8 @@ export class OutCalls {
   }
 }
 
-import { Overloaded } from "./overloaded";
-import { Trace } from "./trace";
+import { Overloaded } from "./overloaded.js";
+import { Trace } from "./trace.js";
 
 export class OverloadedOutCalls {
   constructor() { }

@@ -1,5 +1,5 @@
 import { typeInitializer } from "metano-runtime";
-import { Meter } from "./meter";
+import { Meter } from "./meter.js";
 
 export class SubMeter extends Meter {
   static readonly #$init = /* @__PURE__ */ typeInitializer("SubMeter", () => {

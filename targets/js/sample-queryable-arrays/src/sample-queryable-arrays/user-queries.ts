@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { linq, select, where } from "metano-runtime/system/linq";
-import type { User } from "./user";
+import type { User } from "./user.js";
 
 export class UserQueries {
   constructor() {}

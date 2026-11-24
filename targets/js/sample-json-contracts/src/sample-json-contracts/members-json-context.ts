@@ -2,11 +2,11 @@
 import { List } from "metano-runtime/system/collections";
 import type { ClassType } from "metano-runtime";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { Account } from "./account";
-import { Blob } from "./blob";
-import { InitRec } from "./init-rec";
-import { OrdBase } from "./ord-base";
-import { SetClass } from "./set-class";
+import { Account } from "./account.js";
+import { Blob } from "./blob.js";
+import { InitRec } from "./init-rec.js";
+import { OrdBase } from "./ord-base.js";
+import { SetClass } from "./set-class.js";
 
 let MembersJsonContext$rt: ClassType<MembersJsonContext> | undefined;
 

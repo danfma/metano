@@ -1,16 +1,16 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import { isString, type ClassType } from "metano-runtime";
-import { Issue } from "#/sample-issue-tracker/issues/domain/issue";
-import { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
-import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
-import type { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
-import type { IssueType } from "#/sample-issue-tracker/issues/domain/issue-type";
-import { OperationResult } from "#/sample-issue-tracker/shared-kernel/operation-result";
-import type { PageRequest } from "#/sample-issue-tracker/shared-kernel/page-request";
-import type { PageResult } from "#/sample-issue-tracker/shared-kernel/page-result";
-import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
-import type { IIssueRepository } from "./i-issue-repository";
+import { OperationResult } from "../../shared-kernel/operation-result.js";
+import type { PageRequest } from "../../shared-kernel/page-request.js";
+import type { PageResult } from "../../shared-kernel/page-result.js";
+import type { UserId } from "../../shared-kernel/user-id.js";
+import { IssueId } from "../domain/issue-id.js";
+import { IssuePriority } from "../domain/issue-priority.js";
+import type { IssueStatus } from "../domain/issue-status.js";
+import type { IssueType } from "../domain/issue-type.js";
+import { Issue } from "../domain/issue.js";
+import type { IIssueRepository } from "./i-issue-repository.js";
 
 let IssueService$rt: ClassType<IssueService> | undefined;
 

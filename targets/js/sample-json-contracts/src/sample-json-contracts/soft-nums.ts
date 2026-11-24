@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
-import type { Color } from "./color";
+import type { Color } from "./color.js";
 
 let SoftNums$rt: ClassType<SoftNums> | undefined;
 

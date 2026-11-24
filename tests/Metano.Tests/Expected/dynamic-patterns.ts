@@ -1,5 +1,5 @@
 import { isInt32, isString } from "metano-runtime";
-import { Circle } from "./circle";
+import { Circle } from "./circle.js";
 
 export class Patterns {
   constructor() { }

@@ -1,6 +1,6 @@
 // shapes/circle.ts
 import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
-import { Shape, type ShapeKind } from "./shape";
+import { Shape, type ShapeKind } from "./shape.js";
 
 export class Circle extends Shape {
   constructor(kind: ShapeKind, readonly radius: number) {
@@ -45,14 +45,14 @@ export function assertCircle(value: unknown, message?: string): asserts value is
 }
 
 // shapes/index.ts
-export { assertCircle, Circle, isCircle } from "./circle";
-export { assertShape, isShape } from "./shape.guard";
-export { Shape, ShapeKind } from "./shape";
-export { assertSquare, isSquare, Square } from "./square";
+export { assertCircle, Circle, isCircle } from "./circle.js";
+export { assertShape, isShape } from "./shape.guard.js";
+export { Shape, ShapeKind } from "./shape.js";
+export { assertSquare, isSquare, Square } from "./square.js";
 
 // shapes/shape.guard.ts
-import { isCircle, type Circle } from "./circle";
-import { isSquare, type Square } from "./square";
+import { isCircle, type Circle } from "./circle.js";
+import { isSquare, type Square } from "./square.js";
 
 const variants = [
   () => isCircle,
@@ -107,7 +107,7 @@ export abstract class Shape {
 
 // shapes/square.ts
 import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
-import { Shape, type ShapeKind } from "./shape";
+import { Shape, type ShapeKind } from "./shape.js";
 
 export class Square extends Shape {
   constructor(kind: ShapeKind, readonly side: number) {

@@ -1,14 +1,14 @@
 import { Dictionary, List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type JsonReadOptions, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import { Clip } from "./clip";
-import { ImageClip } from "./image-clip";
-import { Level } from "./level";
-import { Reading } from "./reading";
-import { Shape } from "./shape";
-import { SilenceClip } from "./silence-clip";
-import { Square } from "./square";
-import { Stats } from "./stats";
+import { Clip } from "./clip.js";
+import { ImageClip } from "./image-clip.js";
+import { Level } from "./level.js";
+import { Reading } from "./reading.js";
+import { Shape } from "./shape.js";
+import { SilenceClip } from "./silence-clip.js";
+import { Square } from "./square.js";
+import { Stats } from "./stats.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

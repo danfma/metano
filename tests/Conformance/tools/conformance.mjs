@@ -274,9 +274,7 @@ async function runModule(runtime, module) {
   const base = join(work, "probes", isNode ? "dist" : "src");
   const fileOf = (name) => join(base, `${name}${isNode ? ".js" : ".ts"}`);
   const files = [fileOf(module), ...(preloads.get(module) ?? []).map(fileOf)];
-  const args = isNode
-    ? ["--import", join(toolsDir, "node-extensionless.mjs"), join(toolsDir, "run-probes.mjs"), ...files]
-    : [join(toolsDir, "run-probes.mjs"), ...files];
+  const args = [join(toolsDir, "run-probes.mjs"), ...files];
   const result = await runProcess(runtime, args, work);
   const rows = parseRows(result.stdout);
 

@@ -1,8 +1,8 @@
 import { isInt32 } from "metano-runtime";
-import { Circle } from "./circle";
-import { Node } from "./node";
-import type { Shape } from "./shape";
-import { Square } from "./square";
+import { Circle } from "./circle.js";
+import { Node } from "./node.js";
+import type { Shape } from "./shape.js";
+import { Square } from "./square.js";
 
 export class Geometry {
   constructor() { }

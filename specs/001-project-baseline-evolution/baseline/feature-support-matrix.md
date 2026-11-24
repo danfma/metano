@@ -178,11 +178,11 @@ Declarative array-tuple / callable shapes + tuple deconstruction (no hand-writte
 
 ## Node-resolvable import specifiers (#573)
 
-Planned. Generated internal imports become relative and `.js`-suffixed, so the output loads under plain Node ESM (22, 24, 26), Bun and TypeScript `nodenext` with no resolve hook, no tsconfig `paths` and no `package.json#imports`. `--import-alias` stays opt-in and writes a valid map (no bare `#`, `bun` condition first). Spec: [specs/004-configurable-import-alias/ Amendment A1](../../004-configurable-import-alias/spec.md) (FR-011–FR-017; FR-016 is a future extension option).
+Partial. Generated internal imports are relative and `.js`-suffixed, so the output loads under plain Node ESM (22, 24, 26), Bun and TypeScript `nodenext` with no resolve hook, no tsconfig `paths` and no `package.json#imports`. `--import-alias` stays opt-in and writes a valid map (no bare `#`, `bun` condition first). Spec: [specs/004-configurable-import-alias/ Amendment A1](../../004-configurable-import-alias/spec.md) (FR-011–FR-017; FR-016 is a future extension option).
 
 | Area | Feature | Target | Status | Code area | Test | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| Packaging | Relative `.js` specifiers for internal edges (004 FR-011–FR-013, FR-017) | TS | Planned | `Transformation/ModuleSpecifierRenderer.cs`, `TypeScript/AST/TsModuleSpecifier.cs` | — | Slice 1 (byte-identical refactor: structured local references, one renderer) precedes the flip. Cross-package and BCL specifiers are unchanged (FR-015). |
+| Packaging | Relative `.js` specifiers for internal edges (004 FR-011–FR-013, FR-017) | TS | Implemented | `Transformation/ModuleSpecifierRenderer.cs`, `TypeScript/AST/TsModuleSpecifier.cs`, `Transformation/LocalImportGraph.cs` | `tests/Metano.Tests/ImportAliasTests.cs`, `tests/Metano.Tests/CyclicReferenceTests.cs`, conformance rows `ModuleSpecifierProbes.*`, `AliasProbes.*` (Node, no resolve hook) | One renderer decides every specifier (`./x.js`, `../a/x.js`, barrels as `…/index.js`, `.tsx` targets as `.js`). Cross-package and BCL specifiers are unchanged (FR-015). The MS0005 chain shows package-relative file keys. The Node 22/24/26 packaging smoke (FR-012) is a later slice. |
 | Packaging | Opt-in `package.json#imports` map with Node-valid keys (004 FR-014) | TS | Planned | `Packaging/PackageJsonWriter.cs` | — | Written only with `--import-alias`; existing entries are never deleted. |
 
 ## C# 15 unions

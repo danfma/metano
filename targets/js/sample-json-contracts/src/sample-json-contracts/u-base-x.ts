@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { UBaseH } from "./u-base-h";
+import { UBaseH } from "./u-base-h.js";
 
 let UBaseX$rt: ClassType<UBaseX> | undefined;
 

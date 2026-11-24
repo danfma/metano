@@ -2,10 +2,10 @@
 import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import type { ClassType } from "metano-runtime";
 import { SerializerContext, type JsonReadOptions, type TypeSpec } from "metano-runtime/system/json";
-import { Clip } from "./clip";
-import { Group } from "./group";
-import { ImageClip } from "./image-clip";
-import { SilenceClip } from "./silence-clip";
+import { Clip } from "./clip.js";
+import { Group } from "./group.js";
+import { ImageClip } from "./image-clip.js";
+import { SilenceClip } from "./silence-clip.js";
 
 let OutOfOrderJsonContext$rt: ClassType<OutOfOrderJsonContext> | undefined;
 

@@ -5,8 +5,8 @@ export class Blob {
 
 // receivers/circle.ts
 import type { ClassType } from "metano-runtime";
-import type { IHasArea } from "./i-has-area";
-import { Shape } from "./shape";
+import type { IHasArea } from "./i-has-area.js";
+import { Shape } from "./shape.js";
 
 let Circle$rt: ClassType<Circle> | undefined;
 
@@ -66,7 +66,7 @@ export interface Dto {
 
 // receivers/gadget.ts
 import type { ClassType } from "metano-runtime";
-import type { IHasArea } from "./i-has-area";
+import type { IHasArea } from "./i-has-area.js";
 
 let Gadget$rt: ClassType<Gadget> | undefined;
 
@@ -100,16 +100,16 @@ export interface IHasArea {
 }
 
 // receivers/index.ts
-export { Blob } from "./blob";
-export { Circle } from "./circle";
-export { Color, Color$runtimeType } from "./color";
-export type { Dto } from "./dto";
-export { Gadget } from "./gadget";
-export type { IHasArea } from "./i-has-area";
-export { Point } from "./point";
-export { Probes } from "./probes";
-export { Shape } from "./shape";
-export { Square } from "./square";
+export { Blob } from "./blob.js";
+export { Circle } from "./circle.js";
+export { Color, Color$runtimeType } from "./color.js";
+export type { Dto } from "./dto.js";
+export { Gadget } from "./gadget.js";
+export type { IHasArea } from "./i-has-area.js";
+export { Point } from "./point.js";
+export { Probes } from "./probes.js";
+export { Shape } from "./shape.js";
+export { Square } from "./square.js";
 
 // receivers/point.ts
 import { HashCode, type ClassType } from "metano-runtime";
@@ -157,10 +157,10 @@ export class Point {
 // receivers/probes.ts
 import { getRuntimeType, Int32Type } from "metano-runtime";
 import type { Exception } from "metano-runtime/system/exceptions/exception";
-import { Color$runtimeType, type Color } from "./color";
-import type { IHasArea } from "./i-has-area";
-import { Point } from "./point";
-import type { Shape } from "./shape";
+import { Color$runtimeType, type Color } from "./color.js";
+import type { IHasArea } from "./i-has-area.js";
+import { Point } from "./point.js";
+import type { Shape } from "./shape.js";
 
 export class Probes {
   constructor() { }
@@ -224,7 +224,7 @@ export abstract class Shape {
 
 // receivers/square.ts
 import type { ClassType } from "metano-runtime";
-import { Shape } from "./shape";
+import { Shape } from "./shape.js";
 
 let Square$rt: ClassType<Square> | undefined;
 

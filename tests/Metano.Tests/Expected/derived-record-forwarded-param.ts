@@ -1,5 +1,5 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
-import { Clip } from "./clip";
+import { Clip } from "./clip.js";
 
 export class ImageClip extends Clip {
   constructor(readonly path: string, seconds: number) {

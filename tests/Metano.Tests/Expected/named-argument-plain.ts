@@ -1,9 +1,9 @@
-import { boxed } from "./boxes";
-import type { Engine } from "./engine";
-import { scale } from "./engine-extensions";
-import type { Holder } from "./holder";
-import type { Op } from "./op";
-import { Trace } from "./trace";
+import { boxed } from "./boxes.js";
+import { scale } from "./engine-extensions.js";
+import type { Engine } from "./engine.js";
+import type { Holder } from "./holder.js";
+import type { Op } from "./op.js";
+import { Trace } from "./trace.js";
 
 export class PlainCalls {
   constructor() { }

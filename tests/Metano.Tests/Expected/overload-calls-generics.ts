@@ -1,4 +1,4 @@
-import { Shapes } from "./shapes";
+import { Shapes } from "./shapes.js";
 
 export class Use {
   constructor() { }

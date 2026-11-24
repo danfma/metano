@@ -29,8 +29,8 @@ The script builds the TypeScript CLI and `metano-runtime`, transpiles the probes
 (`xpkg/Lib/ConformanceLib.csproj`), compiles the output with `tsgo` for Node, then runs every
 module of every probe class in its own Bun and Node process, each under a timeout
 (`CONFORMANCE_TIMEOUT_MS`, default 30000). Bun runs the generated `.ts` directly; Node runs the
-`tsgo` output through the extensionless-specifier hook in `tools/node-extensionless.mjs` (the
-same shim as the issue-tracker sample; #573 removes both). The exit code is 1 when a row
+`tsgo` output directly, with no resolve hook: the generated internal imports are relative
+`.js` specifiers (spec 004 FR-011, #573). The exit code is 1 when a row
 `CHANGED`, or when the C# sources changed since the .NET output was recorded.
 
 The probes are **not** part of `Metano.slnx`: `dotnet build Metano.slnx` never compiles them,

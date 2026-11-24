@@ -1,21 +1,21 @@
 import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { NotSupportedException, SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import { ALeaf } from "./a-leaf";
-import { AMid } from "./a-mid";
-import { AB } from "./ab";
-import { Clip } from "./clip";
-import { GBase } from "./g-base";
-import { GDer } from "./g-der";
-import { IgnA } from "./ign-a";
-import { IgnBase } from "./ign-base";
-import { ImageClip } from "./image-clip";
-import { IntA } from "./int-a";
-import { IntBase } from "./int-base";
-import { IntS } from "./int-s";
-import { SBase } from "./s-base";
-import { SDer } from "./s-der";
-import { SilenceClip } from "./silence-clip";
-import { Timeline } from "./timeline";
+import { ALeaf } from "./a-leaf.js";
+import { AMid } from "./a-mid.js";
+import { AB } from "./ab.js";
+import { Clip } from "./clip.js";
+import { GBase } from "./g-base.js";
+import { GDer } from "./g-der.js";
+import { IgnA } from "./ign-a.js";
+import { IgnBase } from "./ign-base.js";
+import { ImageClip } from "./image-clip.js";
+import { IntA } from "./int-a.js";
+import { IntBase } from "./int-base.js";
+import { IntS } from "./int-s.js";
+import { SBase } from "./s-base.js";
+import { SDer } from "./s-der.js";
+import { SilenceClip } from "./silence-clip.js";
+import { Timeline } from "./timeline.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

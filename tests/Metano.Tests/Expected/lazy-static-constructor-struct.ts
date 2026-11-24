@@ -1,5 +1,5 @@
 import { HashCode, typeInitializer } from "metano-runtime";
-import { Seed } from "./seed";
+import { Seed } from "./seed.js";
 
 export class Cell {
   static readonly #$init = /* @__PURE__ */ typeInitializer("Cell", () => {

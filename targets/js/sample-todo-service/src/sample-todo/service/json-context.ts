@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Priority, TodoItem } from "sample-todo/sample-todo";
-import type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "./todos";
+import type { CreateTodoDto, StoredTodo, UpdateTodoDto } from "./todos.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { IgnAbs } from "./ign-abs";
+import { IgnAbs } from "./ign-abs.js";
 
 let IgnAbsDer$rt: ClassType<IgnAbsDer> | undefined;
 

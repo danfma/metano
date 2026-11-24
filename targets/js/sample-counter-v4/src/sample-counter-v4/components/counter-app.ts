@@ -1,9 +1,9 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { ClassType } from "metano-runtime";
 import { Component, type VNode as InfernoElement } from "inferno";
-import type { EmptyProps } from "#/sample-counter-v4/inferno/empty-props";
-import { Counter } from "#/sample-counter-v4/models/counter";
-import { Button, Column, Heading, Row } from "#/sample-counter-v4/mvu/ui";
+import type { EmptyProps } from "../inferno/empty-props.js";
+import { Counter } from "../models/counter.js";
+import { Button, Column, Heading, Row } from "../mvu/ui.js";
 
 let CounterApp$rt: ClassType<CounterApp> | undefined;
 

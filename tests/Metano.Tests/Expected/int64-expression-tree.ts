@@ -1,6 +1,6 @@
 import { List } from "metano-runtime/system/collections";
 import { linq, toList, where } from "metano-runtime/system/linq";
-import type { Row } from "./row";
+import type { Row } from "./row.js";
 
 export class Rows {
   constructor() { }
