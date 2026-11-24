@@ -428,6 +428,7 @@ public static class IrBodyPrinter
                         .Append(": ");
                     PrintExpression(sb, a.Value);
                 }
+
                 sb.Append(')');
                 break;
             case IrTupleLiteral tuple:
@@ -643,6 +644,7 @@ public static class IrBodyPrinter
             PrintSubPatternAsBooleanExpression(sb, member, sub.Pattern);
             wroteAny = true;
         }
+
         if (!wroteAny)
             sb.Append("true");
     }
@@ -819,6 +821,7 @@ public static class IrBodyPrinter
                     sb.Append(FormatObjectPatternType(patternType));
 
                 sb.Append('(');
+
                 for (var i = 0; i < prop.Subpatterns.Count; i++)
                 {
                     if (i > 0)
