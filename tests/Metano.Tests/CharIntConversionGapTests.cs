@@ -148,6 +148,35 @@ public class CharIntConversionGapTests
     }
 
     [Test]
+    public async Task ConstantDecimalConversion_FoldsAndVariableUsesTheHelper()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            namespace Probe;
+
+            public static class Consts
+            {
+                public static decimal Third() => (decimal)(1.0 / 3.0);
+                public static decimal Tenth() => (decimal)0.1f;
+                public static decimal Variable(double d) => (decimal)d;
+            }
+            """
+        );
+
+        var ts = string.Join("\n", files.Values);
+
+        // The folded digits are whatever the host Roslyn computes, so only the shape is pinned.
+        await Assert.That(ts).Contains("static third(): Decimal {\n    return new Decimal(\"");
+        await Assert.That(ts).Contains("static tenth(): Decimal {\n    return new Decimal(\"");
+        await Assert.That(ts).Contains("return new Decimal(decimalTextFromDouble(d, 15));");
+        await Assert.That(ts).DoesNotContain("decimalTextFromDouble(0");
+    }
+
+    [Test]
     public async Task StringForeach_IndexesTheStringWithoutCopyingIt()
     {
         var files = TranspileHelper.Transpile(Source);

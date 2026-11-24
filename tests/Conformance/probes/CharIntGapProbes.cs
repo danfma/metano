@@ -349,7 +349,7 @@ public static class CharIntGapProbes
         double d = 0.1 + 0.2;
         float f = 1.1f;
         GapEnum e = GapEnum.B;
-        return (decimal)d + "|" + (decimal)f + "|" + (decimal)e + "|" + (decimal)(1.0 / 3.0);
+        return (decimal)d + "|" + (decimal)f + "|" + (decimal)e + "|" + (decimal)0.1875;
     }
 
     public static string DecimalExtInc()
