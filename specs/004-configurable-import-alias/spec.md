@@ -185,3 +185,104 @@ generated `package.json` import/export entries for malformed path segments.
   file may reuse the same setting.
 - Cross-package export/import resolution for referenced packages already works for
   nested output directories and is not changed by this feature.
+
+## Amendment A1 — Node-resolvable import specifiers (#573)
+
+**Added**: 2026-11-23. **Issue**: [#573](https://github.com/danfma/metano/issues/573).
+**Design**: `plans/wave-7/design/573-import-specifiers.md` (its FR-088–FR-092 map to
+FR-011–FR-015 below; its FR-093 maps to the future option FR-016). **Decisions**: wave 7, W7-3, and the
+maintainer's approval of the `.js` default for every target.
+
+### Why
+
+Generated code depended on a resolution map for its own internal edges: extensionless
+same-namespace imports (`./issue-id`) and `#/…` subpath imports for cross-namespace edges.
+No runtime resolves that shape on its own. Node ESM rejects extensionless relative
+specifiers (`ERR_MODULE_NOT_FOUND`), and Node 24.11 also rejects every `#/…` key.
+Bun 1.4 rejects every `#/…` key in `package.json#imports` and needs tsconfig `paths`.
+TypeScript `nodenext` reports TS2835. Vite follows the `import` condition into a `dist` that
+does not exist before the first build. A bare `#` key is invalid in Node, Bun and TypeScript.
+The isolated alias of this spec moved the problem but did not remove it.
+
+### Supersessions
+
+- **FR-002 is superseded by FR-011.** The alias no longer names the specifiers of
+  generated internal imports. It names only the convenience entries of FR-014.
+- **FR-004 is relaxed.** "No alias configured" no longer means "byte-identical to the
+  pre-feature output": the default output uses FR-011 specifiers. Still true: configuring
+  no alias writes no alias-scoped entries.
+- **FR-003 is narrowed by FR-014.** Entries are written only when an alias is configured.
+- **FR-009 holds.** Cycle detection runs on the structured file references, not on
+  specifier text, so it is independent of the alias and of the rendered text.
+- **FR-010 is extended by FR-017.** The specifier style joins the cache fingerprint.
+- The contract `contracts/generated-imports.md` § "In-file import specifiers" is
+  superseded by its Amendment A1 section.
+- Spec 005 FR-012/FR-013: the "import-alias" wording describes the opt-in entries only.
+  Spec 005 FR-016 (direct file imports, never through barrels) holds unchanged.
+
+### Functional Requirements (amendment)
+
+- **FR-011**: Every module specifier in generated TypeScript that targets another
+  generated module of the same package MUST be relative to the importing file (`./x`,
+  `../a/b/x`, always `/`) and MUST name a concrete file, never a directory. A leaf barrel
+  is named by its file (`./dir/index.js`). The suffix is always `.js`, for `.ts` and `.tsx`
+  targets alike. No subpath-alias specifier (`#…`) is emitted for an internal edge.
+- **FR-012**: With the default extension (`js`), generated output MUST load under plain
+  Node ESM after a standard `tsc`/`tsgo` build, with no resolve hook, loader flag or
+  bundler, and MUST type-check under `moduleResolution` `nodenext` and `bundler` with no
+  `paths` and no `allowImportingTsExtensions`. The gate runs on Node **22, 24 and 26**.
+- **FR-013**: Resolution of internal edges MUST NOT depend on `package.json#imports`,
+  tsconfig `paths`, `--package-root`, `--src-root` or the position of the output directory
+  in the host package.
+- **FR-014**: `package.json#imports` entries MUST be written only when an import alias is
+  configured. They MUST use only Node-valid keys (`#<alias>/*`, and `#<alias>` when a root
+  barrel exists; never a bare `#` or `#/*`), and MUST list a `bun` condition that targets
+  the `.ts` sources before `import`. Order: the source condition, `types`, `bun`,
+  `import`, `default`. Existing entries stay write-if-missing; entries an earlier run
+  wrote are never deleted.
+- **FR-015**: A cross-package consumer MUST resolve both the types (`nodenext`) and the
+  runtime (Node) of a producer's built output. Cross-package (`[EmitPackage]`) and BCL
+  imports keep their package-name specifiers and resolve through the producer's
+  `exports`; FR-011 does not change them.
+- **FR-016** (future option, not a requirement of this amendment): an
+  `--import-extension` setting could select another suffix at the slice 1 decision point:
+  `ts` (the target's real extension, `.ts` or `.tsx`; needs `allowImportingTsExtensions`
+  or TypeScript ≥ 5.7 `rewriteRelativeImportExtensions` in the consumer) or `none`
+  (extensionless, bundler resolution only; Node ESM fails). Not implemented. The renderer
+  keeps a single decision point so the setting stays cheap to add on demand.
+- **FR-017**: The specifier style (and any future extension setting) MUST be part of the cache
+  fingerprint, so a cache written under another style or extension is never reused.
+
+### Conformance and smoke plan
+
+- `AliasProbes.*` MUST MATCH under Node with no resolve hook; its known gap is removed.
+- New `ModuleSpecifierProbes`, run under Node with no hook: deep namespace → shallow;
+  sibling namespaces (`../`); root namespace ↔ nested; an `[EmitInFile]` co-located
+  target; a static initializer read across namespaces (load order); a type-only import.
+- The Node resolve hooks (`targets/js/sample-issue-tracker/test/node/extensionless-imports.ts`,
+  `tests/Conformance/tools/node-extensionless.mjs`) are deleted.
+- Packaging smoke (extends spec 007's script): pack `sample-todo` + `sample-todo-service`,
+  then run Node 22/24/26 and tsgo `nodenext` (`skipLibCheck: false`) against the tarballs.
+
+### Slice plan
+
+Each slice is green on the full gates and independently mergeable.
+
+1. **Refactor, byte-identical.** Local references become structured
+   (`TsLocalModule(FileKey)`), rendered by one target-side `ModuleSpecifierRenderer`
+   that the Printer calls. `LocalImportGraph` / `CyclicReferenceDetector` consume the
+   file keys. Goldens, samples and conformance unchanged.
+2. **Flip to relative `.js`** (FR-011–FR-013, FR-017). Regenerate goldens and samples,
+   delete both Node hooks, drop the `AliasProbes` gap, re-record Node conformance, add
+   `ModuleSpecifierProbes`.
+3. **Opt-in `imports` map** (FR-014). Writer tests, docs, migration notes.
+4. **Packaging smoke** (FR-012, FR-015) on Node 22/24/26.
+
+### Migration
+
+Regenerate; no tsconfig change is required for the default. Remove any Node resolve hook.
+Hand-written code that imports generated files through `#/…` keeps working through its
+existing `package.json` entries and tsconfig `paths` (never deleted), or switches to
+`--import-alias <name>`. Release class: `feat:` (minor). Nothing that resolves today stops
+resolving; the generated text changes. Webpack needs `resolve.extensionAlias` and Jest a
+`moduleNameMapper` for `.js` → `.ts`.

@@ -176,6 +176,15 @@ Declarative array-tuple / callable shapes + tuple deconstruction (no hand-writte
 | Interop | `[JsCallable]` interface → direct invocation | TS | Implemented | `Bridge/IrToTsExpressionBridge.cs`, `Annotations/TypeScript/JsCallableAttribute.cs` | `tests/Metano.Tests/JsCallableTranspileTests.cs` | `recv.Invoke(a)`→`recv(a)`; overloaded `Invoke`; erased; misuse → MS0028. |
 | Interop | Tuple deconstruction `var (a,b)=e` | TS | Implemented | `Extraction/IrStatementExtractor.cs`, `TypeScript/AST/TsDestructuringDeclaration.cs` | `tests/Metano.Tests/DeconstructionTranspileTests.cs` | → `const [a, b] = e`; discards supported; flat only. |
 
+## Node-resolvable import specifiers (#573)
+
+Planned. Generated internal imports become relative and `.js`-suffixed, so the output loads under plain Node ESM (22, 24, 26), Bun and TypeScript `nodenext` with no resolve hook, no tsconfig `paths` and no `package.json#imports`. `--import-alias` stays opt-in and writes a valid map (no bare `#`, `bun` condition first). Spec: [specs/004-configurable-import-alias/ Amendment A1](../../004-configurable-import-alias/spec.md) (FR-011–FR-017; FR-016 is a future extension option).
+
+| Area | Feature | Target | Status | Code area | Test | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Packaging | Relative `.js` specifiers for internal edges (004 FR-011–FR-013, FR-017) | TS | Planned | `Transformation/ModuleSpecifierRenderer.cs`, `TypeScript/AST/TsModuleSpecifier.cs` | — | Slice 1 (byte-identical refactor: structured local references, one renderer) precedes the flip. Cross-package and BCL specifiers are unchanged (FR-015). |
+| Packaging | Opt-in `package.json#imports` map with Node-valid keys (004 FR-014) | TS | Planned | `Packaging/PackageJsonWriter.cs` | — | Written only with `--import-alias`; existing entries are never deleted. |
+
 ## C# 15 unions
 
 Planned. A C# 15 `union` declaration is erased to a TS type union, case tests are typed, exhaustive switches end with a `never` check, and JSON matches .NET 11 STJ. Spec: [specs/010-csharp-unions/](../../010-csharp-unions/spec.md) (issue #304). Diagnostics `MS0038`–`MS0043` are reserved.

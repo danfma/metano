@@ -52,3 +52,31 @@ the parent, alias `contracts`:
 4. **Well-formed paths (FR-008)**: no doubled path separators at any depth.
 5. **Cycle detection (FR-009)**: a circular reference is reported (diagnostic
    MS0005) whether or not an alias is set.
+
+## Amendment A1 — relative specifiers (#573, spec FR-011–FR-015)
+
+Supersedes § "In-file import specifiers" and narrows § "package.json `imports` entries".
+
+| Case | Specifier |
+|------|-----------|
+| Same namespace | `"./issue-id.js"` |
+| Other namespace | `"../../shared-kernel/user-id.js"` |
+| JSX (`.tsx`) target | `"./view.js"` |
+| Leaf barrel line | `export { A } from "./a.js";` |
+| Root barrel (`--namespace-barrels`) | `import * as x from "./app/domain/index.js";` |
+| External package (`[EmitPackage]`, BCL) | `"pkg/sub"` (unchanged) |
+
+The alias never appears in generated specifiers. `package.json#imports` is written only when
+`--import-alias <name>` is set:
+
+```jsonc
+"#contracts/*": {
+  "source":  "./src/abc/contracts/*.ts",
+  "types":   "./dist/abc/contracts/*.d.ts",
+  "bun":     "./src/abc/contracts/*.ts",
+  "import":  "./dist/abc/contracts/*.js",
+  "default": "./src/abc/contracts/*.ts"
+}
+```
+
+No bare `#` and no `#/*` key is written.
