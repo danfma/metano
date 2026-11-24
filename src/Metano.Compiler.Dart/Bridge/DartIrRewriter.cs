@@ -31,6 +31,10 @@ public sealed class DartIrRewriter
     private readonly DeclarativeMappingRegistry _registry;
     private readonly IReadOnlySet<string> _flattenedStaticClassNames;
     private readonly IDartOverloadNames _overloads;
+    private readonly IReadOnlyDictionary<
+        (string DeclaringType, string MemberName),
+        string
+    > _privateMemberRenames;
 
     /// <param name="registry">Declarative BCL mappings.</param>
     /// <param name="flattenedStaticClassNames">Stable full names of the static classes this target
@@ -40,19 +44,30 @@ public sealed class DartIrRewriter
     /// <param name="overloads">The claim results overload call sites resolve through;
     /// omitted, every call site keeps its source spelling
     /// (<see cref="NoDartOverloadNames"/>).</param>
+    /// <param name="privateMemberRenames">Dart <c>_</c>-prefixed names for private module
+    /// variables whose C# names did not start with an underscore.</param>
     public DartIrRewriter(
         DeclarativeMappingRegistry registry,
         IReadOnlySet<string>? flattenedStaticClassNames = null,
-        IDartOverloadNames? overloads = null
+        IDartOverloadNames? overloads = null,
+        IReadOnlyDictionary<
+            (string DeclaringType, string MemberName),
+            string
+        >? privateMemberRenames = null
     )
     {
         _registry = registry;
         _flattenedStaticClassNames = flattenedStaticClassNames ?? new HashSet<string>();
         _overloads = overloads ?? NoDartOverloadNames.Instance;
+        _privateMemberRenames = privateMemberRenames
+            ?? new Dictionary<(string DeclaringType, string MemberName), string>();
     }
 
     public IrExpression? Rewrite(IrExpression? expression) =>
         expression is null ? null : RewriteExpression(expression);
+
+    internal string? ConstructorNameOf(IrOverloadRef overload) =>
+        _overloads.ConstructorNameOf(overload);
 
     public IReadOnlyList<IrStatement>? Rewrite(IReadOnlyList<IrStatement>? body)
     {
@@ -297,18 +312,32 @@ public sealed class DartIrRewriter
         var rewrittenArgs = call.Arguments.Select(RewriteArgument).ToList();
         var rewrittenCall = call with { Target = rewrittenTarget, Arguments = rewrittenArgs };
 
-        return IrToDartBclMapper.TryMapCall(rewrittenCall, _registry) ?? rewrittenCall;
+        if (IrToDartBclMapper.TryMapCall(rewrittenCall, _registry) is { } mapped)
+            return mapped is IrCallExpression mappedCall
+                ? DartEvaluationOrder.BindCall(mappedCall)
+                : mapped;
+
+        return DartEvaluationOrder.BindCall(rewrittenCall);
     }
 
     private IrExpression RewriteMemberAccess(IrMemberAccess access)
     {
         var rewrittenTarget = RewriteExpression(access.Target);
 
-        var rewritten = access with
+        var origin = ClearNoContainerUnlessFlattened(access.Origin);
+
+        if (
+            origin is { EmittedName: null }
+            && _privateMemberRenames.TryGetValue(
+                (origin.DeclaringTypeFullName, access.MemberName),
+                out var privateName
+            )
+        )
         {
-            Target = rewrittenTarget,
-            Origin = ClearNoContainerUnlessFlattened(access.Origin),
-        };
+            origin = origin with { EmittedName = privateName };
+        }
+
+        var rewritten = access with { Target = rewrittenTarget, Origin = origin };
 
         var mapped = IrToDartBclMapper.TryMapMemberAccess(rewritten, _registry);
         return mapped ?? WithFastPath(rewritten, access.Overload);
@@ -349,14 +378,17 @@ public sealed class DartIrRewriter
     {
         var arguments = construction.Arguments.Select(RewriteArgument).ToList();
 
-        return
+        if (
             construction.Overload is { } overload
             && _overloads.ConstructorNameOf(overload.Target) is { } constructorName
-            ? new DartNamedConstruction(construction.Type, constructorName, arguments)
-            : construction with
-            {
-                Arguments = arguments,
-            };
+        )
+            return DartEvaluationOrder.BindNamedConstruction(
+                new DartNamedConstruction(construction.Type, constructorName, arguments),
+                overload.EvaluationOrder,
+                construction.ExpandedParamsIndex
+            );
+
+        return DartEvaluationOrder.BindNew(construction with { Arguments = arguments });
     }
 
     private IrMemberOrigin? ClearNoContainerUnlessFlattened(IrMemberOrigin? origin) =>

@@ -105,7 +105,10 @@ public class DartOverloadNamingTests
             import 'package:metano_runtime/metano_runtime.dart' show HashCode;
 
             class Point {
-              Point.fromXY(this.x, this.y);
+              Point.fromXY(this.x, this.y) {
+                this._x = x;
+                this._y = y;
+              }
 
               Point.fromV(int v) : this.fromXY(v, v);
 
@@ -314,13 +317,13 @@ public class DartOverloadNamingTests
             class Run {
               static int next() => 1;
 
-              static double a(K k) => k.scaleDN(2, Run.next());
+              static double a(K k) => ((K __target, int __arg1, double __arg0) => __target.scaleDN(__arg0, __arg1))(k, Run.next(), 2);
 
               static int b(K k) => k.countNItems(Run.next(), []);
 
               static int c() {
                 var c = Inner(1);
-                return c.mAB(3, (c = Inner(2)).tag);
+                return ((Inner __target, int __arg1, int __arg0) => __target.mAB(__arg0, __arg1))(c, (c = Inner(2)).tag, 3);
               }
 
               static int d(Inner i) => i.mAB(2, 1);
@@ -404,45 +407,7 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert
-            .That(diagnostics.Select(d => (d.Code, d.Message, FirstLineOf(d))))
-            .IsEquivalentTo([
-                (
-                    DiagnosticCodes.UnsupportedFeature,
-                    ReorderMessage,
-                    "public static int Construct() => new Pair(b: Next(), a: Next()).V;"
-                ),
-                (
-                    DiagnosticCodes.UnsupportedFeature,
-                    ReorderMessage,
-                    "public static int Call(Pair p) => p.Two(b: Next(), a: Next());"
-                ),
-                (
-                    DiagnosticCodes.UnsupportedFeature,
-                    ReorderMessage,
-                    "public static int Receiver(Holder h) => h.Inner.Two(b: Next(), a: 3);"
-                ),
-                (
-                    DiagnosticCodes.UnsupportedFeature,
-                    ReorderMessage,
-                    "return p.Two(b: Next(), a: x);"
-                ),
-                (
-                    DiagnosticCodes.UnsupportedFeature,
-                    ReorderMessage,
-                    "public static double Conditional(Pair p) => p.Scale(n: Next(), d: Flag() ? 2 : 3);"
-                ),
-                (
-                    DiagnosticCodes.UnsupportedFeature,
-                    ReorderMessage,
-                    "public static async Task<int> Awaited(Pair p) => p.Two(b: Next(), a: await NextAsync());"
-                ),
-                (
-                    DiagnosticCodes.UnsupportedFeature,
-                    ReorderMessage,
-                    "return p.Two(b: bump(), a: x);"
-                ),
-            ]);
+        await Assert.That(diagnostics).IsEmpty();
 
         await AssertFile(
             files,
@@ -498,25 +463,25 @@ public class DartOverloadNamingTests
 
               static Future<int> nextAsync() => Task.fromResult(1);
 
-              static int construct() => Pair.fromAB(Use.next(), Use.next()).v;
+              static int construct() => ((int __arg1, int __arg0) => Pair.fromAB(__arg0, __arg1))(Use.next(), Use.next()).v;
 
-              static int call(Pair p) => p.twoAB(Use.next(), Use.next());
+              static int call(Pair p) => ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(p, Use.next(), Use.next());
 
-              static int receiver(Holder h) => h.inner.twoAB(3, Use.next());
+              static int receiver(Holder h) => ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(h.inner, Use.next(), 3);
 
               static int localRead(Pair p) {
                 var x = 5;
-                return p.twoAB(x, Use.next());
+                return ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(p, Use.next(), x);
               }
 
-              static double conditional(Pair p) => p.scaleDN(Use.flag() ? 2 : 3, Use.next());
+              static double conditional(Pair p) => ((Pair __target, int __arg1, double __arg0) => __target.scaleDN(__arg0, __arg1))(p, Use.next(), Use.flag() ? 2 : 3);
 
-              static Future<int> awaited(Pair p) async => p.twoAB(await Use.nextAsync(), Use.next());
+              static Future<int> awaited(Pair p) async => ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(p, Use.next(), await Use.nextAsync());
 
               static int captured(Pair p) {
                 int x = 0;
                 int Function() bump = () => ++x;
-                return p.twoAB(x, bump());
+                return ((Pair __target, int __arg1, int __arg0) => __target.twoAB(__arg0, __arg1))(p, bump(), x);
               }
             }
 
@@ -1427,23 +1392,7 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert
-            .That(diagnostics.Select(d => (d.Code, d.Message, FirstLineOf(d))))
-            .IsEquivalentTo([
-                (
-                    DiagnosticCodes.UnsupportedFeature,
-                    ReorderMessage,
-                    "public static int Call(Engine e) => e.Single(d: Next(), f: Next());"
-                ),
-                (
-                    DiagnosticCodes.UnsupportedFeature,
-                    ReorderMessage,
-                    "public static Pair Construct() => new Pair(d: Next(), f: Next());"
-                ),
-            ]);
-
-        // One report per call: no extraction site reports the same call twice.
-        await Assert.That(diagnostics.Count).IsEqualTo(2);
+        await Assert.That(diagnostics).IsEmpty();
 
         await AssertFile(
             files,
@@ -1455,13 +1404,13 @@ public class DartOverloadNamingTests
             class Use {
               static int next() => 1;
 
-              static int call(Engine e) => e.single(f: Use.next(), d: Use.next());
+              static int call(Engine e) => ((Engine __target, int __arg1, int __arg0) => __target.single(__arg0, __arg1))(e, Use.next(), Use.next());
 
-              static Pair construct() => Pair(f: Use.next(), d: Use.next());
+              static Pair construct() => ((int __arg1, int __arg0) => Pair(__arg0, __arg1))(Use.next(), Use.next());
 
-              static int oneEvaluation(Engine e) => e.single(f: 4, d: Use.next());
+              static int oneEvaluation(Engine e) => e.single(4, Use.next());
 
-              static int inOrder(Engine e) => e.single(f: Use.next(), d: Use.next());
+              static int inOrder(Engine e) => e.single(Use.next(), Use.next());
             }
 
             """
@@ -1498,7 +1447,7 @@ public class DartOverloadNamingTests
             class Use {
               static String tag(String tag) => tag;
 
-              static Exception make() => ((receiver$temp$0) => ((receiver$temp$1) => ArgumentException(message: receiver$temp$1, paramName: receiver$temp$0))(Use.tag('q')))(Use.tag('p'));
+              static Exception make() => ((receiver$temp$0) => ((receiver$temp$1) => ArgumentException(receiver$temp$1, receiver$temp$0))(Use.tag('q')))(Use.tag('p'));
             }
 
             """
@@ -1542,6 +1491,87 @@ public class DartOverloadNamingTests
         );
 
         await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task BaseConstructorSelection_EmitsSuperInitializer_AndAnalyzes_572()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class BaseBox
+            {
+                public int Size;
+                public BaseBox(int size) { Size = size; }
+                public BaseBox(string label) { Size = label.Length; }
+            }
+
+            [Transpile]
+            public class DerivedBox : BaseBox
+            {
+                public DerivedBox(int size) : base(size) { }
+                public DerivedBox(string label) : base(label) { }
+            }
+
+            [Transpile]
+            public class OptBase
+            {
+                public int Value;
+                public OptBase(int x = 10) { Value = x; }
+            }
+
+            [Transpile]
+            public class OptDerived : OptBase
+            {
+                public OptDerived(int x) : base(x) { }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+
+        var derived = files["derived_box.dart"];
+        var optDerived = files["opt_derived.dart"];
+
+        await Assert.That(derived).Contains(": super.fromSize(size)");
+        await Assert.That(derived).Contains(": super.fromLabel(label)");
+        await Assert.That(optDerived).Contains(": super(x)");
+
+        await DartToolchain.AssertAnalyzesAsync(files);
+    }
+
+    [Test]
+    public async Task ModuleFastPathsAcrossFiles_DisambiguateSharedNames_572()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class ModA
+            {
+                public static int Foo(int x) => x;
+                public static int Foo(string s) => s.Length;
+            }
+
+            [Transpile, NoContainer]
+            public static class ModB
+            {
+                public static int Foo(int x) => x + 1;
+                public static int Foo(string s) => s.Length + 1;
+            }
+
+            [Transpile]
+            public static class Consumer
+            {
+                public static int Run() => ModA.Foo(1) + ModB.Foo(2);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.OverloadNameShadowed))
+            .IsTrue();
+
+        await DartToolchain.AssertAnalyzesAsync(files);
     }
 
     private static string FirstLineOf(MetanoDiagnostic diagnostic) =>

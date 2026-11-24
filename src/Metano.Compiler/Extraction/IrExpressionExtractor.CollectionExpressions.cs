@@ -399,9 +399,26 @@ public sealed partial class IrExpressionExtractor
         _semantic.GetTypeInfo(spreadOperand).Type switch
         {
             { SpecialType: SpecialType.System_String } => IrSpreadSource.String,
-            INamedTypeSymbol named when IsMapTarget(named) => IrSpreadSource.Map,
+            { } type when IsMapSpreadOperand(type) => IrSpreadSource.Map,
             _ => IrSpreadSource.Iterable,
         };
+
+    private static bool IsMapSpreadOperand(ITypeSymbol type)
+    {
+        if (type is ITypeParameterSymbol typeParameter)
+            return typeParameter.ConstraintTypes.Any(IsMapSpreadOperand);
+
+        if (type is not INamedTypeSymbol named)
+            return false;
+
+        for (var current = named; current is not null; current = current.BaseType)
+        {
+            if (IsMapTarget(current))
+                return true;
+        }
+
+        return named.AllInterfaces.Any(IsMapTarget);
+    }
 
     private IrTypeRef ToIrTypeArgument(INamedTypeSymbol type, int index) =>
         IrTypeRefMapper.Map(type.TypeArguments[index], _originResolver, _target);

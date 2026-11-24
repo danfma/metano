@@ -8,5 +8,6 @@ namespace Metano.Compiler.Extraction;
 /// </summary>
 internal sealed record BoundOverloadCall(
     IReadOnlyList<IrArgument> Arguments,
-    IrSelectedOverload Overload
+    IrSelectedOverload Overload,
+    int? ExpandedParamsIndex = null
 );

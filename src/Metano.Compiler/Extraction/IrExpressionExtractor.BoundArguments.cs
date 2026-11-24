@@ -60,9 +60,14 @@ public sealed partial class IrExpressionExtractor
         if (evaluationOrder is not null && call is not null)
             ReportIfEvaluationOrderIsLost(call, bindable);
 
+        var expandedParamsIndex = bindable
+            .FirstOrDefault(argument => argument.ArgumentKind == ArgumentKind.ParamArray)
+            ?.Parameter?.Ordinal;
+
         return new BoundOverloadCall(
             inParameterOrder.Select(argument => argument.Value).ToList(),
-            new IrSelectedOverload(target, evaluationOrder)
+            new IrSelectedOverload(target, evaluationOrder),
+            expandedParamsIndex
         );
     }
 
@@ -209,11 +214,15 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     internal void ReportIfThisChainOrderIsLost(ConstructorInitializerSyntax thisCall)
     {
+        if (_context.KeepsArgumentEvaluationOrder)
+            return;
+
         if (
             _semantic.GetOperation(thisCall) is IInvocationOperation invocation
             && IsReordered(invocation.Arguments)
+            && CountOrderSensitiveEvaluations(invocation, invocation.Arguments) >= 2
         )
-            ReportIfEvaluationOrderIsLost(invocation, invocation.Arguments);
+            ReportLostEvaluationOrder(invocation);
     }
 
     /// <summary>
@@ -242,12 +251,16 @@ public sealed partial class IrExpressionExtractor
         ImmutableArray<IArgumentOperation> arguments
     )
     {
-        if (_context.KeepsArgumentEvaluationOrder || IsBaseInitializer(call))
+        if (_context.KeepsCallEvaluationOrder || IsBaseInitializer(call))
             return;
 
         if (CountOrderSensitiveEvaluations(call, arguments) < 2)
             return;
 
+        ReportLostEvaluationOrder(call);
+    }
+
+    private void ReportLostEvaluationOrder(IOperation call) =>
         ExtractionDiagnostics.Report(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Warning,
@@ -259,7 +272,6 @@ public sealed partial class IrExpressionExtractor
                 call.Syntax.GetLocation()
             )
         );
-    }
 
     /// <summary>
     /// A <c>: base(...)</c> call or a primary-constructor base call.
@@ -474,7 +486,15 @@ public sealed partial class IrExpressionExtractor
         {
             ArgumentKind.ParamArray => ExpandedParamsElementsOf(argument),
             ArgumentKind.ParamCollection => [ExpandedParamsCollectionOf(argument)],
-            ArgumentKind.DefaultValue => [new IrArgument(BoundDefaultOf(argument))],
+            ArgumentKind.DefaultValue =>
+            [
+                new IrArgument(
+                    BoundDefaultOf(argument),
+                    Type: argument.Parameter is { } defaultParam
+                        ? MapTypeWithReifiedScope(defaultParam.Type, argument.Syntax)
+                        : null
+                ),
+            ],
             _ => [ExplicitBoundArgumentOf(argument)],
         };
 
@@ -498,7 +518,15 @@ public sealed partial class IrExpressionExtractor
                 },
                 argumentSyntax.Expression
             ),
-            ExpressionSyntax expression => (new IrArgument(Extract(expression)), expression),
+            ExpressionSyntax expression => (
+                new IrArgument(
+                    Extract(expression),
+                    Type: argument.Parameter is { } extParam
+                        ? MapTypeWithReifiedScope(extParam.Type, expression)
+                        : null
+                ),
+                expression
+            ),
             _ => throw new InvalidCastException(
                 $"An explicit argument has unexpected syntax '{argument.Syntax?.Kind()}'."
             ),
@@ -524,7 +552,18 @@ public sealed partial class IrExpressionExtractor
         var elements = ((IArrayCreationOperation)argument.Value).Initializer?.ElementValues
             ?? ImmutableArray<IOperation>.Empty;
 
-        return elements.Select(element => new IrArgument(Extract(ElementSyntaxOf(element))));
+        var elementType = (argument.Parameter?.Type as IArrayTypeSymbol)?.ElementType;
+
+        return elements.Select(element =>
+        {
+            var syntax = ElementSyntaxOf(element);
+            var type = elementType ?? element.Type;
+
+            return new IrArgument(
+                Extract(syntax),
+                Type: type is not null ? MapTypeWithReifiedScope(type, syntax) : null
+            );
+        });
     }
 
     /// <summary>

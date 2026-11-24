@@ -24,6 +24,9 @@ public sealed class DartOverloadClaimsRegistry : IDartOverloadNames
         SymbolEqualityComparer.Default
     );
 
+    private readonly HashSet<string> _moduleTakenNames = new(StringComparer.Ordinal);
+    private readonly object _moduleClaimsLock = new();
+
     public DartOverloadClaimsRegistry(Compilation compilation, IrExtractionContext extraction)
     {
         _compilation = compilation;
@@ -69,10 +72,13 @@ public sealed class DartOverloadClaimsRegistry : IDartOverloadNames
 
         if (DartTypeShapes.LowersToTopLevelFunctions(type))
         {
-            return DartFlatClaimPass.Run(
-                type.Name,
-                IrModuleFunctionExtractor.Extract(type, _shapeExtraction)
-            );
+            var functions = IrModuleFunctionExtractor.Extract(type, _shapeExtraction);
+            var variables = IrModuleVariableExtractor.Extract(type, _shapeExtraction);
+
+            lock (_moduleClaimsLock)
+            {
+                return DartFlatClaimPass.Run(type.Name, functions, variables, _moduleTakenNames);
+            }
         }
 
         if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))

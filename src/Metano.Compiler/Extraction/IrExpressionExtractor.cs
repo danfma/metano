@@ -1181,7 +1181,7 @@ public sealed partial class IrExpressionExtractor
             designator
         )
         {
-            InputType = type is null ? null : PatternInputType(recursive),
+            InputType = PatternInputType(recursive),
         };
     }
 
@@ -1211,11 +1211,22 @@ public sealed partial class IrExpressionExtractor
             current = PropertySubpattern(
                 segments[index],
                 new IrPropertyPattern(Type: null, [current])
+                {
+                    InputType = MemberTypeOf(segments[index]),
+                }
             );
         }
 
         return current;
     }
+
+    private IrTypeRef? MemberTypeOf(SimpleNameSyntax member) =>
+        _semantic.GetSymbolInfo(member).Symbol switch
+        {
+            IPropertySymbol prop => IrTypeRefMapper.Map(prop.Type, _originResolver, _target),
+            IFieldSymbol field => IrTypeRefMapper.Map(field.Type, _originResolver, _target),
+            _ => null,
+        };
 
     private IrPropertySubpattern PropertySubpattern(SimpleNameSyntax member, IrPattern pattern)
     {
@@ -2829,7 +2840,11 @@ public sealed partial class IrExpressionExtractor
             return folded;
 
         var origin = BuildOrigin(_semantic.GetSymbolInfo(member.Node).Symbol);
-        var memberAccess = new IrMemberAccess(target, name, origin);
+        var receiverType = _semantic.GetTypeInfo(member.Receiver).Type;
+        var targetType = receiverType is not null
+            ? MapTypeWithReifiedScope(receiverType, member.Receiver)
+            : null;
+        var memberAccess = new IrMemberAccess(target, name, origin) { TargetType = targetType };
         return WrapMethodGroupForDelegate(member.Node, symbol, memberAccess);
     }
 
@@ -3356,6 +3371,7 @@ public sealed partial class IrExpressionExtractor
             HasExplicitTypeArguments = WritesTypeArguments(inv),
             ReifiedTypeArguments = reifiedCallArgs,
             ReifiedArgumentPosition = reifiedPosition,
+            ExpandedParamsIndex = ExpandedParamsIndexOf(symbol, args),
         };
     }
 
@@ -3578,8 +3594,10 @@ public sealed partial class IrExpressionExtractor
         )
         {
             Overload = MarkSynthesized(bound.Overload, symbol),
+            HasExplicitTypeArguments = WritesTypeArguments(inv),
             ReifiedTypeArguments = reifiedCallArgs,
             ReifiedArgumentPosition = reifiedPosition,
+            ExpandedParamsIndex = bound.ExpandedParamsIndex,
         };
     }
 
@@ -3694,8 +3712,10 @@ public sealed partial class IrExpressionExtractor
         )
         {
             Overload = MarkSynthesized(bound.Overload, symbol),
+            HasExplicitTypeArguments = WritesTypeArguments(inv),
             ReifiedTypeArguments = reifiedCallArgs,
             ReifiedArgumentPosition = reifiedPosition,
+            ExpandedParamsIndex = bound.ExpandedParamsIndex,
         };
     }
 
@@ -4328,8 +4348,23 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrArgument ExtractArgument(ArgumentSyntax argument) =>
         argument.RefOrOutKeyword.IsKind(SyntaxKind.None)
-            ? new(Extract(argument.Expression), argument.NameColon?.Name.Identifier.ValueText)
+            ? new(
+                Extract(argument.Expression),
+                argument.NameColon?.Name.Identifier.ValueText,
+                Type: ArgumentTypeOf(argument)
+            )
             : ExtractByReferenceArgument(argument);
+
+    private IrTypeRef? ArgumentTypeOf(ArgumentSyntax argument)
+    {
+        if (_semantic.GetOperation(argument) is IArgumentOperation { Parameter: { } parameter })
+            return MapTypeWithReifiedScope(parameter.Type, argument);
+
+        var type = _semantic.GetTypeInfo(argument.Expression).ConvertedType
+            ?? _semantic.GetTypeInfo(argument.Expression).Type;
+
+        return type is not null ? MapTypeWithReifiedScope(type, argument) : null;
+    }
 
     /// <summary>
     /// Lowers an extension-method call site (classic <c>(this T)</c>
@@ -4419,9 +4454,15 @@ public sealed partial class IrExpressionExtractor
             };
         }
 
+        var receiverType = _semantic.GetTypeInfo(extensionAccess.Receiver).Type;
         IReadOnlyList<IrArgument> helperArgs =
         [
-            new IrArgument(Extract(extensionAccess.Receiver)),
+            new IrArgument(
+                Extract(extensionAccess.Receiver),
+                Type: receiverType is not null
+                    ? MapTypeWithReifiedScope(receiverType, extensionAccess.Receiver)
+                    : null
+            ),
             .. extensionArgs,
         ];
 
@@ -5403,6 +5444,18 @@ public sealed partial class IrExpressionExtractor
         return built;
     }
 
+    private static int? ExpandedParamsIndexOf(
+        IMethodSymbol? symbol,
+        IReadOnlyList<IrArgument> args
+    ) =>
+        symbol is { Parameters: [.., { IsParams: true, Type: IArrayTypeSymbol }] }
+        && !(
+            args.Count == symbol.Parameters.Length
+            && (args[^1].IsSpread || args[^1].Value is IrLiteral { Kind: IrLiteralKind.Null })
+        )
+            ? symbol.Parameters.Length - 1
+            : null;
+
     private static bool HasNamedArgument(IReadOnlyList<IrArgument> args) =>
         args.Any(argument => argument.Name is not null);
 
@@ -5534,6 +5587,7 @@ public sealed partial class IrExpressionExtractor
                     ReportedConstructionOrderOf(creationSyntax, sourceArgs, exception)
                 )
                 : null,
+            ExpandedParamsIndex = overload is null ? ExpandedParamsIndexOf(ctor, args) : null,
         };
 
         var constructed = chain?.Bind(BindExceptionArguments(creation))
@@ -5814,7 +5868,15 @@ public sealed partial class IrExpressionExtractor
         if (byName.TryGetValue(parameter.Name, out var named))
             return [named];
 
-        return parameter.IsParams ? [] : [new IrArgument(BuildDefaultArgument(parameter))];
+        return parameter.IsParams
+            ? []
+            :
+            [
+                new IrArgument(
+                    BuildDefaultArgument(parameter),
+                    Type: IrTypeRefMapper.Map(parameter.Type, _originResolver, _target)
+                ),
+            ];
     }
 
     private IrExpression BuildDefaultArgument(IParameterSymbol parameter)

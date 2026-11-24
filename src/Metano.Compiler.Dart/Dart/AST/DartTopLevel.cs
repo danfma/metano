@@ -60,6 +60,38 @@ public sealed record DartFunction(
     bool IsAsync = false
 ) : DartTopLevel;
 
+/// <summary>
+/// A top-level Dart variable declaration emitted for a static field or
+/// auto-property of a containerless static class (<c>[NoContainer]</c>).
+/// </summary>
+public sealed record DartTopLevelVariable(
+    string Name,
+    DartType Type,
+    bool IsFinal = false,
+    bool IsLate = false,
+    Metano.Compiler.IR.IrExpression? Initializer = null
+) : DartTopLevel;
+
+/// <summary>
+/// A top-level Dart getter emitted for a computed static property of a
+/// containerless static class.
+/// </summary>
+public sealed record DartTopLevelGetter(
+    string Name,
+    DartType ReturnType,
+    IReadOnlyList<Metano.Compiler.IR.IrStatement>? Body = null
+) : DartTopLevel;
+
+/// <summary>
+/// A top-level Dart setter emitted for a computed static property with a
+/// setter body on a containerless static class.
+/// </summary>
+public sealed record DartTopLevelSetter(
+    string Name,
+    DartType ValueType,
+    IReadOnlyList<Metano.Compiler.IR.IrStatement>? Body = null
+) : DartTopLevel;
+
 /// <summary>A single enum value. <see cref="Value"/> is the constructor arguments string
 /// for enhanced enums (e.g., <c>"low"</c>) or null for plain enums.</summary>
 public sealed record DartEnumValue(string Name, string? Value = null);
@@ -80,7 +112,8 @@ public sealed record DartConstructor(
     bool IsConst = false,
     IReadOnlyList<Metano.Compiler.IR.IrStatement>? Body = null,
     string? Name = null,
-    DartConstructorRedirect? Redirect = null
+    DartConstructorRedirect? Redirect = null,
+    DartSuperCall? SuperCall = null
 );
 
 /// <summary>
@@ -88,6 +121,15 @@ public sealed record DartConstructor(
 /// or <c>this(arguments)</c> when the name is <c>null</c>.
 /// </summary>
 public sealed record DartConstructorRedirect(
+    string? ConstructorName,
+    IReadOnlyList<Metano.Compiler.IR.IrArgument> Arguments
+);
+
+/// <summary>
+/// A base constructor initializer: <c>super.<see cref="ConstructorName"/>(arguments)</c>,
+/// or <c>super(arguments)</c> when the name is <c>null</c>.
+/// </summary>
+public sealed record DartSuperCall(
     string? ConstructorName,
     IReadOnlyList<Metano.Compiler.IR.IrArgument> Arguments
 );

@@ -82,7 +82,7 @@ public static class IrBodyPrinter
                     sb.Append(FormatType(vd.Type)).Append(' ');
                 else
                     sb.Append("var ");
-                sb.Append(vd.Name);
+                sb.Append(IrToDartNamingPolicy.ToParameterName(vd.Name));
                 if (vd.Initializer is not null)
                 {
                     sb.Append(" = ");
@@ -142,7 +142,7 @@ public static class IrBodyPrinter
                     sb.Append(FormatType(fe.VariableType)).Append(' ');
                 else
                     sb.Append("var ");
-                sb.Append(fe.Variable).Append(" in ");
+                sb.Append(IrToDartNamingPolicy.ToParameterName(fe.Variable)).Append(" in ");
                 PrintExpression(sb, fe.Collection);
                 sb.AppendLine(") {");
                 foreach (var s in fe.Body)
@@ -173,6 +173,7 @@ public static class IrBodyPrinter
                 foreach (var s in ts.Body)
                     PrintStatement(sb, s, indentLevel + 1);
                 sb.Append(indent).Append('}');
+
                 if (ts.Catches is not null)
                 {
                     foreach (var c in ts.Catches)
@@ -181,12 +182,17 @@ public static class IrBodyPrinter
                         {
                             sb.Append(" on ").Append(FormatType(c.ExceptionType));
                         }
-                        sb.Append(" catch (").Append(c.VariableName ?? "e").AppendLine(") {");
+
+                        sb.Append(" catch (")
+                            .Append(IrToDartNamingPolicy.ToParameterName(c.VariableName ?? "e"))
+                            .AppendLine(") {");
+
                         foreach (var s in c.Body)
                             PrintStatement(sb, s, indentLevel + 1);
                         sb.Append(indent).Append('}');
                     }
                 }
+
                 if (ts.Finally is not null)
                 {
                     sb.AppendLine(" finally {");
@@ -278,7 +284,9 @@ public static class IrBodyPrinter
                 break;
             case IrSequenceExpression sequence:
                 // Dart has no comma operator: `(() { effect; return result; })()`.
-                sb.Append("(()");
+                var awaitsSequence = IrEvaluationTraits.ContainsAwait(sequence);
+
+                sb.Append(awaitsSequence ? "await (() async" : "(()");
                 PrintClosureBody(sb, sequence);
                 sb.Append(")()");
                 break;
@@ -298,6 +306,7 @@ public static class IrBodyPrinter
                 PrintReceiver(sb, call.Target);
                 if (call.IsOptional)
                     sb.Append("?.call");
+                PrintCallTypeArguments(sb, call);
                 sb.Append('(');
                 PrintArgs(sb, call.Arguments);
                 sb.Append(')');
@@ -415,7 +424,8 @@ public static class IrBodyPrinter
                     if (i > 0)
                         sb.Append(", ");
                     var a = withExpr.Assignments[i];
-                    sb.Append(IrToDartNamingPolicy.ToParameterName(a.MemberName)).Append(": ");
+                    sb.Append(a.EmittedName ?? IrToDartNamingPolicy.ToParameterName(a.MemberName))
+                        .Append(": ");
                     PrintExpression(sb, a.Value);
                 }
                 sb.Append(')');
@@ -535,7 +545,7 @@ public static class IrBodyPrinter
     {
         var printed = DartNumericConversions.Unwrap(expression);
 
-        if (IsAwaitedLet(printed))
+        if (IsAwaitedClosure(printed))
             return true;
 
         return printed
@@ -550,9 +560,10 @@ public static class IrBodyPrinter
             || DartNumericLiterals.IsNegative(printed);
     }
 
-    /// <summary>A let-binding whose body awaits, which prints as an <c>await</c> expression (see <see cref="PrintLet"/>).</summary>
-    private static bool IsAwaitedLet(IrExpression expression) =>
-        expression is IrLetExpression let && IrEvaluationTraits.ContainsAwait(let.Body);
+    /// <summary>A let-binding or sequence whose closure body awaits, which prints as an <c>await</c> expression (see <see cref="PrintLet"/>).</summary>
+    private static bool IsAwaitedClosure(IrExpression expression) =>
+        (expression is IrLetExpression let && IrEvaluationTraits.ContainsAwait(let.Body))
+        || (expression is IrSequenceExpression seq && IrEvaluationTraits.ContainsAwait(seq));
 
     /// <summary>
     /// Dart renders <c>x is Foo</c> natively. A type-with-designator (<c>x is Foo f</c>)
@@ -615,7 +626,20 @@ public static class IrBodyPrinter
             // The member name stays in its original C# casing; `IrMemberAccess`
             // is rendered via the body printer which in turn calls the naming
             // policy, so we don't camelCase it twice here.
-            var member = new IrMemberAccess(value, sub.MemberName);
+            var member = new IrMemberAccess(
+                value,
+                sub.MemberName,
+                Origin: sub.EmittedName is { } emitted
+                    ? new IrMemberOrigin(
+                        "",
+                        sub.MemberName,
+                        false,
+                        false,
+                        false,
+                        EmittedName: emitted
+                    )
+                    : null
+            );
             PrintSubPatternAsBooleanExpression(sb, member, sub.Pattern);
             wroteAny = true;
         }
@@ -760,8 +784,9 @@ public static class IrBodyPrinter
         sb.Append("...");
         if (slicePattern is null)
             return;
+
         if (slicePattern is IrVarPattern varPat)
-            sb.Append(varPat.Designator.Name);
+            sb.Append(IrToDartNamingPolicy.ToParameterName(varPat.Designator.Name));
         else
             PrintSwitchPattern(sb, slicePattern);
     }
@@ -775,31 +800,46 @@ public static class IrBodyPrinter
                 break;
             case IrTypePattern typePat:
                 sb.Append(FormatType(typePat.Type));
+
                 if (typePat.Designator is not null)
-                    sb.Append(' ').Append(typePat.Designator.Name);
+                    sb.Append(' ')
+                        .Append(IrToDartNamingPolicy.ToParameterName(typePat.Designator.Name));
+
                 break;
             case IrVarPattern varPat:
-                sb.Append("var ").Append(varPat.Designator.Name);
+                sb.Append("var ")
+                    .Append(IrToDartNamingPolicy.ToParameterName(varPat.Designator.Name));
+
                 break;
             case IrDiscardPattern:
                 sb.Append('_');
                 break;
             case IrPropertyPattern prop:
-                if (prop.Type is not null)
-                    sb.Append(FormatType(prop.Type));
+                if (ObjectPatternTypeOf(prop) is { } patternType)
+                    sb.Append(FormatObjectPatternType(patternType));
+
                 sb.Append('(');
                 for (var i = 0; i < prop.Subpatterns.Count; i++)
                 {
                     if (i > 0)
                         sb.Append(", ");
                     // Dart 3 object pattern subpatterns: `getterName: pattern`.
-                    sb.Append(IrToDartNamingPolicy.ToParameterName(prop.Subpatterns[i].MemberName))
+                    sb.Append(
+                            prop.Subpatterns[i].EmittedName
+                                ?? IrToDartNamingPolicy.ToParameterName(
+                                    prop.Subpatterns[i].MemberName
+                                )
+                        )
                         .Append(": ");
                     PrintSwitchPattern(sb, prop.Subpatterns[i].Pattern);
                 }
+
                 sb.Append(')');
+
                 if (prop.Designator is not null)
-                    sb.Append(' ').Append(prop.Designator.Name);
+                    sb.Append(' ')
+                        .Append(IrToDartNamingPolicy.ToParameterName(prop.Designator.Name));
+
                 break;
             case IrRelationalPattern rel:
                 // Dart 3 relational patterns match C#'s shape syntactically:
@@ -856,15 +896,35 @@ public static class IrBodyPrinter
                 if (pos.Type is not null)
                     sb.Append(FormatType(pos.Type));
                 sb.Append('(');
+
                 for (var i = 0; i < pos.Elements.Count; i++)
                 {
                     if (i > 0)
                         sb.Append(", ");
+
+                    if (
+                        pos.Type is not null
+                        && pos.ElementMembers is { } elementMembers
+                        && i < elementMembers.Count
+                        && elementMembers[i] is { } member
+                    )
+                    {
+                        sb.Append(
+                                member.EmittedName
+                                    ?? IrToDartNamingPolicy.ToParameterName(member.Name)
+                            )
+                            .Append(": ");
+                    }
+
                     PrintSwitchPattern(sb, pos.Elements[i]);
                 }
+
                 sb.Append(')');
+
                 if (pos.Designator is not null)
-                    sb.Append(' ').Append(pos.Designator.Name);
+                    sb.Append(' ')
+                        .Append(IrToDartNamingPolicy.ToParameterName(pos.Designator.Name));
+
                 break;
             default:
                 sb.Append("/* TODO: unsupported pattern ")
@@ -1034,7 +1094,7 @@ public static class IrBodyPrinter
     /// </summary>
     private static void PrintLet(StringBuilder sb, IrLetExpression let)
     {
-        var awaits = IsAwaitedLet(let);
+        var awaits = IsAwaitedClosure(let);
 
         sb.Append(awaits ? "await ((" : "((")
             .Append(IrToDartNamingPolicy.ToParameterName(let.Name))
@@ -1168,10 +1228,9 @@ public static class IrBodyPrinter
     }
 
     /// <summary>
-    /// Dart supports named arguments natively (<c>foo(x, priority: p)</c>),
-    /// so when an <see cref="IrArgument"/> carries a source-side name we
-    /// render it verbatim. Positional arguments (no name) lower to the
-    /// value only.
+    /// Dart's transpiled declarations use positional parameters only, so
+    /// arguments print as values in parameter order (named arguments were
+    /// already reordered and defaults filled by extraction).
     /// </summary>
     private static void PrintArgs(StringBuilder sb, IReadOnlyList<IrArgument> args)
     {
@@ -1179,10 +1238,7 @@ public static class IrBodyPrinter
         {
             if (i > 0)
                 sb.Append(", ");
-            var arg = args[i];
-            if (arg.Name is not null)
-                sb.Append(IrToDartNamingPolicy.ToParameterName(arg.Name)).Append(": ");
-            PrintExpression(sb, arg.Value);
+            PrintExpression(sb, args[i].Value);
         }
     }
 
@@ -1218,11 +1274,8 @@ public static class IrBodyPrinter
         }
     }
 
-    // Only functions lose the qualifier: the Dart bridge emits no module-level variables
-    // for [NoContainer] data members, so those keep their (currently unresolved) qualifier.
     private static bool IsContainerlessFunction(IrMemberOrigin origin) =>
-        origin
-            is { IsStatic: true, IsDeclaringTypeNoContainer: true, IsTranspiledDataMember: false };
+        origin is { IsStatic: true, IsDeclaringTypeNoContainer: true };
 
     /// <summary>
     /// A positional element read of a C# tuple, which Dart models as a record:
@@ -1356,9 +1409,37 @@ public static class IrBodyPrinter
     /// never as an emitted name.
     /// </summary>
     private static string MemberNameOf(IrMemberAccess access) =>
-        access.Origin is { ParameterTypes: not null, EmittedName: { } emittedName }
+        access.Origin is { IsStringEnumMember: false, EmittedName: { } emittedName }
             ? emittedName
             : IrToDartNamingPolicy.ToParameterName(access.MemberName);
+
+    private static void PrintCallTypeArguments(StringBuilder sb, IrCallExpression call)
+    {
+        if (call is not { HasExplicitTypeArguments: true, TypeArguments: { Count: > 0 } typeArgs })
+            return;
+
+        sb.Append('<');
+
+        for (var i = 0; i < typeArgs.Count; i++)
+        {
+            if (i > 0)
+                sb.Append(", ");
+
+            sb.Append(FormatType(typeArgs[i]));
+        }
+
+        sb.Append('>');
+    }
+
+    private static IrTypeRef? ObjectPatternTypeOf(IrPropertyPattern prop) =>
+        prop.Type ?? prop.InputType;
+
+    private static string FormatObjectPatternType(IrTypeRef type)
+    {
+        var nonNull = type is IrNullableTypeRef nullable ? nullable.Inner : type;
+
+        return nonNull is IrDynamicTypeRef or IrUnknownTypeRef ? "Object" : FormatType(nonNull);
+    }
 
     private static string FormatType(IrTypeRef type) =>
         DartTypeFormatter.Format(IrToDartTypeMapper.Map(type));

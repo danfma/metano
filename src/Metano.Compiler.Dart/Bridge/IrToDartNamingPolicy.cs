@@ -27,6 +27,9 @@ public static class IrToDartNamingPolicy
 
     public static string ToParameterName(string irName) => ToCamelCase(irName);
 
+    public static string ToPromotedMemberName(IrConstructorParameter parameter) =>
+        parameter.EmittedName ?? ToParameterName(parameter.Parameter.Name);
+
     /// <summary>
     /// The candidate of one overload of a dispatched method group (spec 013
     /// FR-001, FR-022): the group's C# name in camelCase plus the suffix the

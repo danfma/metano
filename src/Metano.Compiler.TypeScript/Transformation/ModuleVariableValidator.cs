@@ -386,7 +386,16 @@ public sealed class ModuleVariableValidator(
                 && !SymbolHelper.HasIgnore(member, TargetLanguage.TypeScript)
             )
             .SelectMany(member => member.DeclaringSyntaxReferences)
-            .Select(reference => reference.GetSyntax());
+            .Select(reference => reference.GetSyntax())
+            .SelectMany<SyntaxNode, SyntaxNode>(syntax =>
+                syntax is TypeDeclarationSyntax typeDecl
+                    ? new SyntaxNode?[]
+                    {
+                        typeDecl.ParameterList,
+                        typeDecl.BaseList,
+                    }.OfType<SyntaxNode>()
+                    : [syntax]
+            );
 
     private static IEnumerable<ExpressionSyntax> InitializerValues(ISymbol member) =>
         member
