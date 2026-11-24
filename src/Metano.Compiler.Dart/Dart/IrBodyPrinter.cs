@@ -419,13 +419,16 @@ public static class IrBodyPrinter
                 // every record class by IrToDartClassBridge).
                 PrintReceiver(sb, withExpr.Source);
                 sb.Append(".copyWith(");
+
                 for (var i = 0; i < withExpr.Assignments.Count; i++)
                 {
                     if (i > 0)
                         sb.Append(", ");
                     var a = withExpr.Assignments[i];
+
                     sb.Append(a.EmittedName ?? IrToDartNamingPolicy.ToParameterName(a.MemberName))
                         .Append(": ");
+
                     PrintExpression(sb, a.Value);
                 }
 
@@ -641,6 +644,7 @@ public static class IrBodyPrinter
                     )
                     : null
             );
+
             PrintSubPatternAsBooleanExpression(sb, member, sub.Pattern);
             wroteAny = true;
         }
@@ -834,6 +838,7 @@ public static class IrBodyPrinter
                                 )
                         )
                         .Append(": ");
+
                     PrintSwitchPattern(sb, prop.Subpatterns[i].Pattern);
                 }
 
