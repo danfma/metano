@@ -202,8 +202,8 @@ export abstract class ImmutableListBuilderCore<T> implements IList<T>, IReadOnly
   }
 
   /** Zero-copy live read-only view over the builder's backing array (FR-056). */
-  asJsArray(): readonly T[] {
-    return this._list.asJsArray();
+  asReadOnlyJsArray(): readonly T[] {
+    return this._list.asReadOnlyJsArray();
   }
 
   toJSON(): T[] {

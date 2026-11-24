@@ -251,9 +251,10 @@ export abstract class ImmutableListCore<T, Self extends ImmutableListCore<T, Sel
   /**
    * Read-only view over `_items`: zero-copy when this version owns the full array
    * (detaching tip-append ownership so later `add` calls copy rather than mutating
-   * the view); falls back to a shallow copy when an older version shares a grown array.
+   * the view); falls back to a shallow copy when an older version shares a grown
+   * store (values are immutable, though array identity is not stable across calls).
    */
-  asJsArray(): readonly T[] {
+  asReadOnlyJsArray(): readonly T[] {
     if (this._items.length !== this._count) {
       return this.visible();
     }

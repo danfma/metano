@@ -181,7 +181,7 @@
         "upperValue",
         "ImmutableArray`1"
       ],
-      "$comment": "Stage 011h (3553 B + 10% = 3908 B) had 0 B headroom left by #737 (pre-#737 baseline bun 3908 B). #737 adds +66 B for length + zero-copy asJsArray() with tip detachment: bun 3974 B / esbuild 3907 B + 1% = 4014 B."
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3553 B / esbuild 3509 B (proposed 2048 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used. #737 (Round 1): had 0 B headroom on origin/main (bun 3908 B); length + zero-copy asReadOnlyJsArray() with tip detachment measured bun 3976 B / esbuild 3910 B (+68 B, maxGzip 4014 B)."
     },
     {
       "name": "ImmutableHashSet alone",
@@ -212,7 +212,7 @@
         "upperValue",
         "ImmutableList`1"
       ],
-      "$comment": "Stage 011h (3959 B + 10% = 4355 B) had 34 B headroom left by #737 (pre-#737 baseline bun 4321 B). #737 adds +68 B for length + zero-copy asJsArray() with tip detachment: bun 4389 B / esbuild 4321 B + 1% = 4433 B."
+      "$comment": "Stage 011h compiler half, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3959 B / esbuild 3898 B. A sibling of ImmutableList over the internal ImmutableListCore (W4-66), so it carries no ImmutableList text; NFR-008 reason as the other 011h rows, plus IndexOutOfRangeException. #737 (Round 1): had 34 B headroom on origin/main (bun 4321 B); length + zero-copy asReadOnlyJsArray() with tip detachment measured bun 4392 B / esbuild 4324 B (+71 B, maxGzip 4433 B)."
     },
     {
       "name": "ImmutableArrayBuilder alone",

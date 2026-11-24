@@ -29,7 +29,8 @@ public static class IrTypeRefEquivalence
             // int[] render different types.
             (IrCollectionTypeRef l, IrCollectionTypeRef r) => l.Kind == r.Kind
                 && AreEquivalent(l.TypeArguments, r.TypeArguments),
-            (IrArrayTypeRef l, IrArrayTypeRef r) => AreEquivalent(l.ElementType, r.ElementType),
+            (IrArrayTypeRef l, IrArrayTypeRef r) => l.IsReadOnly == r.IsReadOnly
+                && AreEquivalent(l.ElementType, r.ElementType),
             (IrSetTypeRef l, IrSetTypeRef r) => AreEquivalent(l.ElementType, r.ElementType),
             (IrIterableTypeRef l, IrIterableTypeRef r) => AreEquivalent(
                 l.ElementType,

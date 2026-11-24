@@ -187,17 +187,20 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
   }
 
   /**
-   * Zero-copy read-only view over the source's backing array when backed by an array
-   * or a list exposing `asJsArray()`; falls back to a shallow copy for custom `IList` sources.
+   * Read-only view over the source's backing array (spec 011 FR-056):
+   * zero-copy and live ONLY for runtime array-backed sources (a native array,
+   * a `List`, or a source exposing `asReadOnlyJsArray()`). For a custom `IList`
+   * source without `asReadOnlyJsArray()`, returns a **shallow snapshot copy**
+   * (not live; allocates a new array on each call).
    */
-  asJsArray(): readonly T[] {
+  asReadOnlyJsArray(): readonly T[] {
     const source = this._source;
 
     if (isArraySource(source)) {
       return source;
     }
 
-    return hasAsJsArray(source) ? source.asJsArray() : Array.from(source);
+    return hasAsReadOnlyJsArray(source) ? source.asReadOnlyJsArray() : Array.from(source);
   }
 
   toJSON(): T[] {
@@ -234,6 +237,8 @@ function isArraySource<T>(source: IList<T> | readonly T[]): source is readonly T
   return Array.isArray(source);
 }
 
-function hasAsJsArray<T>(source: IList<T>): source is IList<T> & { asJsArray(): readonly T[] } {
-  return typeof (source as { asJsArray?: unknown }).asJsArray === "function";
+function hasAsReadOnlyJsArray<T>(
+  source: IList<T>,
+): source is IList<T> & { asReadOnlyJsArray(): readonly T[] } {
+  return typeof (source as { asReadOnlyJsArray?: unknown }).asReadOnlyJsArray === "function";
 }

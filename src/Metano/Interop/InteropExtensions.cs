@@ -28,10 +28,12 @@ public static class InteropExtensions
     /// <summary>
     /// The list's backing array itself, as the native JavaScript array (spec 011
     /// FR-056): no copy, so a write through either side is seen by the other.
-    /// TypeScript emits <c>asJsArray(list)</c>, which throws
-    /// <c>ArgumentNullException</c> for <c>null</c>. On .NET it is a copy, so a
-    /// write through it is not seen by the list, a documented divergence;
-    /// TypeScript only (<c>MS0051</c> elsewhere).
+    /// Contract (mirroring <c>CollectionsMarshal.AsSpan</c>): do not add or remove
+    /// elements through the writable view while the <see cref="List{T}"/> is being
+    /// enumerated (it bypasses <c>_version</c>). TypeScript emits
+    /// <c>asJsArray(list)</c>, which throws <c>ArgumentNullException</c> for
+    /// <c>null</c>. On .NET it is a copy, so a write through it is not seen by
+    /// the list, a documented divergence; TypeScript only (<c>MS0051</c> elsewhere).
     /// </summary>
     [TargetSpecific(Metano.Annotations.TargetLanguage.TypeScript)]
     public static JsArray<T> AsJsArray<T>(this List<T> list) =>
@@ -39,22 +41,46 @@ public static class InteropExtensions
 
     /// <summary>
     /// A read-only view over the list's backing array (spec 011 FR-056):
-    /// zero-copy for array-backed list kinds (reflects later mutations of a
-    /// mutable source; read-only for the consumer), falling back to a shallow
-    /// copy when no exact backing array exists. TypeScript emits
-    /// <c>asJsArray(list)</c> typed <c>readonly T[]</c>, which throws
-    /// <c>ArgumentNullException</c> for <c>null</c> (mutating the view or
-    /// assigning it to a mutable <c>T[]</c> does not type-check in TypeScript).
-    /// On .NET it returns a copy; TypeScript only (<c>MS0051</c> elsewhere).
+    /// zero-copy and live for a <see cref="List{T}"/> (reflects later mutations;
+    /// read-only for the consumer). TypeScript emits
+    /// <c>asReadOnlyJsArray(list)</c> typed <c>readonly T[]</c>, which throws
+    /// <c>ArgumentNullException</c> for <c>null</c>. On .NET it wraps
+    /// <paramref name="list"/> without copying; TypeScript only (<c>MS0051</c>
+    /// elsewhere).
     /// </summary>
     [TargetSpecific(Metano.Annotations.TargetLanguage.TypeScript)]
-    public static JsArray<T> AsJsArray<T>(this IReadOnlyList<T> list) =>
-        new(list ?? throw new ArgumentNullException(nameof(list)));
+    public static ReadOnlyJsArray<T> AsReadOnlyJsArray<T>(this List<T> list) =>
+        ReadOnlyJsArray<T>.Wrap(list ?? throw new ArgumentNullException(nameof(list)));
+
+    /// <summary>
+    /// A read-only view over the list's backing array (spec 011 FR-056):
+    /// zero-copy and live for runtime array-backed list kinds (reflects later
+    /// mutations of a mutable source; array identity is not stable for older
+    /// <c>ImmutableList</c>/<c>ImmutableArray</c> versions sharing a grown store),
+    /// and a shallow snapshot copy when wrapping a <c>ReadOnlyCollection</c> over
+    /// a custom <c>IList</c> without <c>asReadOnlyJsArray()</c>. TypeScript emits
+    /// <c>asReadOnlyJsArray(list)</c> typed <c>readonly T[]</c>, which throws
+    /// <c>ArgumentNullException</c> for <c>null</c>. On .NET it wraps
+    /// <paramref name="list"/> without copying; TypeScript only (<c>MS0051</c>
+    /// elsewhere).
+    /// </summary>
+    [TargetSpecific(Metano.Annotations.TargetLanguage.TypeScript)]
+    public static ReadOnlyJsArray<T> AsReadOnlyJsArray<T>(this IReadOnlyList<T> list) =>
+        ReadOnlyJsArray<T>.Wrap(list ?? throw new ArgumentNullException(nameof(list)));
 
     /// <summary>
     /// A new native array copied from the list (spec 011 FR-055): TypeScript
     /// emits <c>list.toArray()</c>, as for <c>ToArray()</c>.
     /// </summary>
     [TargetSpecific(Metano.Annotations.TargetLanguage.TypeScript)]
-    public static JsArray<T> ToJsArray<T>(this List<T> list) => new(list);
+    public static JsArray<T> ToJsArray<T>(this List<T> list) =>
+        new(list ?? throw new ArgumentNullException(nameof(list)));
+
+    /// <summary>
+    /// A new mutable native array copied from the read-only list (spec 011
+    /// FR-055): TypeScript emits <c>list.toArray()</c>.
+    /// </summary>
+    [TargetSpecific(Metano.Annotations.TargetLanguage.TypeScript)]
+    public static JsArray<T> ToJsArray<T>(this IReadOnlyList<T> list) =>
+        new(list ?? throw new ArgumentNullException(nameof(list)));
 }

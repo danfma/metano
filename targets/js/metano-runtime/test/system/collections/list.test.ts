@@ -344,6 +344,7 @@ describe("List views and copies", () => {
 
     expect(list.get(0)).toBe(1);
     expect(list.length).toBe(2);
+    expect(list.asReadOnlyJsArray()).toBe(list.asJsArray());
     expect(list.asSpan()).toBe(list.asJsArray());
     expect(list.asReadOnlySpan()).toBe(list.asJsArray());
     list.asJsArray().push(3);

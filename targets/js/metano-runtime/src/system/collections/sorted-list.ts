@@ -522,7 +522,7 @@ export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
   }
 
   /** Zero-copy live read-only view over the list's backing key/value array (FR-056). */
-  asJsArray(): readonly T[] {
+  asReadOnlyJsArray(): readonly T[] {
     return this.items();
   }
 

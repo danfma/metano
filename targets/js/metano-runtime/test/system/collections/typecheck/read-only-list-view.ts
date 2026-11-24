@@ -1,6 +1,7 @@
 import {
   asJsArray,
   asList,
+  asReadOnlyJsArray,
   type ImmutableArray,
   type ImmutableArrayBuilder,
   type ImmutableList,
@@ -10,11 +11,12 @@ import {
   type ReadOnlyList,
   type SortedListView,
 } from "#/system/collections";
+
 import { type Equal, expectType } from "../../../typecheck/type-assertions.ts";
 
 expectType<Equal<IReadOnlyList<number>["length"], number>>();
 expectType<Equal<ReturnType<IReadOnlyList<number>["toArray"]>, number[]>>();
-expectType<Equal<ReturnType<IReadOnlyList<number>["asJsArray"]>, readonly number[]>>();
+expectType<Equal<ReturnType<IReadOnlyList<number>["asReadOnlyJsArray"]>, readonly number[]>>();
 
 declare const list: List<number>;
 declare const ro: IReadOnlyList<number>;
@@ -44,10 +46,12 @@ void asInterfaceFromListBuilder;
 void asInterfaceFromArrayBuilder;
 
 const mutableView = asJsArray(list);
-const roViewFromHelper = asJsArray(ro);
-const roViewFromNative = asJsArray(nativeReadOnly);
+const roViewFromList = asReadOnlyJsArray(list);
+const roViewFromHelper = asReadOnlyJsArray(ro);
+const roViewFromNative = asReadOnlyJsArray(nativeReadOnly);
 
 expectType<Equal<typeof mutableView, number[]>>();
+expectType<Equal<typeof roViewFromList, readonly number[]>>();
 expectType<Equal<typeof roViewFromHelper, readonly number[]>>();
 expectType<Equal<typeof roViewFromNative, readonly number[]>>();
 
@@ -57,10 +61,13 @@ const castReadOnly =
 void castReadOnly;
 
 // @ts-expect-error — consumer view from IReadOnlyList is read-only
-ro.asJsArray().push(1);
+ro.asReadOnlyJsArray().push(1);
 
-// @ts-expect-error — free helper over IReadOnlyList returns readonly T[]
-asJsArray(ro).push(1);
+// @ts-expect-error — free helper returns readonly T[]
+asReadOnlyJsArray(ro).push(1);
+
+// @ts-expect-error — free helper over List returns readonly T[]
+asReadOnlyJsArray(list).push(1);
 
 // @ts-expect-error — length mirrors count and is read-only
 ro.length = 0;

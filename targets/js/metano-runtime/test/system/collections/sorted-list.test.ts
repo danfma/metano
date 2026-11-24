@@ -229,10 +229,10 @@ describe("SortedList", () => {
     expect(SortedList.$runtimeType.test(sample())).toBe(true);
   });
 
-  test("views expose length, toArray and zero-copy live asJsArray", () => {
+  test("views expose length, toArray and zero-copy live asReadOnlyJsArray", () => {
     const list = sample();
-    const keysView = list.keys.asJsArray();
-    const valuesView = list.values.asJsArray();
+    const keysView = list.keys.asReadOnlyJsArray();
+    const valuesView = list.values.asReadOnlyJsArray();
 
     expect(list.keys.length).toBe(2);
     expect(list.values.length).toBe(2);

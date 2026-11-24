@@ -488,6 +488,11 @@ export class List<T> implements IList<T>, IReadOnlyList<T> {
     return this._items;
   }
 
+  /** The backing array itself, typed read-only (FR-056). */
+  asReadOnlyJsArray(): readonly T[] {
+    return this._items;
+  }
+
   /** The backing array itself, typed as a length-keeping view (FR-056). */
   asSpan(): Span<T> {
     return this._items;

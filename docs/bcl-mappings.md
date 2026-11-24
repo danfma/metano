@@ -212,6 +212,7 @@ runtime classes only.
 | `char.Is*` (11 predicates), `Convert.ToDouble` (int-sized, `double`, `float`, `decimal`, `bool`, `string`), `decimal.ToDouble` | mapped |
 | `int.CompareTo` | `int`, `uint`, `double`, `float` give -1/0/1 (NaN first); `short`, `ushort`, `byte`, `sbyte`, `char` give the difference, as .NET |
 | LINQ `ElementAt`, `ElementAtOrDefault`, `DefaultIfEmpty`, `Distinct(comparer)` | `elementAt`, `elementAtOrDefault`, `defaultIfEmpty`, `distinct(comparer)` |
+| `ReadOnlyJsArray<T>`, `list.AsReadOnlyJsArray()` / `ro.AsReadOnlyJsArray()`, `ro.ToJsArray()` (#737) | `readonly T[]`, `asReadOnlyJsArray(x)` (live zero-copy view for runtime array-backed lists; shallow snapshot copy for `ReadOnlyCollection<T>` over a custom `IList<T>`), `ro.toArray()` (writable copy); TS-only (`MS0051` elsewhere). Do not add/remove via `list.AsJsArray()` while enumerating `list` (bypasses `_version`) |
 
 Not mapped, reported with `MS0001`: `ElementAt(Index)`, `Array.IndexOf(a, v, start, count)`,
 `Array.Sort(a, index, length)`. Known gaps: `(decimal)double` emits the raw double; a record has no

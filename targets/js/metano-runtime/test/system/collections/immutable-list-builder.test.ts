@@ -140,9 +140,9 @@ describe("ImmutableListBuilder (W4-11 condition 4: never alias)", () => {
     );
   });
 
-  test("length, toArray and zero-copy live asJsArray", () => {
+  test("length, toArray and zero-copy live asReadOnlyJsArray", () => {
     const builder = new ImmutableListBuilder([1, 2]);
-    const view = builder.asJsArray();
+    const view = builder.asReadOnlyJsArray();
     const snapshot = builder.toArray();
 
     expect(builder.length).toBe(2);

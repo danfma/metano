@@ -139,9 +139,9 @@ describe("ImmutableArrayBuilder", () => {
     expect(getRuntimeType(new ImmutableArrayBuilder())).toBe(ImmutableArrayBuilder.$runtimeType);
   });
 
-  test("length, toArray and zero-copy live asJsArray", () => {
+  test("length, toArray and zero-copy live asReadOnlyJsArray", () => {
     const builder = new ImmutableArrayBuilder([1, 2]);
-    const view = builder.asJsArray();
+    const view = builder.asReadOnlyJsArray();
     const snapshot = builder.toArray();
 
     expect(builder.length).toBe(2);

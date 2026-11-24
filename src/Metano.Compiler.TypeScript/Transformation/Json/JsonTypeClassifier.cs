@@ -223,7 +223,11 @@ internal static class JsonTypeClassifier
         if (named.IsSetLike() && named.TypeArguments.Length > 0)
             return JsonPropertyKind.HashSet;
 
-        if (IsSequence(named, fullName) || fullName.StartsWith("Metano.Interop.JsArray<"))
+        if (
+            IsSequence(named, fullName)
+            || fullName.StartsWith("Metano.Interop.JsArray<")
+            || fullName.StartsWith("Metano.Interop.ReadOnlyJsArray<")
+        )
             return JsonPropertyKind.Array;
 
         if (named.TypeKind == TypeKind.Enum)

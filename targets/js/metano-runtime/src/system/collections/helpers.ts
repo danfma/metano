@@ -46,21 +46,32 @@ export function asArray(value: unknown): unknown[] | null {
 
 /**
  * `list.AsJsArray()`: the backing array itself; `ArgumentNullException` for `null`.
- * Returns a mutable `T[]` for a `List<T>` and a read-only view `readonly T[]` for
- * any other `IReadOnlyList<T>` (or a native array passed through `IReadOnlyList<T>`).
+ * Contract (mirroring `CollectionsMarshal.AsSpan`): do not add or remove elements
+ * through the writable view while the `List` is being enumerated (it bypasses `_version`).
  */
-export function asJsArray<T>(list: List<T> | null | undefined): T[];
-export function asJsArray<T>(
-  list: IReadOnlyList<T> | readonly T[] | null | undefined,
-): readonly T[];
-export function asJsArray<T>(
+export function asJsArray<T>(list: List<T> | null | undefined): T[] {
+  if (list === null || list === undefined) {
+    throwArgumentNull("list");
+  }
+
+  return list._items;
+}
+
+/**
+ * `list.AsReadOnlyJsArray()`: a read-only view `readonly T[]` over the list's
+ * backing array; `ArgumentNullException` for `null`. Zero-copy and live for
+ * runtime array-backed list kinds (and native arrays); a shallow snapshot copy
+ * when `ReadOnlyList` wraps a custom `IList` without `asReadOnlyJsArray()`, and
+ * for older immutable versions sharing a grown store.
+ */
+export function asReadOnlyJsArray<T>(
   list: IReadOnlyList<T> | readonly T[] | null | undefined,
 ): readonly T[] {
   if (list === null || list === undefined) {
     throwArgumentNull("list");
   }
 
-  return Array.isArray(list) ? list : (list as IReadOnlyList<T>).asJsArray();
+  return Array.isArray(list) ? list : (list as IReadOnlyList<T>).asReadOnlyJsArray();
 }
 
 /** `list.AsSpan()` / `CollectionsMarshal.AsSpan(list)`: the backing array; empty for `null`. */
