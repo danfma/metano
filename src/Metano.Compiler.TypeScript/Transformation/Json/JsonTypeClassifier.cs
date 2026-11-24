@@ -120,6 +120,11 @@ internal static class JsonTypeClassifier
     /// <summary><c>System.Guid</c>, which maps to the runtime's branded <c>UUID</c>.</summary>
     public static bool IsGuid(ITypeSymbol type) => type.ToDisplayString() is "System.Guid";
 
+    /// <summary><c>Metano.Interop.ReadOnlyJsArray&lt;T&gt;</c>, which emits as a JSON array.</summary>
+    internal static bool IsReadOnlyJsArray(INamedTypeSymbol type) =>
+        type is { Name: "ReadOnlyJsArray", Arity: 1 }
+        && type.ContainingNamespace?.ToDisplayString() == "Metano.Interop";
+
     /// <summary>
     /// A single-dimensional <c>byte[]</c>, which System.Text.Json writes as a
     /// base64 string; <c>List&lt;byte&gt;</c> and <c>byte[,]</c> are not
@@ -226,7 +231,7 @@ internal static class JsonTypeClassifier
         if (
             IsSequence(named, fullName)
             || fullName.StartsWith("Metano.Interop.JsArray<")
-            || fullName.StartsWith("Metano.Interop.ReadOnlyJsArray<")
+            || IsReadOnlyJsArray(named)
         )
             return JsonPropertyKind.Array;
 

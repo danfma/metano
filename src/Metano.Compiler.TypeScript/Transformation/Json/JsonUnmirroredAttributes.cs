@@ -14,7 +14,9 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 /// <c>Always</c> or <c>Never</c> condition, <c>[JsonRequired]</c> on a
 /// non-nullable member (the runtime already rejects a payload without it,
 /// FR-045), <c>[JsonConstructor]</c> on the constructor the factory calls,
-/// <c>[JsonPolymorphic]</c> / <c>[JsonDerivedType]</c> (FR-004) and
+/// <c>[JsonPolymorphic]</c> / <c>[JsonDerivedType]</c> (FR-004),
+/// <c>[JsonConverter]</c> on <c>ReadOnlyJsArray&lt;T&gt;</c> (whose descriptor
+/// writes and reads a JSON array, matching the converter), and
 /// <c>[JsonConverter]</c> on a <c>[Branded]</c> / <c>[InlineWrapper]</c> type,
 /// whose descriptor writes the wrapped value as such converters do.
 /// <c>[JsonStringEnumMemberName]</c> only matters under a string enum
@@ -328,10 +330,10 @@ internal sealed class JsonUnmirroredAttributes(JsonPropertyCollector properties)
 
     /// <summary>
     /// <c>[JsonConverter]</c> on a type the context reaches, except a branded
-    /// type (see the class summary).
+    /// type or <c>ReadOnlyJsArray&lt;T&gt;</c> (see the class summary).
     /// </summary>
     private static MetanoDiagnostic? TypeConverterWarningOf(INamedTypeSymbol type) =>
-        SymbolHelper.HasBranded(type)
+        SymbolHelper.HasBranded(type) || JsonTypeClassifier.IsReadOnlyJsArray(type)
             ? null
             : AttributeWarningOf(
                 type,

@@ -1,5 +1,8 @@
 using System.Collections;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Metano.Annotations;
 
 namespace Metano.Interop;
@@ -7,18 +10,22 @@ namespace Metano.Interop;
 /// <summary>
 /// A read-only view of a native JavaScript array, for interop signatures
 /// (<c>[Import]</c> facades, <c>[JsCallable]</c> callbacks, JSX props) and
-/// zero-copy <c>AsReadOnlyJsArray()</c> views (spec 011 FR-004, FR-056).
-/// TypeScript emits <c>readonly T[]</c>, exposing only non-mutating
-/// <c>ReadonlyArray</c> members; <see cref="JsArray{T}"/> and <c>T[]</c>
-/// convert to it implicitly and nothing is emitted. On .NET it wraps an
-/// <see cref="IReadOnlyList{T}"/> directly (or a <see cref="List{T}"/> copy when
-/// constructed from an enumerable). TypeScript only: any other target reports
-/// <c>MS0051</c>.
+/// zero-copy <c>AsReadOnlyJsArray()</c> views (spec 011 FR-004, FR-056a).
+/// Implements only <see cref="IEnumerable{T}"/> (not <see cref="IReadOnlyList{T}"/>,
+/// mirroring <see cref="ReadOnlySpan{T}"/>), exposing <see cref="Length"/> and a
+/// get-only indexer as plain members, and carries a <see cref="JsonConverterAttribute"/>
+/// so System.Text.Json reads and writes it as a JSON array. TypeScript emits
+/// <c>readonly T[]</c>, exposing only non-mutating <c>ReadonlyArray</c> members;
+/// <see cref="JsArray{T}"/> and <c>T[]</c> convert to it implicitly and nothing is
+/// emitted. On .NET it wraps an <see cref="IReadOnlyList{T}"/> directly (or a
+/// <see cref="List{T}"/> copy when constructed from an enumerable). TypeScript
+/// only: any other target reports <c>MS0051</c>.
 /// </summary>
 /// <typeparam name="T">The element type.</typeparam>
 [TargetSpecific(TargetLanguage.TypeScript)]
 [CollectionBuilder(typeof(ReadOnlyJsArray), nameof(ReadOnlyJsArray.Create))]
-public sealed class ReadOnlyJsArray<T> : IReadOnlyList<T>
+[JsonConverter(typeof(ReadOnlyJsArrayJsonConverterFactory))]
+public sealed class ReadOnlyJsArray<T> : IEnumerable<T>
 {
     private readonly IReadOnlyList<T> _items;
 
@@ -35,8 +42,6 @@ public sealed class ReadOnlyJsArray<T> : IReadOnlyList<T>
 
     /// <summary><c>arr[index]</c>: read-only; no bounds check in JavaScript.</summary>
     public T this[int index] => _items[index];
-
-    int IReadOnlyCollection<T>.Count => _items.Count;
 
     /// <summary>The array itself: <c>JsArray&lt;T&gt;</c> → <c>ReadOnlyJsArray&lt;T&gt;</c> emits nothing.</summary>
     public static implicit operator ReadOnlyJsArray<T>(JsArray<T> array) =>
@@ -122,4 +127,104 @@ public static class ReadOnlyJsArray
     /// which TypeScript emits as the array literal itself.
     /// </summary>
     public static ReadOnlyJsArray<T> Create<T>(ReadOnlySpan<T> items) => new(items.ToArray());
+}
+
+/// <summary>
+/// <see cref="JsonConverterFactory"/> that serializes and deserializes
+/// <see cref="ReadOnlyJsArray{T}"/> as a JSON array on .NET, matching
+/// TypeScript's <c>array</c> JSON descriptor.
+/// </summary>
+[TargetSpecific(TargetLanguage.TypeScript)]
+public sealed class ReadOnlyJsArrayJsonConverterFactory : JsonConverterFactory
+{
+    /// <inheritdoc />
+    public override bool CanConvert(Type typeToConvert) =>
+        typeToConvert.IsGenericType
+        && typeToConvert.GetGenericTypeDefinition() == typeof(ReadOnlyJsArray<>);
+
+    /// <inheritdoc />
+    public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+    {
+        var elementType = typeToConvert.GetGenericArguments()[0];
+        var converterType = typeof(ReadOnlyJsArrayJsonConverter<>).MakeGenericType(elementType);
+
+        return (JsonConverter)Activator.CreateInstance(converterType)!;
+    }
+
+    private sealed class ReadOnlyJsArrayJsonConverter<T> : JsonConverter<ReadOnlyJsArray<T>>
+    {
+        private static readonly ConditionalWeakTable<
+            JsonSerializerOptions,
+            JsonSerializerOptions
+        > FallbackOptions = new();
+
+        public override ReadOnlyJsArray<T>? Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options
+        )
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+                return null;
+
+            if (reader.TokenType != JsonTokenType.StartArray)
+            {
+                throw new JsonException(
+                    $"Expected start of JSON array for {typeToConvert}, got {reader.TokenType}."
+                );
+            }
+
+            var elementTypeInfo = ResolveElementTypeInfo(options);
+            var items = new List<T>();
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndArray)
+                    return ReadOnlyJsArray<T>.Wrap(items);
+
+                items.Add(JsonSerializer.Deserialize(ref reader, elementTypeInfo)!);
+            }
+
+            throw new JsonException("Unexpected end of JSON while reading array.");
+        }
+
+        public override void Write(
+            Utf8JsonWriter writer,
+            ReadOnlyJsArray<T> value,
+            JsonSerializerOptions options
+        )
+        {
+            var elementTypeInfo = ResolveElementTypeInfo(options);
+
+            writer.WriteStartArray();
+
+            for (var i = 0; i < value.Length; i++)
+                JsonSerializer.Serialize(writer, value[i], elementTypeInfo);
+
+            writer.WriteEndArray();
+        }
+
+        private static JsonTypeInfo<T> ResolveElementTypeInfo(JsonSerializerOptions options)
+        {
+            if (options.TryGetTypeInfo(typeof(T), out var typeInfo))
+                return (JsonTypeInfo<T>)typeInfo;
+
+            var fallback = FallbackOptions.GetValue(options, static source =>
+            {
+                var copy = new JsonSerializerOptions(source)
+                {
+                    TypeInfoResolver = source.TypeInfoResolver is null
+                        ? new DefaultJsonTypeInfoResolver()
+                        : JsonTypeInfoResolver.Combine(
+                            source.TypeInfoResolver,
+                            new DefaultJsonTypeInfoResolver()
+                        ),
+                };
+
+                return copy;
+            });
+
+            return (JsonTypeInfo<T>)fallback.GetTypeInfo(typeof(T));
+        }
+    }
 }

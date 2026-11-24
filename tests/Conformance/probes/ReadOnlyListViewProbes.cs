@@ -1,7 +1,51 @@
+using System.Collections;
 using System.Collections.Immutable;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Metano.Annotations;
 using Metano.Interop;
 
+[assembly: MapMethod(
+    typeof(JsonSerializer),
+    nameof(JsonSerializer.Serialize),
+    JsTemplate = "JSON.stringify(JsonSerializer.serialize($0, $1))",
+    RuntimeImports = "JsonSerializer",
+    WhenArgCount = 2
+)]
+[assembly: MapMethod(
+    typeof(JsonSerializer),
+    nameof(JsonSerializer.Deserialize),
+    JsTemplate = "JsonSerializer.deserializeText($0, $1)",
+    RuntimeImports = "JsonSerializer",
+    WhenArgCount = 2
+)]
+[assembly: MapMethod(
+    typeof(Conformance.ReadOnlyListViewProbes),
+    "GetDefaultContext",
+    JsTemplate = "$T0.default"
+)]
+
 namespace Conformance;
+
+public sealed record ReadOnlyJsArrayBag(ReadOnlyJsArray<int> Items, ReadOnlyJsArray<string>? Names);
+
+[JsonSerializable(typeof(ReadOnlyJsArrayBag))]
+public partial class ReadOnlyJsArrayBagContext : JsonSerializerContext;
+
+public class UserReadOnlyList : IReadOnlyList<int>
+{
+    private readonly List<int> _items;
+
+    public UserReadOnlyList(List<int> items) => _items = items;
+
+    public int Count => _items.Count;
+
+    public int this[int index] => _items[index];
+
+    public IEnumerator<int> GetEnumerator() => _items.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+}
 
 /// <summary>
 /// Spec 011 FR-056a (#737): <c>ReadOnlyJsArray&lt;T&gt;</c>,
@@ -90,5 +134,35 @@ public static class ReadOnlyListViewProbes
         {
             return $"{ex.ParamName}|{ex.Message}";
         }
+    }
+
+    public static string AsReadOnlyJsArrayOnUserIReadOnlyListClass()
+    {
+        IReadOnlyList<int> custom = new UserReadOnlyList(new List<int> { 10, 20, 30 });
+        var view = custom.AsReadOnlyJsArray();
+
+        return $"{view.Length}:{view[0]},{view[1]},{view[2]}|{view.Join(",")}";
+    }
+
+    private static T GetDefaultContext<T>()
+        where T : JsonSerializerContext => (T)(object)ReadOnlyJsArrayBagContext.Default;
+
+    public static string ReadOnlyJsArrayJsonRoundTrip()
+    {
+        var ctx = GetDefaultContext<ReadOnlyJsArrayBagContext>();
+        var full = new ReadOnlyJsArrayBag([1, 2, 3], ["a", "b"]);
+        var withNull = new ReadOnlyJsArrayBag([4, 5], null);
+        var fullJson = JsonSerializer.Serialize(full, ctx.ReadOnlyJsArrayBag);
+        var nullJson = JsonSerializer.Serialize(withNull, ctx.ReadOnlyJsArrayBag);
+        var roundFull = JsonSerializer.Deserialize(fullJson, ctx.ReadOnlyJsArrayBag)!;
+        var roundNull = JsonSerializer.Deserialize(nullJson, ctx.ReadOnlyJsArrayBag)!;
+
+        return string.Join(
+            "|",
+            fullJson,
+            nullJson,
+            $"{roundFull.Items.Length}:{roundFull.Items.Join(",")}:{roundFull.Names!.Join(",")}",
+            $"{roundNull.Items.Length}:{roundNull.Items.Join(",")}:{(roundNull.Names is null ? "null" : "nonnull")}"
+        );
     }
 }

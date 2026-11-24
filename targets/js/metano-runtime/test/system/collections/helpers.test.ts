@@ -135,4 +135,35 @@ describe("helpers", () => {
       "Value cannot be null. (Parameter 'list')",
     );
   });
+
+  test("asReadOnlyJsArray falls back to a snapshot copy when receiver lacks asReadOnlyJsArray", () => {
+    const backing = [10, 20, 30];
+
+    const custom = {
+      get count() {
+        return backing.length;
+      },
+
+      get(index: number) {
+        return backing[index]!;
+      },
+
+      [Symbol.iterator]() {
+        return backing[Symbol.iterator]();
+      },
+    } as unknown as IReadOnlyList<number>;
+
+    const snapshot1 = asReadOnlyJsArray(custom);
+
+    expect(snapshot1).toEqual([10, 20, 30]);
+
+    backing.push(40);
+
+    expect(snapshot1).toEqual([10, 20, 30]);
+
+    const snapshot2 = asReadOnlyJsArray(custom);
+
+    expect(snapshot2).toEqual([10, 20, 30, 40]);
+    expect(snapshot2).not.toBe(snapshot1);
+  });
 });

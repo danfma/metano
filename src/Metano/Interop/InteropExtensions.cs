@@ -53,12 +53,14 @@ public static class InteropExtensions
         ReadOnlyJsArray<T>.Wrap(list ?? throw new ArgumentNullException(nameof(list)));
 
     /// <summary>
-    /// A read-only view over the list's backing array (spec 011 FR-056):
+    /// A read-only view over the list's backing array (spec 011 FR-056a):
     /// zero-copy and live for runtime array-backed list kinds (reflects later
     /// mutations of a mutable source; array identity is not stable for older
     /// <c>ImmutableList</c>/<c>ImmutableArray</c> versions sharing a grown store),
-    /// and a shallow snapshot copy when wrapping a <c>ReadOnlyCollection</c> over
-    /// a custom <c>IList</c> without <c>asReadOnlyJsArray()</c>. TypeScript emits
+    /// and a shallow snapshot copy (<c>Array.from(list)</c>) when wrapping a
+    /// <c>ReadOnlyCollection</c> over a custom <c>IList</c> or a receiver that
+    /// lacks <c>asReadOnlyJsArray()</c> (such as a user-defined
+    /// <see cref="IReadOnlyList{T}"/> class). TypeScript emits
     /// <c>asReadOnlyJsArray(list)</c> typed <c>readonly T[]</c>, which throws
     /// <c>ArgumentNullException</c> for <c>null</c>. On .NET it wraps
     /// <paramref name="list"/> without copying; TypeScript only (<c>MS0051</c>

@@ -1,5 +1,8 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
+using Metano.Interop;
 using Metano.Tests.TreeShaking;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -389,6 +392,192 @@ public class ReadOnlyListViewTranspileTests
         await Assert.That(ms0051).IsNotEmpty();
     }
 
+    [Test]
+    [Arguments("TakeIReadOnlyList(arr);", "CS1503")]
+    [Arguments("TakeIReadOnlyCollection(arr);", "CS1503")]
+    [Arguments("var list = (IReadOnlyList<int>)arr;", "CS0030")]
+    public async Task ReadOnlyJsArray_DoesNotImplementIReadOnlyListInCSharp(
+        string statement,
+        string expectedDiagnosticId
+    )
+    {
+        var source = $$"""
+            using System.Collections.Generic;
+            using Metano.Interop;
+
+            public static class InterfaceCheck
+            {
+                public static void TakeIReadOnlyList(IReadOnlyList<int> items) { }
+
+                public static void TakeIReadOnlyCollection(IReadOnlyCollection<int> items) { }
+
+                public static void Check(ReadOnlyJsArray<int> arr)
+                {
+                    {{statement}}
+                }
+            }
+            """;
+
+        var compilation = CompileSnippet(source);
+
+        var errors = compilation
+            .GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .Select(d => d.Id)
+            .ToList();
+
+        await Assert.That(errors).Contains(expectedDiagnosticId);
+    }
+
+    [Test]
+    public async Task ReadOnlyJsArray_JsonSerializerContext_EmitsArrayDescriptorsAndPassesTsgo()
+    {
+        const string source = """
+            using System.Text.Json.Serialization;
+            using Metano.Annotations;
+            using Metano.Interop;
+
+            namespace TestApp;
+
+            [Transpile]
+            public sealed record ReadOnlyJsArrayBag(
+                ReadOnlyJsArray<int> Items,
+                ReadOnlyJsArray<string>? Names
+            );
+
+            [Transpile]
+            [JsonSerializable(typeof(ReadOnlyJsArrayBag))]
+            [JsonSerializable(typeof(ReadOnlyJsArray<int>))]
+            public partial class ReadOnlyJsArrayBagContext : JsonSerializerContext;
+            """;
+
+        var (files, diagnostics) = TranspileHelper.TranspileWithJsonSourceGenerator(source);
+
+        var errors = diagnostics.Where(d => d.Severity == MetanoDiagnosticSeverity.Error).ToList();
+
+        await Assert.That(errors).IsEmpty();
+
+        var ms0037 = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnmirroredJsonOption)
+            .ToList();
+
+        await Assert.That(ms0037).IsEmpty();
+
+        const string expected = """
+            import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
+            import { ReadOnlyJsArrayBag } from "./read-only-js-array-bag";
+
+            export class ReadOnlyJsArrayBagContext extends SerializerContext {
+              private static readonly _default = /* @__PURE__ */ new ReadOnlyJsArrayBagContext() as ReadOnlyJsArrayBagContext;
+              private _readOnlyJsArrayBag?: TypeSpec<ReadOnlyJsArrayBag>;
+              private _readOnlyJsArrayInt32?: ValueSpec<readonly number[] | null>;
+
+              static get default(): ReadOnlyJsArrayBagContext {
+                return this._default;
+              }
+
+              get readOnlyJsArrayBag(): TypeSpec<ReadOnlyJsArrayBag> {
+                return this._readOnlyJsArrayBag ??= this.createSpec({
+                  type: ReadOnlyJsArrayBag,
+                  runtimeType: () => ReadOnlyJsArrayBag.$runtimeType,
+                  factory: (p: Record<string, unknown>) => new ReadOnlyJsArrayBag(p.items as readonly number[], p.names as readonly string[] | null),
+                  properties: [
+                    {
+                      ts: "items",
+                      json: "Items",
+                      type: {
+                        kind: "array",
+                        element: { kind: "primitive", numberType: "System.Int32" },
+                      },
+                    },
+                    {
+                      ts: "names",
+                      json: "Names",
+                      type: {
+                        kind: "nullable",
+                        inner: {
+                          kind: "array",
+                          element: { kind: "primitive" },
+                        },
+                      },
+                      optional: true,
+                    },
+                  ],
+                });
+              }
+
+              get readOnlyJsArrayInt32(): ValueSpec<readonly number[] | null> {
+                return this._readOnlyJsArrayInt32 ??= this.createValueSpec({
+                  descriptor: {
+                    kind: "array",
+                    element: { kind: "primitive", numberType: "System.Int32" },
+                  },
+                });
+              }
+            }
+
+            """;
+
+        await Assert.That(files["test-app/read-only-js-array-bag-context.ts"]).IsEqualTo(expected);
+
+        var (exitCode, output) = await StrictTypeCheck.Run(new Dictionary<string, string>(), files);
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task ReadOnlyJsArray_SystemTextJson_RoundTripsNonNullAndNullableProperties()
+    {
+        var full = new StjReadOnlyJsArrayBag([1, 2, 3], ["a", "b"]);
+        var withNull = new StjReadOnlyJsArrayBag([4, 5], null);
+        var empty = new StjReadOnlyJsArrayBag([], ["only"]);
+
+        var fullJson = JsonSerializer.Serialize(
+            full,
+            StjReadOnlyJsArrayBagContext.Default.StjReadOnlyJsArrayBag
+        );
+
+        var nullJson = JsonSerializer.Serialize(
+            withNull,
+            StjReadOnlyJsArrayBagContext.Default.StjReadOnlyJsArrayBag
+        );
+
+        var emptyJson = JsonSerializer.Serialize(empty);
+
+        await Assert.That(fullJson).IsEqualTo("""{"Items":[1,2,3],"Names":["a","b"]}""");
+        await Assert.That(nullJson).IsEqualTo("""{"Items":[4,5],"Names":null}""");
+        await Assert.That(emptyJson).IsEqualTo("""{"Items":[],"Names":["only"]}""");
+
+        var roundFull = JsonSerializer.Deserialize(
+            fullJson,
+            StjReadOnlyJsArrayBagContext.Default.StjReadOnlyJsArrayBag
+        )!;
+
+        var roundNull = JsonSerializer.Deserialize(
+            nullJson,
+            StjReadOnlyJsArrayBagContext.Default.StjReadOnlyJsArrayBag
+        )!;
+
+        var roundEmpty = JsonSerializer.Deserialize<StjReadOnlyJsArrayBag>(emptyJson)!;
+
+        await Assert.That(roundFull.Items.ToArray()).IsEquivalentTo([1, 2, 3]);
+        await Assert.That(roundFull.Names!.ToArray()).IsEquivalentTo(["a", "b"]);
+        await Assert.That(roundNull.Items.ToArray()).IsEquivalentTo([4, 5]);
+        await Assert.That(roundNull.Names).IsNull();
+        await Assert.That(roundEmpty.Items.Length).IsEqualTo(0);
+        await Assert.That(roundEmpty.Names!.ToArray()).IsEquivalentTo(["only"]);
+
+        await Assert
+            .That(() =>
+                JsonSerializer.Deserialize(
+                    """{"Items":123,"Names":null}""",
+                    StjReadOnlyJsArrayBagContext.Default.StjReadOnlyJsArrayBag
+                )
+            )
+            .Throws<JsonException>();
+    }
+
     private static CSharpCompilation CompileSnippet(string source)
     {
         var tree = CSharpSyntaxTree.ParseText(
@@ -423,3 +612,11 @@ public class ReadOnlyListViewTranspileTests
             .Diagnostics;
     }
 }
+
+internal sealed record StjReadOnlyJsArrayBag(
+    Metano.Interop.ReadOnlyJsArray<int> Items,
+    Metano.Interop.ReadOnlyJsArray<string>? Names
+);
+
+[JsonSerializable(typeof(StjReadOnlyJsArrayBag))]
+internal partial class StjReadOnlyJsArrayBagContext : JsonSerializerContext;
