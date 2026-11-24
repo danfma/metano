@@ -3,7 +3,7 @@ name: Int64 reference fixtures
 # Regenerates the spec 012 reference fixtures (FR-064) on .NET and fails when
 # they drift from the committed ones: a changed twin, generator or SDK must
 # ship regenerated fixtures. Runs when those inputs change, and weekly, because
-# the SDK rolls forward (global.json, setup-dotnet 10.0.x) and a new runtime can
+# the 10.0.x runtime rolls forward (setup-dotnet 10.0.x) and a new runtime can
 # change an exception message without touching any filtered path (plan K7).
 on:
   schedule:
@@ -39,8 +39,10 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
+          # The SDK pinned in global.json (11.0.100 GA) builds everything; the
+          # 10.0.x SDK brings the net10 runtime the tools, tests and CSharpier run on.
+          global-json-file: global.json
           dotnet-version: "10.0.x"
-          dotnet-quality: "preview"
 
       - name: Regenerate the fixtures
         run: dotnet run --project tests/Int64Reference/

@@ -27,8 +27,10 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
+          # The SDK pinned in global.json (11.0.100 GA) builds everything; the
+          # 10.0.x SDK brings the net10 runtime the tools, tests and CSharpier run on.
+          global-json-file: global.json
           dotnet-version: "10.0.x"
-          dotnet-quality: "preview"
 
       # Trusted Publishing requires npm >= 11.5.1 (Node 24+).
       - uses: actions/setup-node@v4
