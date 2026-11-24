@@ -18,9 +18,31 @@ This page lists every mapping the transpiler knows about out of the box.
 | `char` | `string` (length 1) |
 | `Guid` | `UUID` (branded `string`, from `metano-runtime`) |
 | `Uri` | `string` |
-| `object` | `unknown` |
+| `object` | `Object` (any non-nullish value; see [`object` and `Object`](#object-and-object)) |
+| `object?` | `Object \| null` (the C# `null` maps to `null`, never `undefined`) |
 | `void` | `void` |
 | `T?` / `Nullable<T>` | `T \| null` |
+
+### `object` and `Object`
+
+C# `object` maps to the TypeScript `Object` type and `object?` maps to `Object | null`; the two are kept distinct, following the general nullable rule (`T?` → `T | null`). This is the closest match to C#'s semantics:
+
+- `Object` accepts every non-nullish value, primitives included, as C# `object` accepts boxed `int`, `string` and so on. The lowercase `object` type would reject a boxed number.
+- The non-nullable / nullable split stays visible. `unknown` would include `null` and `undefined` and erase it.
+- `Object.prototype` members such as `toString` type-check without casts, which the generated code relies on for `ToString()`, `Equals` and `GetHashCode`.
+
+Linters that ban the `Object` type (Biome's `lint/complexity/noBannedTypes`, typescript-eslint's `no-wrapper-object-types`) flag generated files. Exclude the generated output folder from those rules rather than editing generated code; for example, in `biome.json`:
+
+```json
+{
+  "overrides": [
+    {
+      "includes": ["src/generated/**"],
+      "linter": { "rules": { "complexity": { "noBannedTypes": "off" } } }
+    }
+  ]
+}
+```
 
 ### `decimal` specifics
 
