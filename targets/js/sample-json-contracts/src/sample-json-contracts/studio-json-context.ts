@@ -66,6 +66,7 @@ import { SPoint } from "./s-point";
 import { Schedule } from "./schedule";
 import type { Shape } from "./shape";
 import { SilenceClip } from "./silence-clip";
+import { SingleBox } from "./single-box";
 import { Sq } from "./sq";
 import { SqB } from "./sq-b";
 import { Timeline } from "./timeline";
@@ -157,6 +158,7 @@ export class StudioJsonContext extends SerializerContext {
   private _episodeRec?: TypeSpec<EpisodeRec>;
   private _int64Box?: TypeSpec<Int64Box>;
   private _int64Containers?: TypeSpec<Int64Containers>;
+  private _singleBox?: TypeSpec<SingleBox>;
   private _int64?: ValueSpec<bigint>;
   private _uInt64?: ValueSpec<bigint>;
   private _imageClip?: TypeSpec<ImageClip>;
@@ -1518,6 +1520,30 @@ export class StudioJsonContext extends SerializerContext {
             value: { kind: "primitive" },
             create: (entries) => Dictionary.assign(entries),
           },
+        },
+      ],
+    }));
+  }
+
+  get singleBox(): TypeSpec<SingleBox> {
+    return (this._singleBox ??= this.createSpec({
+      type: SingleBox,
+      runtimeType: () => SingleBox.$runtimeType,
+      factory: (p: Record<string, unknown>) => new SingleBox(p.f as number, p.g as number | null),
+      properties: [
+        {
+          ts: "f",
+          json: "F",
+          type: { kind: "primitive", numberType: "System.Single" },
+        },
+        {
+          ts: "g",
+          json: "G",
+          type: {
+            kind: "nullable",
+            inner: { kind: "primitive", numberType: "System.Single" },
+          },
+          optional: true,
         },
       ],
     }));

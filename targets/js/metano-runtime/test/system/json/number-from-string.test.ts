@@ -274,7 +274,10 @@ describe("numbers from strings — floating point", () => {
     expect(Math.fround(value * 1)).toBe(value);
     const text = JSON.stringify(JsonSerializer.serialize(value, { descriptor: single }));
 
+    expect(text).toBe("0.1");
     expect(JsonSerializer.deserializeText(text, { descriptor: single })).toBe(value);
+    expect(JSON.stringify(JsonSerializer.serialize(1e20, { descriptor: single }))).toBe("1E+20");
+    expect(JSON.stringify(JsonSerializer.serialize(NaN, { descriptor: single }))).toBe("null");
   });
 
   test("Single rejects a value beyond its own range", () => {

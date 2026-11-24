@@ -75,6 +75,7 @@ export { SetClass } from "./set-class";
 export { isShape, Shape$runtimeType } from "./shape";
 export type { Shape } from "./shape";
 export { SilenceClip } from "./silence-clip";
+export { SingleBox } from "./single-box";
 export { SnakeCaseJsonContext } from "./snake-case-json-context";
 export { SoftNums } from "./soft-nums";
 export { SqB } from "./sq-b";

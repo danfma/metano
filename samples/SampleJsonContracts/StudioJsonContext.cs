@@ -82,6 +82,7 @@ namespace SampleJsonContracts;
 [JsonSerializable(typeof(EpisodeRec))]
 [JsonSerializable(typeof(Int64Box))]
 [JsonSerializable(typeof(Int64Containers))]
+[JsonSerializable(typeof(SingleBox))]
 [JsonSerializable(typeof(long))]
 [JsonSerializable(typeof(ulong))]
 public partial class StudioJsonContext : JsonSerializerContext;

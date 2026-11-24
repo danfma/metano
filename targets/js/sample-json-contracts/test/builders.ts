@@ -29,6 +29,7 @@ import { ImmHolder } from "#/sample-json-contracts/imm-holder";
 import { ImageClip } from "#/sample-json-contracts/image-clip";
 import { InitRec } from "#/sample-json-contracts/init-rec";
 import { Int64Box } from "#/sample-json-contracts/int64-box";
+import { SingleBox } from "#/sample-json-contracts/single-box";
 import { Int64Containers } from "#/sample-json-contracts/int64-containers";
 import { IntMapHolder } from "#/sample-json-contracts/int-map-holder";
 import { IS } from "#/sample-json-contracts/is";
@@ -794,6 +795,21 @@ export const caseBuilders: Record<string, CaseBuilder> = {
   // (#605): the generated fields are bigint values, written as their exact
   // digits; every read goes through deserializeText, which keeps a 64-bit
   // token's digits and shape as System.Text.Json reads them (FR-053).
+  // The Single rows (#695): a float writes its shortest text and reads
+  // rounded to single precision.
+  F1: {
+    build: () => new SingleBox(Math.fround(0.1), null),
+    assertRead: (value) => {
+      const box = expectClass(value, SingleBox);
+
+      expect(box.f).toBe(Math.fround(0.1));
+
+      expect(box.g).toBeNull();
+    },
+  },
+  F2: {
+    build: () => new SingleBox(3.4028234663852886e38, Math.fround(1e20)),
+  },
   I1: {
     build: () => new Int64Box(1152921504606846977n, 18446744073709551615n, null),
   },

@@ -5,6 +5,7 @@ import type {
   PrimitiveDescriptor,
 } from "./types.ts";
 import type { ValueConverter } from "./value-converter.ts";
+import { formatSingle } from "../double-format.ts";
 import { JsonException } from "./errors.ts";
 import { isDecimalText, readDecimalText } from "./decimal-text.ts";
 import {
@@ -112,7 +113,11 @@ export function primitiveConverterOf(
  * A `float`: a JSON number reads rounded to single precision, as
  * System.Text.Json parses it into a `Single` (#695), and a string reads
  * through the number grammar (which rounds too) when the context reads
- * numbers from strings. Writes pass through.
+ * numbers from strings. A finite value writes the shortest text that reads
+ * back as the same `float`, as System.Text.Json writes it (`0.1`, not the
+ * double `0.10000000149011612`), through the exact-number leaf. A
+ * non-finite value passes through: System.Text.Json throws for it without
+ * `AllowNamedFloatingPointLiterals`, which Metano does not mirror.
  */
 function singleConverterOf(
   readOptions: JsonReadOptions | undefined,
@@ -121,10 +126,19 @@ function singleConverterOf(
   const readsStrings = readsNumbersFromStrings(readOptions);
 
   return {
-    serialize: passthroughConverter.serialize,
+    serialize: (value: unknown) =>
+      typeof value === "number" && Number.isFinite(value)
+        ? writeExactNumber(formatSingle(value), () => Math.fround(value))
+        : passthroughConverter.serialize(value),
     deserialize: (value: unknown) => {
       if (typeof value === "number") {
         return Math.fround(value);
+      }
+
+      const exact = exactNumberTextOf(value);
+
+      if (exact !== undefined) {
+        return Math.fround(Number(exact));
       }
 
       if (typeof value !== "string" || !readsStrings) {
