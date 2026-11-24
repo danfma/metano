@@ -111,6 +111,37 @@ export class HashCore<K, V> {
     return true;
   }
 
+  /**
+   * Appends `element` to the array stored under `key`, storing a new array when there is none:
+   * a `get` and a `set` in one lookup, for the groupings of `groupBy`, `toLookup` and `join`.
+   */
+  append<E>(this: HashCore<K, E[]>, key: K, element: E): void {
+    const entries = this._entries;
+
+    if (this._direct(key)) {
+      const bucket = entries.get(key);
+
+      if (bucket === undefined) {
+        entries.set(key, [element]);
+      } else {
+        bucket.push(element);
+      }
+
+      return;
+    }
+
+    const stored = this._find(key);
+
+    if (!isMissing(stored)) {
+      entries.get(stored)!.push(element);
+
+      return;
+    }
+
+    entries.set(key, [element]);
+    this._bucketOf(this._hash(key)).push(key);
+  }
+
   delete(key: K): boolean {
     if (this._direct(key)) {
       return this._entries.delete(key);

@@ -620,6 +620,12 @@ export function contains<T>(
     value,
     comparer,
     apply: (source) => {
+      // A primitive other than NaN is equal to exactly what `===` says, with no comparer.
+      if (!comparer && (typeof value !== "object" || value === null) && !Number.isNaN(value)) {
+        for (const element of source) if (element === value) return true;
+        return false;
+      }
+
       for (const element of source) if (equalsBy(comparer, element, value)) return true;
       return false;
     },

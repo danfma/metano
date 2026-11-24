@@ -18,6 +18,13 @@ public class SeEq
     public override int GetHashCode() => V;
 }
 
+public sealed class SeLengthComparer : IEqualityComparer<string?>
+{
+    public bool Equals(string? x, string? y) => x == y;
+
+    public int GetHashCode(string? value) => value!.Length;
+}
+
 /// <summary>
 /// Wave 7 track E (#664): value equality in the LINQ searches. Contains, GroupBy, SequenceEqual,
 /// ToLookup and Join compare through EqualityComparer&lt;T&gt;.Default (or the comparer given): a
@@ -40,6 +47,7 @@ public static class SearchEqualityProbes
         IEnumerable<CePoint> s = new List<CePoint> { new(1, 2) }.Where(_ => true);
         IEnumerable<SePlain> p = new List<SePlain> { new(1) }.Where(_ => true);
         IEnumerable<SeEq> e = new List<SeEq> { new(1) }.Where(_ => true);
+
         return B(
             r.Contains(new("a", 1)),
             s.Contains(new(1, 2)),
@@ -60,6 +68,7 @@ public static class SearchEqualityProbes
     {
         IEnumerable<string> words = new List<string> { "ab", "xyz" }.Where(_ => true);
         var same = new CeLengthComparer();
+
         return B(
             words.Contains("cd", same),
             words.Contains("c", same),
@@ -77,6 +86,7 @@ public static class SearchEqualityProbes
             new("a", 1),
             new("b", 2),
         };
+
         return string.Join(";", items.GroupBy(x => x).Select(g => g.Key.Name + g.Count()));
     }
 
@@ -98,6 +108,7 @@ public static class SearchEqualityProbes
     public static string GroupByComparer()
     {
         var words = new List<string> { "ab", "xyz", "cd", "q", "mno" };
+
         return string.Join(
             ";",
             words
@@ -121,6 +132,7 @@ public static class SearchEqualityProbes
         var p2 = new List<SePlain> { new(1) };
         var e1 = new List<SeEq> { new(1) };
         var e2 = new List<SeEq> { new(1) };
+
         return B(
             r1.SequenceEqual(r2),
             p1.SequenceEqual(p2),
@@ -134,6 +146,7 @@ public static class SearchEqualityProbes
         var a = new List<int> { 1, 2 };
         var d = new List<double> { double.NaN, 1.0 };
         var m = new List<decimal> { 1.5m };
+
         return B(
             a.SequenceEqual(new List<int> { 2, 1 }),
             a.SequenceEqual(new List<int> { 1 }),
@@ -147,6 +160,7 @@ public static class SearchEqualityProbes
     public static string SequenceEqualComparer()
     {
         var words = new List<string> { "ab", "xyz" };
+
         return B(
             words.SequenceEqual(new List<string> { "cd", "qrs" }, new CeLengthComparer()),
             words.SequenceEqual(new List<string> { "cd", "q" }, new CeLengthComparer()),
@@ -174,6 +188,7 @@ public static class SearchEqualityProbes
     {
         var outer = new List<CeItem> { new("a", 1), new("b", 2), new("c", 3) };
         var inner = new List<CeItem> { new("b", 2), new("a", 1), new("a", 1) };
+
         return string.Join(
             ",",
             outer.Join(inner, o => o, i => i, (o, i) => o.Name + inner.IndexOf(i))
@@ -185,6 +200,7 @@ public static class SearchEqualityProbes
         var outer = new List<string?> { null, "ab", "xyz" };
         var inner = new List<string?> { null, "cd", "qrs", "t" };
         var byValue = outer.Join(inner, o => o, i => i, (o, i) => (o ?? "null") + i);
+
         var byLength = outer.Join(
             inner,
             o => o,
@@ -192,6 +208,84 @@ public static class SearchEqualityProbes
             (o, i) => (o ?? "null") + i,
             new CeLengthComparer()
         );
+
         return string.Join(",", byValue) + "|" + string.Join(",", byLength);
+    }
+
+    static int _reads;
+
+    static IEnumerable<int> Counted(int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            _reads++;
+
+            yield return i;
+        }
+    }
+
+    static IEnumerable<int> Throwing()
+    {
+        if (_reads >= 0)
+            throw new InvalidOperationException();
+
+        yield return 0;
+    }
+
+    public static string JoinEmptyInnerCounts()
+    {
+        _reads = 0;
+
+        var keyCalls = 0;
+
+        var result = Counted(5)
+            .Join(
+                new List<int>(),
+                o =>
+                {
+                    keyCalls++;
+
+                    return o;
+                },
+                i => i,
+                (o, i) => o + i
+            )
+            .Count();
+
+        return $"{result},{_reads},{keyCalls}";
+    }
+
+    public static string GroupByNullKeyWithComparer()
+    {
+        var words = new List<string?> { "a", null, "b", null };
+
+        return string.Join(
+            ";",
+            words.GroupBy(x => x, new SeLengthComparer()).Select(g => (g.Key ?? "null") + g.Count())
+        );
+    }
+
+    public static string ToLookupNullKeyWithComparer()
+    {
+        var words = new List<string?> { "a", null, "b", null };
+        var lookup = words.ToLookup(x => x, new SeLengthComparer());
+
+        return $"{lookup.Count},{lookup.Contains(null)},{lookup.Contains("a")}";
+    }
+
+    public static string GroupByReadsOnFirstMoveNext()
+    {
+        _reads = 0;
+
+        try
+        {
+            return Throwing()
+                .SequenceEqual(Counted(3).GroupBy(x => x).Select(g => g.Key))
+                .ToString();
+        }
+        catch (InvalidOperationException)
+        {
+            return "threw," + _reads;
+        }
     }
 }

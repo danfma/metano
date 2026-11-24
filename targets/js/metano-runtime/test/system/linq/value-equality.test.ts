@@ -99,6 +99,69 @@ describe("groupBy", () => {
   });
 });
 
+describe("deferred execution and null keys", () => {
+  test("groupBy reads its source on the first next(), not when the iterator is made", () => {
+    let reads = 0;
+    const source = {
+      *[Symbol.iterator]() {
+        reads++;
+        yield 1;
+      },
+    };
+    const iterator = linq(source, groupBy((x: number) => x))[Symbol.iterator]();
+
+    expect(reads).toBe(0);
+    iterator.next();
+    expect(reads).toBe(1);
+  });
+
+  test("a comparer never sees a null key in getHashCode, as in .NET's Lookup", () => {
+    const length: IEqualityComparer<string | null> = {
+      equals: (a, b) => a === b,
+      getHashCode: (value) => value!.length,
+    };
+    const groups = [...linq(["a", null, "b", null], groupBy((s: string | null) => s, length))];
+
+    expect(groups.map((group) => [group.key, [...group].length])).toEqual([
+      ["a", 1],
+      [null, 2],
+      ["b", 1],
+    ]);
+
+    const lookup = linq(["a", null], toLookup((s: string | null) => s, length));
+
+    expect(lookup.contains(null)).toBe(true);
+  });
+
+  test("join with an empty inner reads one outer element and never calls the key selector", () => {
+    let reads = 0;
+    let keyCalls = 0;
+    const outer = {
+      *[Symbol.iterator]() {
+        while (true) {
+          reads++;
+          yield reads;
+        }
+      },
+    };
+    const joined = linq(
+      outer,
+      join(
+        [] as number[],
+        (o: number) => {
+          keyCalls++;
+          return o;
+        },
+        (i: number) => i,
+        (o: number) => o,
+      ),
+    );
+
+    expect([...joined]).toEqual([]);
+    expect([reads, keyCalls]).toEqual([1, 0]);
+  });
+});
+
 describe("sequenceEqual", () => {
   test("compares in order by value", () => {
     expect(linq([new Item("a", 1)], sequenceEqual([new Item("a", 1)]))).toBe(true);

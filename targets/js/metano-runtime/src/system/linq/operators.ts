@@ -13,7 +13,7 @@
  * as their result is determined.
  */
 import type { IEqualityComparer } from "../collections/default-comparer.ts";
-import type { HashCore } from "../collections/hash-core.ts";
+import { HashCore } from "../collections/hash-core.ts";
 import { HashSet } from "../collections/hash-set.ts";
 import { compareKeys } from "./compare-keys.ts";
 import { bucketsOf, groupingsOf } from "./grouping.ts";
@@ -471,7 +471,39 @@ export function groupBy<T, K>(
     comparer,
     queryable,
     apply: (source) => ({
-      [Symbol.iterator]: () => groupingsOf(bucketsOf(source, keySelector, comparer)),
+      // A generator, so the source is read on the first `next()`, as .NET's GroupBy does. With the
+      // default comparison the bucketing runs in this generator body, where V8 keeps it as fast as
+      // a native `Map` loop; a user comparer goes through the shared `bucketsOf`.
+      *[Symbol.iterator]() {
+        if (comparer) {
+          yield* groupingsOf(bucketsOf(source, keySelector, comparer));
+
+          return;
+        }
+
+        const buckets = new HashCore<K, T[]>();
+        const entries = buckets._entries;
+
+        for (const item of source) {
+          const key = keySelector(item);
+
+          if (typeof key === "object" && key !== null) {
+            buckets.append(key, item);
+
+            continue;
+          }
+
+          const bucket = entries.get(key);
+
+          if (bucket === undefined) {
+            entries.set(key, [item]);
+          } else {
+            bucket.push(item);
+          }
+        }
+
+        yield* groupingsOf(buckets);
+      },
     }),
   };
 }
@@ -479,7 +511,8 @@ export function groupBy<T, K>(
 /**
  * `Join(inner, outerKeySelector, innerKeySelector, resultSelector[, comparer])`: for each
  * outer element, in order, one result per inner element of an equal key, in inner order.
- * A `null` key matches nothing. The inner source is read when the first outer element is.
+ * A `null` key matches nothing. The inner source is read once the first outer element is, and an
+ * inner with no key ends the join there.
  */
 export function join<T, U, K, R>(
   inner: Iterable<U>,
@@ -500,7 +533,12 @@ export function join<T, U, K, R>(
         let matches: HashCore<K, U[]> | undefined;
 
         for (const outer of source) {
-          matches ??= bucketsOf(inner, innerKeySelector, comparer, undefined, true);
+          if (matches === undefined) {
+            matches = bucketsOf(inner, innerKeySelector, comparer, undefined, true);
+
+            // .NET reads one outer element, and stops there when the inner has no key.
+            if (matches.size === 0) return;
+          }
 
           const key = outerKeySelector(outer);
           const bucket = key === null || key === undefined ? undefined : matches.get(key);
