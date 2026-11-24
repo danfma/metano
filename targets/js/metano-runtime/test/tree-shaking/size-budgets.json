@@ -35,8 +35,8 @@
     {
       "name": "LINQ groupBy (value equality, #664)",
       "entry": "entries/linq-group-by.js",
-      "maxGzip": 2074,
-      "$comment": "W7-4 (#664), measured size + 10%: bun 1887 B / esbuild 1866 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+      "maxGzip": 2323,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 2112 B / esbuild 2077 B (round 1: the default-comparison loop is inlined in the generator, which V8 keeps as fast as main). The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
     },
     {
       "name": "LINQ toLookup (value equality, #664)",
