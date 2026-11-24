@@ -776,8 +776,20 @@ public static class IrBodyPrinter
             sb.Append(" => ");
             PrintExpression(sb, arm.Result);
         }
+
+        if (NeedsNonExhaustiveTail(sw))
+            sb.Append(", _ => throw StateError('Non-exhaustive switch expression')");
+
         sb.Append(" }");
     }
+
+    /// <summary>
+    /// C# proves a switch over a <c>closed</c> class exhaustive with no catch-all,
+    /// but the Dart <c>abstract class</c> it lowers to has no exhaustiveness, so
+    /// such a switch needs a throwing default to compile (spec 010 FR-C2).
+    /// </summary>
+    private static bool NeedsNonExhaustiveTail(IrSwitchExpression sw) =>
+        sw.ScrutineeIsClosed && !sw.Arms.Any(arm => arm.IsCatchAll);
 
     /// <summary>
     /// Renders the `...` rest element inside a Dart list pattern. When the

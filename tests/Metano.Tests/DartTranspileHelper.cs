@@ -20,33 +20,7 @@ public static class DartTranspileHelper
         IReadOnlyList<MetanoDiagnostic> Diagnostics
     ) Transpile(string csharpSource)
     {
-        var source = $"""
-            using System;
-            using Metano.Annotations;
-            {csharpSource}
-            """;
-        var syntaxTree = CSharpSyntaxTree.ParseText(
-            source,
-            new CSharpParseOptions(LanguageVersion.Preview)
-        );
-        // Share the same cached metadata references that TranspileHelper uses —
-        // rebuilding the ~200-entry list per test would add hundreds of MB of
-        // churn across the suite.
-        var compilation = CSharpCompilation.Create(
-            "DartTestAssembly",
-            [syntaxTree],
-            TranspileHelper.BaseReferences,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
-        );
-
-        var errors = compilation
-            .GetDiagnostics()
-            .Where(d => d.Severity == DiagnosticSeverity.Error)
-            .ToList();
-        if (errors.Count > 0)
-            throw new InvalidOperationException(
-                "C# compilation failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
-            );
+        var compilation = Compile(csharpSource);
 
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(
             compilation,
@@ -62,5 +36,51 @@ public static class DartTranspileHelper
             result[file.FileName] = printer.Print(file);
 
         return (result, transformer.Diagnostics);
+    }
+
+    /// <summary>
+    /// The diagnostics the frontend raises for a Dart run (the declaration
+    /// validators, such as the interim union rejection), which
+    /// <see cref="Transpile"/> leaves out because it returns the transformer's.
+    /// </summary>
+    public static IReadOnlyList<MetanoDiagnostic> FrontendDiagnostics(string csharpSource) =>
+        new CSharpSourceFrontend()
+            .ExtractFromCompilation(Compile(csharpSource), TargetLanguage.Dart)
+            .Diagnostics;
+
+    private static CSharpCompilation Compile(string csharpSource)
+    {
+        var source = $"""
+            using System;
+            using Metano.Annotations;
+            {csharpSource}
+            """;
+
+        var syntaxTree = CSharpSyntaxTree.ParseText(
+            source,
+            new CSharpParseOptions(LanguageVersion.Preview)
+        );
+
+        // Share the same cached metadata references that TranspileHelper uses —
+        // rebuilding the ~200-entry list per test would add hundreds of MB of
+        // churn across the suite.
+        var compilation = CSharpCompilation.Create(
+            "DartTestAssembly",
+            [syntaxTree],
+            TranspileHelper.BaseReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+
+        var errors = compilation
+            .GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+
+        if (errors.Count > 0)
+            throw new InvalidOperationException(
+                "C# compilation failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
+            );
+
+        return compilation;
     }
 }

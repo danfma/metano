@@ -895,7 +895,13 @@ public sealed partial class IrExpressionExtractor
                 Extract(a.Expression)
             ))
             .ToList();
-        return new IrSwitchExpression(Extract(switchExpr.GoverningExpression), arms);
+
+        var scrutineeType = _semantic.GetTypeInfo(switchExpr.GoverningExpression).Type;
+
+        return new IrSwitchExpression(Extract(switchExpr.GoverningExpression), arms)
+        {
+            ScrutineeIsClosed = RoslynTypeQueries.IsClosedHierarchy(scrutineeType),
+        };
     }
 
     /// <summary>

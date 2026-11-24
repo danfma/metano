@@ -1329,7 +1329,17 @@ public sealed record IrIsPatternExpression(IrExpression Expression, IrPattern Pa
 /// switch expressions, TypeScript lowers to an IIFE with <c>if/else</c>.
 /// </summary>
 public sealed record IrSwitchExpression(IrExpression Scrutinee, IReadOnlyList<IrSwitchArm> Arms)
-    : IrExpression;
+    : IrExpression
+{
+    /// <summary>
+    /// The scrutinee's type is a C# 15 <c>closed</c> class, or a type parameter
+    /// constrained to one, so C# accepts the switch as exhaustive once every direct
+    /// subtype has an arm, with no catch-all. A neutral fact: a target whose own
+    /// switch cannot prove that exhaustiveness (Dart over an <c>abstract class</c>)
+    /// appends a throwing default (spec 010 FR-C2).
+    /// </summary>
+    public bool ScrutineeIsClosed { get; init; }
+}
 
 /// <summary>
 /// One arm of an <see cref="IrSwitchExpression"/>.
@@ -1338,7 +1348,11 @@ public sealed record IrSwitchExpression(IrExpression Scrutinee, IReadOnlyList<Ir
 /// <param name="WhenClause">Optional <c>when</c> guard expression — evaluated
 /// only after the pattern matches.</param>
 /// <param name="Result">The expression the arm evaluates to when it wins.</param>
-public sealed record IrSwitchArm(IrPattern Pattern, IrExpression? WhenClause, IrExpression Result);
+public sealed record IrSwitchArm(IrPattern Pattern, IrExpression? WhenClause, IrExpression Result)
+{
+    /// <summary>An unguarded arm whose pattern always matches (<c>_</c>, <c>var x</c>).</summary>
+    public bool IsCatchAll => WhenClause is null && Pattern.AlwaysMatches;
+}
 
 // -- Non-destructive update --
 

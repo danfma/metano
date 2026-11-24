@@ -177,11 +177,23 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateThisAttribute(compilation, diagnostics);
             ValidateEmitAttribute(compilation, diagnostics);
 
+            // One rule instance so a union is reported once per file, whether the
+            // file declares it or only uses it (spec 010 FR-012a).
+            var unionRule = new UnsupportedUnionRule(diagnostics);
+
+            UnionDeclarationValidator.Validate(
+                compilation,
+                assemblyWideTranspile,
+                target,
+                unionRule
+            );
+
             TranspiledReferenceWalker.Validate(
                 compilation,
                 assemblyWideTranspile,
                 target,
                 generatedSources,
+                unionRule,
                 diagnostics
             );
 

@@ -111,8 +111,8 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var scrutinee = new TsIdentifier(ScrutineeParameterName);
-        var conditionalArms = sw.Arms.TakeWhile(arm => !IsCatchAllArm(arm));
-        var catchAll = sw.Arms.FirstOrDefault(IsCatchAllArm);
+        var conditionalArms = sw.Arms.TakeWhile(arm => !arm.IsCatchAll);
+        var catchAll = sw.Arms.FirstOrDefault(arm => arm.IsCatchAll);
 
         var conditionalStatements = conditionalArms.Select(arm =>
             LowerConditionalSwitchArm(arm, scrutinee, context)
@@ -152,9 +152,6 @@ public static partial class IrToTsExpressionBridge
     private static TsThrowStatement BuildNonExhaustiveSwitchThrow(TsExpression scrutinee) =>
         new(IrToTsExceptionConstructionBridge.MapNonExhaustiveSwitch(scrutinee));
 
-    private static bool IsCatchAllArm(IrSwitchArm arm) =>
-        arm.WhenClause is null && IsAlwaysMatchingPattern(arm.Pattern);
-
     /// <summary>
     /// <c>if (test) { bindings; outcome }</c>. Without designators the
     /// <c>when</c> guard joins the test; with designators it nests inside
@@ -168,7 +165,7 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        if (IsAlwaysMatchingPattern(arm.Pattern) && arm.WhenClause is { } guard)
+        if (arm.Pattern.AlwaysMatches && arm.WhenClause is { } guard)
             return LowerGuardedCatchAllArm(arm, guard, scrutinee, context);
 
         if (HasDesignators(arm.Pattern, context) || arm.WhenClause is null)

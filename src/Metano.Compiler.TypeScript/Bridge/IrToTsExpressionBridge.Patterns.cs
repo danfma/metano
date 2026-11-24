@@ -253,10 +253,7 @@ public static partial class IrToTsExpressionBridge
         TsExpression value,
         IrPattern pattern,
         IrToTsBridgeContext context
-    ) => IsAlwaysMatchingPattern(pattern) ? null : BuildPatternTest(value, pattern, context);
-
-    private static bool IsAlwaysMatchingPattern(IrPattern pattern) =>
-        pattern is IrDiscardPattern or IrVarPattern;
+    ) => pattern.AlwaysMatches ? null : BuildPatternTest(value, pattern, context);
 
     /// <summary>
     /// Joins a pattern test with a <c>when</c> guard as <c>test &amp;&amp; guard</c>.

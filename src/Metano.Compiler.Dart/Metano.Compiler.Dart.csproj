@@ -23,6 +23,11 @@
       ExcludeAssets="runtime"
       PrivateAssets="all"
     />
+    <PackageReference
+      Include="Microsoft.NET.StringTools"
+      ExcludeAssets="runtime"
+      PrivateAssets="all"
+    />
   </ItemGroup>
 
   <ItemGroup>

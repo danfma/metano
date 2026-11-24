@@ -11,7 +11,14 @@ namespace Metano.Compiler.IR;
 /// <see cref="IrUnsupportedPattern"/> until a dedicated extraction pass lands.
 /// </para>
 /// </summary>
-public abstract record IrPattern;
+public abstract record IrPattern
+{
+    /// <summary>
+    /// The pattern matches every value with no test: a discard <c>_</c> or a
+    /// <c>var</c> designation. One rule for every target's catch-all detection.
+    /// </summary>
+    public bool AlwaysMatches => this is IrDiscardPattern or IrVarPattern;
+}
 
 /// <summary>Constant pattern: <c>case 1:</c>, <c>x is null</c>, <c>x is "foo"</c>.</summary>
 public sealed record IrConstantPattern(IrExpression Value) : IrPattern
