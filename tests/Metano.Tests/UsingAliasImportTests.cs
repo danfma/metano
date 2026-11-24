@@ -525,7 +525,9 @@ public class UsingAliasImportTests
         bindings.Add("Decimal", alias: null, typeOnly: false);
         bindings.Add("Decimal", alias: "Money", typeOnly: true);
 
-        var import = bindings.ToImport("decimal.js");
+        var import = bindings.ToImport(
+            new Metano.Compiler.TypeScript.AST.TsPackageModule("decimal.js")
+        );
 
         await Assert.That(import.Names).IsEquivalentTo(["Decimal"]);
         await Assert.That(import.TypeOnly).IsFalse();

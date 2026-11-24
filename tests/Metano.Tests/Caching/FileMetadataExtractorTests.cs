@@ -17,7 +17,7 @@ public class FileMetadataExtractorTests
         var source = new TsSourceFile(
             "foo/bar.ts",
             [
-                new TsImport(["UserId"], "#/shared-kernel/user-id"),
+                new TsImport(["UserId"], new TsLocalModule("shared-kernel/user-id")),
                 new TsClass("Bar", null, [], Exported: true),
                 new TsInterface("BarOptions", [], Exported: true),
             ]
@@ -27,7 +27,8 @@ public class FileMetadataExtractorTests
 
         await Assert.That(meta.Path).IsEqualTo("foo/bar.ts");
         await Assert.That(meta.Imports.Count).IsEqualTo(1);
-        await Assert.That(meta.Imports[0].From).IsEqualTo("#/shared-kernel/user-id");
+        await Assert.That(meta.Imports[0].From).IsEqualTo("shared-kernel/user-id");
+        await Assert.That(meta.Imports[0].FromLocalFile).IsTrue();
         await Assert.That(meta.Imports[0].Names[0]).IsEqualTo("UserId");
         await Assert.That(meta.Exports.Count).IsEqualTo(2);
 
@@ -92,7 +93,7 @@ public class FileMetadataExtractorTests
         var source = new TsSourceFile(
             "foo/bar.ts",
             [
-                new TsReExport(["Foo"], "#/foo"),
+                new TsReExport(["Foo"], new TsLocalModule("foo")),
                 new TsModuleExport("Bar", IsDefault: false),
                 new TsExportImportAlias("Alias", "Target"),
             ]
@@ -111,7 +112,10 @@ public class FileMetadataExtractorTests
         var meta = new CachedFileMetadata(
             "foo/bar.ts",
             "deadbeef",
-            [new CachedImport(["UserId"], "#/shared-kernel/user-id")],
+            [
+                new CachedImport(["UserId"], "shared-kernel/user-id", FromLocalFile: true),
+                new CachedImport(["Decimal"], "decimal.js"),
+            ],
             [
                 new CachedExport("CClass", CachedExportKind.Class),
                 new CachedExport("fFunc", CachedExportKind.Function),
@@ -125,7 +129,16 @@ public class FileMetadataExtractorTests
         var stub = FileMetadataExtractor.BuildStub(meta);
 
         await Assert.That(stub.FileName).IsEqualTo("foo/bar.ts");
-        await Assert.That(stub.Statements.OfType<TsImport>().Count()).IsEqualTo(1);
+
+        await Assert
+            .That(stub.Statements.OfType<TsImport>().Select(import => import.From))
+            .IsEquivalentTo(
+                new TsModuleSpecifier[]
+                {
+                    new TsLocalModule("shared-kernel/user-id"),
+                    new TsPackageModule("decimal.js"),
+                }
+            );
 
         await Assert
             .That(stub.Statements.OfType<TsClass>().Any(c => c.Name == "CClass" && c.Exported))
@@ -166,7 +179,7 @@ public class FileMetadataExtractorTests
         var source = new TsSourceFile(
             "foo/bar.ts",
             [
-                new TsImport(["Helper"], "#/util/helper"),
+                new TsImport(["Helper"], new TsLocalModule("util/helper")),
                 new TsClass("Internal", null, [], Exported: false),
             ]
         );
@@ -238,8 +251,8 @@ public class FileMetadataExtractorTests
             [typeof(TsNamespaceDeclaration)] = new TsNamespaceDeclaration("NNs", []),
             [typeof(TsTypeAlias)] = new TsTypeAlias("TTa", new TsAnyType()),
             [typeof(TsInterface)] = new TsInterface("IIf", []),
-            [typeof(TsImport)] = new TsImport(["X"], "#/x"),
-            [typeof(TsReExport)] = new TsReExport(["X"], "#/x"),
+            [typeof(TsImport)] = new TsImport(["X"], new TsLocalModule("x")),
+            [typeof(TsReExport)] = new TsReExport(["X"], new TsLocalModule("x")),
             [typeof(TsModuleExport)] = new TsModuleExport("Mod", false),
             [typeof(TsExportImportAlias)] = new TsExportImportAlias("Alias", "Target"),
             [typeof(TsTopLevelStatement)] = new TsTopLevelStatement(new TsRawStatement(";")),

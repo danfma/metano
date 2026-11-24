@@ -42,6 +42,12 @@ public sealed class ImportCollector(
     /// </summary>
     private const string TemporalModuleName = "@js-temporal/polyfill";
 
+    /// <summary>The root <c>metano-runtime</c> module as an import source.</summary>
+    private static readonly TsPackageModule RuntimeModule = new(RuntimeModuleName);
+
+    /// <summary>The runtime collections barrel as an import source.</summary>
+    private static readonly TsPackageModule CollectionsModule = new(RuntimeCollections.Module);
+
     /// <summary>The <c>metano-runtime</c> descriptor types a file imports as types only.</summary>
     private static readonly IReadOnlySet<string> RuntimeDescriptorTypeNames = new HashSet<string>(
         StringComparer.Ordinal
@@ -255,7 +261,7 @@ public sealed class ImportCollector(
             ) && !runtimeImported.Contains("Grouping")
         )
         {
-            imports.Add(new TsImport(["Grouping"], RuntimeModuleName, TypeOnly: true));
+            imports.Add(new TsImport(["Grouping"], RuntimeModule, TypeOnly: true));
             runtimeImported.Add("Grouping");
         }
 
@@ -270,7 +276,7 @@ public sealed class ImportCollector(
 
         if (descriptorTypes.Length > 0)
         {
-            imports.Add(new TsImport(descriptorTypes, RuntimeModuleName, TypeOnly: true));
+            imports.Add(new TsImport(descriptorTypes, RuntimeModule, TypeOnly: true));
             runtimeImported.UnionWith(descriptorTypes);
         }
 
@@ -285,7 +291,7 @@ public sealed class ImportCollector(
             // The dedicated UUID line and any helper-bucket line carrying UUID
             // merge into one import below (MergeImportsByPath dedupes by
             // name and alias), so the buckets stay untouched.
-            imports.Add(new TsImport(["UUID"], RuntimeModuleName));
+            imports.Add(new TsImport(["UUID"], RuntimeModule));
             runtimeImported.Add("UUID");
         }
 
@@ -297,8 +303,9 @@ public sealed class ImportCollector(
         if (runtimeHelperReferences.Count > 0)
         {
             imports.Add(
-                new TsImport(runtimeHelperReferences.OrderBy(n => n).ToArray(), RuntimeModuleName)
+                new TsImport(runtimeHelperReferences.OrderBy(n => n).ToArray(), RuntimeModule)
             );
+
             runtimeImported.UnionWith(runtimeHelperReferences);
         }
 
@@ -313,8 +320,9 @@ public sealed class ImportCollector(
         if (templateRuntimeHelpers.Count > 0)
         {
             imports.Add(
-                new TsImport(templateRuntimeHelpers.OrderBy(n => n).ToArray(), RuntimeModuleName)
+                new TsImport(templateRuntimeHelpers.OrderBy(n => n).ToArray(), RuntimeModule)
             );
+
             runtimeImported.UnionWith(templateRuntimeHelpers);
         }
 
@@ -327,7 +335,7 @@ public sealed class ImportCollector(
             imports.Add(
                 new TsImport(
                     linqPipeHelpers.OrderBy(n => n).ToArray(),
-                    "metano-runtime/system/linq"
+                    new TsPackageModule("metano-runtime/system/linq")
                 )
             );
         }
@@ -342,32 +350,42 @@ public sealed class ImportCollector(
         // merged into a single named-import line. Default imports are kept
         // separate because the syntax `import Foo from "..."` only supports one name.
         var byPath = new Dictionary<string, (List<string> Names, bool IsDefault)>();
+
         foreach (var (typeName, origin) in crossPackageOrigins)
         {
             if (!importedNames.Add(typeName))
                 continue;
+
             // An import line is actually being emitted for this package — promote
             // the resolver's staged version hint into a real package.json
             // dependency. (Types whose origin was resolved but which erased never
             // reach this loop, so their package stays out of dependencies.)
             _typeMappingContext.ConfirmCrossPackageDependency(origin.PackageName);
+
             var importPath =
                 origin.SubPath.Length > 0
                     ? $"{origin.PackageName}/{origin.SubPath}"
                     : origin.PackageName;
+
             // Default imports never merge — emit them as their own line.
             if (origin.IsDefault)
             {
-                imports.Add(new TsImport([typeName], importPath, IsDefault: true));
+                imports.Add(
+                    new TsImport([typeName], new TsPackageModule(importPath), IsDefault: true)
+                );
+
                 continue;
             }
+
             if (!byPath.TryGetValue(importPath, out var bucket))
             {
                 bucket = (new List<string>(), false);
                 byPath[importPath] = bucket;
             }
+
             bucket.Names.Add(typeName);
         }
+
         foreach (var (importPath, bucket) in byPath.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             // Per-name type-only detection. With `verbatimModuleSyntax: true` in the
@@ -390,7 +408,7 @@ public sealed class ImportCollector(
             imports.Add(
                 new TsImport(
                     bucket.Names.ToArray(),
-                    importPath,
+                    new TsPackageModule(importPath),
                     TypeOnly: allTypeOnly,
                     TypeOnlyNames: !allTypeOnly && anyTypeOnly ? typeOnlyNames : null
                 )
@@ -412,10 +430,14 @@ public sealed class ImportCollector(
 
             imports.Add(
                 aliased.Origin.IsDefault
-                    ? new TsImport([aliased.Alias], importPath, IsDefault: true)
+                    ? new TsImport(
+                        [aliased.Alias],
+                        new TsPackageModule(importPath),
+                        IsDefault: true
+                    )
                     : new TsImport(
                         [aliased.Canonical],
-                        importPath,
+                        new TsPackageModule(importPath),
                         TypeOnly: !aliased.IsValue,
                         Aliases: new Dictionary<string, string>(StringComparer.Ordinal)
                         {
@@ -430,7 +452,7 @@ public sealed class ImportCollector(
         // Same strategy the cross-package loop above uses — keeps barrel-first output
         // clean and Biome-friendly (e.g., all-type-only → whole-statement `import type`
         // rather than per-name `{ type A, type B }`).
-        var localByPath = new Dictionary<string, ImportBindings>(StringComparer.Ordinal);
+        var localByPath = new Dictionary<TsModuleSpecifier, ImportBindings>();
 
         // Per-specifier dedup inside a bucket. The outer `importedNames` set dedupes
         // by the *referenced* identifier (the key used to look up the entry), but
@@ -441,7 +463,7 @@ public sealed class ImportCollector(
         // value and type-only across iterations, the value form wins — type-only is
         // the narrower claim, and runtime-imported names must not be demoted to
         // type-only imports (would break `new Foo(...)` at runtime).
-        void AddLocal(string importPath, string name, bool typeOnly)
+        void AddLocal(TsModuleSpecifier importPath, string name, bool typeOnly)
         {
             if (!localByPath.TryGetValue(importPath, out var bucket))
             {
@@ -454,7 +476,12 @@ public sealed class ImportCollector(
 
         // A project type: bound under every `using` alias the file spells for it, and
         // plainly only when the file also names it by its own name.
-        void AddLocalType(string importPath, string canonical, string tsName, bool typeOnly)
+        void AddLocalType(
+            TsModuleSpecifier importPath,
+            string canonical,
+            string tsName,
+            bool typeOnly
+        )
         {
             if (!aliasBindings.TryGetValue(canonical, out var aliases))
             {
@@ -498,7 +525,7 @@ public sealed class ImportCollector(
                         ? $"{crossOrigin.PackageName}/{crossOrigin.SubPath}"
                         : crossOrigin.PackageName;
 
-                AddLocal(crossPath, name, typeOnly: false);
+                AddLocal(new TsPackageModule(crossPath), name, typeOnly: false);
 
                 return;
             }
@@ -509,8 +536,7 @@ public sealed class ImportCollector(
             if (erasableOwner.Namespace == currentNs && erasableOwner.FileName == currentFileName)
                 return;
 
-            var fnPath = _context.PathNaming.ComputeRelativeImportPath(
-                currentNs,
+            var fnPath = _context.PathNaming.LocalModule(
                 erasableOwner.Namespace,
                 erasableOwner.FileName
             );
@@ -548,15 +574,17 @@ public sealed class ImportCollector(
                         [extImport.Name] = typeName,
                     };
                 var isTypeOnly = !extImport.IsDefault && !valueTypes.Contains(typeName);
+
                 imports.Add(
                     new TsImport(
                         [extImport.Name],
-                        extImport.From,
+                        new TsPackageModule(extImport.From),
                         IsDefault: extImport.IsDefault,
                         TypeOnly: isTypeOnly,
                         Aliases: aliases
                     )
                 );
+
                 // Track for auto-deps when [Import] declared a Version. The package
                 // name is `extImport.From` (the module specifier).
                 if (extImport.Version is not null && extImport.Version.Length > 0)
@@ -585,11 +613,7 @@ public sealed class ImportCollector(
 
                 if (guarded.Namespace == currentNs && guardFileName == currentFileName)
                     continue; // same file
-                var guardPath = _context.PathNaming.ComputeRelativeImportPath(
-                    currentNs,
-                    guarded.Namespace,
-                    guardFileName
-                );
+                var guardPath = _context.PathNaming.LocalModule(guarded.Namespace, guardFileName);
 
                 // Guards are functions → always imported as values, never type-only.
                 AddLocal(guardPath, typeName, typeOnly: false);
@@ -611,12 +635,14 @@ public sealed class ImportCollector(
             {
                 if (helperOwner.Namespace == currentNs && helperOwner.FileName == currentFileName)
                     continue;
-                var helperPath = _context.PathNaming.ComputeRelativeImportPath(
-                    currentNs,
+
+                var helperPath = _context.PathNaming.LocalModule(
                     helperOwner.Namespace,
                     helperOwner.FileName
                 );
+
                 AddLocal(helperPath, typeName, typeOnly: false);
+
                 continue;
             }
 
@@ -686,11 +712,11 @@ public sealed class ImportCollector(
 
             // Path is computed against the FILE name (not the type name) so multiple
             // types co-located in the same file resolve to the same import path.
-            var importPath = _context.PathNaming.ComputeRelativeImportPath(
-                currentNs,
+            var importPath = _context.PathNaming.LocalModule(
                 referencedRef.Namespace,
                 referencedRef.FileName
             );
+
             var typeOnly = !valueTypes.Contains(typeName);
             AddLocalType(importPath, typeName, referencedRef.TsName, typeOnly);
         }
@@ -709,9 +735,14 @@ public sealed class ImportCollector(
         //   - mixed         → `import { A, type B } from "..."`       (per-name)
         // The whole-statement form is preferred when everything is type-only so Biome's
         // `noImportTypeQualifier` lint stays quiet.
-        foreach (
-            var (importPath, bucket) in localByPath.OrderBy(kv => kv.Key, StringComparer.Ordinal)
-        )
+        var importerFileKey = _context.PathNaming.FileKey(currentNs, currentFileName);
+
+        var orderedLocalImports = localByPath.OrderBy(
+            kv => _context.ModuleSpecifiers.Render(kv.Key, importerFileKey),
+            StringComparer.Ordinal
+        );
+
+        foreach (var (importPath, bucket) in orderedLocalImports)
             imports.Add(bucket.ToImport(importPath));
 
         // Template-driven external imports collected from TsTemplate.ExternalImports
@@ -738,10 +769,14 @@ public sealed class ImportCollector(
                 // facade's own name (#553) — so it takes no alias.
                 imports.Add(
                     ext.IsDefault
-                        ? new TsImport([bindingName], ext.From, IsDefault: true)
+                        ? new TsImport(
+                            [bindingName],
+                            new TsPackageModule(ext.From),
+                            IsDefault: true
+                        )
                         : new TsImport(
                             [ext.Name],
-                            ext.From,
+                            new TsPackageModule(ext.From),
                             Aliases: BuildExternalImportAliases(ext)
                         )
                 );
@@ -781,9 +816,7 @@ public sealed class ImportCollector(
             .Order(Ordinal)
             .ToArray();
 
-        return missing.Length > 0
-            ? [new TsImport(missing, RuntimeCollections.Module, TypeOnly: true)]
-            : [];
+        return missing.Length > 0 ? [new TsImport(missing, CollectionsModule, TypeOnly: true)] : [];
     }
 
     /// <summary>
@@ -798,7 +831,7 @@ public sealed class ImportCollector(
 
     private static IEnumerable<TsImport> RoutedToCollectionsBarrel(TsImport import)
     {
-        if (import.From != RuntimeModuleName || import.IsDefault || import.IsNamespace)
+        if (import.From != RuntimeModule || import.IsDefault || import.IsNamespace)
             return [import];
 
         var routed = import.Names.Where(RuntimeCollections.IsCollectionsName).ToArray();
@@ -807,7 +840,7 @@ public sealed class ImportCollector(
             return [import];
 
         var kept = import.Names.Except(routed, Ordinal).ToArray();
-        var collections = PartOf(import, routed) with { From = RuntimeCollections.Module };
+        var collections = PartOf(import, routed) with { From = CollectionsModule };
 
         return kept.Length == 0 ? [collections] : [PartOf(import, kept), collections];
     }
@@ -895,9 +928,12 @@ public sealed class ImportCollector(
     /// the runtime doesn't claim stays a user binding.
     /// </summary>
     private static bool IsRuntimeNamedImportLine(TsImport import) =>
-        import.From == RuntimeModuleName
-        || import.From.StartsWith($"{RuntimeModuleName}/")
-        || import.From == TemporalModuleName;
+        import.From is TsPackageModule { Specifier: var specifier }
+        && (
+            specifier == RuntimeModuleName
+            || specifier.StartsWith($"{RuntimeModuleName}/")
+            || specifier == TemporalModuleName
+        );
 
     /// <summary>
     /// Every name that would shadow or clash with a helper binding: the
@@ -1131,7 +1167,7 @@ public sealed class ImportCollector(
         string currentNs,
         string currentFileName,
         HashSet<string> importedNames,
-        Action<string, string, bool> addLocal
+        Action<TsModuleSpecifier, string, bool> addLocal
     )
     {
         foreach (var (exportName, owners) in ownersByModuleExport.OrderBy(kv => kv.Key))
@@ -1158,11 +1194,7 @@ public sealed class ImportCollector(
                 continue;
             }
 
-            var ownerPath = _context.PathNaming.ComputeRelativeImportPath(
-                currentNs,
-                ownerRef.Namespace,
-                ownerRef.FileName
-            );
+            var ownerPath = _context.PathNaming.LocalModule(ownerRef.Namespace, ownerRef.FileName);
 
             addLocal(ownerPath, exportName, false);
         }

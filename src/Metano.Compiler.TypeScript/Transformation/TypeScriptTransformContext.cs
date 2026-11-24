@@ -57,6 +57,9 @@ public sealed class TypeScriptTransformContext(
     public IAssemblySymbol? CurrentAssembly { get; } = currentAssembly;
     public bool AssemblyWideTranspile { get; } = assemblyWideTranspile;
 
+    /// <summary>The single decision point for the text of every module specifier.</summary>
+    public required ModuleSpecifierRenderer ModuleSpecifiers { get; init; }
+
     /// <summary>
     /// The runtime classes of the BCL exceptions, read from the
     /// <c>[ExportFromBcl]</c> entries in scope (spec 011 FR-014): the one

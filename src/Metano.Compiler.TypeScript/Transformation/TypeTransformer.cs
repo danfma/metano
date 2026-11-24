@@ -84,10 +84,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     /// <summary>
     /// Optional isolated subpath-imports alias for internal imports, forwarded to
-    /// <see cref="PathNaming"/> and <see cref="CyclicReferenceDetector"/>. <c>null</c>
+    /// <see cref="ModuleSpecifiers"/> and <see cref="CyclicReferenceDetector"/>. <c>null</c>
     /// keeps the default <c>#</c> behavior. Set via <c>--import-alias</c>.
     /// </summary>
     public string? ImportAlias { get; init; }
+
+    /// <summary>
+    /// The single decision point for the text of every module specifier this run
+    /// prints, shared by the import collector's ordering and every
+    /// <see cref="Printer"/> (spec 004 Amendment A1).
+    /// </summary>
+    public ModuleSpecifierRenderer ModuleSpecifiers => field ??= new(ImportAlias);
 
     /// <summary>
     /// Output directory for the active run, supplied by the host
@@ -618,7 +625,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         // All callers now use the explicit TypeMappingContext — no static assignment needed.
 
-        _pathNaming = new PathNaming(ir.LocalRootNamespace, ImportAlias);
+        _pathNaming = new PathNaming(ir.LocalRootNamespace);
 
         var declarativeMappings = DeclarativeMappingRegistry.FromIr(ir);
 
@@ -681,6 +688,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             )
             {
                 TypeMapping = typeMappingContext,
+                ModuleSpecifiers = ModuleSpecifiers,
                 UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
                 NoContainerFunctionExports = erasableFunctionExports,
                 SynthesizedAliasesByFile = synthesizedAliasesByFile,
@@ -924,7 +932,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 }
             });
 
-            new ImportCycleCastPass(ImportAlias).Run(outcomes, (index, asserted) =>
+            ImportCycleCastPass.Run(outcomes, (index, asserted) =>
                 TransformGroupFresh(index, groups[index], outcomes, asserted)
             );
 
@@ -1452,7 +1460,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // AND what the cache fingerprints. Stash in
         // _cachedFileContents so the target skips its own Printer
         // call for this path.
-        var printedContent = new Printer().Print(produced);
+        var printedContent = new Printer(moduleSpecifiers: ModuleSpecifiers).Print(produced);
         _cachedFileContents[produced.FileName] = printedContent;
 
         // A group whose casts were asserted for the import graph of this run

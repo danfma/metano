@@ -5,9 +5,8 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <summary>
 /// The directed graph of local imports between generated files: each file
 /// (keyed by its relative path without the <c>.ts</c> extension) points at
-/// every file it imports through the local package alias (<c>#</c>, or the
-/// configured <c>--import-alias</c>, and its <c>/</c> subpaths) or a relative
-/// path. An <c>index.ts</c> also answers to its directory's barrel path.
+/// every generated file it imports (<see cref="TsLocalModule"/>, whose file
+/// key names the target directly; a namespace barrel is its <c>index</c> file).
 /// Imports from external packages are not edges. The value graph keeps only
 /// the imports an ES module evaluates (every import but <c>import type</c>),
 /// the edges that decide the order modules load in.
@@ -15,37 +14,27 @@ namespace Metano.Compiler.TypeScript.Transformation;
 internal sealed class LocalImportGraph
 {
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _edges;
-    private readonly IReadOnlyDictionary<string, string> _byImportKey;
-    private readonly string _aliasPrefix;
+    private readonly IReadOnlySet<string> _fileKeys;
 
     private LocalImportGraph(
         IReadOnlyDictionary<string, IReadOnlyList<string>> edges,
-        IReadOnlyDictionary<string, string> byImportKey,
-        string aliasPrefix
+        IReadOnlySet<string> fileKeys
     )
     {
         _edges = edges;
-        _byImportKey = byImportKey;
-        _aliasPrefix = aliasPrefix;
+        _fileKeys = fileKeys;
     }
-
-    /// <summary>The import alias prefix the graph resolves (<c>#</c> by default).</summary>
-    public string AliasPrefix => _aliasPrefix;
 
     /// <summary>The keys of every file in the graph.</summary>
     public IEnumerable<string> Files => _edges.Keys;
 
     /// <summary>Every import of <paramref name="files"/>, type-only ones included.</summary>
-    public static LocalImportGraph AllImports(
-        IReadOnlyList<TsSourceFile> files,
-        string? importAlias
-    ) => Build(files, importAlias, _ => true);
+    public static LocalImportGraph AllImports(IReadOnlyList<TsSourceFile> files) =>
+        Build(files, _ => true);
 
     /// <summary>The imports of <paramref name="files"/> an ES module evaluates.</summary>
-    public static LocalImportGraph ValueImports(
-        IReadOnlyList<TsSourceFile> files,
-        string? importAlias
-    ) => Build(files, importAlias, import => !import.TypeOnly);
+    public static LocalImportGraph ValueImports(IReadOnlyList<TsSourceFile> files) =>
+        Build(files, import => !import.TypeOnly);
 
     /// <summary>The key of <paramref name="file"/>: its relative path without the <c>.ts</c> extension.</summary>
     public static string KeyOf(TsSourceFile file) =>
@@ -83,7 +72,7 @@ internal sealed class LocalImportGraph
         importer
             .Statements.OfType<TsImport>()
             .Where(import => !import.TypeOnly && ValueBindingsOf(import).Contains(name))
-            .Select(import => Resolve(import.From, KeyOf(importer), _byImportKey, _aliasPrefix))
+            .Select(import => Resolve(import.From, _fileKeys))
             .FirstOrDefault(key => key is not null);
 
     /// <summary>The local names <paramref name="import"/> binds to values (an alias under its local name).</summary>
@@ -106,12 +95,10 @@ internal sealed class LocalImportGraph
 
     private static LocalImportGraph Build(
         IReadOnlyList<TsSourceFile> files,
-        string? importAlias,
         Func<TsImport, bool> isEdge
     )
     {
-        var aliasPrefix = PathNaming.NormalizeImportAliasPrefix(importAlias);
-        var byImportKey = ImportKeys(files);
+        var fileKeys = files.Select(KeyOf).ToHashSet(StringComparer.Ordinal);
 
         // Indexer writes, not ToDictionary: two files of one name (an MS0008
         // collision) keep the last, as the diagnostics that report it expect.
@@ -119,71 +106,18 @@ internal sealed class LocalImportGraph
 
         foreach (var file in files)
         {
-            var importer = KeyOf(file);
-
-            edges[importer] = file
+            edges[KeyOf(file)] = file
                 .Statements.OfType<TsImport>()
                 .Where(isEdge)
-                .Select(import => Resolve(import.From, importer, byImportKey, aliasPrefix))
+                .Select(import => Resolve(import.From, fileKeys))
                 .OfType<string>()
                 .ToList();
         }
 
-        return new LocalImportGraph(edges, byImportKey, aliasPrefix);
+        return new LocalImportGraph(edges, fileKeys);
     }
 
-    /// <summary>
-    /// Every key a local import may name, mapped to its file: the file's own
-    /// key, and for an <c>index</c> file its directory (<c>""</c> for the root
-    /// <c>index.ts</c>).
-    /// </summary>
-    private static Dictionary<string, string> ImportKeys(IReadOnlyList<TsSourceFile> files)
-    {
-        var byImportKey = new Dictionary<string, string>(StringComparer.Ordinal);
-
-        foreach (var key in files.Select(KeyOf))
-        {
-            byImportKey[key] = key;
-
-            if (Path.GetFileName(key).Equals("index", StringComparison.Ordinal))
-                byImportKey[Path.GetDirectoryName(key)?.Replace('\\', '/') ?? ""] = key;
-        }
-
-        return byImportKey;
-    }
-
-    private static string? Resolve(
-        string from,
-        string importerKey,
-        IReadOnlyDictionary<string, string> byImportKey,
-        string aliasPrefix
-    ) =>
-        LocalImportKey(from, importerKey, aliasPrefix) is { } key
-        && byImportKey.TryGetValue(key, out var file)
-            ? file
-            : null;
-
-    /// <summary>
-    /// The key a local import specifier names: the path under the alias, or a
-    /// relative path resolved against the importer's directory. <c>null</c>
-    /// for an external package.
-    /// </summary>
-    private static string? LocalImportKey(string from, string importerKey, string aliasPrefix)
-    {
-        if (from == aliasPrefix)
-            return "";
-
-        var aliasSubpathPrefix = aliasPrefix + "/";
-
-        if (from.StartsWith(aliasSubpathPrefix, StringComparison.Ordinal))
-            return from[aliasSubpathPrefix.Length..];
-
-        if (!from.StartsWith("./", StringComparison.Ordinal))
-            return null;
-
-        var directory = Path.GetDirectoryName(importerKey)?.Replace('\\', '/') ?? "";
-        var relative = from[2..];
-
-        return directory.Length > 0 ? directory + "/" + relative : relative;
-    }
+    /// <summary>The generated file <paramref name="module"/> names; <c>null</c> for an external package.</summary>
+    private static string? Resolve(TsModuleSpecifier module, IReadOnlySet<string> fileKeys) =>
+        module is TsLocalModule { FileKey: var key } && fileKeys.Contains(key) ? key : null;
 }

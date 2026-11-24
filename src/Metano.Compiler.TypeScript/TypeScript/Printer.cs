@@ -2,14 +2,17 @@ using System.Text.RegularExpressions;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Parenthesization;
 using Metano.Compiler.TypeScript.Parenthesization.Templates;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript;
 
 /// <summary>
 /// Walks a TypeScript AST and produces formatted source text.
-/// Modeled after the tsc emitter: AST in, text out.
+/// Modeled after the tsc emitter: AST in, text out. Module specifiers print
+/// through <paramref name="moduleSpecifiers"/>, the single decision point for their
+/// text (<see cref="ModuleSpecifierRenderer.Default"/> when none is given).
 /// </summary>
-public sealed class Printer(string indent = "  ")
+public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? moduleSpecifiers = null)
 {
     /// <summary>The annotation bundlers read as "no side effects, drop when unused".</summary>
     private const string PureAnnotation = "/* @__PURE__ */ ";
@@ -18,6 +21,12 @@ public sealed class Printer(string indent = "  ")
     private const string ProtoKey = "__proto__";
 
     private readonly IndentedStringBuilder _sb = new(indent);
+
+    private readonly ModuleSpecifierRenderer _moduleSpecifiers = moduleSpecifiers
+        ?? ModuleSpecifierRenderer.Default;
+
+    /// <summary>The file key of the module being printed; local specifiers render against it.</summary>
+    private string _importerFileKey = "";
 
     /// <summary>
     /// Prints a whole module: rendering keeps every runtime helper name in
@@ -44,6 +53,7 @@ public sealed class Printer(string indent = "  ")
     internal string PrintWithDeferredHelperNames(TsSourceFile file)
     {
         _sb.Clear();
+        _importerFileKey = ModulePath.Of(file.FileName);
         for (var i = 0; i < file.Statements.Count; i++)
         {
             var stmt = file.Statements[i];
@@ -442,7 +452,7 @@ public sealed class Printer(string indent = "  ")
             _sb.Write(" }");
         }
         _sb.Write(" from ");
-        _sb.WriteQuoted(import.From);
+        _sb.WriteQuoted(SpecifierText(import.From));
         _sb.Write(";");
     }
 
@@ -462,9 +472,12 @@ public sealed class Printer(string indent = "  ")
             _sb.Write(" } from ");
         }
 
-        _sb.WriteQuoted(reExport.From);
+        _sb.WriteQuoted(SpecifierText(reExport.From));
         _sb.Write(";");
     }
+
+    private string SpecifierText(TsModuleSpecifier module) =>
+        _moduleSpecifiers.Render(module, _importerFileKey);
 
     private void PrintTypeAlias(TsTypeAlias alias)
     {

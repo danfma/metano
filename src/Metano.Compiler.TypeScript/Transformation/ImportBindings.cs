@@ -41,7 +41,7 @@ internal sealed class ImportBindings
     /// bound plainly, else under its first alias; every other alias of it is an
     /// extra binding (<c>import { Decimal, Decimal as Money }</c>).
     /// </summary>
-    public TsImport ToImport(string from)
+    public TsImport ToImport(TsModuleSpecifier from)
     {
         var names = new List<string>();
         var typeOnlyNames = new HashSet<string>(StringComparer.Ordinal);

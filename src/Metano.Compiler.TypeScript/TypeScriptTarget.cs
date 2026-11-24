@@ -144,7 +144,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
 
         var crossPackageDependencies = transformer.CrossPackageDependencies;
 
-        var printer = new Printer();
+        var printer = new Printer(moduleSpecifiers: transformer.ModuleSpecifiers);
         var generated = new List<GeneratedFile>(sourceFiles.Count);
         foreach (var file in sourceFiles)
         {

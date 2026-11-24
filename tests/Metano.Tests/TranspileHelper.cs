@@ -211,7 +211,7 @@ public static class TranspileHelper
         };
 
         var files = transformer.TransformAll();
-        var printer = new Printer();
+        var printer = new Printer(moduleSpecifiers: transformer.ModuleSpecifiers);
         var result = new Dictionary<string, string>();
 
         foreach (var file in files)

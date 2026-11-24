@@ -24,9 +24,9 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// 011 FR-019): the interface's descriptor imports the implementer's, which only
 /// extends the interface's type.
 ///
-/// Only intra-project paths (the configurable root alias — <c>#</c> by default, or
-/// <c>#&lt;alias&gt;</c> when <c>--import-alias</c> is set — plus its <c>/</c> subpaths)
-/// participate in the graph. Imports from external packages
+/// Only imports of generated files (<see cref="TsLocalModule"/>) participate in the
+/// graph; the chain is displayed under the import alias (<c>#</c> by default, or
+/// <c>#&lt;alias&gt;</c> when <c>--import-alias</c> is set). Imports from external packages
 /// (<c>metano-runtime</c>, <c>@js-temporal/polyfill</c>, etc.) are skipped — their
 /// resolution lives outside Metano's view of the world.
 /// </summary>
@@ -41,8 +41,8 @@ public static class CyclicReferenceDetector
         if (files.Count == 0)
             return;
 
-        var importGraph = LocalImportGraph.ValueImports(files, importAlias);
-        var aliasPrefix = importGraph.AliasPrefix;
+        var importGraph = LocalImportGraph.ValueImports(files);
+        var aliasPrefix = PathNaming.NormalizeImportAliasPrefix(importAlias);
 
         var graph = importGraph.Files.ToDictionary(
             file => file,

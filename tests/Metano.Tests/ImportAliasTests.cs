@@ -1,15 +1,18 @@
+using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Tests;
 
 /// <summary>
 /// Tests for the configurable isolated subpath-import alias (<c>--import-alias</c>).
-/// Covers both the unit-level specifier shaping in <see cref="PathNaming"/> and the
+/// Covers both the unit-level specifier shaping in <see cref="ModuleSpecifierRenderer"/> and the
 /// end-to-end emitted imports, plus the no-regression guarantee when no alias is set.
 /// The package.json side is covered in <see cref="EmitPackageTests"/>.
 /// </summary>
 public class ImportAliasTests
 {
+    private static readonly PathNaming AppNaming = new("App");
+
     // ── Alias normalization (FR-007) ─────────────────────────────────
 
     [Test]
@@ -27,52 +30,72 @@ public class ImportAliasTests
 
     // ── In-file specifier with an alias (FR-002) ─────────────────────
 
-    [Test]
-    public async Task ComputeRelativeImportPath_WithAlias_UsesAliasKey()
-    {
-        var naming = new PathNaming("App", "contracts");
+    private static string Render(string? alias, string fromNs, string toNs, string fileName) =>
+        new ModuleSpecifierRenderer(alias).Render(
+            AppNaming.LocalModule(toNs, fileName),
+            AppNaming.FileKey(fromNs, "Importer")
+        );
 
+    [Test]
+    public async Task ModuleSpecifier_WithAlias_UsesAliasKey()
+    {
         // Cross-namespace → alias-scoped path to the defining file.
         await Assert
-            .That(naming.ComputeRelativeImportPath("App.Services", "App.Models", "Money"))
+            .That(Render("contracts", "App.Services", "App.Models", "Money"))
             .IsEqualTo("#contracts/models/money");
+
         // Root namespace → alias key + file name.
         await Assert
-            .That(naming.ComputeRelativeImportPath("App.Services", "App", "Root"))
+            .That(Render("contracts", "App.Services", "App", "Root"))
             .IsEqualTo("#contracts/root");
+
         // Same namespace → relative file import, never aliased.
         await Assert
-            .That(naming.ComputeRelativeImportPath("App.Models", "App.Models", "Money"))
+            .That(Render("contracts", "App.Models", "App.Models", "Money"))
             .IsEqualTo("./money");
     }
 
     [Test]
-    public async Task ComputeRelativeImportPath_AliasNormalized_LeadingHashEquivalent()
+    public async Task ModuleSpecifier_AliasNormalized_LeadingHashEquivalent()
     {
-        var withHash = new PathNaming("App", "#contracts");
-        var withoutHash = new PathNaming("App", "contracts");
-
         await Assert
-            .That(withHash.ComputeRelativeImportPath("App.A", "App.B", "T"))
-            .IsEqualTo(withoutHash.ComputeRelativeImportPath("App.A", "App.B", "T"));
+            .That(Render("#contracts", "App.A", "App.B", "T"))
+            .IsEqualTo(Render("contracts", "App.A", "App.B", "T"));
+    }
+
+    [Test]
+    public async Task ModuleSpecifier_BarrelBelowImporter_RendersItsDirectory()
+    {
+        var specifier = new ModuleSpecifierRenderer(null).Render(
+            new TsLocalModule("app/domain/index"),
+            "index"
+        );
+
+        await Assert.That(specifier).IsEqualTo("./app/domain");
+    }
+
+    [Test]
+    public async Task ModuleSpecifier_PackageModule_PrintsVerbatim()
+    {
+        var specifier = new ModuleSpecifierRenderer("contracts").Render(
+            new TsPackageModule("pkg/sub"),
+            "a/b"
+        );
+
+        await Assert.That(specifier).IsEqualTo("pkg/sub");
     }
 
     // ── No-regression when unset (FR-004 / SC-002) ───────────────────
 
     [Test]
-    public async Task ComputeRelativeImportPath_NoAlias_UsesDefaultHashKey()
+    public async Task ModuleSpecifier_NoAlias_UsesDefaultHashKey()
     {
-        var naming = new PathNaming("App");
-
         await Assert
-            .That(naming.ComputeRelativeImportPath("App.Services", "App.Models", "Money"))
+            .That(Render(null, "App.Services", "App.Models", "Money"))
             .IsEqualTo("#/models/money");
-        await Assert
-            .That(naming.ComputeRelativeImportPath("App.Services", "App", "Root"))
-            .IsEqualTo("#/root");
-        await Assert
-            .That(naming.ComputeRelativeImportPath("App.Models", "App.Models", "Money"))
-            .IsEqualTo("./money");
+
+        await Assert.That(Render(null, "App.Services", "App", "Root")).IsEqualTo("#/root");
+        await Assert.That(Render(null, "App.Models", "App.Models", "Money")).IsEqualTo("./money");
     }
 
     // ── End-to-end emitted imports (FR-002) ──────────────────────────
@@ -107,6 +130,7 @@ public class ImportAliasTests
         await Assert
             .That(files.Values.Any(c => c.Contains("from \"#contracts/app/models/money\"")))
             .IsTrue();
+
         // The default `#` alias never appears.
         await Assert.That(files.Values.Any(c => c.Contains("from \"#/"))).IsFalse();
         await Assert.That(files.Values.Any(c => c.Contains("from \"#\""))).IsFalse();
@@ -122,6 +146,7 @@ public class ImportAliasTests
         await Assert
             .That(files.Values.Any(c => c.Contains("from \"#/app/models/money\"")))
             .IsTrue();
+
         // No alias-scoped key leaks in.
         await Assert.That(files.Values.Any(c => c.Contains("#contracts"))).IsFalse();
     }

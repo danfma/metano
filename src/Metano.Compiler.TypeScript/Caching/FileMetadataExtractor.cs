@@ -69,13 +69,27 @@ public static class FileMetadataExtractor
     private static CachedImport CaptureImport(TsImport import) =>
         new(
             import.Names,
-            import.From,
+            SpecifierTextOf(import.From),
             import.TypeOnly,
             import.IsDefault,
             import.TypeOnlyNames is null ? null : import.TypeOnlyNames.ToArray(),
             import.IsNamespace,
-            import.Aliases
+            import.Aliases,
+            FromLocalFile: import.From is TsLocalModule
         );
+
+    private static string SpecifierTextOf(TsModuleSpecifier module) =>
+        module switch
+        {
+            TsPackageModule package => package.Specifier,
+            TsLocalModule local => local.FileKey,
+            _ => throw new InvalidOperationException(
+                $"Unhandled module specifier '{module.GetType().Name}'."
+            ),
+        };
+
+    private static TsModuleSpecifier SpecifierOf(CachedImport import) =>
+        import.FromLocalFile ? new TsLocalModule(import.From) : new TsPackageModule(import.From);
 
     /// <summary>
     /// Maps each exported <c>TsTopLevel</c> subtype to its
@@ -170,7 +184,7 @@ public static class FileMetadataExtractor
             statements.Add(
                 new TsImport(
                     import.Names.ToArray(),
-                    import.From,
+                    SpecifierOf(import),
                     import.TypeOnly,
                     import.IsDefault,
                     import.TypeOnlyNames is null
