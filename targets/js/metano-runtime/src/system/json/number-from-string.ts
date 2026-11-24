@@ -122,10 +122,13 @@ function isWithinRange(value: bigint, min: bigint, max: bigint): boolean {
 
 /**
  * Reads the floating-point grammar; `staysFinite` rejects a value that
- * overflows the target type. The value keeps double precision, as a JSON
- * number read into a `Single` does.
+ * overflows the target type, and `round` brings the double to the target's
+ * precision (a `Single` rounds to single precision, #695).
  */
-function floatingPointReader(staysFinite: FiniteCheck): TextReader<number> {
+function floatingPointReader(
+  staysFinite: FiniteCheck,
+  round: (value: number) => number,
+): TextReader<number> {
   return (text) => {
     const literal = FLOATING_POINT_LITERALS.get(text);
 
@@ -141,12 +144,29 @@ function floatingPointReader(staysFinite: FiniteCheck): TextReader<number> {
 
     const value = Number(text);
 
-    return staysFinite(parts, value) ? value : undefined;
+    return staysFinite(parts, value) ? round(value) : undefined;
   };
 }
 
 function fitsDouble(_: RegExpExecArray, value: number): boolean {
   return Number.isFinite(value);
+}
+
+/** The largest `Single`, `(2 − 2^-23) × 2^127`. */
+const SINGLE_MAX_VALUE = 3.4028234663852886e38;
+
+/**
+ * A finite double that {@link fitsSingle} accepted, rounded to single
+ * precision (#695). Only the threshold double itself would round to an
+ * infinity (a tie to even); its text was below the threshold, so it is
+ * `±Single.MaxValue`.
+ */
+function roundToFiniteSingle(value: number): number {
+  const single = Math.fround(value);
+
+  return Number.isFinite(single) || !Number.isFinite(value)
+    ? single
+    : Math.sign(single) * SINGLE_MAX_VALUE;
 }
 
 /**
@@ -272,8 +292,8 @@ const INTEGER_TOKEN_READERS = /* @__PURE__ */ lazyValue(
 const NUMBER_TEXT_READERS = /* @__PURE__ */ lazyValue(
   (): Readonly<Record<NumberTypeName, TextReader<number | bigint>>> => ({
     ...STRICT_INTEGER_READERS(),
-    "System.Single": floatingPointReader(fitsSingle),
-    "System.Double": floatingPointReader(fitsDouble),
+    "System.Single": floatingPointReader(fitsSingle, roundToFiniteSingle),
+    "System.Double": floatingPointReader(fitsDouble, (value) => value),
   }),
 );
 

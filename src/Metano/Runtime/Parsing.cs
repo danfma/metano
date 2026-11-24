@@ -160,8 +160,8 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(float),
     nameof(float.TryParse),
-    JsTemplate = "tryParseFloat64($0)",
-    RuntimeImports = "tryParseFloat64",
+    JsTemplate = "tryParseFloat32($0)",
+    RuntimeImports = "tryParseFloat32",
     WhenArgCount = 2
 )]
 [assembly: MapMethod(
@@ -509,15 +509,15 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(float),
     nameof(float.Parse),
-    JsTemplate = "parseFloat64($0)",
-    RuntimeImports = "parseFloat64",
+    JsTemplate = "parseFloat32($0)",
+    RuntimeImports = "parseFloat32",
     WhenParameterTypes = [typeof(string)]
 )]
 [assembly: MapMethod(
     typeof(float),
     nameof(float.Parse),
-    JsTemplate = "parseFloat64($0)",
-    RuntimeImports = "parseFloat64",
+    JsTemplate = "parseFloat32($0)",
+    RuntimeImports = "parseFloat32",
     WhenParameterTypes = [typeof(string), typeof(IFormatProvider)]
 )]
 [assembly: MapMethod(

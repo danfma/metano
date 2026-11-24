@@ -99,7 +99,7 @@ public class IntegerToDecimalConversionTests
 
         var output = result["zero.ts"];
 
-        await Assert.That(output).Contains("return new Decimal(a % b + 0);");
+        await Assert.That(output).Contains("return new Decimal(intRem(a, b) + 0);");
         await Assert.That(output).Contains("return n == null ? null : new Decimal(n + 0);");
         await Assert.That(output).DoesNotContain("-3 + 0");
     }

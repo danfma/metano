@@ -11,6 +11,7 @@
 
 import { ArgumentException } from "./exceptions/argument-exception.ts";
 import { ArgumentOutOfRangeException } from "./exceptions/argument-out-of-range-exception.ts";
+import { OverflowException } from "./exceptions/overflow-exception.ts";
 
 /**
  * Mirror of `System.MidpointRounding`. The numeric values match the .NET enum, so a
@@ -179,4 +180,22 @@ function assertMode(mode: number): asserts mode is MidpointRounding {
       "mode",
     );
   }
+}
+
+const INT32_MIN = -2147483648;
+
+/**
+ * `Math.Abs(int)` (#695): JavaScript's `Math.abs` returns `2147483648` for
+ * `int.MinValue`, whose magnitude does not fit `int`.
+ *
+ * @throws OverflowException, with .NET's message, for `int.MinValue`.
+ */
+export function absInt32(value: number): number {
+  if (value === INT32_MIN) {
+    throw new OverflowException(
+      "Negating the minimum value of a twos complement number is invalid.",
+    );
+  }
+
+  return Math.abs(value);
 }

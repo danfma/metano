@@ -156,8 +156,7 @@ function numberResult(result: readonly [found: boolean, value: bigint]): ParseRe
 }
 
 /**
- * Mirrors `double.TryParse(string, out double)` (and `float.TryParse`, whose values the
- * generated code holds as `number` too). A value beyond the `double` range parses to
+ * Mirrors `double.TryParse(string, out double)`. A value beyond the `double` range parses to
  * an infinity, as it does since .NET Core 3.0.
  */
 export function tryParseFloat64(text: string | null | undefined): ParseResult<number> {
@@ -177,6 +176,17 @@ export function tryParseFloat64(text: string | null | undefined): ParseResult<nu
 }
 
 /**
+ * Mirrors `float.TryParse(string, out float)`: {@link tryParseFloat64}'s grammar, the value
+ * rounded to single precision as .NET's parser rounds it (#695). A value beyond the
+ * `float` range parses to an infinity.
+ */
+export function tryParseFloat32(text: string | null | undefined): ParseResult<number> {
+  const [found, value] = tryParseFloat64(text);
+
+  return [found, Math.fround(value)];
+}
+
+/**
  * Mirrors `bool.TryParse(string, out bool)`: `true` / `false` in any letter case, around
  * whitespace (JavaScript's `\s`, close to .NET's `char.IsWhiteSpace`) and `\0` characters.
  */
@@ -191,8 +201,7 @@ export function tryParseBoolean(text: string | null | undefined): ParseResult<bo
 }
 
 /**
- * Mirrors `double.Parse(string)` (and `float.Parse`, whose values the generated code holds as
- * `number` too).
+ * Mirrors `double.Parse(string)`.
  *
  * @throws ArgumentNullException for `null`.
  * @throws FormatException for text outside the grammar of {@link tryParseFloat64}.
@@ -209,6 +218,17 @@ export function parseFloat64(text: string | null | undefined): number {
   }
 
   return value;
+}
+
+/**
+ * Mirrors `float.Parse(string)`: {@link parseFloat64}, the value rounded to single precision
+ * as .NET's parser rounds it (#695).
+ *
+ * @throws ArgumentNullException for `null`.
+ * @throws FormatException for text outside the grammar of {@link tryParseFloat64}.
+ */
+export function parseFloat32(text: string | null | undefined): number {
+  return Math.fround(parseFloat64(text));
 }
 
 /**

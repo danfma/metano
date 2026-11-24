@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Decimal } from "#/system/decimal";
 import { OverflowException } from "#/system/exceptions";
-import { narrowFromDecimal } from "#/system/int64";
+import { charCodeFromDecimal, narrowFromDecimal } from "#/system/int64";
 
 describe("decimal to narrow integer", () => {
   test.each([NaN, Infinity, -Infinity])("rejects non-finite decimal %s with the target message", (value) => {
@@ -33,6 +33,22 @@ describe("decimal to narrow integer", () => {
   ] as const)("checks %s-bit signed=%s %s", (bits, signed, text, type) => {
     expect(() => narrowFromDecimal(new Decimal(text), bits, signed)).toThrow(
       new OverflowException(`Value was either too large or too small for ${type}.`),
+    );
+  });
+});
+
+describe("decimal to char code", () => {
+  test.each([
+    ["66.7", 66],
+    ["65535.9", 65535],
+    ["-0.9", 0],
+  ] as const)("truncates %s to %s", (text, expected) => {
+    expect(charCodeFromDecimal(new Decimal(text))).toBe(expected);
+  });
+
+  test.each(["65536", "-1"])("rejects %s with .NET's character message", (text) => {
+    expect(() => charCodeFromDecimal(new Decimal(text))).toThrow(
+      new OverflowException("Value was either too large or too small for a character."),
     );
   });
 });

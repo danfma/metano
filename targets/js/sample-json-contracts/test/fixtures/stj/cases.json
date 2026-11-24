@@ -2402,5 +2402,34 @@
       "stjMessage": "The JSON value could not be converted to SampleJsonContracts.Int64Box."
     },
     "divergence": "spec 012 012h: a ulong member takes no sign, not even -0, through deserializeText too (I8 pins the root); both sides run it, the TypeScript side through deserializeText (#605)"
+  },
+  {
+    "id": "F1",
+    "context": "StudioJsonContext",
+    "getter": "singleBox",
+    "direction": "roundtrip",
+    "expectedClass": "SingleBox",
+    "json": "{\"F\":0.1,\"G\":null}"
+  },
+  {
+    "id": "F2",
+    "context": "StudioJsonContext",
+    "getter": "singleBox",
+    "direction": "write",
+    "json": "{\"F\":3.4028235E+38,\"G\":1E+20}"
+  },
+  {
+    "id": "F3",
+    "context": "StudioJsonContext",
+    "getter": "singleBox",
+    "direction": "write",
+    "sides": [
+      "stj"
+    ],
+    "error": {
+      "class": "ArgumentException",
+      "message": ".NET number values such as positive and negative infinity cannot be written as valid JSON. To make it work when using 'JsonSerializer', consider specifying 'JsonNumberHandling.AllowNamedFloatingPointLiterals' (see https://learn.microsoft.com/dotnet/api/system.text.json.serialization.jsonnumberhandling)."
+    },
+    "divergence": "stj only: System.Text.Json throws for a non-finite Single without AllowNamedFloatingPointLiterals; the TypeScript writer keeps writing null (JSON.stringify of NaN)"
   }
 ]

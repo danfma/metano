@@ -1,4 +1,4 @@
-import { HashCode, copyRecordWith, formatDouble, isFloat64, isInt32, valueEquals, valueHashCode } from "metano-runtime";
+import { HashCode, absInt32, copyRecordWith, formatDouble, isFloat64, isInt32, valueEquals, valueHashCode } from "metano-runtime";
 
 export class RTol {
   constructor(readonly v: number) { }
@@ -274,7 +274,7 @@ export class HMid extends HTop {
   }
 
   equalsOSlack(o: HMid, slack: number): boolean {
-    return Math.abs((o.b - this.b) | 0) <= slack;
+    return absInt32((o.b - this.b) | 0) <= slack;
   }
 
   equalsByValue(other: any): boolean {
@@ -366,7 +366,7 @@ export class UObjEq {
   }
 
   equalsOSlack(o: UObjEq, slack: number): boolean {
-    return Math.abs((o.x - this.x) | 0) <= slack;
+    return absInt32((o.x - this.x) | 0) <= slack;
   }
 
   equalsByValue(o: Object | null): boolean {
@@ -613,7 +613,7 @@ export class SEqJoin {
   }
 
   equalsOSlack(o: SEqJoin, slack: number): boolean {
-    return Math.abs((o.x - this.x) | 0) <= slack;
+    return absInt32((o.x - this.x) | 0) <= slack;
   }
 
   equalsO(o: SEqJoin): boolean {

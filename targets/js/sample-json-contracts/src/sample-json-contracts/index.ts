@@ -77,6 +77,7 @@ export { SetClass } from "./set-class.js";
 export { isShape, Shape$runtimeType } from "./shape.js";
 export type { Shape } from "./shape.js";
 export { SilenceClip } from "./silence-clip.js";
+export { SingleBox } from "./single-box.js";
 export { SnakeCaseJsonContext } from "./snake-case-json-context.js";
 export { SoftNums } from "./soft-nums.js";
 export { Spice, Spice$runtimeType } from "./spice.js";

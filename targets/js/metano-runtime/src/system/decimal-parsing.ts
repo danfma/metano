@@ -63,6 +63,115 @@ export function parseDecimalText(text: string | null | undefined): string {
   return `${sign}${integer || "0"}${fraction ? `.${fraction}` : ""}`;
 }
 
+/** The largest scale of a `decimal`. */
+const DECIMAL_SCALE_MAX = 28;
+
+/** `1e0` … `1e28`, parsed so each is the exact double .NET's table holds. */
+const DOUBLE_POWERS_OF_TEN = /* @__PURE__ */ lazyValue(() =>
+  Array.from({ length: DECIMAL_SCALE_MAX + 1 }, (_, power) => Number(`1e${power}`)),
+);
+
+/** A scratch view that reads the biased binary exponent of a `number`. */
+const EXPONENT_VIEW = /* @__PURE__ */ lazyValue(() => new DataView(new ArrayBuffer(8)));
+
+/**
+ * The digits of `(decimal)d` (`digits` 15) or `(decimal)f` (`digits` 7), for
+ * `new Decimal(…)`, ported from .NET's `VarDecFromR8` / `VarDecFromR4`
+ * (#695): the value is scaled by a power of ten to `digits` significant
+ * digits, the scale capped at 28, rounded half to even, and trailing zeros
+ * are dropped from the scale. So `(decimal)(0.1 + 0.2)` is `0.3`,
+ * `(decimal)1000000000000005.0` is `1000000000000000` and `(decimal)1e-30`
+ * is `0`. The scaling is done in double arithmetic, as .NET does.
+ *
+ * @throws OverflowException for NaN, ±Infinity and a magnitude of 2^96 or more.
+ */
+export function decimalTextFromDouble(value: number, digits: 7 | 15): string {
+  const exponent = binaryExponentOf(value);
+
+  if (exponent < -94) {
+    return "0";
+  }
+
+  if (exponent > 96) {
+    throw new OverflowException(DECIMAL_RANGE_MESSAGE);
+  }
+
+  const lowest = DOUBLE_POWERS_OF_TEN()[digits - 1]!;
+  let power = digits - 1 - ((exponent * 19728) >> 16);
+  let scaled = Math.abs(value);
+
+  if (power >= 0) {
+    power = Math.min(power, DECIMAL_SCALE_MAX);
+    scaled *= DOUBLE_POWERS_OF_TEN()[power]!;
+  } else if (power !== -1 || scaled >= lowest * 10) {
+    scaled /= DOUBLE_POWERS_OF_TEN()[-power]!;
+  } else {
+    power = 0;
+  }
+
+  if (scaled < lowest && power < DECIMAL_SCALE_MAX) {
+    scaled *= 10;
+    power++;
+  }
+
+  const mantissa = roundHalfToEven(scaled);
+
+  if (mantissa === 0) {
+    return "0";
+  }
+
+  const sign = value < 0 ? "-" : "";
+
+  return power < 0
+    ? `${sign}${mantissa}${"0".repeat(-power)}`
+    : `${sign}${scaledText(String(mantissa), power, digits - 1)}`;
+}
+
+/**
+ * The exponent .NET reads from a binary floating-point value: the biased
+ * exponent of the double minus 1022, so `2^e ≤ |value| < 2^(e+1)` gives
+ * `e + 1`. A `float` held as a double reads the same exponent.
+ */
+function binaryExponentOf(value: number): number {
+  const view = EXPONENT_VIEW();
+
+  view.setFloat64(0, value);
+
+  return ((view.getUint16(0) >> 4) & 0x7ff) - 1022;
+}
+
+/** `value` (below 2^53) rounded to an integer, a tie to the even one. */
+function roundHalfToEven(value: number): number {
+  const floor = Math.floor(value);
+  const rest = value - floor;
+
+  return rest > 0.5 || (rest === 0.5 && floor % 2 === 1) ? floor + 1 : floor;
+}
+
+/**
+ * `digitsText` divided by `10^scale`, written out after up to `maxStrip`
+ * trailing zeros are dropped from the scale.
+ */
+function scaledText(digitsText: string, scale: number, maxStrip: number): string {
+  let text = digitsText;
+  let remaining = scale;
+  let strippable = Math.min(scale, maxStrip);
+
+  while (strippable > 0 && text.endsWith("0")) {
+    text = text.slice(0, -1);
+    remaining--;
+    strippable--;
+  }
+
+  if (remaining === 0) {
+    return text;
+  }
+
+  const padded = text.padStart(remaining + 1, "0");
+
+  return `${padded.slice(0, -remaining)}.${padded.slice(-remaining)}`;
+}
+
 function formatException(text: string): FormatException {
   return new FormatException(`The input string '${text}' was not in a correct format.`);
 }

@@ -16,14 +16,24 @@ namespace Metano.Compiler.Extraction;
 public sealed partial class IrExpressionExtractor
 {
     /// <summary>
-    /// <paramref name="result"/> reduced as <paramref name="operation"/> needs, or unchanged.
-    /// A constant operation that needs a reduction (<c>1u &lt;&lt; 31</c>,
-    /// <c>~0u</c>) is the value Roslyn folded, which is already reduced.
+    /// <paramref name="result"/> brought back into the domain of its type as
+    /// <paramref name="operation"/> needs, or unchanged: an integer reduced
+    /// (wrapped or range-checked), or a <c>float</c> rounded to single
+    /// precision (<see cref="SinglePrecisionRounding"/>, #695). A constant
+    /// operation that needs a reduction (<c>1u &lt;&lt; 31</c>, <c>~0u</c>)
+    /// is the value Roslyn folded, which is already reduced.
     /// </summary>
-    private IrExpression ReduceOverflow(IOperation? operation, IrExpression result) =>
-        ReductionOf(operation) is { } reduction
-            ? FoldedOperatorConstant(operation) ?? reduction.Reduce(result)
-            : result;
+    private IrExpression ReduceOverflow(IOperation? operation, IrExpression result)
+    {
+        if (ReductionOf(operation) is { } reduction)
+            return FoldedOperatorConstant(operation) ?? reduction.Reduce(result);
+
+        return RoundsToSingle(operation) ? SinglePrecisionRounding.Round(result) : result;
+    }
+
+    /// <summary>Whether <paramref name="operation"/>'s <c>float</c> result is rounded on this target (<see cref="SinglePrecisionRounding.RoundsResultOf"/>).</summary>
+    private bool RoundsToSingle(IOperation? operation) =>
+        SinglePrecisionRounding.RoundsResultOf(operation, _context.NumericLowering);
 
     /// <summary>The reduction <paramref name="operation"/> needs on this target (<see cref="IntegerOverflowLowering.ReductionOf"/>).</summary>
     private IntegerOverflowReduction? ReductionOf(IOperation? operation) =>

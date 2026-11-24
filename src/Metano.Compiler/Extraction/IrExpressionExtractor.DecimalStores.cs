@@ -20,8 +20,12 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>Whether <paramref name="operand"/> is a non-nullable <c>decimal</c> whose stores go through its methods.</summary>
     private bool IsDecimalStoreTarget(ExpressionSyntax operand) =>
+        IsDecimalComputedByMethods(_semantic.GetTypeInfo(operand).Type);
+
+    /// <summary>Whether <paramref name="type"/> is a non-nullable <c>decimal</c> and the target computes with it through methods.</summary>
+    private bool IsDecimalComputedByMethods(ITypeSymbol? type) =>
         _context.NumericLowering.ComputesDecimalByMethods
-        && _semantic.GetTypeInfo(operand).Type?.SpecialType is SpecialType.System_Decimal;
+        && type?.SpecialType is SpecialType.System_Decimal;
 
     /// <summary>A compound assignment to a <c>decimal</c> whose operator is a method of the runtime value.</summary>
     private bool IsDecimalCompound(IrBinaryOp op, AssignmentExpressionSyntax assign) =>

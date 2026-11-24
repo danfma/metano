@@ -21,13 +21,17 @@ internal static class DefaultValueLiterals
     /// other struct keeps the opaque <see cref="IrLiteralKind.Default"/>
     /// marker, since no target-agnostic value exists for it.
     /// </summary>
-    public static IrExpression For(ITypeSymbol type, Func<ISymbol?, IrMemberOrigin?> buildOrigin)
+    public static IrExpression For(
+        ITypeSymbol type,
+        Func<ISymbol?, IrMemberOrigin?> buildOrigin,
+        Func<ITypeSymbol, IrTypeRef> mapType
+    )
     {
         if (IsNullDefault(type))
             return new IrLiteral(null, IrLiteralKind.Null);
 
         if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType)
-            return EnumZero(enumType, buildOrigin);
+            return EnumZero(enumType, buildOrigin, mapType);
 
         if (IsGuid(type))
             return StaticMember(type, nameof(Guid.Empty), buildOrigin);
@@ -94,7 +98,8 @@ internal static class DefaultValueLiterals
 
     private static IrExpression EnumZero(
         INamedTypeSymbol enumType,
-        Func<ISymbol?, IrMemberOrigin?> buildOrigin
+        Func<ISymbol?, IrMemberOrigin?> buildOrigin,
+        Func<ITypeSymbol, IrTypeRef> mapType
     )
     {
         var zeroMember = FindEnumMember(enumType, 0);
@@ -103,11 +108,25 @@ internal static class DefaultValueLiterals
             return new IrLiteral(0, IrLiteralKind.Int32);
 
         return new IrMemberAccess(
-            new IrTypeReference(enumType.Name),
+            TypeReferenceTo(enumType, mapType),
             zeroMember.Name,
             buildOrigin(zeroMember)
         );
     }
+
+    /// <summary>
+    /// The value reference to <paramref name="type"/> as its type reference
+    /// names it: a nested enum through its container (<c>Outer.Inner</c>,
+    /// #695), with its cross-package origin; its bare name for a type the
+    /// mapper does not name.
+    /// </summary>
+    private static IrTypeReference TypeReferenceTo(
+        INamedTypeSymbol type,
+        Func<ITypeSymbol, IrTypeRef> mapType
+    ) =>
+        mapType(type) is IrNamedTypeRef named
+            ? new IrTypeReference(named.Name, named.Origin, named.PrivateNestedSegments)
+            : new IrTypeReference(type.Name);
 
     private static IrExpression StaticMember(
         ITypeSymbol type,

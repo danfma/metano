@@ -264,6 +264,7 @@ public sealed partial class IrExpressionExtractor
             ?? UnsupportedDynamicUserConversion(expression)
             ?? ImportFacadeMethodGroupOf(expression)
             ?? FoldedInt64Constant(expression)
+            ?? FoldedPrimitiveLimit(expression)
             ?? FoldedCheckedContextConstant(expression)
             ?? FoldedNumberStylesConstant(expression)
             ?? ExtractUnbound(expression);
@@ -357,6 +358,12 @@ public sealed partial class IrExpressionExtractor
             ArrayCreationExpressionSyntax sized when TryExtractSizedArray(sized) is { } creation =>
                 creation,
             ImplicitArrayCreationExpressionSyntax iarr => ArrayLiteralOf(iarr, iarr.Initializer),
+            // `int[] a = { 1, 2 };`: the declaration's shorthand for `new int[] { 1, 2 }`.
+            InitializerExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.ArrayInitializerExpression,
+                Parent: EqualsValueClauseSyntax,
+            } shorthand => ArrayLiteralOf(shorthand, shorthand),
             // C# language keywords used as expressions — `string.Concat(…)`,
             // `int.Parse(…)`, etc. Resolve to the underlying BCL type so the
             // member-access lookup that wraps the expression can route to the
@@ -2545,7 +2552,8 @@ public sealed partial class IrExpressionExtractor
     /// <c>x++</c>, <c>++x</c>, <c>x--</c> or <c>--x</c> through the built-in
     /// operator of the operand's type: lifted over a nullable value, stored
     /// through the code of a <c>char</c> or the methods of a <c>decimal</c>,
-    /// reduced to an integer kind, or the native operator.
+    /// rounded to a <c>float</c>, reduced to an integer kind, or the native
+    /// operator.
     /// </summary>
     private IrExpression ExtractBuiltinIncrement(
         ExpressionSyntax node,
@@ -2555,18 +2563,39 @@ public sealed partial class IrExpressionExtractor
         bool isPrefix
     )
     {
+        if (IsCharStoreTarget(operand))
+            return ExtractCharIncrement(node, operand, op, extractedOperand, isPrefix);
+
         if (IsNullableValueOperand(operand))
             return LiftIncrement(node, operand, op, extractedOperand, isPrefix);
-
-        if (IsCharStoreTarget(operand))
-            return ExtractCharIncrement(node, op, extractedOperand, isPrefix);
 
         if (IsDecimalStoreTarget(operand))
             return ExtractDecimalIncrement(node, op, extractedOperand, isPrefix);
 
+        if (RoundsToSingle(_semantic.GetOperation(node)))
+            return ExtractSingleIncrement(node, op, extractedOperand, isPrefix);
+
         return TryExtractReducedIncrement(node, operand, op, extractedOperand, isPrefix)
             ?? new IrUnaryExpression(op, extractedOperand, isPrefix);
     }
+
+    /// <summary>
+    /// <c>f++</c>, <c>++f</c>, <c>f--</c> or <c>--f</c> on a <c>float</c>
+    /// the target rounds (#695): <c>f = round(f ± 1)</c>. A postfix form
+    /// whose value is used binds the previous value, since the step is not
+    /// invertible once rounded.
+    /// </summary>
+    private IrExpression ExtractSingleIncrement(
+        ExpressionSyntax node,
+        IrUnaryOp op,
+        IrExpression target,
+        bool isPrefix
+    ) =>
+        WriteIncrement(node, target, isPrefix, current =>
+            SinglePrecisionRounding.Round(
+                new IrBinaryExpression(current, StepOperatorOf(op), OneLiteral)
+            )
+        );
 
     /// <summary>
     /// <c>x!</c>: a reference or type-parameter value keeps the assertion so a
@@ -4647,7 +4676,10 @@ public sealed partial class IrExpressionExtractor
     /// <c>prop$get(r) ± 1</c>, matching C# increment semantics for the
     /// numeric extension properties the MVP covers; a
     /// <c>Nullable&lt;T&gt;</c> property stores its value behind the lifted
-    /// null guard (see <see cref="ExtensionIncrementValue"/>, #497).
+    /// null guard (see <see cref="ExtensionIncrementValue"/>, #497). When
+    /// the value is used, the setter call is followed by the stored value
+    /// (prefix) or the previous one (postfix), since the setter returns
+    /// nothing (#695, see <see cref="StoreIncrementThroughSetter"/>).
     /// </summary>
     private IrExpression BuildExtensionPropertyIncrement(
         ExpressionSyntax node,
@@ -4667,55 +4699,73 @@ public sealed partial class IrExpressionExtractor
         var binaryOp = StepOperatorOf(op);
         var one = OneOf(targetSyntax);
 
+        IrExpression Step(IrExpression current) =>
+            ExtensionIncrementValue(node, property, current, binaryOp, one);
+
+        IrExpression Accessor(string name, string? emittedName, IReadOnlyList<IrArgument> args) =>
+            BuildExtensionHelperCall(
+                propLowering.HelperContainer,
+                name,
+                emittedName,
+                args,
+                typeArguments: null
+            );
+
         // Static increment: no receiver to capture — emit
         // `prop$set(prop$get() ± 1)` directly.
         if (propLowering.IsStatic)
         {
-            var currentValue = BuildExtensionHelperCall(
-                propLowering.HelperContainer,
-                getterName,
-                emittedGetterName,
-                Array.Empty<IrArgument>(),
-                typeArguments: null
-            );
-
-            return BuildExtensionHelperCall(
-                propLowering.HelperContainer,
-                setterName,
-                emittedSetterName,
-                [
-                    new IrArgument(
-                        ExtensionIncrementValue(node, property, currentValue, binaryOp, one)
-                    ),
-                ],
-                typeArguments: null
+            return StoreIncrementThroughSetter(
+                node,
+                Accessor(getterName, emittedGetterName, []),
+                Step,
+                value => Accessor(setterName, emittedSetterName, [new IrArgument(value)])
             );
         }
 
         var receiver = Extract(targetSyntax.Expression);
 
-        return BuildReceiverOnceSetter(
-            propLowering.HelperContainer,
-            receiver,
-            getterName,
-            emittedGetterName,
-            setterName,
-            emittedSetterName,
-            recv =>
-                ExtensionIncrementValue(
-                    node,
-                    property,
-                    BuildExtensionHelperCall(
-                        propLowering.HelperContainer,
-                        getterName,
-                        emittedGetterName,
-                        [new IrArgument(recv)],
-                        typeArguments: null
-                    ),
-                    binaryOp,
-                    one
-                )
+        return BindReceiverOnce(receiver, recv =>
+            StoreIncrementThroughSetter(
+                node,
+                Accessor(getterName, emittedGetterName, [new IrArgument(recv)]),
+                Step,
+                value =>
+                    Accessor(
+                        setterName,
+                        emittedSetterName,
+                        [new IrArgument(recv), new IrArgument(value)]
+                    )
+            )
         );
+    }
+
+    /// <summary>
+    /// <c>store(step(current))</c> when the increment's value is unused;
+    /// otherwise a sequence that yields the stored value of a prefix form,
+    /// <c>(next = step(current), store(next), next)</c>, or the previous value
+    /// of a postfix one, <c>(previous = current, store(step(previous)), previous)</c>.
+    /// </summary>
+    private IrExpression StoreIncrementThroughSetter(
+        ExpressionSyntax node,
+        IrExpression current,
+        Func<IrExpression, IrExpression> step,
+        Func<IrExpression, IrExpression> store
+    )
+    {
+        if (IsValueUnused(node))
+            return store(step(current));
+
+        if (node is PrefixUnaryExpressionSyntax)
+            return BindOnce(step(current), isReusable: false, next => new IrSequenceExpression(
+                [store(next)],
+                next
+            ));
+
+        return BindOnce(current, isReusable: false, previous => new IrSequenceExpression(
+            [store(step(previous))],
+            previous
+        ));
     }
 
     /// <summary>

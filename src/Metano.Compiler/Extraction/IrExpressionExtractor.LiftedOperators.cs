@@ -101,6 +101,10 @@ public sealed partial class IrExpressionExtractor
         if (TryMapCompoundAssignmentToBinary(assign.Kind()) is not { } mappedOp)
             return null;
 
+        // A `char?` store lifts through the code of the char (CharStores.cs).
+        if (IsCharStoreTarget(assign.Left))
+            return null;
+
         var op = NarrowBuiltinOperator(mappedOp, assign);
         var operation = _semantic.GetOperation(assign);
 
