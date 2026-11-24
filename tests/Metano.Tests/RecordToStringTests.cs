@@ -40,9 +40,11 @@ public class RecordToStringTests
         );
 
         await TranspileHelper.AssertGolden("record-to-string-derived.ts", files["derived.ts"]);
+
         await Assert
             .That(files["derived-empty.ts"])
             .Contains("return super.$printMembers?.() ?? \"\";");
+
         await Assert
             .That(files["derived-empty.ts"])
             .Contains("return members ? `DerivedEmpty { ${members} }` : \"DerivedEmpty { }\";");
@@ -67,6 +69,7 @@ public class RecordToStringTests
         await Assert.That(files["sealed.ts"]).Contains("return `Sealed { A = ${this.a} }`;");
         await Assert.That(files["sealed.ts"]).DoesNotContain("$printMembers");
         await Assert.That(files["sealed-empty.ts"]).Contains("return \"SealedEmpty { }\";");
+
         await Assert
             .That(files["point.ts"])
             .Contains("return `Point { X = ${this.x}, Y = ${this.y} }`;");
@@ -130,6 +133,7 @@ public class RecordToStringTests
             .Contains(
                 "return `Name = ${this.name ?? \"\"}, Extra = ${this.extra}, Computed = ${this.computed}, Field = ${this.field ?? \"\"}, PrivGet = ${this.privGet}`;"
             );
+
         await Assert.That(files["virtual-derived.ts"]).Contains("W = ${this.w}");
         await Assert.That(files["virtual-derived.ts"]).DoesNotContain("V = ");
     }
@@ -175,9 +179,11 @@ public class RecordToStringTests
 
         await Assert.That(files["custom.ts"]).Contains("return \"custom\";");
         await Assert.That(files["custom.ts"]).DoesNotContain("`Custom {");
+
         await Assert
             .That(files["after-sealed.ts"])
             .Contains("protected override $printMembers(): string");
+
         await Assert.That(files["after-sealed.ts"]).DoesNotContain("toString(): string");
         await Assert.That(files["after-abstract.ts"]).Contains("override toString(): string");
     }
@@ -240,6 +246,7 @@ public class RecordToStringTests
         var plainObject = diagnostics.Where(d => d.Message.Contains("[PlainObject]")).ToList();
 
         await Assert.That(plainObject.Count).IsEqualTo(3);
+
         await Assert
             .That(plainObject.All(d => d.Severity == MetanoDiagnosticSeverity.Warning))
             .IsTrue();
@@ -267,6 +274,7 @@ public class RecordToStringTests
         await Assert
             .That(files["local.ts"])
             .Contains("const base = super.$printMembers?.() ?? \"\";");
+
         await Assert.That(files["local.ts"]).Contains("override toString(): string");
     }
 
