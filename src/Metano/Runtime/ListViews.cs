@@ -16,7 +16,29 @@ using Metano.Interop;
     typeof(InteropExtensions),
     nameof(InteropExtensions.AsJsArray),
     JsTemplate = "asJsArray($this)",
-    RuntimeImports = "asJsArray"
+    RuntimeImports = "asJsArray",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(InteropExtensions),
+    nameof(InteropExtensions.AsJsArray),
+    JsTemplate = "asJsArray($0)",
+    RuntimeImports = "asJsArray",
+    WhenArgCount = 1
+)]
+[assembly: MapMethod(
+    typeof(InteropExtensions),
+    nameof(InteropExtensions.AsReadOnlyJsArray),
+    JsTemplate = "asReadOnlyJsArray($this)",
+    RuntimeImports = "asReadOnlyJsArray",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(InteropExtensions),
+    nameof(InteropExtensions.AsReadOnlyJsArray),
+    JsTemplate = "asReadOnlyJsArray($0)",
+    RuntimeImports = "asReadOnlyJsArray",
+    WhenArgCount = 1
 )]
 [assembly: MapMethod(
     typeof(ListViewExtensions),
@@ -41,9 +63,21 @@ using Metano.Interop;
 [assembly: MapMethod(
     typeof(InteropExtensions),
     nameof(InteropExtensions.ToJsArray),
-    JsTemplate = "$this.toArray()"
+    JsTemplate = "$this.toArray()",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(InteropExtensions),
+    nameof(InteropExtensions.ToJsArray),
+    JsTemplate = "$0.toArray()",
+    WhenArgCount = 1
 )]
 [assembly: MapMethod(typeof(JsArray), nameof(JsArray.From), JsTemplate = "Array.from($0)")]
+[assembly: MapMethod(
+    typeof(ReadOnlyJsArray),
+    nameof(ReadOnlyJsArray.From),
+    JsTemplate = "Array.from($0)"
+)]
 
 // ─── JsArray<T> → List<T> (shared storage) ─────────────────────────
 [assembly: MapMethod(
@@ -53,8 +87,13 @@ using Metano.Interop;
     RuntimeImports = "List"
 )]
 [assembly: MapProperty(typeof(JsArray<>), nameof(JsArray<int>.Length), JsProperty = "length")]
+[assembly: MapProperty(
+    typeof(ReadOnlyJsArray<>),
+    nameof(ReadOnlyJsArray<int>.Length),
+    JsProperty = "length"
+)]
 
-// ─── new JsArray<T>() / new JsArray<T>(items) ──────────────────────
+// ─── new JsArray<T>() / new ReadOnlyJsArray<T>() ───────────────────
 [assembly: MapMethod(
     typeof(JsArray<>),
     MapMethodAttribute.ConstructorName,
@@ -63,6 +102,18 @@ using Metano.Interop;
 )]
 [assembly: MapMethod(
     typeof(JsArray<>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "Array.from($0)",
+    WhenParameterTypes = new[] { typeof(IEnumerable<>) }
+)]
+[assembly: MapMethod(
+    typeof(ReadOnlyJsArray<>),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "[]",
+    WhenParameterTypes = new Type[0]
+)]
+[assembly: MapMethod(
+    typeof(ReadOnlyJsArray<>),
     MapMethodAttribute.ConstructorName,
     JsTemplate = "Array.from($0)",
     WhenParameterTypes = new[] { typeof(IEnumerable<>) }

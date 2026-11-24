@@ -56,7 +56,7 @@ public static class IrToTsTypeMapper
             IrPrimitiveTypeRef p => MapPrimitive(p.Primitive),
             IrNullableTypeRef n => MakeNullable(Map(n.Inner, overrides)),
             IrCollectionTypeRef c => MapCollection(c, overrides),
-            IrArrayTypeRef a => new TsArrayType(Map(a.ElementType, overrides)),
+            IrArrayTypeRef a => new TsArrayType(Map(a.ElementType, overrides), a.IsReadOnly),
             IrMapTypeRef m => new TsNamedType(
                 "Map",
                 [Map(m.KeyType, overrides), Map(m.ValueType, overrides)]

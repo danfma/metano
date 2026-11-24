@@ -67,16 +67,26 @@ internal static partial class IrToTsClassBridge
     {
         if (references is not { Count: > 0 } refs)
             return null;
+
         var result = new List<TsType>();
+
         foreach (var reference in refs)
         {
             if (reference is IrNamedTypeRef { Semantics.IsTranspilable: false })
                 continue;
+
             var mapped = IrToTsTypeMapper.Map(reference);
+
             result.Add(
-                mapped is TsArrayType array ? new TsNamedType("Array", [array.ElementType]) : mapped
+                mapped is TsArrayType array
+                    ? new TsNamedType(
+                        array.IsReadonly ? "ReadonlyArray" : "Array",
+                        [array.ElementType]
+                    )
+                    : mapped
             );
         }
+
         return result.Count > 0 ? result : null;
     }
 

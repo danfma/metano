@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { IList } from "#/system/collections/interfaces.ts";
 import { List } from "#/system/collections/list.ts";
 import { asReadOnly, ReadOnlyList } from "#/system/collections/read-only-list.ts";
 import { Int32Type } from "#/system/reflection/primitive-types.ts";
@@ -127,5 +128,81 @@ describe("ReadOnlyList", () => {
     expect(String(view)).toBe("System.Collections.ObjectModel.ReadOnlyCollection`1[System.Int32]");
     expect(Object.keys(view)).toEqual([]);
     expect(ReadOnlyList.$runtimeType.test(view)).toBe(true);
+  });
+
+  test("length, toArray and asReadOnlyJsArray across list, array, nested and custom sources", () => {
+    const list = List.of([1, 2]);
+    const overList = asReadOnly(list);
+
+    expect(overList.length).toBe(2);
+    expect(overList.asReadOnlyJsArray()).toBe(list.asJsArray());
+
+    list.add(3);
+
+    expect(overList.length).toBe(3);
+    expect(overList.asReadOnlyJsArray()).toEqual([1, 2, 3]);
+
+    const copiedFromList = overList.toArray();
+    copiedFromList[0] = 99;
+    expect(list.get(0)).toBe(1);
+
+    const raw = [4, 5];
+    const overArray = ReadOnlyList.fromArray(raw);
+
+    expect(overArray.length).toBe(2);
+    expect(overArray.asReadOnlyJsArray()).toBe(raw);
+
+    raw.push(6);
+
+    expect(overArray.length).toBe(3);
+    expect(overArray.asReadOnlyJsArray()).toEqual([4, 5, 6]);
+
+    const copiedFromArray = overArray.toArray();
+    copiedFromArray[0] = 88;
+    expect(raw[0]).toBe(4);
+
+    const nested = new ReadOnlyList(overList);
+
+    expect(nested.length).toBe(3);
+    expect(nested.asReadOnlyJsArray()).toBe(list.asJsArray());
+    expect(ReadOnlyList.empty<number>().asReadOnlyJsArray()).toEqual([]);
+
+    const backing = [10, 11];
+
+    const custom: IList<number> = {
+      get count() {
+        return backing.length;
+      },
+      isReadOnly: true,
+      get: (i) => backing[i] as number,
+      set: () => {},
+      indexOf: (x) => backing.indexOf(x),
+      insert: () => {},
+      removeAt: () => {},
+      add: () => {},
+      clear: () => {},
+      contains: (x) => backing.includes(x),
+      copyTo: () => {},
+      remove: () => false,
+      [Symbol.iterator]: () => backing[Symbol.iterator](),
+    };
+
+    const overCustom = new ReadOnlyList(custom);
+    const snapshot1 = overCustom.asReadOnlyJsArray();
+
+    expect(overCustom.length).toBe(2);
+    expect(snapshot1).toEqual([10, 11]);
+    expect(overCustom.toArray()).toEqual([10, 11]);
+
+    // Custom IList sources take a shallow snapshot copy (not live; new array per call).
+    backing.push(12);
+
+    expect(overCustom.length).toBe(3);
+    expect(snapshot1).toEqual([10, 11]);
+
+    const snapshot2 = overCustom.asReadOnlyJsArray();
+
+    expect(snapshot2).toEqual([10, 11, 12]);
+    expect(snapshot2).not.toBe(snapshot1);
   });
 });

@@ -16,7 +16,9 @@ internal static class IrTypeRefSignatures
             IrPrimitiveTypeRef p => $"prim:{p.Primitive}",
             IrNullableTypeRef n => $"null<{Describe(n.Inner)}>",
             IrCollectionTypeRef c => Describe(c.LegacyForm),
-            IrArrayTypeRef a => $"arr<{Describe(a.ElementType)}>",
+            IrArrayTypeRef a => a.IsReadOnly
+                ? $"roarr<{Describe(a.ElementType)}>"
+                : $"arr<{Describe(a.ElementType)}>",
             IrMapTypeRef m => $"map<{Describe(m.KeyType)},{Describe(m.ValueType)}>",
             IrSetTypeRef s => $"set<{Describe(s.ElementType)}>",
             IrTupleTypeRef t => $"tuple<{string.Join(",", t.Elements.Select(Describe))}>",

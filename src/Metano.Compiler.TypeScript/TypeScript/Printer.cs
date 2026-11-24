@@ -1137,6 +1137,9 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
                 break;
 
             case TsArrayType array:
+                if (array.IsReadonly)
+                    _sb.Write("readonly ");
+
                 PrintArrayElementType(array.ElementType);
                 _sb.Write("[]");
                 break;
@@ -1266,7 +1269,14 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
     /// </summary>
     private void PrintArrayElementType(TsType elementType)
     {
-        if (elementType is TsUnionType or TsIntersectionType or TsFunctionType)
+        if (
+            elementType
+            is TsUnionType
+                or TsIntersectionType
+                or TsFunctionType
+                or TsArrayType { IsReadonly: true }
+                or TsTupleType { IsReadonly: true }
+        )
         {
             _sb.Write("(");
             PrintType(elementType);

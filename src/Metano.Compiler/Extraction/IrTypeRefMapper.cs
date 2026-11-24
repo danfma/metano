@@ -169,11 +169,18 @@ public static class IrTypeRefMapper
             if (CollectionKindOf(named, target) is { } kind)
                 return MapCollection(named, kind, originResolver, target);
 
-            // Metano.Interop.JsArray<T> is the native array itself (spec 011 FR-004).
+            // Metano.Interop.JsArray<T> and ReadOnlyJsArray<T> are the native array itself (spec 011 FR-004).
             if (IsJsArray(named))
                 return new IrArrayTypeRef(Map(named.TypeArguments[0], originResolver, target))
                 {
                     IsNative = true,
+                };
+
+            if (IsReadOnlyJsArray(named))
+                return new IrArrayTypeRef(Map(named.TypeArguments[0], originResolver, target))
+                {
+                    IsNative = true,
+                    IsReadOnly = true,
                 };
 
             // Dictionary-like → Map
@@ -368,6 +375,10 @@ public static class IrTypeRefMapper
 
     private static bool IsJsArray(INamedTypeSymbol type) =>
         type is { Name: "JsArray", Arity: 1 }
+        && type.ContainingNamespace?.ToDisplayString() == "Metano.Interop";
+
+    private static bool IsReadOnlyJsArray(INamedTypeSymbol type) =>
+        type is { Name: "ReadOnlyJsArray", Arity: 1 }
         && type.ContainingNamespace?.ToDisplayString() == "Metano.Interop";
 
     private static IrCollectionTypeRef MapCollection(

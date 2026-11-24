@@ -212,6 +212,7 @@ runtime classes only.
 | `char.Is*` (11 predicates), `Convert.ToDouble` (int-sized, `double`, `float`, `decimal`, `bool`, `string`), `decimal.ToDouble` | mapped |
 | `int.CompareTo` | `int`, `uint`, `double`, `float` give -1/0/1 (NaN first); `short`, `ushort`, `byte`, `sbyte`, `char` give the difference, as .NET |
 | LINQ `ElementAt`, `ElementAtOrDefault`, `DefaultIfEmpty`, `Distinct(comparer)` | `elementAt`, `elementAtOrDefault`, `defaultIfEmpty`, `distinct(comparer)` |
+| `ReadOnlyJsArray<T>`, `list.AsReadOnlyJsArray()` / `ro.AsReadOnlyJsArray()`, `ro.ToJsArray()` (#737) | `readonly T[]` (`IEnumerable<T>`-only in C#, not `IReadOnlyList<T>`; `[JsonConverter]` array support in STJ), `asReadOnlyJsArray(x)` (live zero-copy view for runtime array-backed lists; `Array.from(x)` shallow snapshot copy for receivers lacking `asReadOnlyJsArray()`, such as user `IReadOnlyList<T>` classes or `ReadOnlyCollection<T>` over a custom `IList<T>`), `ro.toArray()` (writable copy); TS-only (`MS0051` elsewhere). Do not add/remove via `list.AsJsArray()` while enumerating `list` (bypasses `_version`) |
 
 LINQ searches use .NET's `EqualityComparer<T>.Default` through the runtime (#664): a record, `NaN`
 and a decimal compare by value, and a class without `Equals` by reference.

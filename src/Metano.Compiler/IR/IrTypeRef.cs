@@ -307,10 +307,21 @@ public sealed record IrArrayTypeRef(IrTypeRef ElementType) : IrTypeRef
     /// </summary>
     public bool IsNative { get; init; }
 
-    public bool Equals(IrArrayTypeRef? other) =>
-        other is not null && ElementType.Equals(other.ElementType);
+    /// <summary>
+    /// Whether the source type is a read-only native JS array view
+    /// (<c>ReadOnlyJsArray&lt;T&gt;</c>): TypeScript emits <c>readonly T[]</c>
+    /// instead of <c>T[]</c>. Unlike <see cref="IsNative"/>, this changes the
+    /// emitted type, so it participates in equality.
+    /// </summary>
+    public bool IsReadOnly { get; init; }
 
-    public override int GetHashCode() => HashCode.Combine(typeof(IrArrayTypeRef), ElementType);
+    public bool Equals(IrArrayTypeRef? other) =>
+        other is not null
+        && IsReadOnly == other.IsReadOnly
+        && ElementType.Equals(other.ElementType);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(typeof(IrArrayTypeRef), ElementType, IsReadOnly);
 }
 
 /// <summary>
