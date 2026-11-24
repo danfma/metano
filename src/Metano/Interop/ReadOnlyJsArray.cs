@@ -148,116 +148,138 @@ public sealed class ReadOnlyJsArrayJsonConverterFactory : JsonConverterFactory
     [UnconditionalSuppressMessage(
         "AOT",
         "IL3050:RequiresDynamicCode",
-        Justification = "The converter is a sealed generic class with no static generic virtual "
-            + "calls; NativeAOT instantiates it over the element types the app's "
-            + "JsonSerializerContext already roots (FR-056a requires them to be registered)."
+        Justification = "Reference-type element instantiations share canonical code and "
+            + "resolve under NativeAOT. Value-type element types need "
+            + "ReadOnlyJsArrayJsonConverter<T> registered in JsonSerializerOptions.Converters "
+            + "or JsonSourceGenerationOptions.Converters (FR-056a); options converters take "
+            + "precedence over this factory, so it never runs for them."
     )]
     public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
         var elementType = typeToConvert.GetGenericArguments()[0];
-        var converterType = typeof(ReadOnlyJsArrayJsonConverter<>).MakeGenericType(elementType);
 
-        return (JsonConverter)Activator.CreateInstance(converterType)!;
+        try
+        {
+            var converterType = typeof(ReadOnlyJsArrayJsonConverter<>).MakeGenericType(elementType);
+
+            return (JsonConverter)Activator.CreateInstance(converterType)!;
+        }
+        catch (NotSupportedException error)
+        {
+            throw new NotSupportedException(
+                $"ReadOnlyJsArray<{elementType.Name}> needs "
+                    + $"ReadOnlyJsArrayJsonConverter<{elementType.Name}> registered in "
+                    + "JsonSerializerOptions.Converters or JsonSourceGenerationOptions.Converters "
+                    + "under NativeAOT.",
+                error
+            );
+        }
+    }
+}
+
+/// <summary>
+/// The System.Text.Json converter for <see cref="ReadOnlyJsArray{T}"/>, created by
+/// <see cref="ReadOnlyJsArrayJsonConverterFactory"/>. NativeAOT apps register it once
+/// per value-type element type (for example in
+/// <c>[JsonSourceGenerationOptions(Converters = [typeof(ReadOnlyJsArrayJsonConverter&lt;int&gt;)])]</c>),
+/// because the factory cannot instantiate it over a value type without dynamic code.
+/// </summary>
+[TargetSpecific(TargetLanguage.TypeScript)]
+public sealed class ReadOnlyJsArrayJsonConverter<T> : JsonConverter<ReadOnlyJsArray<T>>
+{
+    private static readonly ConditionalWeakTable<
+        JsonSerializerOptions,
+        JsonSerializerOptions
+    > FallbackOptions = new();
+
+    public override ReadOnlyJsArray<T>? Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    )
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            return null;
+
+        if (reader.TokenType != JsonTokenType.StartArray)
+        {
+            throw new JsonException(
+                $"Expected start of JSON array for {typeToConvert}, got {reader.TokenType}."
+            );
+        }
+
+        var elementTypeInfo = ResolveElementTypeInfo(options);
+        var items = new List<T>();
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray)
+                return ReadOnlyJsArray<T>.Wrap(items);
+
+            items.Add(JsonSerializer.Deserialize(ref reader, elementTypeInfo)!);
+        }
+
+        throw new JsonException("Unexpected end of JSON while reading array.");
     }
 
-    private sealed class ReadOnlyJsArrayJsonConverter<T> : JsonConverter<ReadOnlyJsArray<T>>
+    public override void Write(
+        Utf8JsonWriter writer,
+        ReadOnlyJsArray<T> value,
+        JsonSerializerOptions options
+    )
     {
-        private static readonly ConditionalWeakTable<
-            JsonSerializerOptions,
-            JsonSerializerOptions
-        > FallbackOptions = new();
+        var elementTypeInfo = ResolveElementTypeInfo(options);
 
-        public override ReadOnlyJsArray<T>? Read(
-            ref Utf8JsonReader reader,
-            Type typeToConvert,
-            JsonSerializerOptions options
-        )
+        writer.WriteStartArray();
+
+        for (var i = 0; i < value.Length; i++)
+            JsonSerializer.Serialize(writer, value[i], elementTypeInfo);
+
+        writer.WriteEndArray();
+    }
+
+    private static JsonTypeInfo<T> ResolveElementTypeInfo(JsonSerializerOptions options)
+    {
+        if (options.TryGetTypeInfo(typeof(T), out var typeInfo))
+            return (JsonTypeInfo<T>)typeInfo;
+
+        if (!JsonSerializer.IsReflectionEnabledByDefault)
+            return (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+
+        return ResolveThroughReflection(options);
+    }
+
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026:RequiresUnreferencedCode",
+        Justification = "Reached only when JsonSerializer.IsReflectionEnabledByDefault is "
+            + "true; trimmed and AOT apps default it to false and take the "
+            + "GetTypeInfo path, which reports unregistered element types."
+    )]
+    [UnconditionalSuppressMessage(
+        "AOT",
+        "IL3050:RequiresDynamicCode",
+        Justification = "Reached only when JsonSerializer.IsReflectionEnabledByDefault is "
+            + "true; trimmed and AOT apps default it to false."
+    )]
+    private static JsonTypeInfo<T> ResolveThroughReflection(JsonSerializerOptions options)
+    {
+        var fallback = FallbackOptions.GetValue(options, CreateReflectionOptions);
+
+        return (JsonTypeInfo<T>)fallback.GetTypeInfo(typeof(T));
+    }
+
+    [RequiresUnreferencedCode("Uses DefaultJsonTypeInfoResolver for unregistered element types.")]
+    [RequiresDynamicCode("Uses DefaultJsonTypeInfoResolver for unregistered element types.")]
+    private static JsonSerializerOptions CreateReflectionOptions(JsonSerializerOptions source)
+    {
+        var reflection = new DefaultJsonTypeInfoResolver();
+
+        return new JsonSerializerOptions(source)
         {
-            if (reader.TokenType == JsonTokenType.Null)
-                return null;
-
-            if (reader.TokenType != JsonTokenType.StartArray)
-            {
-                throw new JsonException(
-                    $"Expected start of JSON array for {typeToConvert}, got {reader.TokenType}."
-                );
-            }
-
-            var elementTypeInfo = ResolveElementTypeInfo(options);
-            var items = new List<T>();
-
-            while (reader.Read())
-            {
-                if (reader.TokenType == JsonTokenType.EndArray)
-                    return ReadOnlyJsArray<T>.Wrap(items);
-
-                items.Add(JsonSerializer.Deserialize(ref reader, elementTypeInfo)!);
-            }
-
-            throw new JsonException("Unexpected end of JSON while reading array.");
-        }
-
-        public override void Write(
-            Utf8JsonWriter writer,
-            ReadOnlyJsArray<T> value,
-            JsonSerializerOptions options
-        )
-        {
-            var elementTypeInfo = ResolveElementTypeInfo(options);
-
-            writer.WriteStartArray();
-
-            for (var i = 0; i < value.Length; i++)
-                JsonSerializer.Serialize(writer, value[i], elementTypeInfo);
-
-            writer.WriteEndArray();
-        }
-
-        private static JsonTypeInfo<T> ResolveElementTypeInfo(JsonSerializerOptions options)
-        {
-            if (options.TryGetTypeInfo(typeof(T), out var typeInfo))
-                return (JsonTypeInfo<T>)typeInfo;
-
-            if (!JsonSerializer.IsReflectionEnabledByDefault)
-                return (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
-
-            return ResolveThroughReflection(options);
-        }
-
-        [UnconditionalSuppressMessage(
-            "Trimming",
-            "IL2026:RequiresUnreferencedCode",
-            Justification = "Reached only when JsonSerializer.IsReflectionEnabledByDefault is "
-                + "true; trimmed and AOT apps default it to false and take the "
-                + "GetTypeInfo path, which reports unregistered element types."
-        )]
-        [UnconditionalSuppressMessage(
-            "AOT",
-            "IL3050:RequiresDynamicCode",
-            Justification = "Reached only when JsonSerializer.IsReflectionEnabledByDefault is "
-                + "true; trimmed and AOT apps default it to false."
-        )]
-        private static JsonTypeInfo<T> ResolveThroughReflection(JsonSerializerOptions options)
-        {
-            var fallback = FallbackOptions.GetValue(options, CreateReflectionOptions);
-
-            return (JsonTypeInfo<T>)fallback.GetTypeInfo(typeof(T));
-        }
-
-        [RequiresUnreferencedCode(
-            "Uses DefaultJsonTypeInfoResolver for unregistered element types."
-        )]
-        [RequiresDynamicCode("Uses DefaultJsonTypeInfoResolver for unregistered element types.")]
-        private static JsonSerializerOptions CreateReflectionOptions(JsonSerializerOptions source)
-        {
-            var reflection = new DefaultJsonTypeInfoResolver();
-
-            return new JsonSerializerOptions(source)
-            {
-                TypeInfoResolver = source.TypeInfoResolver is null
-                    ? reflection
-                    : JsonTypeInfoResolver.Combine(source.TypeInfoResolver, reflection),
-            };
-        }
+            TypeInfoResolver = source.TypeInfoResolver is null
+                ? reflection
+                : JsonTypeInfoResolver.Combine(source.TypeInfoResolver, reflection),
+        };
     }
 }
