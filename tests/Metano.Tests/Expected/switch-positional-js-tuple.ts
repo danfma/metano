@@ -5,7 +5,7 @@ export class Pairs {
 
   static of(pair: Pair): string {
     {
-      const $s = pair;
+      let $s = pair;
 
       if ($s != null && $s[0] === 0) {
         const label = $s[1];

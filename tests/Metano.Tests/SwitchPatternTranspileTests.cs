@@ -575,7 +575,7 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["geo/maker.ts"];
-        await Assert.That(output).Contains("const $s = Maker.make();");
+        await Assert.That(output).Contains("let $s = Maker.make();");
         await Assert.That(output.Split("Maker.make()").Length - 1).IsEqualTo(1);
         await Assert.That(output).Contains("if ($s instanceof Circle) {");
         await Assert.That(output).Contains("if ($s instanceof Square) {");
@@ -663,7 +663,7 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["geo/loader.ts"];
-        await Assert.That(output).Contains("const $s = s;");
+        await Assert.That(output).Contains("let $s = s;");
 
         await Assert
             .That(output)

@@ -77,6 +77,7 @@ public static class PatternSubjectProbes
             calls++;
             return '3';
         });
+
         var second = test(() =>
         {
             calls++;
@@ -112,5 +113,55 @@ public static class PatternSubjectProbes
         var both = next() is >= 1 and <= 1 && next() is >= 2 and <= 2;
 
         return both + ":" + calls;
+    }
+
+    public static string SubjectInACatchFilter()
+    {
+        var counter = new PsCounter();
+
+        try
+        {
+            throw new InvalidOperationException("x");
+        }
+        catch (InvalidOperationException) when (counter.NextInt() is >= 1 and <= 100)
+        {
+            return "caught:" + counter.Calls;
+        }
+    }
+
+    public static string ElementReadThroughAGetter()
+    {
+        var holder = new PsTextHolder("a5");
+        var digits = 0;
+
+        for (var i = 0; i < 2; i++)
+        {
+            if (holder.Text[i] is >= '0' and <= '9')
+                digits++;
+        }
+
+        return digits + ":" + holder.Reads;
+    }
+}
+
+public sealed class PsCounter
+{
+    public int Calls { get; private set; }
+
+    public int NextInt() => ++Calls;
+}
+
+public sealed class PsTextHolder(string text)
+{
+    public int Reads { get; private set; }
+
+    public string Text
+    {
+        get
+        {
+            Reads++;
+
+            return text;
+        }
     }
 }

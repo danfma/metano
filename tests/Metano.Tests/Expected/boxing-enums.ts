@@ -21,7 +21,7 @@ export class Probe {
     }
 
     {
-      const $s = o;
+      let $s = o;
 
       if (unboxFor($s, Color$runtimeType) === Color.Red) {
         return "red";

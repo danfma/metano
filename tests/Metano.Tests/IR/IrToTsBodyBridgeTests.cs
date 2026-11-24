@@ -339,7 +339,7 @@ public class IrToTsBodyBridgeTests
         // The bridge preserves that semantics by emitting statements whose
         // trailing statement throws on no match.
         var ts = PrintMethodFromIr("int Classify(int n) => n switch { 0 => 10, 1 => 20 };");
-        await Assert.That(ts).Contains("const $s = n;");
+        await Assert.That(ts).Contains("let $s = n;");
         await Assert.That(ts).Contains("if ($s === 0)");
         await Assert.That(ts).Contains("return 10;");
 

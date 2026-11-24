@@ -57,6 +57,21 @@ public class PatternSubjectReuseTests
             public bool ListP(Func<int[]> next) => next() is [1, 2];
 
             public async Task<bool> AwaitIn() => (await Load()) is "5" or "6";
+
+            public string Text => Next();
+            public bool TextDigit(int i) => Text[i] is >= '0' and <= '9';
+
+            public string InFilter()
+            {
+                try
+                {
+                    throw new InvalidOperationException("x");
+                }
+                catch (InvalidOperationException) when (Next() is "5" or "6")
+                {
+                    return "caught";
+                }
+            }
         }
         """;
 
@@ -142,5 +157,41 @@ public class PatternSubjectReuseTests
     public async Task NoPatternSubject_IsBoundThroughAnArrow()
     {
         await Assert.That(Output()).DoesNotContain("($v) =>");
+    }
+
+    [Test]
+    public async Task ElementReadThroughAProperty_KeepsTheTemporary()
+    {
+        await Assert
+            .That(Output())
+            .Contains(
+                "return ($subject0 = this.text[i]!, true) && $subject0 >= \"0\" && $subject0 <= \"9\";"
+            );
+    }
+
+    [Test]
+    public async Task SubjectInACatchFilter_IsDeclaredAheadOfTheTry()
+    {
+        var output = Output();
+
+        await Assert.That(output).Contains("let $subject0: string;");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "tryFilter(() => ($subject0 = this.next(), true) && ($subject0 === \"5\" || $subject0 === \"6\"))"
+            );
+
+        await Assert.That(output).DoesNotContain("CatchFilterVariable");
+    }
+
+    [Test]
+    public async Task SubjectInACatchFilter_IsNotReportedAsAFilterVariable()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Source);
+
+        await Assert
+            .That(diagnostics.Where(d => d.Message.Contains("filter", StringComparison.Ordinal)))
+            .IsEmpty();
     }
 }

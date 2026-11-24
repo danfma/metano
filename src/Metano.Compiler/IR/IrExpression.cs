@@ -238,6 +238,15 @@ public sealed record IrMemberAccess(
     /// dispatched group member.
     /// </summary>
     public IrSelectedOverload? Overload { get; init; }
+
+    /// <summary>
+    /// Reading the member runs no user code: it is a field or a
+    /// non-overridable auto-property of this compilation, so reading it again
+    /// gives the same value while nothing writes it. A hand-written,
+    /// <c>field</c>-keyword or overridable getter, or a property of another
+    /// assembly, may compute, so its read is not a storage read.
+    /// </summary>
+    public bool IsStorageRead { get; init; }
 }
 
 /// <summary>

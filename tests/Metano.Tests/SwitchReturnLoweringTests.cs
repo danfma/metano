@@ -44,6 +44,13 @@ public class SwitchReturnLoweringTests
             public static Func<Shape, int> Lambda() => shape => shape switch { Circle c => c.Radius, Square s => s.Side };
 
             public static int Nested(Shape shape) => 1 + shape switch { Circle c => c.Radius, Square s => s.Side };
+
+            public static string OfConstant()
+            {
+                const int k = 2;
+
+                return k switch { 1 => "one", 2 => "two", var v when v > 5 => "big", _ => "other" };
+            }
         }
         """;
 
@@ -54,7 +61,7 @@ public class SwitchReturnLoweringTests
     {
         var output = Output();
 
-        await Assert.That(output).Contains("const $s = shape;");
+        await Assert.That(output).Contains("let $s = shape;");
         await Assert.That(output).Contains("if ($s instanceof Circle) {");
         await Assert.That(output).Contains("const c = $s;");
         await Assert.That(output).Contains("throw new SwitchExpressionException($s);");
@@ -84,5 +91,13 @@ public class SwitchReturnLoweringTests
         var output = Output();
 
         await Assert.That(output).Contains("1 + (($s) => {");
+    }
+
+    // A `const` would keep the literal type of a C# constant (`2`), and the
+    // type checker would reject the `1` arm as a comparison with no overlap.
+    [Test]
+    public async Task ReturnedSwitchOverAConstant_BindsTheScrutineeWithLet()
+    {
+        await Assert.That(Output()).Contains("let $s = k;");
     }
 }

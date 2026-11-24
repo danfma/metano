@@ -78,7 +78,7 @@ export class Probe {
 
   static kind(o: Object): number {
     {
-      const $s = o;
+      let $s = o;
 
       if (isPoint($s)) {
         return 1;

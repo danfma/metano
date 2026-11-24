@@ -1759,7 +1759,11 @@ public sealed partial class IrExpressionExtractor
                 new IrThisExpression(),
                 id.Identifier.ValueText,
                 BuildOrigin(symbol)
-            );
+            )
+            {
+                IsStorageRead = IsStorageMember(symbol),
+            };
+
             return WrapMethodGroupForDelegate(id, symbol, memberAccess);
         }
 
@@ -2847,7 +2851,12 @@ public sealed partial class IrExpressionExtractor
             ? MapTypeWithReifiedScope(receiverType, member.Receiver)
             : null;
 
-        var memberAccess = new IrMemberAccess(target, name, origin) { TargetType = targetType };
+        var memberAccess = new IrMemberAccess(target, name, origin)
+        {
+            TargetType = targetType,
+            IsStorageRead = IsStorageMember(symbol),
+        };
+
         return WrapMethodGroupForDelegate(member.Node, symbol, memberAccess);
     }
 

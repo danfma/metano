@@ -72,14 +72,13 @@ public sealed record IrExtractionContext(
     internal bool KeepsReflectionSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
-    /// Whether the target keeps a pattern that binds nothing in the form the
-    /// extraction gave it before #735 (Dart): the subject is not captured in
-    /// a synthesized designator when the pattern reads it more than once,
-    /// since that target has no assignment-in-test form for it, so its output
-    /// stays as it was.
+    /// Whether the target can assign a local inside a test expression and go
+    /// on testing (an assignment in a comma expression:
+    /// <c>($subject0 = next(), true) &amp;&amp; …</c>), so a pattern that binds
+    /// nothing can capture a subject it reads more than once in a synthesized
+    /// designator (#735). Dart has no such form and keeps the uncaptured one.
     /// </summary>
-    internal bool KeepsUncapturedPatternSubjects =>
-        Target == Metano.Annotations.TargetLanguage.Dart;
+    internal bool HasAssignmentInTestForm => Target != Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
     /// Whether the target's BCL collections are its native ones (Dart until

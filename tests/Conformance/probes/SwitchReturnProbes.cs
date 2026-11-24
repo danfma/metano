@@ -67,6 +67,21 @@ public static class SwitchReturnProbes
         return "" + _calls;
     }
 
+    static string OfConstant()
+    {
+        const int k = 2;
+
+        return k switch
+        {
+            1 => "one",
+            2 => "two",
+            var v when v > 5 => "big",
+            _ => "other",
+        };
+    }
+
+    public static string ConstantScrutinee() => OfConstant();
+
     public static string UnmatchedValueThrows()
     {
         try

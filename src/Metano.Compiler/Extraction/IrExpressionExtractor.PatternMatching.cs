@@ -63,7 +63,7 @@ public sealed partial class IrExpressionExtractor
     ) =>
         IrPatternDesignators.Declares(pattern)
             ? !IsStableSubject(syntax, subject)
-            : !_context.KeepsUncapturedPatternSubjects
+            : _context.HasAssignmentInTestForm
                 && !IrEvaluationTraits.ReadsSubjectOnce(pattern)
                 && !IrEvaluationTraits.IsRepeatableRead(subject);
 
@@ -75,7 +75,12 @@ public sealed partial class IrExpressionExtractor
     private IrLogicalPattern CapturedFirst(IrTypeRef type, IrPattern pattern) =>
         new(
             IrLogicalOp.And,
-            new IrVarPattern(new IrPatternDesignator($"$subject{_patternSubjectCounter++}", type)),
+            new IrVarPattern(
+                new IrPatternDesignator($"$subject{_patternSubjectCounter++}", type)
+                {
+                    IsSynthesized = true,
+                }
+            ),
             pattern
         );
 
@@ -161,9 +166,16 @@ public sealed partial class IrExpressionExtractor
             : null;
 
     private static bool IsStableSymbol(ISymbol? symbol) =>
+        symbol is ILocalSymbol or IParameterSymbol || IsStorageMember(symbol);
+
+    /// <summary>
+    /// A field or a property whose read runs no user code (see
+    /// <see cref="IrMemberAccess.IsStorageRead"/>).
+    /// </summary>
+    private static bool IsStorageMember(ISymbol? symbol) =>
         symbol switch
         {
-            ILocalSymbol or IParameterSymbol or IFieldSymbol => true,
+            IFieldSymbol => true,
             IPropertySymbol property => !IsComputed(property),
             _ => false,
         };

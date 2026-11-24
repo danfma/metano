@@ -56,22 +56,34 @@ public static class IrEvaluationTraits
 
     /// <summary>
     /// Whether a lowering may read this expression more than once and get the
-    /// same value each time, without running user code: a
-    /// <see cref="IsSideEffectFree">side-effect-free</see> expression, or an
-    /// element access of an array or a <c>string</c> whose receiver and index
-    /// are themselves repeatable. A user-defined indexer or a collection
-    /// class's <c>get</c> may run code or throw, so it is not repeatable.
+    /// same value each time, without running user code: a literal, a local or
+    /// parameter, <c>this</c>, a type, a
+    /// <see cref="IrMemberAccess.IsStorageRead">storage read</see> (a field or
+    /// a plain auto-property) of a repeatable receiver, an element access of
+    /// an array or a <c>string</c> whose receiver and index are themselves
+    /// repeatable, and non-assigning operators over those. Any other member
+    /// access may run a getter (<c>c.Text[i]</c> would call <c>Text</c> once
+    /// per read), and a user-defined indexer or a collection class's
+    /// <c>get</c> may run code or throw, so neither is repeatable.
     /// </summary>
     public static bool IsRepeatableRead(IrExpression expression) =>
         expression switch
         {
+            IrLiteral or IrIdentifier or IrThisExpression or IrTypeReference => true,
+            IrMemberAccess { IsStorageRead: true } access => IsRepeatableRead(access.Target),
             IrElementAccess
             {
                 TargetType: IrArrayTypeRef or IrPrimitiveTypeRef { Primitive: IrPrimitive.String }
             } element => IsRepeatableRead(element.Target) && IsRepeatableRead(element.Index),
-            IrUnaryExpression { Operator: IrUnaryOp.NonNullAssertion } assertion =>
-                IsRepeatableRead(assertion.Operand),
-            _ => IsSideEffectFree(expression),
+            IrUnaryExpression
+            {
+                Operator: not (IrUnaryOp.Increment or IrUnaryOp.Decrement)
+            } unary => IsRepeatableRead(unary.Operand),
+            IrBinaryExpression binary when !binary.Operator.IsAssignment() => IsRepeatableRead(
+                binary.Left
+            ) && IsRepeatableRead(binary.Right),
+            IrNumericConversion conversion => IsRepeatableRead(conversion.Operand),
+            _ => false,
         };
 
     /// <summary>

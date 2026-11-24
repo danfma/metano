@@ -18,7 +18,7 @@ export class Patterns {
     const circle = d instanceof Circle ? d : null;
 
     {
-      const $s = d;
+      let $s = d;
 
       if (isInt32($s)) {
         const n = $s;

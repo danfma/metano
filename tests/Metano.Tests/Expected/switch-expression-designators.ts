@@ -9,7 +9,7 @@ export class ClipDescription {
 
   static of(clip: Clip): string {
     {
-      const $s = clip;
+      let $s = clip;
 
       if ($s instanceof ImageClip) {
         const image = $s;

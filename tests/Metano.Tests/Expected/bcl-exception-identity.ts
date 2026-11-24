@@ -189,7 +189,7 @@ export class Ledger {
 
   static classify(error: Exception): string {
     {
-      const $s = error;
+      let $s = error;
 
       if ($s instanceof ArgumentNullException) {
         return "null";

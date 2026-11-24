@@ -39,9 +39,13 @@ public static partial class IrToTsExpressionBridge
     /// <c>return value switch { ... };</c> without a closure (#735): when the
     /// switch cannot lower to a ternary chain, the return becomes a block
     /// that binds the scrutinee once and walks the arms as <c>if</c>s that
-    /// each return or throw: <c>{ const $s = value; if (...) { return ...; } throw ...; }</c>.
+    /// each return or throw: <c>{ let $s = value; if (...) { return ...; } throw ...; }</c>.
     /// The block keeps <c>$s</c> and the arm designators out of the enclosing
-    /// scope. <c>null</c> when the switch lowers as an expression.
+    /// scope. <c>$s</c> is a <c>let</c>, which widens a literal type the way
+    /// the arrow's parameter did (a <c>const</c> bound to a C# <c>const</c>
+    /// keeps the literal type <c>2</c>, and TypeScript then rejects the
+    /// <c>$s === 1</c> arm as a comparison with no overlap). <c>null</c> when
+    /// the switch lowers as an expression.
     /// </summary>
     internal static TsStatement? TryMapSwitchReturn(
         IrSwitchExpression sw,
@@ -54,7 +58,11 @@ public static partial class IrToTsExpressionBridge
         var scrutinee = new TsIdentifier(ScrutineeParameterName);
 
         return new TsBlockStatement([
-            new TsVariableDeclaration(ScrutineeParameterName, Map(sw.Scrutinee, context)),
+            new TsVariableDeclaration(
+                ScrutineeParameterName,
+                Map(sw.Scrutinee, context),
+                Const: false
+            ),
             .. BuildSwitchArmStatements(sw, scrutinee, context),
         ]);
     }
