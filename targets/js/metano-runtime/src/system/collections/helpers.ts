@@ -5,7 +5,7 @@
  */
 import { IndexOutOfRangeException } from "../exceptions/index-out-of-range-exception.ts";
 import { invalidCast } from "../reflection/invalid-cast.ts";
-import type { IList, Span } from "./interfaces.ts";
+import type { IList, IReadOnlyList, Span } from "./interfaces.ts";
 import { List } from "./list.ts";
 import { throwArgumentNull } from "./throw-helpers.ts";
 
@@ -44,13 +44,23 @@ export function asArray(value: unknown): unknown[] | null {
   return value instanceof List && value.isFixedSize ? value._items : null;
 }
 
-/** `list.AsJsArray()`: the backing array itself; `ArgumentNullException` for `null`. */
-export function asJsArray<T>(list: List<T> | null | undefined): T[] {
+/**
+ * `list.AsJsArray()`: the backing array itself; `ArgumentNullException` for `null`.
+ * Returns a mutable `T[]` for a `List<T>` and a read-only view `readonly T[]` for
+ * any other `IReadOnlyList<T>` (or a native array passed through `IReadOnlyList<T>`).
+ */
+export function asJsArray<T>(list: List<T> | null | undefined): T[];
+export function asJsArray<T>(
+  list: IReadOnlyList<T> | readonly T[] | null | undefined,
+): readonly T[];
+export function asJsArray<T>(
+  list: IReadOnlyList<T> | readonly T[] | null | undefined,
+): readonly T[] {
   if (list === null || list === undefined) {
     throwArgumentNull("list");
   }
 
-  return list._items;
+  return Array.isArray(list) ? list : (list as IReadOnlyList<T>).asJsArray();
 }
 
 /** `list.AsSpan()` / `CollectionsMarshal.AsSpan(list)`: the backing array; empty for `null`. */
@@ -73,7 +83,10 @@ export function asReadOnlySpan<T>(list: List<T> | null | undefined): ReadonlyArr
  * collection descriptor), so an object that is not a list fails at its first use instead
  * of at the cast.
  */
-export function asList<T>(value: unknown, targetType: string): IList<T> | null {
+export function asList<T>(
+  value: unknown,
+  targetType: string,
+): (IList<T> & IReadOnlyList<T>) | null {
   if (value === null || value === undefined) {
     return null;
   }
@@ -82,7 +95,9 @@ export function asList<T>(value: unknown, targetType: string): IList<T> | null {
     throw invalidCast(value, targetType);
   }
 
-  return Array.isArray(value) ? List.adopt(value as T[], { fixedSize: true }) : (value as IList<T>);
+  return Array.isArray(value)
+    ? List.adopt(value as T[], { fixedSize: true })
+    : (value as IList<T> & IReadOnlyList<T>);
 }
 
 function isPrimitive(value: unknown): value is string | number | boolean | bigint {

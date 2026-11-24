@@ -1,5 +1,5 @@
 import { type ComparisonArgument, elementEquals } from "./default-comparer.ts";
-import type { IList } from "./interfaces.ts";
+import type { IList, IReadOnlyList } from "./interfaces.ts";
 import { List } from "./list.ts";
 import { throwArgumentOutOfRange } from "./throw-helpers.ts";
 
@@ -14,7 +14,7 @@ import { throwArgumentOutOfRange } from "./throw-helpers.ts";
  * check with .NET's default `ArgumentOutOfRangeException` text, not `List`'s.
  * Internal.
  */
-export abstract class ImmutableListBuilderCore<T> implements IList<T> {
+export abstract class ImmutableListBuilderCore<T> implements IList<T>, IReadOnlyList<T> {
   declare readonly _list: List<T>;
 
   /** Defines `_list`, a copy of `source`; each subclass then defines its own fields. */
@@ -48,6 +48,10 @@ export abstract class ImmutableListBuilderCore<T> implements IList<T> {
   ): readonly [start: number, length: number] | null;
 
   get count(): number {
+    return this._list.count;
+  }
+
+  get length(): number {
     return this._list.count;
   }
 
@@ -190,6 +194,16 @@ export abstract class ImmutableListBuilderCore<T> implements IList<T> {
 
   copyTo(array: T[], arrayIndex = 0): void {
     this._list.copyTo(array, arrayIndex);
+  }
+
+  /** Detached shallow copy (FR-055). */
+  toArray(): T[] {
+    return this._list.toArray();
+  }
+
+  /** Zero-copy live read-only view over the builder's backing array (FR-056). */
+  asJsArray(): readonly T[] {
+    return this._list.asJsArray();
   }
 
   toJSON(): T[] {

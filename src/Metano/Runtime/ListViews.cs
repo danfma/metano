@@ -16,7 +16,15 @@ using Metano.Interop;
     typeof(InteropExtensions),
     nameof(InteropExtensions.AsJsArray),
     JsTemplate = "asJsArray($this)",
-    RuntimeImports = "asJsArray"
+    RuntimeImports = "asJsArray",
+    WhenArgCount = 0
+)]
+[assembly: MapMethod(
+    typeof(InteropExtensions),
+    nameof(InteropExtensions.AsJsArray),
+    JsTemplate = "asJsArray($0)",
+    RuntimeImports = "asJsArray",
+    WhenArgCount = 1
 )]
 [assembly: MapMethod(
     typeof(ListViewExtensions),

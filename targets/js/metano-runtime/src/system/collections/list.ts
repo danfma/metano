@@ -135,6 +135,10 @@ export class List<T> implements IList<T>, IReadOnlyList<T> {
     return this._items.length;
   }
 
+  get length(): number {
+    return this._items.length;
+  }
+
   get isReadOnly(): boolean {
     return false;
   }

@@ -15,10 +15,17 @@
 import { defaultEqualityComparer, type IEqualityComparer } from "./default-comparer.ts";
 import { HashCore } from "./hash-core.ts";
 
+let detachedTips: WeakSet<object> | undefined;
+
+/** Marks `store` as exposed to a read-only view so later appends copy instead of mutating it. */
+export function detachTip(store: object): void {
+  (detachedTips ??= new WeakSet()).add(store);
+}
+
 /** W4-11's ownership rule: a version of `count` entries may append to `store` in place. */
 export function ownsTip(store: { readonly length: number }, count: number): boolean {
   // Empty versions can be canonical singletons: never mutate their backing store.
-  return count > 0 && store.length === count;
+  return count > 0 && store.length === count && !detachedTips?.has(store);
 }
 
 /** `null` for the default equality comparer, so comparing comparers sees one default. */

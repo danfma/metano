@@ -5,7 +5,7 @@ import {
   type IEqualityComparer,
 } from "./default-comparer.ts";
 import type { IImmutableList } from "./immutable-interfaces.ts";
-import { ownsTip } from "./immutable-storage.ts";
+import { detachTip, ownsTip } from "./immutable-storage.ts";
 import type { IReadOnlyList } from "./interfaces.ts";
 import { binarySearch } from "./sorted-array.ts";
 
@@ -40,6 +40,10 @@ export abstract class ImmutableListCore<T, Self extends ImmutableListCore<T, Sel
   }
 
   get count(): number {
+    return this._count;
+  }
+
+  get length(): number {
     return this._count;
   }
 
@@ -242,6 +246,23 @@ export abstract class ImmutableListCore<T, Self extends ImmutableListCore<T, Sel
   /** A detached copy. */
   toArray(): T[] {
     return this.visible();
+  }
+
+  /**
+   * Read-only view over `_items`: zero-copy when this version owns the full array
+   * (detaching tip-append ownership so later `add` calls copy rather than mutating
+   * the view); falls back to a shallow copy when an older version shares a grown array.
+   */
+  asJsArray(): readonly T[] {
+    if (this._items.length !== this._count) {
+      return this.visible();
+    }
+
+    if (this._count > 0) {
+      detachTip(this._items);
+    }
+
+    return this._items;
   }
 
   toJSON(): T[] {

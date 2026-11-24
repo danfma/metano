@@ -38,6 +38,20 @@ public static class InteropExtensions
         new(list ?? throw new ArgumentNullException(nameof(list)));
 
     /// <summary>
+    /// A read-only view over the list's backing array (spec 011 FR-056):
+    /// zero-copy for array-backed list kinds (reflects later mutations of a
+    /// mutable source; read-only for the consumer), falling back to a shallow
+    /// copy when no exact backing array exists. TypeScript emits
+    /// <c>asJsArray(list)</c> typed <c>readonly T[]</c>, which throws
+    /// <c>ArgumentNullException</c> for <c>null</c> (mutating the view or
+    /// assigning it to a mutable <c>T[]</c> does not type-check in TypeScript).
+    /// On .NET it returns a copy; TypeScript only (<c>MS0051</c> elsewhere).
+    /// </summary>
+    [TargetSpecific(Metano.Annotations.TargetLanguage.TypeScript)]
+    public static JsArray<T> AsJsArray<T>(this IReadOnlyList<T> list) =>
+        new(list ?? throw new ArgumentNullException(nameof(list)));
+
+    /// <summary>
     /// A new native array copied from the list (spec 011 FR-055): TypeScript
     /// emits <c>list.toArray()</c>, as for <c>ToArray()</c>.
     /// </summary>

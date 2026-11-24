@@ -139,4 +139,24 @@ describe("ImmutableListBuilder (W4-11 condition 4: never alias)", () => {
       "System.Collections.Immutable.ImmutableList`1+Builder[System.Int32]",
     );
   });
+
+  test("length, toArray and zero-copy live asJsArray", () => {
+    const builder = new ImmutableListBuilder([1, 2]);
+    const view = builder.asJsArray();
+    const snapshot = builder.toArray();
+
+    expect(builder.length).toBe(2);
+    expect(view).toBe(builder._list.asJsArray());
+
+    builder.add(3);
+    snapshot[0] = 99;
+
+    expect(builder.length).toBe(3);
+    expect(view).toEqual([1, 2, 3]);
+    expect(builder.get(0)).toBe(1);
+    expect([...toImmutableList(builder)]).toEqual([1, 2, 3]);
+
+    builder.add(4);
+    expect(view).toEqual([1, 2, 3, 4]);
+  });
 });

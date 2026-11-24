@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { IList } from "#/system/collections/interfaces.ts";
 import { List } from "#/system/collections/list.ts";
 import { asReadOnly, ReadOnlyList } from "#/system/collections/read-only-list.ts";
 import { Int32Type } from "#/system/reflection/primitive-types.ts";
@@ -127,5 +128,65 @@ describe("ReadOnlyList", () => {
     expect(String(view)).toBe("System.Collections.ObjectModel.ReadOnlyCollection`1[System.Int32]");
     expect(Object.keys(view)).toEqual([]);
     expect(ReadOnlyList.$runtimeType.test(view)).toBe(true);
+  });
+
+  test("length, toArray and asJsArray across list, array, nested and custom sources", () => {
+    const list = List.of([1, 2]);
+    const overList = asReadOnly(list);
+
+    expect(overList.length).toBe(2);
+    expect(overList.asJsArray()).toBe(list.asJsArray());
+
+    list.add(3);
+
+    expect(overList.length).toBe(3);
+    expect(overList.asJsArray()).toEqual([1, 2, 3]);
+
+    const copiedFromList = overList.toArray();
+    copiedFromList[0] = 99;
+    expect(list.get(0)).toBe(1);
+
+    const raw = [4, 5];
+    const overArray = ReadOnlyList.fromArray(raw);
+
+    expect(overArray.length).toBe(2);
+    expect(overArray.asJsArray()).toBe(raw);
+
+    raw.push(6);
+
+    expect(overArray.length).toBe(3);
+    expect(overArray.asJsArray()).toEqual([4, 5, 6]);
+
+    const copiedFromArray = overArray.toArray();
+    copiedFromArray[0] = 88;
+    expect(raw[0]).toBe(4);
+
+    const nested = new ReadOnlyList(overList);
+
+    expect(nested.length).toBe(3);
+    expect(nested.asJsArray()).toBe(list.asJsArray());
+    expect(ReadOnlyList.empty<number>().asJsArray()).toEqual([]);
+
+    const custom: IList<number> = {
+      count: 2,
+      isReadOnly: true,
+      get: (i) => i + 10,
+      set: () => {},
+      indexOf: () => -1,
+      insert: () => {},
+      removeAt: () => {},
+      add: () => {},
+      clear: () => {},
+      contains: () => false,
+      copyTo: () => {},
+      remove: () => false,
+      [Symbol.iterator]: () => [10, 11][Symbol.iterator](),
+    };
+
+    const overCustom = new ReadOnlyList(custom);
+
+    expect(overCustom.length).toBe(2);
+    expect(overCustom.asJsArray()).toEqual([10, 11]);
+    expect(overCustom.toArray()).toEqual([10, 11]);
   });
 });

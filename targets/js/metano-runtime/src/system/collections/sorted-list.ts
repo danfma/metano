@@ -459,6 +459,10 @@ export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
     return this._list.count;
   }
 
+  get length(): number {
+    return this._list.count;
+  }
+
   get isReadOnly(): true {
     return true;
   }
@@ -512,8 +516,18 @@ export class SortedListView<T> implements IList<T>, IReadOnlyList<T> {
     return throwSortedListNested();
   }
 
+  /** Detached shallow copy (FR-055). */
+  toArray(): T[] {
+    return this.items().slice();
+  }
+
+  /** Zero-copy live read-only view over the list's backing key/value array (FR-056). */
+  asJsArray(): readonly T[] {
+    return this.items();
+  }
+
   toJSON(): T[] {
-    return [...this.items()];
+    return this.toArray();
   }
 
   [Symbol.iterator](): Iterator<T> {

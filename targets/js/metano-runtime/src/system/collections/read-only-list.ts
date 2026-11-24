@@ -92,6 +92,10 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
     return isArraySource(source) ? source.length : source.count;
   }
 
+  get length(): number {
+    return this.count;
+  }
+
   get isReadOnly(): boolean {
     return true;
   }
@@ -175,8 +179,29 @@ export class ReadOnlyList<T> implements IList<T>, IReadOnlyList<T> {
     return throwReadOnly();
   }
 
+  /** Detached shallow copy of the source's elements (FR-055). */
+  toArray(): T[] {
+    const source = this._source;
+
+    return isArraySource(source) ? source.slice() : Array.from(source);
+  }
+
+  /**
+   * Zero-copy read-only view over the source's backing array when backed by an array
+   * or a list exposing `asJsArray()`; falls back to a shallow copy for custom `IList` sources.
+   */
+  asJsArray(): readonly T[] {
+    const source = this._source;
+
+    if (isArraySource(source)) {
+      return source;
+    }
+
+    return hasAsJsArray(source) ? source.asJsArray() : Array.from(source);
+  }
+
   toJSON(): T[] {
-    return [...this];
+    return this.toArray();
   }
 
   /** .NET's ``System.Collections.ObjectModel.ReadOnlyCollection`1[T]`` text. */
@@ -207,4 +232,8 @@ export function asReadOnly<T>(
 
 function isArraySource<T>(source: IList<T> | readonly T[]): source is readonly T[] {
   return Array.isArray(source);
+}
+
+function hasAsJsArray<T>(source: IList<T>): source is IList<T> & { asJsArray(): readonly T[] } {
+  return typeof (source as { asJsArray?: unknown }).asJsArray === "function";
 }

@@ -272,4 +272,32 @@ describe("ImmutableArray", () => {
     expect(ImmutableArray.$runtimeType.test(typed)).toBe(true);
     expect(ImmutableArray.$runtimeType.test(ImmutableList.of([1]))).toBe(false);
   });
+
+  test("length and asJsArray respect immutability and tip-append sharing", () => {
+    const v1 = ImmutableArray.of([1, 2]);
+    const view1 = v1.asJsArray();
+
+    expect(v1.length).toBe(2);
+    expect(v1.asJsArray()).toBe(view1);
+    expect(view1).toEqual([1, 2]);
+
+    const v2 = v1.addRange([3]);
+
+    expect(v2.length).toBe(3);
+    expect(view1).toEqual([1, 2]);
+    expect(v2.asJsArray()).toEqual([1, 2, 3]);
+
+    const v3 = v2.add(4);
+
+    expect(v2.asJsArray()).toEqual([1, 2, 3]);
+    expect(v3.asJsArray()).toEqual([1, 2, 3, 4]);
+
+    const empty = ImmutableArray.empty<number>();
+    const emptyView = empty.asJsArray();
+
+    expect(empty.length).toBe(0);
+    expect(emptyView).toEqual([]);
+    expect(empty.add(1).asJsArray()).toEqual([1]);
+    expect(emptyView).toEqual([]);
+  });
 });

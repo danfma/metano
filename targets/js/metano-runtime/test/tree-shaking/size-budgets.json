@@ -175,13 +175,13 @@
     {
       "name": "ImmutableList alone",
       "entry": "entries/immutable-list-only.js",
-      "maxGzip": 3908,
+      "maxGzip": 4014,
       "mustNotContain": [
         "Queue empty.",
         "upperValue",
         "ImmutableArray`1"
       ],
-      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3553 B / esbuild 3509 B (proposed 2048 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
+      "$comment": "Stage 011h (3553 B + 10% = 3908 B) had 0 B headroom left by #737 (pre-#737 baseline bun 3908 B). #737 adds +66 B for length + zero-copy asJsArray() with tip detachment: bun 3974 B / esbuild 3907 B + 1% = 4014 B."
     },
     {
       "name": "ImmutableHashSet alone",
@@ -206,13 +206,13 @@
     {
       "name": "ImmutableArray alone",
       "entry": "entries/immutable-array-only.js",
-      "maxGzip": 4355,
+      "maxGzip": 4433,
       "mustNotContain": [
         "Queue empty.",
         "upperValue",
         "ImmutableList`1"
       ],
-      "$comment": "Stage 011h compiler half, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3959 B / esbuild 3898 B. A sibling of ImmutableList over the internal ImmutableListCore (W4-66), so it carries no ImmutableList text; NFR-008 reason as the other 011h rows, plus IndexOutOfRangeException."
+      "$comment": "Stage 011h (3959 B + 10% = 4355 B) had 34 B headroom left by #737 (pre-#737 baseline bun 4321 B). #737 adds +68 B for length + zero-copy asJsArray() with tip detachment: bun 4389 B / esbuild 4321 B + 1% = 4433 B."
     },
     {
       "name": "ImmutableArrayBuilder alone",

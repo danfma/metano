@@ -14,7 +14,14 @@ import {
   isIterable,
 } from "#/system/collections/helpers.ts";
 
+import { ImmutableArray } from "#/system/collections/immutable-array.ts";
+import { ImmutableArrayBuilder } from "#/system/collections/immutable-array-builder.ts";
+import { ImmutableList } from "#/system/collections/immutable-list.ts";
+import { ImmutableListBuilder } from "#/system/collections/immutable-list-builder.ts";
+import type { IReadOnlyList } from "#/system/collections/interfaces.ts";
 import { List } from "#/system/collections/list.ts";
+import { ReadOnlyList } from "#/system/collections/read-only-list.ts";
+import { SortedList } from "#/system/collections/sorted-list.ts";
 import { IndexOutOfRangeException } from "#/system/exceptions/index-out-of-range-exception.ts";
 import { InvalidCastException } from "#/system/exceptions/invalid-cast-exception.ts";
 
@@ -94,5 +101,31 @@ describe("helpers", () => {
     expect(asSpan(null)).toEqual([]);
     expect(asReadOnlySpan(undefined)).toEqual([]);
     expect(() => asJsArray(null)).toThrow("Value cannot be null. (Parameter 'list')");
+    expect(() => asJsArray(undefined)).toThrow("Value cannot be null. (Parameter 'list')");
+  });
+
+  test("asJsArray accepts every IReadOnlyList and native arrays", () => {
+    const list = List.of([1, 2]);
+    const roList: IReadOnlyList<number> = new ReadOnlyList(list);
+    const immutableList = ImmutableList.of([3, 4]);
+    const immutableArray = ImmutableArray.of([5, 6]);
+    const sorted = SortedList.of([
+      [1, "a"],
+      [2, "b"],
+    ]);
+    const listBuilder = new ImmutableListBuilder([7, 8]);
+    const arrayBuilder = new ImmutableArrayBuilder([9, 10]);
+    const raw = [11, 12];
+
+    expect(asJsArray(roList)).toBe(list.asJsArray());
+    expect(asJsArray(immutableList)).toBe(immutableList._items);
+    expect(asJsArray(immutableArray)).toBe(immutableArray._items);
+    expect(asJsArray(sorted.keys)).toBe(sorted._keys);
+    expect(asJsArray(listBuilder)).toBe(listBuilder._list.asJsArray());
+    expect(asJsArray(arrayBuilder)).toBe(arrayBuilder._list.asJsArray());
+    expect(asJsArray(raw)).toBe(raw);
+    expect(() => asJsArray<number>(null as IReadOnlyList<number> | null)).toThrow(
+      "Value cannot be null. (Parameter 'list')",
+    );
   });
 });
