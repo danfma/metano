@@ -191,6 +191,20 @@ runtime classes only.
 | `int.CompareTo` | `int`, `uint`, `double`, `float` give -1/0/1 (NaN first); `short`, `ushort`, `byte`, `sbyte`, `char` give the difference, as .NET |
 | LINQ `ElementAt`, `ElementAtOrDefault`, `DefaultIfEmpty`, `Distinct(comparer)` | `elementAt`, `elementAtOrDefault`, `defaultIfEmpty`, `distinct(comparer)` |
 
+LINQ searches use .NET's `EqualityComparer<T>.Default` through the runtime (#664): a record, `NaN`
+and a decimal compare by value, and a class without `Equals` by reference.
+
+| C# | TypeScript |
+| --- | --- |
+| `xs.Contains(x[, comparer])` on a lazy sequence | `linq(xs, contains(x[, comparer]))` |
+| `xs.GroupBy(k[, comparer])` | `linq(xs, groupBy(k[, comparer]))`: groups and elements in first-seen order |
+| `xs.SequenceEqual(ys[, comparer])` | `linq(xs, sequenceEqual(ys[, comparer]))` |
+| `xs.ToLookup(k[, e][, comparer])` | `linq(xs, toLookup(k[, e][, comparer]))`: a runtime `Lookup` (`count`, `get`, `contains`, iteration) |
+| `xs.Join(ys, ok, ik, result[, comparer])` | `linq(xs, join(ys, ok, ik, result[, comparer]))`: a `null` key matches nothing |
+
+Not mapped, reported with `MS0001`: the `lookup[key]` indexer of an `ILookup`, `GroupJoin`, and the
+`GroupBy` overloads with an element or result selector.
+
 Not mapped, reported with `MS0001`: `ElementAt(Index)`, `Array.IndexOf(a, v, start, count)`,
 `Array.Sort(a, index, length)`. Known gaps: `(decimal)double` emits the raw double; a record has no
 `toString`; `-0` dictionary keys and `list.Equals` differ from .NET; `ReadOnlyDictionary`,
