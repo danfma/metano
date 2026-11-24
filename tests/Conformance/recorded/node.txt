@@ -19,6 +19,8 @@ BoxingProbes.objectHashSetMixedCount = 1
 BoxingProbes.switchOnObject = red;color:2;perms:2;color:2;other;
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
 CastProbes.thisCastFail THROWS TypeError: a.asDog(...).bark is not a function
+CharIntGapProbes.genericMath = 6|3|4294967294
+CharIntGapProbes.refDecimal = 1
 CollectionEqualityProbes.asListCast = cast1
 CollectionEqualityProbes.immutableListEmptyAddRange = False,2
 CollectionEqualityProbes.listEquals THROWS TypeError: a.equals is not a function
@@ -72,7 +74,7 @@ InteropProbes.inlineCodeStatement = 5
 InteropProbes.unsafeCastWrong = cast
 LazyDirectProbes.baseModuleFirst LOADFAIL file://<conformance>/.work/probes/dist/conformance/lazy-barrel/lz-square.js:3
 LinqProbes.decimalLambda = 3|5.5|3.5|1|7|1.5|2|6|0.875
-LinqProbes.intOverflowSum THROWS ReferenceError: Int32 is not defined
+LinqProbes.intOverflowSum = 2147483648|OverflowException:Arithmetic operation resulted in an overflow.|1073741824|1.5
 LinqProbes.minMaxDecimal = 0.5|2|1.5|10|13.75|4.5833333333333333333333333333|24.25|4|1.3333333333333333333333333333
 LinqSetProbes.comparers THROWS Error: Unsupported expression: UnsupportedLinqOverload
 LinqSetProbes.setOpsRecords = 3|1|1|2|1|1|2

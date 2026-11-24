@@ -1,4 +1,4 @@
-import { checkedInt64, divInt64, divUInt64, intDiv, remInt64, remUInt64 } from "metano-runtime";
+import { checkedInt64, divInt64, divUInt64, intDiv, intRem, remInt64, remUInt64 } from "metano-runtime";
 
 export class Divide {
   private _cursor: number = 0;
@@ -80,7 +80,7 @@ export class Divide {
   }
 
   narrow(a: number, b: number): number {
-    return (intDiv(a, b) + a % b) | 0;
+    return (intDiv(a, b) + intRem(a, b)) | 0;
   }
 
   compound(l: bigint, m: bigint): bigint {

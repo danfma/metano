@@ -264,6 +264,7 @@ public sealed partial class IrExpressionExtractor
             ?? UnsupportedDynamicUserConversion(expression)
             ?? ImportFacadeMethodGroupOf(expression)
             ?? FoldedInt64Constant(expression)
+            ?? FoldedPrimitiveLimit(expression)
             ?? FoldedCheckedContextConstant(expression)
             ?? FoldedNumberStylesConstant(expression)
             ?? ExtractUnbound(expression);
@@ -357,6 +358,12 @@ public sealed partial class IrExpressionExtractor
             ArrayCreationExpressionSyntax sized when TryExtractSizedArray(sized) is { } creation =>
                 creation,
             ImplicitArrayCreationExpressionSyntax iarr => ArrayLiteralOf(iarr, iarr.Initializer),
+            // `int[] a = { 1, 2 };`: the declaration's shorthand for `new int[] { 1, 2 }`.
+            InitializerExpressionSyntax
+            {
+                RawKind: (int)SyntaxKind.ArrayInitializerExpression,
+                Parent: EqualsValueClauseSyntax,
+            } shorthand => ArrayLiteralOf(shorthand, shorthand),
             // C# language keywords used as expressions — `string.Concat(…)`,
             // `int.Parse(…)`, etc. Resolve to the underlying BCL type so the
             // member-access lookup that wraps the expression can route to the
@@ -2544,11 +2551,11 @@ public sealed partial class IrExpressionExtractor
         bool isPrefix
     )
     {
+        if (IsCharStoreTarget(operand))
+            return ExtractCharIncrement(node, operand, op, extractedOperand, isPrefix);
+
         if (IsNullableValueOperand(operand))
             return LiftIncrement(node, operand, op, extractedOperand, isPrefix);
-
-        if (IsCharStoreTarget(operand))
-            return ExtractCharIncrement(node, op, extractedOperand, isPrefix);
 
         if (IsDecimalStoreTarget(operand))
             return ExtractDecimalIncrement(node, op, extractedOperand, isPrefix);

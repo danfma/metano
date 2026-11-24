@@ -210,19 +210,36 @@ export function uint64FromDecimal(value: DecimalLike): bigint {
 
 /** Decimal to an integer of 32 bits or fewer: truncate exactly, then check even when unchecked. */
 export function narrowFromDecimal(value: DecimalLike, bits: 8 | 16 | 32, signed: boolean): number {
-  const message = () => {
-    const type =
-      bits === 8
-        ? signed
-          ? "a signed byte"
-          : "an unsigned byte"
-        : `${signed ? "an Int" : "a UInt"}${bits}`;
-    return `Value was either too large or too small for ${type}.`;
-  };
-  const integer = truncatedDecimal(value, message);
+  const type =
+    bits === 8
+      ? signed
+        ? "a signed byte"
+        : "an unsigned byte"
+      : `${signed ? "an Int" : "a UInt"}${bits}`;
   const width = BigInt(bits);
   const min = signed ? -(1n << (width - 1n)) : 0n;
   const max = signed ? (1n << (width - 1n)) - 1n : (1n << width) - 1n;
+
+  return truncatedDecimalInRange(value, min, max, type);
+}
+
+/**
+ * `(char)m`: the UTF-16 code of the truncated `decimal` (#695).
+ *
+ * @throws OverflowException("Value was either too large or too small for a character.") outside 0–65535.
+ */
+export function charCodeFromDecimal(value: DecimalLike): number {
+  return truncatedDecimalInRange(value, 0n, 0xffffn, "a character");
+}
+
+function truncatedDecimalInRange(
+  value: DecimalLike,
+  min: bigint,
+  max: bigint,
+  type: string,
+): number {
+  const message = () => `Value was either too large or too small for ${type}.`;
+  const integer = truncatedDecimal(value, message);
 
   return Number(requireRange(integer, min, max, message));
 }

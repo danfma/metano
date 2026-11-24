@@ -43,8 +43,13 @@ public static class IrToTsStatementBridge
             return MapListForEach(fe, context);
 
         // C# `foreach (var x in xs) { … }` → TS `for (const x of xs) { … }`;
-        // `await foreach` → `for await (…)` (#625).
+        // `await foreach` → `for await (…)` (#625). A string walks its UTF-16
+        // code units, as C# does (#695): its own iterator yields code points.
         var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
+
+        if (fe.CollectionType is IrPrimitiveTypeRef { Primitive: IrPrimitive.String })
+            collection = IrToTsExpressionBridge.CodeUnitsOf(collection);
+
         var body = MapBody(fe.Body, context);
         var loopVariable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
         var loop = fe.IsAwait ? "for await" : "for";

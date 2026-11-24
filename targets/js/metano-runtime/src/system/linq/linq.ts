@@ -1760,7 +1760,10 @@ export function linq(
   source: unknown,
   ...ops: (OperatorBase<any, any> | TerminalBase<any, any>)[]
 ): unknown {
-  const result = ops.reduce((acc, op) => op.apply(acc as Iterable<any>) as any, source as any);
+  // A C# string enumerates its UTF-16 code units; a JS string's own iterator
+  // yields code points, so a surrogate pair would be one element (#695).
+  const start = typeof source === "string" ? source.split("") : source;
+  const result = ops.reduce((acc, op) => op.apply(acc as Iterable<any>) as any, start as any);
   // Attach the original stage list to the materialized result so an
   // IQueryable-style consumer can introspect the chain. Skipped for
   // primitive results (terminals like `count` / `sum` return numbers

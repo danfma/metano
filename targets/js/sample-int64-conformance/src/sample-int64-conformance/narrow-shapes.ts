@@ -100,7 +100,7 @@ export function staticFieldCompoundChecked(start: number, amount: number): numbe
 
 export function capturedIncrement(start: number): number {
   let counter = start;
-  const step = () => ((counter = (counter + 1) & 0xFF) - 1) & 0xFF;
+  const step = () => counter = (counter + 1) & 0xFF;
   step();
   step();
 

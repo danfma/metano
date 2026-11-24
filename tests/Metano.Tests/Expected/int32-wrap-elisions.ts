@@ -165,7 +165,7 @@ export class Elisions {
   writtenByLambda(n: number): number {
     let s = 0;
     for (let i = 0; i < n; i = (i + 1) | 0) {
-      const skip = () => ((i = (i + 1) | 0) - 1) | 0;
+      const skip = () => i = (i + 1) | 0;
       skip();
       s = (s + 1) | 0;
     }
@@ -205,6 +205,6 @@ export class Elisions {
   }
 
   private static bump(value: number): void {
-    ((value = (value + 1) | 0) - 1) | 0;
+    value = (value + 1) | 0;
   }
 }

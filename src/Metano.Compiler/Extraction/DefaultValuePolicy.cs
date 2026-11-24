@@ -37,7 +37,7 @@ internal static class DefaultValuePolicy
         if (type is INamedTypeSymbol { IsTupleType: true } tuple)
             return TupleDefault(tuple, buildOrigin, mapType);
 
-        var literal = DefaultValueLiterals.For(type, buildOrigin);
+        var literal = DefaultValueLiterals.For(type, buildOrigin, mapType);
 
         return literal switch
         {

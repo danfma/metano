@@ -429,6 +429,47 @@ public sealed partial class IrExpressionExtractor
     private static bool IsNumericConstant(object? value) => value is not (null or string or bool);
 
     /// <summary>
+    /// A limit of a 32-bit-or-narrower integer type or of <c>char</c>
+    /// (<c>int.MaxValue</c>, <c>char.MinValue</c>): a BCL constant no runtime
+    /// declares, folded to the literal its own literal form lowers to (a
+    /// <c>char</c> literal for a <c>char</c>, the digits for a
+    /// <c>decimal</c> slot), so the conversions that follow apply as they do
+    /// to that literal (#695). <c>null</c> for any other expression; a 64-bit
+    /// limit folds before, in <see cref="FoldedInt64Constant"/>.
+    /// </summary>
+    private IrLiteral? FoldedPrimitiveLimit(ExpressionSyntax expression)
+    {
+        if (expression is not MemberAccessExpressionSyntax)
+            return null;
+
+        if (
+            _semantic.GetSymbolInfo(expression).Symbol
+            is not IFieldSymbol { IsConst: true, ConstantValue: { } value } field
+        )
+            return null;
+
+        if (!IsNarrowPrimitive(field.ContainingType.SpecialType))
+            return null;
+
+        return value is char character
+            ? new IrLiteral(character, IrLiteralKind.Char)
+            : ConstantLiteralOfKind(
+                value,
+                DigitCarryingTarget(_semantic.GetTypeInfo(expression).ConvertedType)
+            );
+    }
+
+    private static bool IsNarrowPrimitive(SpecialType type) =>
+        type
+            is SpecialType.System_Char
+                or SpecialType.System_Byte
+                or SpecialType.System_SByte
+                or SpecialType.System_Int16
+                or SpecialType.System_UInt16
+                or SpecialType.System_Int32
+                or SpecialType.System_UInt32;
+
+    /// <summary>
     /// <c>nint.MaxValue</c> / <c>MinValue</c>, <c>nuint.MaxValue</c> /
     /// <c>MinValue</c> and <c>IntPtr.Size</c>: properties, not C# constants
     /// (CS0133), whose values are fixed on every 64-bit host Metano targets

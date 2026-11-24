@@ -1,4 +1,4 @@
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, absInt32, copyRecordWith } from "metano-runtime";
 
 export class Point {
   constructor(readonly x: number, readonly y: number) { }
@@ -8,7 +8,7 @@ export class Point {
   }
 
   manhattanLength(): number {
-    return (Math.abs(this.x) + Math.abs(this.y)) | 0;
+    return (absInt32(this.x) + absInt32(this.y)) | 0;
   }
 
   equals(other: any): boolean {

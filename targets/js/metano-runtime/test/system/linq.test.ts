@@ -604,3 +604,12 @@ describe("linq operators", () => {
     expect(calls).toBe(3);
   });
 });
+
+describe("linq over a string", () => {
+  test("walks the UTF-16 code units, as a C# string enumerates", () => {
+    const text = "a\u{1F600}";
+
+    expect(linq(text, count())).toBe(3);
+    expect(linq(text, select((unit: string) => unit.charCodeAt(0)), last())).toBe(0xde00);
+  });
+});

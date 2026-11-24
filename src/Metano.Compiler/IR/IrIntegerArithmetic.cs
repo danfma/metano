@@ -90,6 +90,25 @@ public sealed record IrNumericConversion(
     public static bool IsDecimalToNarrowInteger(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from is { Kind: IrNumericKind.Decimal, IsEnum: false } && to.IsNarrowIntegerValue();
 
+    /// <summary>A decimal read as a <c>char</c>: truncate, then range-check in every context, as an unsigned 16-bit integer (#695).</summary>
+    public static bool IsDecimalToChar(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        from is { Kind: IrNumericKind.Decimal, IsEnum: false }
+        && to is { Kind: IrNumericKind.Char, IsEnum: false };
+
+    /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> makes a <c>decimal</c> of a <c>double</c> or <c>float</c>, rounded to its significant digits (#695).</summary>
+    public static bool IsBinaryFloatingPointToDecimal(
+        IrNumericEndpoint from,
+        IrNumericEndpoint to
+    ) =>
+        from is { IsEnum: false }
+        && from.Kind.IsFloatingPoint()
+        && to is { Kind: IrNumericKind.Decimal, IsEnum: false };
+
+    /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> rounds a <c>double</c> to a <c>float</c> (#695).</summary>
+    public static bool IsDoubleToSingle(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        from is { Kind: IrNumericKind.Double, IsEnum: false }
+        && to is { Kind: IrNumericKind.Single, IsEnum: false };
+
     /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> reads a <c>decimal</c> as a <c>double</c> or <c>float</c>.</summary>
     public static bool IsDecimalToBinaryFloatingPoint(
         IrNumericEndpoint from,

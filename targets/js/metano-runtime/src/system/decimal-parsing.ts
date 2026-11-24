@@ -63,6 +63,24 @@ export function parseDecimalText(text: string | null | undefined): string {
   return `${sign}${integer || "0"}${fraction ? `.${fraction}` : ""}`;
 }
 
+/** The magnitude from which a binary floating-point value no longer fits a `decimal`. */
+const DECIMAL_LIMIT = 7.922816251426434e28;
+
+/**
+ * The digits of `(decimal)d` (`digits` 15) or `(decimal)f` (`digits` 7), for
+ * `new Decimal(…)`: .NET rounds the binary value to that many significant
+ * digits, so `(decimal)(0.1 + 0.2)` is `0.3` (#695).
+ *
+ * @throws OverflowException for NaN, ±Infinity and a magnitude beyond `decimal.MaxValue`.
+ */
+export function decimalTextFromDouble(value: number, digits: 7 | 15): string {
+  if (!(Math.abs(value) < DECIMAL_LIMIT)) {
+    throw new OverflowException(DECIMAL_RANGE_MESSAGE);
+  }
+
+  return value.toPrecision(digits);
+}
+
 function formatException(text: string): FormatException {
   return new FormatException(`The input string '${text}' was not in a correct format.`);
 }

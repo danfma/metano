@@ -21,6 +21,7 @@ export class Counter {
 }
 
 // fixtures/no-runtime-questions/geometry.ts
+import { absInt32 } from "metano-runtime";
 import { Point } from "./point";
 import { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
@@ -29,7 +30,7 @@ export class Geometry {
   constructor() { }
 
   static distance(a: Point, b: Point): number {
-    return (Math.abs((a.x - b.x) | 0) + Math.abs((a.y - b.y) | 0)) | 0;
+    return (absInt32((a.x - b.x) | 0) + absInt32((a.y - b.y) | 0)) | 0;
   }
 
   static plan(title: string, x: number, y: number): TodoItem {
@@ -45,7 +46,7 @@ export { Priority } from "./priority";
 export { TodoItem } from "./todo-item";
 
 // fixtures/no-runtime-questions/point.ts
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, absInt32, copyRecordWith } from "metano-runtime";
 
 export class Point {
   constructor(readonly x: number, readonly y: number) { }
@@ -55,7 +56,7 @@ export class Point {
   }
 
   manhattanLength(): number {
-    return (Math.abs(this.x) + Math.abs(this.y)) | 0;
+    return (absInt32(this.x) + absInt32(this.y)) | 0;
   }
 
   equals(other: any): boolean {
