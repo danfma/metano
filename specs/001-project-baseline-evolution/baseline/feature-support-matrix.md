@@ -188,7 +188,7 @@ Declarative array-tuple / callable shapes + tuple deconstruction (no hand-writte
 
 ## Deconstruction (#779)
 
-FR-102: every deconstruction C# accepts in statement position. Extends the flat `[JsTuple]` row above.
+FR-103: every deconstruction C# accepts in statement position. Extends the flat `[JsTuple]` row above.
 
 | Area | Feature | Target | Status | Code area | Test | Notes |
 | --- | --- | --- | --- | --- | --- | --- |

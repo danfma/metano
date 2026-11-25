@@ -10,8 +10,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// Lowers one deconstruction into three ordered statement lists, which is
     /// C#'s evaluation order: the receivers and indices of the existing
-    /// variables written, then the right side with its <c>Deconstruct</c>
-    /// calls and the fresh locals, then the writes into existing variables.
+    /// variables written, then the right side — every element of a tuple
+    /// literal first, then each <c>Deconstruct</c> call, depth first — with
+    /// the fresh locals, then the writes into existing variables.
     /// </summary>
     private sealed class DeconstructionLowering(IrExpressionExtractor extractor, SyntaxNode site)
     {
@@ -19,7 +20,7 @@ public sealed partial class IrExpressionExtractor
 
         private readonly List<IrStatement> _bindings = [];
 
-        private readonly List<IrStatement> _writes = [];
+        private readonly Dictionary<StoredSlot, IrStatement> _writes = [];
 
         private readonly Dictionary<StoredSlot, IrExpression?> _places = [];
 
@@ -33,7 +34,13 @@ public sealed partial class IrExpressionExtractor
         )
         {
             ResolvePlaces(slots);
-            BindSyntax(slots, info, value);
+
+            if (extractor.ShapeOf(info, site) is not { } shape)
+                _failed = true;
+            else if (shape is PositionalShape && LiteralOf(value, slots.Count) is { } literal)
+                BindLiteral(slots, info, literal);
+            else
+                BindValue(PartOf(extractor.Extract(value), slots, info, shape, value));
 
             return Result();
         }
@@ -43,13 +50,14 @@ public sealed partial class IrExpressionExtractor
             IReadOnlyList<DeconstructionSlot> slots,
             DeconstructionInfo info,
             IrExpression value,
-            IrTypeRef? valueType
+            IrTypeRef? valueType,
+            ITypeSymbol? valueSymbol
         )
         {
             ResolvePlaces(slots);
 
             if (extractor.ShapeOf(info, site) is { } shape)
-                BindValue(slots, info, shape, value, valueType);
+                BindValue(new Part(value, slots, info, shape, valueType, valueSymbol));
             else
                 _failed = true;
 
@@ -59,16 +67,109 @@ public sealed partial class IrExpressionExtractor
         private IReadOnlyList<IrStatement> Result() =>
             _failed
                 ? [new IrExpressionStatement(new IrUnsupportedExpression("deconstruction"))]
-                : [.. _receivers, .. _bindings, .. _writes];
+                : [.. _receivers, .. _bindings, .. WritesInOrder()];
 
-        /// <summary>
-        /// A tuple literal taken apart by position binds each element to its
-        /// slot directly; any other value is extracted whole.
-        /// </summary>
-        private void BindSyntax(
+        /// <summary>The writes, left to right as the slots are written in C#.</summary>
+        private IEnumerable<IrStatement> WritesInOrder() =>
+            _places.Keys.Where(_writes.ContainsKey).Select(slot => _writes[slot]);
+
+        private Part PartOf(
+            IrExpression value,
             IReadOnlyList<DeconstructionSlot> slots,
             DeconstructionInfo info,
-            ExpressionSyntax value
+            DeconstructionShape shape,
+            ExpressionSyntax source
+        ) =>
+            new(
+                value,
+                slots,
+                info,
+                shape,
+                extractor.MapExpressionType(source),
+                extractor._semantic.GetTypeInfo(source).Type
+            );
+
+        /// <summary>
+        /// A tuple literal taken apart by position: every element is evaluated
+        /// first, then the parts that a further deconstruction takes apart.
+        /// </summary>
+        private void BindLiteral(
+            IReadOnlyList<DeconstructionSlot> slots,
+            DeconstructionInfo info,
+            TupleExpressionSyntax literal
+        )
+        {
+            var deferred = new List<Part>();
+
+            BindElements(slots, info, literal, deferred);
+
+            foreach (var part in deferred)
+                BindValue(part);
+        }
+
+        private void BindElements(
+            IReadOnlyList<DeconstructionSlot> slots,
+            DeconstructionInfo info,
+            TupleExpressionSyntax literal,
+            List<Part> deferred
+        )
+        {
+            for (var index = 0; index < slots.Count; index++)
+            {
+                BindElement(
+                    slots[index],
+                    NestedInfo(info, index),
+                    literal.Arguments[index].Expression,
+                    deferred
+                );
+            }
+        }
+
+        private void BindElement(
+            DeconstructionSlot slot,
+            DeconstructionInfo info,
+            ExpressionSyntax element,
+            List<Part> deferred
+        )
+        {
+            switch (slot)
+            {
+                case NestedSlot nested:
+                    BindNestedElement(nested, info, element, deferred);
+                    break;
+
+                case DeclaredSlot declared:
+                    _bindings.Add(
+                        new IrVariableDeclaration(
+                            declared.Name,
+                            Type: null,
+                            extractor.Extract(element),
+                            InferredType: declared.Type
+                        )
+                    );
+
+                    break;
+
+                case StoredSlot stored:
+                    BindStoredElement(stored, element);
+                    break;
+
+                default:
+                    Evaluate(extractor.Extract(element));
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// A nested literal's elements join the enclosing literal's; any other
+        /// element is held in a temporary and taken apart once every element
+        /// has been evaluated.
+        /// </summary>
+        private void BindNestedElement(
+            NestedSlot nested,
+            DeconstructionInfo info,
+            ExpressionSyntax element,
+            List<Part> deferred
         )
         {
             if (extractor.ShapeOf(info, site) is not { } shape)
@@ -78,59 +179,16 @@ public sealed partial class IrExpressionExtractor
                 return;
             }
 
-            if (
-                shape is PositionalShape
-                && UnparenthesizedTuple(value) is { } literal
-                && literal.Arguments.Count == slots.Count
-            )
+            if (shape is PositionalShape && LiteralOf(element, nested.Slots.Count) is { } literal)
             {
-                for (var index = 0; index < slots.Count; index++)
-                    BindElement(slots[index], NestedInfo(info, index), literal.Arguments[index]);
+                BindElements(nested.Slots, info, literal, deferred);
 
                 return;
             }
 
-            BindValue(
-                slots,
-                info,
-                shape,
-                extractor.Extract(value),
-                extractor.MapExpressionType(value)
-            );
-        }
+            var value = Bound(extractor.Extract(element), _bindings);
 
-        private void BindElement(
-            DeconstructionSlot slot,
-            DeconstructionInfo info,
-            ArgumentSyntax element
-        )
-        {
-            switch (slot)
-            {
-                case NestedSlot nested:
-                    BindSyntax(nested.Slots, info, element.Expression);
-                    break;
-
-                case DeclaredSlot declared:
-                    _bindings.Add(
-                        new IrVariableDeclaration(
-                            declared.Name,
-                            Type: null,
-                            extractor.Extract(element.Expression),
-                            InferredType: declared.Type
-                        )
-                    );
-
-                    break;
-
-                case StoredSlot stored:
-                    BindStoredElement(stored, element.Expression);
-                    break;
-
-                default:
-                    Evaluate(extractor.Extract(element.Expression));
-                    break;
-            }
+            deferred.Add(PartOf(value, nested.Slots, info, shape, element));
         }
 
         /// <summary>
@@ -148,20 +206,21 @@ public sealed partial class IrExpressionExtractor
             Write(place, value is IrLiteral ? value : Bound(value, _bindings), stored);
         }
 
-        private void BindValue(
-            IReadOnlyList<DeconstructionSlot> slots,
-            DeconstructionInfo info,
-            DeconstructionShape shape,
-            IrExpression value,
-            IrTypeRef? valueType = null
-        )
+        /// <summary>
+        /// Takes <paramref name="part"/> apart: one destructuring binding (or
+        /// the <c>Deconstruct</c> call alone when it binds nothing), the
+        /// conversions its parts need, then the parts that a further
+        /// <c>Deconstruct</c> call takes apart, depth first.
+        /// </summary>
+        private void BindValue(Part part)
         {
-            var parts = shape is MethodShape method
-                ? extractor.DeconstructCall(value, method.Method)
-                : value;
+            var parts = part.Shape is MethodShape method
+                ? extractor.DeconstructCall(part.Value, method.Method)
+                : part.Value;
 
-            var deferred = new List<DeferredPart>();
-            var elements = ElementsOf(slots, info, deferred);
+            var deferred = new List<Part>();
+            var conversions = new List<IrStatement>();
+            var elements = ElementsOf(part.Slots, part.Info, part.Type, deferred, conversions);
 
             if (_failed)
                 return;
@@ -171,8 +230,8 @@ public sealed partial class IrExpressionExtractor
                 _bindings.Add(
                     new IrTupleDeconstruction(elements, parts, IsConst: false)
                     {
-                        Members = (shape as MembersShape)?.Members,
-                        ValueType = shape is PositionalShape ? valueType : null,
+                        Members = (part.Shape as MembersShape)?.Members,
+                        ValueType = part.Shape is PositionalShape ? part.IrType : null,
                     }
                 );
             }
@@ -181,55 +240,105 @@ public sealed partial class IrExpressionExtractor
                 Evaluate(parts);
             }
 
-            foreach (var part in deferred)
-                BindValue(part.Slots, part.Info, part.Shape, new IrIdentifier(part.Name));
+            _bindings.AddRange(conversions);
+
+            foreach (var nested in deferred)
+                BindValue(nested);
         }
 
         private List<IrDeconstructionElement> ElementsOf(
             IReadOnlyList<DeconstructionSlot> slots,
             DeconstructionInfo info,
-            List<DeferredPart> deferred
-        ) =>
-            slots
-                .Select((slot, index) => ElementOf(slot, NestedInfo(info, index), deferred))
+            ITypeSymbol? valueType,
+            List<Part> deferred,
+            List<IrStatement> conversions
+        )
+        {
+            var partTypes = PartTypesOf(info, valueType, slots.Count);
+
+            return slots
+                .Select(
+                    (slot, index) =>
+                        ElementOf(
+                            slot,
+                            NestedInfo(info, index),
+                            partTypes[index],
+                            deferred,
+                            conversions
+                        )
+                )
                 .ToList();
+        }
 
         /// <summary>
-        /// The element binding <paramref name="slot"/>'s part. A part taken
-        /// apart by a <c>Deconstruct</c> call is bound to a temporary and
-        /// deconstructed after the enclosing binding (<paramref name="deferred"/>).
+        /// The element binding <paramref name="slot"/>'s part, of type
+        /// <paramref name="partType"/>. A part that converts on its way to its
+        /// variable, or is written into an existing one, is bound to a
+        /// temporary; so is a part a <c>Deconstruct</c> call takes apart, after
+        /// the enclosing binding (<paramref name="deferred"/>).
         /// </summary>
         private IrDeconstructionElement ElementOf(
             DeconstructionSlot slot,
             DeconstructionInfo info,
-            List<DeferredPart> deferred
+            ITypeSymbol? partType,
+            List<Part> deferred,
+            List<IrStatement> conversions
+        ) =>
+            slot switch
+            {
+                DeclaredSlot declared => DeclaredElementOf(declared, partType, conversions),
+                StoredSlot stored => StoredElementOf(stored, partType),
+                NestedSlot nested => NestedElementOf(nested, info, partType, deferred, conversions),
+                _ => new IrDeconstructionElement(Name: null),
+            };
+
+        private IrDeconstructionElement DeclaredElementOf(
+            DeclaredSlot declared,
+            ITypeSymbol? partType,
+            List<IrStatement> conversions
         )
         {
-            switch (slot)
+            if (!extractor.ConvertsPart(partType, declared.Symbol))
+                return new IrDeconstructionElement(declared.Name);
+
+            var temporary = extractor.NextDeconstructionTempName();
+
+            conversions.Add(
+                new IrVariableDeclaration(
+                    declared.Name,
+                    Type: null,
+                    ConvertedPart(new IrIdentifier(temporary), partType, declared.Symbol),
+                    InferredType: declared.Type
+                )
+            );
+
+            return new IrDeconstructionElement(temporary);
+        }
+
+        private IrDeconstructionElement StoredElementOf(StoredSlot stored, ITypeSymbol? partType)
+        {
+            var temporary = extractor.NextDeconstructionTempName();
+
+            if (PlaceOf(stored) is { } place)
             {
-                case DeclaredSlot declared:
-                    return new IrDeconstructionElement(declared.Name);
+                var value = ConvertedPart(
+                    new IrIdentifier(temporary),
+                    partType,
+                    extractor._semantic.GetTypeInfo(stored.Target).Type
+                );
 
-                case StoredSlot stored:
-                    var temporary = extractor.NextDeconstructionTempName();
-
-                    if (PlaceOf(stored) is { } place)
-                        Write(place, new IrIdentifier(temporary), stored);
-
-                    return new IrDeconstructionElement(temporary);
-
-                case NestedSlot nested:
-                    return NestedElementOf(nested, info, deferred);
-
-                default:
-                    return new IrDeconstructionElement(Name: null);
+                Write(place, value, stored);
             }
+
+            return new IrDeconstructionElement(temporary);
         }
 
         private IrDeconstructionElement NestedElementOf(
             NestedSlot nested,
             DeconstructionInfo info,
-            List<DeferredPart> deferred
+            ITypeSymbol? partType,
+            List<Part> deferred,
+            List<IrStatement> conversions
         )
         {
             var shape = extractor.ShapeOf(info, site);
@@ -245,7 +354,9 @@ public sealed partial class IrExpressionExtractor
             {
                 var temporary = extractor.NextDeconstructionTempName();
 
-                deferred.Add(new DeferredPart(temporary, nested.Slots, info, shape));
+                deferred.Add(
+                    new Part(new IrIdentifier(temporary), nested.Slots, info, shape, null, partType)
+                );
 
                 return new IrDeconstructionElement(temporary);
             }
@@ -253,11 +364,17 @@ public sealed partial class IrExpressionExtractor
             return new IrDeconstructionElement(Name: null)
             {
                 Nested = new IrNestedDeconstruction(
-                    ElementsOf(nested.Slots, info, deferred),
+                    ElementsOf(nested.Slots, info, partType, deferred, conversions),
                     (shape as MembersShape)?.Members
                 ),
             };
         }
+
+        private IrExpression ConvertedPart(
+            IrExpression value,
+            ITypeSymbol? from,
+            ITypeSymbol? to
+        ) => extractor.ConvertedPart(site, value, from, to);
 
         /// <summary>
         /// Resolves the place every written slot stores into, left to right,
@@ -278,8 +395,8 @@ public sealed partial class IrExpressionExtractor
 
         /// <summary>
         /// The place <paramref name="stored"/> writes, its receiver and index
-        /// evaluated ahead of the right side unless reading them again is
-        /// harmless.
+        /// evaluated ahead of the right side: even a local, which the right
+        /// side may reassign, is read once there.
         /// </summary>
         private IrExpression? PlaceAheadOf(StoredSlot stored)
         {
@@ -292,18 +409,18 @@ public sealed partial class IrExpressionExtractor
 
             return place switch
             {
-                IrMemberAccess member => member with { Target = Stable(member.Target) },
+                IrMemberAccess member => member with { Target = Fixed(member.Target) },
                 IrElementAccess element => element with
                 {
-                    Target = Stable(element.Target),
-                    Index = Stable(element.Index),
+                    Target = Fixed(element.Target),
+                    Index = Fixed(element.Index),
                 },
                 _ => place,
             };
         }
 
-        private IrExpression Stable(IrExpression operand) =>
-            IsStableOperand(operand) ? operand : Bound(operand, _receivers);
+        private IrExpression Fixed(IrExpression operand) =>
+            IsFixedOperand(operand) ? operand : Bound(operand, _receivers);
 
         private IrIdentifier Bound(IrExpression value, List<IrStatement> statements)
         {
@@ -318,15 +435,13 @@ public sealed partial class IrExpressionExtractor
         {
             var write = new IrBinaryExpression(place, IrBinaryOp.Assign, value);
 
-            _writes.Add(
-                new IrExpressionStatement(
-                    place is IrElementAccess && !extractor._context.KeepsNativeCollections
-                        ? write with
-                        {
-                            Location = SourceLocationOf(stored.Target),
-                        }
-                        : write
-                )
+            _writes[stored] = new IrExpressionStatement(
+                place is IrElementAccess && !extractor._context.KeepsNativeCollections
+                    ? write with
+                    {
+                        Location = SourceLocationOf(stored.Target),
+                    }
+                    : write
             );
         }
 
@@ -337,24 +452,35 @@ public sealed partial class IrExpressionExtractor
                 _bindings.Add(new IrExpressionStatement(value));
         }
 
-        private static TupleExpressionSyntax? UnparenthesizedTuple(ExpressionSyntax value) =>
+        /// <summary>
+        /// <paramref name="value"/> as a tuple literal of <paramref name="count"/>
+        /// elements, through any parentheses; <c>null</c> otherwise.
+        /// </summary>
+        private static TupleExpressionSyntax? LiteralOf(ExpressionSyntax value, int count) =>
             value switch
             {
-                ParenthesizedExpressionSyntax parenthesized => UnparenthesizedTuple(
-                    parenthesized.Expression
+                ParenthesizedExpressionSyntax parenthesized => LiteralOf(
+                    parenthesized.Expression,
+                    count
                 ),
-                TupleExpressionSyntax tuple => tuple,
+                TupleExpressionSyntax tuple when tuple.Arguments.Count == count => tuple,
                 _ => null,
             };
 
         private static DeconstructionInfo NestedInfo(DeconstructionInfo info, int index) =>
             index < info.Nested.Length ? info.Nested[index] : default;
 
-        private sealed record DeferredPart(
-            string Name,
+        /// <summary>
+        /// A value to take apart and how: its slots, its deconstruction and
+        /// shape, and its type as the IR and as Roslyn see it.
+        /// </summary>
+        private sealed record Part(
+            IrExpression Value,
             IReadOnlyList<DeconstructionSlot> Slots,
             DeconstructionInfo Info,
-            DeconstructionShape Shape
+            DeconstructionShape Shape,
+            IrTypeRef? IrType,
+            ITypeSymbol? Type
         );
     }
 }

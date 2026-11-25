@@ -55,12 +55,17 @@ public class DeconstructionLoweringTests
             public static int Dictionary(System.Collections.Generic.Dictionary<string, int> d) { var t = 0; foreach (var (k, v) in d) t += k.Length + v; return t; }
             public static int Records(Point[] points) { var t = 0; foreach (var (x, y) in points) t += x * y; return t; }
             public static int Lambda() { var x = 0; Action f = () => (x, _) = (9, 1); f(); return x; }
+            public static int Alias(int i, int[] a) { (i, a[i]) = (1, 2); return i; }
+            public static long Widen() { (long l, decimal d) = Pair2(); long m = 0; (m, _) = Pair2(); return l + m + (long)d; }
+            public static (int, int) Pair2() => (1, 2);
+            public static int DeconstructLast(Pair p) { int x = 0, y = 0, w = 0; (x, (y, _), w) = (Next(1), p, Next(3)); return x + y + w; }
         }
         """;
 
     private const string Expected = """
-        import { HashCode, arrayLength, copyRecordWith } from "metano-runtime";
+        import { HashCode, arrayLength, copyRecordWith, int64FromDecimal } from "metano-runtime";
         import { Dictionary } from "metano-runtime/system/collections";
+        import { Decimal } from "metano-runtime/system/decimal";
 
         export class Point {
           constructor(readonly x: number, readonly y: number) { }
@@ -211,12 +216,14 @@ public class DeconstructionLoweringTests
           }
 
           static members(h: Holder, i: number): number {
-            const $part0 = Shapes.array(i);
-            const $part1 = Shapes.next(i);
-            const $part2 = Shapes.next(6);
-            h.field = 5;
-            h.prop = $part2;
-            $part0[$part1] = 7;
+            const $part0 = h;
+            const $part1 = h;
+            const $part2 = Shapes.array(i);
+            const $part3 = Shapes.next(i);
+            const $part4 = Shapes.next(6);
+            $part0.field = 5;
+            $part1.prop = $part4;
+            $part2[$part3] = 7;
 
             return (h.field + h.prop) | 0;
           }
@@ -249,6 +256,45 @@ public class DeconstructionLoweringTests
             f();
 
             return x;
+          }
+
+          static alias(i: number, a: number[]): number {
+            const $part0 = a;
+            const $part1 = i;
+            i = 1;
+            $part0[$part1] = 2;
+
+            return i;
+          }
+
+          static widen(): bigint {
+            const [$part0, $part1] = Shapes.pair2();
+            const l = BigInt($part0);
+            const d = new Decimal($part1 + 0);
+            let m = 0n;
+            const [$part2] = Shapes.pair2();
+            m = BigInt($part2);
+
+            return BigInt.asIntN(64, BigInt.asIntN(64, l + m) + int64FromDecimal(d));
+          }
+
+          static pair2(): [number, number] {
+            return [1, 2] as [number, number];
+          }
+
+          static deconstructLast(p: Pair): number {
+            let x = 0;
+            let y = 0;
+            let w = 0;
+            const $part0 = Shapes.next(1);
+            const $part1 = p;
+            const $part2 = Shapes.next(3);
+            const [$part3] = $part1.deconstruct();
+            x = $part0;
+            y = $part3;
+            w = $part2;
+
+            return (x + y + w) | 0;
           }
         }
 

@@ -23,6 +23,16 @@ public class DeconHolder
     public string State => _a + "," + _b;
 }
 
+public class DeconLog
+{
+    public void Deconstruct(out int a, out int b)
+    {
+        DeconstructionProbes.Trace += "d";
+        a = 1;
+        b = 2;
+    }
+}
+
 public static class DeconRunner
 {
     public static (int, Action) Run(Func<Action, (int, Action)> body) => body(() => { });
@@ -32,6 +42,8 @@ public static class DeconRunner
 public static class DeconstructionProbes
 {
     private static string _log = "";
+
+    public static string Trace = "";
 
     private static int Log(int value)
     {
@@ -130,5 +142,78 @@ public static class DeconstructionProbes
         holder.Swap();
 
         return x + "|" + holder.State;
+    }
+
+    // A local written by the deconstruction is read as receiver or index
+    // before the right side (#779 review).
+    public static string IndexAlias()
+    {
+        int i = 0;
+        var a = new int[] { 0, 0, 0 };
+        (i, a[i]) = (1, 2);
+        int j = 0;
+        var b = new int[] { 0, 0, 0 };
+        var k = 5;
+        (j, b[j]) = (k, k);
+
+        return i + ":" + string.Join(",", a) + "|" + j + ":" + string.Join(",", b);
+    }
+
+    public static string ReceiverAlias()
+    {
+        var o1 = new DeconHolder();
+        var o2 = new DeconHolder();
+        var o = o1;
+        (o, o.Field) = (o2, 5);
+
+        return o1.Field + "," + o2.Field;
+    }
+
+    public static string ClosureIndex()
+    {
+        int i = 0;
+        var a = new int[] { 0, 0, 0 };
+        Func<int> bump = () =>
+        {
+            i++;
+            return 7;
+        };
+        (a[i], i) = (bump(), 2);
+
+        return i + ":" + string.Join(",", a);
+    }
+
+    // Every literal element is evaluated before a nested Deconstruct runs.
+    public static string NestedDeconstructOrder()
+    {
+        Trace = "";
+        var o = new DeconLog();
+        int x = 0,
+            y = 0,
+            w = 0;
+        (x, (y, _), w) = (Mark(1, "f"), o, Mark(3, "g"));
+
+        return Trace + x + y + w;
+    }
+
+    private static int Mark(int value, string tag)
+    {
+        Trace += tag;
+
+        return value;
+    }
+
+    private static (int, int) IntPair() => (1, 2);
+
+    // Element conversions of a non-literal right side (int to long / decimal).
+    public static string ElementConversions()
+    {
+        (long l, long m) = IntPair();
+        (decimal d, decimal e) = IntPair();
+        decimal f = 0,
+            g = 0;
+        (f, g) = IntPair();
+
+        return (l * 3000000000L + m) + "|" + (d + 0.5m) + "," + e + "|" + (f + g + 0.25m);
     }
 }

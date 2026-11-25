@@ -28,7 +28,7 @@ internal static class IrToTsDeconstructionBridge
         IReadOnlyList<IrPositionalElementMember>? members
     ) =>
         members is null
-            ? new TsArrayBindingPattern(elements.Select(TargetOf).ToList())
+            ? new TsArrayBindingPattern(WithoutTrailingHoles(elements.Select(TargetOf).ToList()))
             : new TsObjectBindingPattern(
                 elements
                     .Zip(members, (element, member) => (Target: TargetOf(element), member))
@@ -43,6 +43,15 @@ internal static class IrToTsDeconstructionBridge
                     ))
                     .ToList()
             );
+
+    /// <summary>A trailing hole skips nothing: <c>[a, ]</c> is <c>[a]</c>.</summary>
+    private static List<TsBindingTarget?> WithoutTrailingHoles(List<TsBindingTarget?> targets)
+    {
+        while (targets is [.., null])
+            targets.RemoveAt(targets.Count - 1);
+
+        return targets;
+    }
 
     /// <summary>The target one element binds; <c>null</c> for a discard.</summary>
     private static TsBindingTarget? TargetOf(IrDeconstructionElement element) =>

@@ -1550,10 +1550,14 @@ Product requirements added after the migration (normative; each one is traced by
   derived arguments with the same type and requiredness. A type-level attribute on a type with
   no constructor (a static class) reports that there is no constructor to lower.
 
-- **FR-102** (deconstruction, #779, Group U): Every deconstruction C# accepts in statement
+- **FR-103** (deconstruction, #779, Group U): Every deconstruction C# accepts in statement
   position MUST lower without a closure and keep .NET's evaluation order: the receivers and
   indices of the existing variables written are evaluated first, left to right, then the right
-  side in full (with every `Deconstruct` call), then the writes, left to right. This covers
+  side in full — every element of a tuple literal first, then every `Deconstruct` call, depth
+  first — then the writes, left to right. Each written receiver and index, a local included
+  (the right side or a closure may reassign it), is read once into a `const` before the right
+  side; each part converts to its variable as an implicit tuple-element conversion does
+  (`(long l, decimal d) = IntPair()`). This covers
   `var (a, b) = e`, `(var a, var b) = e`, `(T a, U b) = e`, a mix of declarations and existing
   variables (`(x, var y) = e`), nesting (`(a, (b, c))`), discards, `foreach (var (k, v) in e)`,
   and the expression body of a `void` member or lambda (`void Swap() => (a, b) = (b, a);`).
@@ -1577,23 +1581,24 @@ Product requirements added after the migration (normative; each one is traced by
      (`var (a, (b, _)) = e;`), a tuple literal as one declaration per element; every other
      shape keeps the unsupported placeholder.
 
-- **FR-103** (indistinguishable dispatcher branches, #778, Group U): A TypeScript overload
-  dispatcher (a class method group, or the function group of an `[ExportedAsModule]` /
-  `[NoContainer]` class or an extension container) MUST NOT keep a branch whose runtime test is
-  the same JavaScript as the test of a branch tried before it (`Func<Action, T>` and
-  `Action<Action>` are both a one-parameter function; `JsArray<T>` and `T[]`, `int[]` and
-  `double[]` are both an array): the branch and its overload signature are dropped, the overload's
-  fast path stays, and `MS0063` is reported at the overload, naming the overload that takes its
-  calls and the fast path hand-written TypeScript must call (`Reactivity.rootActionOfAction`).
-  C# call sites already bind to the fast path (spec 013 FR-018) and are unchanged. A delegate
-  parameter is tested with `typeof === "function"` alone, never `Function.length` (which leaves
-  out ignored, defaulted and rest parameters: `Probes.run(() => 42)` must not throw "No matching
-  overload"), so delegate overloads share one test; when only the later of two such overloads
-  returns a value (`Action<Action>` before `Func<Action, T>`), the dispatcher keeps the
-  value-returning one. A pair that differs only by a branded 64-bit type keeps its existing
-  once-per-group `MS0063`. Constructor
-  dispatchers, dispatchers that also dispatch to a synthesized member and the static groups of a
-  branded companion object are not covered.
+- **FR-104** (indistinguishable dispatcher branches, #778, Group U): A TypeScript overload
+  dispatcher (a constructor, a class method group, or the function group of an
+  `[ExportedAsModule]` / `[NoContainer]` class or an extension container) MUST NOT keep a branch
+  whose runtime test is the same JavaScript as the test of a branch tried before it
+  (`Func<Action, T>` and `Action<Action>` are both a one-parameter function; `JsArray<T>` and
+  `T[]`, `int[]` and `double[]` are both an array): the branch and its overload signature are
+  dropped, the overload's fast path (a constructor's factory) stays, and `MS0063` is reported at
+  the overload, naming the overload that takes its calls and the function hand-written TypeScript
+  must call (`Reactivity.rootActionOfAction`). C# call sites already bind to the fast path
+  (spec 013 FR-018) and are unchanged. `Function.length` is never an exact test (it leaves out
+  ignored, defaulted and rest parameters: `Probes.run(() => 42)` must not throw "No matching
+  overload"): at a parameter position where the overloads' delegates have one arity, the test is
+  `typeof === "function"` alone, so they share it and the dispatcher keeps the overload whose
+  delegate returns a value (`Func<Action, T>` over `Action<Action>`); where the arities differ,
+  the larger ones are tried first with `length >= n` and the smallest takes any function. A pair
+  that differs only by a branded 64-bit type keeps its existing once-per-group `MS0063`.
+  Dispatchers that also dispatch to a synthesized member and the static groups of a branded
+  companion object apply the delegate test but drop nothing.
 
 ### Key Entities
 

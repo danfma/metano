@@ -72,7 +72,8 @@ public sealed partial class IrExpressionExtractor
             slots,
             _semantic.GetDeconstructionInfo(loop),
             element,
-            elementType is null ? null : IrTypeRefMapper.Map(elementType, _originResolver, _target)
+            elementType is null ? null : IrTypeRefMapper.Map(elementType, _originResolver, _target),
+            elementType
         );
     }
 
@@ -120,7 +121,8 @@ public sealed partial class IrExpressionExtractor
 
         return new DeclaredSlot(
             LocalIrNameOf(local, designation.Identifier.ValueText),
-            local is null ? null : IrTypeRefMapper.Map(local.Type, _originResolver, _target)
+            local is null ? null : IrTypeRefMapper.Map(local.Type, _originResolver, _target),
+            local?.Type
         );
     }
 
@@ -273,18 +275,75 @@ public sealed partial class IrExpressionExtractor
             _ => false,
         };
 
-    /// <summary>Whether reading <paramref name="expression"/> again gives the same value.</summary>
+    /// <summary>Whether evaluating <paramref name="expression"/> has no effect worth keeping.</summary>
     private static bool IsStableOperand(IrExpression expression) =>
-        expression
-            is IrIdentifier
-                or IrThisExpression
-                or IrBaseExpression
-                or IrLiteral
-                or IrTypeReference;
+        expression is IrIdentifier || IsFixedOperand(expression);
+
+    /// <summary>
+    /// Whether <paramref name="expression"/> reads the same value whenever it
+    /// is evaluated: unlike a local, which the right side may reassign
+    /// (<c>(i, a[i]) = (1, 2)</c>) or a closure may change.
+    /// </summary>
+    private static bool IsFixedOperand(IrExpression expression) =>
+        expression is IrThisExpression or IrBaseExpression or IrLiteral or IrTypeReference;
+
+    /// <summary>
+    /// <paramref name="value"/>, of type <paramref name="from"/>, converted
+    /// to <paramref name="to"/> as an implicit tuple-element conversion
+    /// does (a 64-bit integer, a <c>decimal</c>, a nullable unwrap); the
+    /// value itself when nothing converts.
+    /// </summary>
+    private IrExpression ConvertedPart(
+        SyntaxNode site,
+        IrExpression value,
+        ITypeSymbol? from,
+        ITypeSymbol? to
+    ) =>
+        ConvertsPart(from, to)
+            ? ConvertedElement(
+                site,
+                value,
+                from!,
+                to!,
+                TupleElementConversions.Implicit(_context.NumericLowering)
+            )
+            : value;
+
+    private bool ConvertsPart(ITypeSymbol? from, ITypeSymbol? to) =>
+        from is not null
+        && to is not null
+        && !SymbolEqualityComparer.Default.Equals(from, to)
+        && TupleElementConversions.Implicit(_context.NumericLowering).ConvertsElement(from, to);
+
+    /// <summary>
+    /// The types of the parts <paramref name="info"/> takes
+    /// <paramref name="count"/> of from a value of type
+    /// <paramref name="valueType"/>: the <c>out</c> parameters of its
+    /// <c>Deconstruct</c>, else the tuple's element types; <c>null</c> for
+    /// a part whose type is unknown.
+    /// </summary>
+    private static IReadOnlyList<ITypeSymbol?> PartTypesOf(
+        DeconstructionInfo info,
+        ITypeSymbol? valueType,
+        int count
+    )
+    {
+        var types =
+            info.Method is { } method
+                ? method
+                    .Parameters.Where(p => p.RefKind is RefKind.Out)
+                    .Select(p => (ITypeSymbol?)p.Type)
+            : valueType?.UnwrapNullableValueType() is INamedTypeSymbol { IsTupleType: true } tuple
+                ? tuple.TupleElements.Select(element => (ITypeSymbol?)element.Type)
+            : [];
+
+        return [.. types.Concat(Enumerable.Repeat<ITypeSymbol?>(null, count)).Take(count)];
+    }
 
     private abstract record DeconstructionSlot;
 
-    private sealed record DeclaredSlot(string Name, IrTypeRef? Type) : DeconstructionSlot;
+    private sealed record DeclaredSlot(string Name, IrTypeRef? Type, ITypeSymbol? Symbol)
+        : DeconstructionSlot;
 
     private sealed record DiscardSlot : DeconstructionSlot;
 
