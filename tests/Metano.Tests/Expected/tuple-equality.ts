@@ -1,4 +1,4 @@
-import { objectEquals, tupleEquals } from "metano-runtime";
+import { objectEquals, throwError, tupleEquals } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Comparisons {
@@ -60,9 +60,7 @@ export class Comparisons {
   }
 
   static throughValue(a: [[number, number], number] | null, b: [[number, number], number]): boolean {
-    return tupleEquals(a ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })(), b, [[], null]);
+    return tupleEquals(a ?? throwError(new InvalidOperationException("Nullable object must have a value.")), b, [[], null]);
   }
 
   static mismatched(a: [number, number], b: [number, bigint]): boolean {

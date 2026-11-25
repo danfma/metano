@@ -1494,21 +1494,29 @@ Product requirements added after the migration (normative; each one is traced by
      `($s = subject, test1 ? result1 : test2 ? result2 : tail)`.
   2. *Temporaries.* `$s` is an untyped `let` declared at the head of the innermost statement
      list (the temporaries mechanism of spec 011, contracts/runtime-collections.md § Indexer
-     compound assignments). Each arm designator becomes its own typed `let` named after it with
-     a `$` prefix (`Circle c` → `let $c: Circle;`), assigned by the arm's test right after the
-     check that narrows the subject (`$s instanceof Circle && ($c = $s, guard)`), and every read
-     or write of the designator in the arm's guard and result names the temporary. Nested
-     switches take distinct names (`$s1`, `$c1`).
-  3. *Tail.* An unguarded catch-all arm (`_`, `var x`) is the tail; later arms are unreachable.
-     Without one, the tail throws through the runtime helper `throwError(error): never` with the
-     `SwitchExpressionException` the statement form throws
-     (`throwError(new SwitchExpressionException($s))`). An arm whose result is a throw
-     expression (`_ => throw new X()`) throws through the same helper, in the subject-reading
-     chain of item 1 too.
-  4. *Fallback.* Where no statement list encloses the switch (a field or static initializer, a
-     constructor-initializer argument), the self-invoking arrow stays.
-  5. *Scope.* Dart output does not change. A throw expression outside a switch arm keeps its
-     current lowering.
+     compound assignments). A `switch` statement's sections are not statement lists of their
+     own: every `case` clause of a JS `switch` shares one scope, so the temporaries of a
+     section go to the head of the list that encloses the `switch` statement, and sections
+     are not wrapped in blocks (a local of one section stays visible to the next, as in C#).
+     Each arm designator the arm reads becomes its own typed `let` named after it with a `$`
+     prefix (`Circle c` → `let $c: Circle;`), assigned by the arm's test right after the check
+     that narrows the subject (`$s instanceof Circle && ($c = $s, guard)`), and every read or
+     write of the designator in the arm's guard and result names the temporary. A designator
+     the arm never reads takes no temporary. Nested switches take distinct names (`$s1`,
+     `$c1`).
+  3. *Throws.* An unguarded catch-all arm (`_`, `var x`) is the tail; later arms are
+     unreachable. Without one, the tail throws through the runtime helper
+     `throwError(error): never` with the `SwitchExpressionException` the statement form throws
+     (`throwError(new SwitchExpressionException($s))`). Every C# throw expression, in a switch
+     arm or anywhere else (`x ?? throw new X()`, `flag ? 1 : throw new X()`), lowers to
+     `throwError(<exception>)` instead of a throwing arrow.
+  4. *Fallback.* The self-invoking arrow, whose bindings are fresh per evaluation, stays in two
+     cases: (a) no statement list encloses the switch (a field or static initializer, a
+     constructor-initializer argument); (b) a lambda in an arm's guard or result reads one of
+     the arm's designators. One temporary per statement list would be shared by every closure
+     created from a loop header (`while`/`do` condition, `for` increment), which evaluates the
+     switch many times per execution of the list, and such an arm allocates a closure anyway.
+  5. *Scope.* Dart output does not change.
 
 ### Key Entities
 

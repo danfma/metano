@@ -34,14 +34,14 @@ public class TupleCastNullableElementTests
     {
         var output = TranspileHelper.Transpile(Source)["casts.ts"];
 
-        await Assert.That(output).Contains("return [n ?? (() => {");
+        await Assert.That(output).Contains("return [n ?? throwError(");
     }
 
     [Test]
     public async Task NullableTupleSourceElements_UnwrapWithTheThrow()
     {
         var output = TranspileHelper.Transpile(Source)["casts.ts"];
-        var guardedElements = output.Split("return [s[0] ?? (() => {").Length - 1;
+        var guardedElements = output.Split("return [s[0] ?? throwError(").Length - 1;
 
         await Assert.That(guardedElements).IsEqualTo(2);
     }

@@ -221,15 +221,15 @@ public class SwitchExpressionChainTests
             );
     }
 
-    // The designator temporary is typed, so a closure in the arm can read it.
+    // A closure in an arm that reads no designator keeps the chain.
     [Test]
-    public async Task ClosureInAnArm_ReadsTheTypedDesignatorTemporary()
+    public async Task ClosureInAnArm_ReadingNoDesignator_KeepsTheChain()
     {
         var output = Transpile(
             """
                 public static Func<int> Reader(Shape shape)
                 {
-                    Func<int> f = shape switch { Circle c => () => c.Radius, _ => () => 0 };
+                    Func<int> f = shape switch { Circle c => c.Radius > 0 ? () => 1 : () => 0, _ => () => -1 };
                     return f;
                 }
             """
@@ -241,7 +241,7 @@ public class SwitchExpressionChainTests
                 """
                     let $s;
                     let $c: Circle;
-                    const f = ($s = shape, $s instanceof Circle && ($c = $s, true) ? () => $c.radius : () => 0);
+                    const f = ($s = shape, $s instanceof Circle && ($c = $s, true) ? $c.radius > 0 ? () => 1 : () => 0 : () => -1);
                 """
             );
     }
@@ -321,6 +321,115 @@ public class SwitchExpressionChainTests
             .That(output)
             .Contains(
                 "return Areas.echo(value === 1 ? \"one\" : throwError(new ArgumentException(\"no\")));"
+            );
+    }
+
+    // Every `case` clause of a JS `switch` shares one scope: the temporaries
+    // of each section go to the list enclosing the `switch`, never redeclared.
+    [Test]
+    public async Task TwoSwitchSections_DeclareTheirTemporariesOnceAboveTheSwitch()
+    {
+        var output = Transpile(
+            """
+                public static int Sections(int sel, Shape s)
+                {
+                    switch (sel)
+                    {
+                        case 1: var a = 1 + s switch { Circle c => c.Radius, _ => 0 }; return a;
+                        case 2: var b = 2 + s switch { Circle c => c.Radius, _ => 0 }; return b;
+                        default: return 0;
+                    }
+                }
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                  static sections(sel: number, s: Shape): number {
+                    let $s, $s1;
+                    let $c: Circle;
+                    let $c1: Circle;
+
+                    switch (sel) {
+                      case 1:
+                        const a = (1 + ($s = s, $s instanceof Circle && ($c = $s, true) ? $c.radius : 0)) | 0;
+
+                        return a;
+                      case 2:
+                        const b = (2 + ($s1 = s, $s1 instanceof Circle && ($c1 = $s1, true) ? $c1.radius : 0)) | 0;
+
+                        return b;
+                      default:
+                        return 0;
+                    }
+                  }
+                """
+            );
+    }
+
+    // A closure that reads a designator would share one temporary across the
+    // evaluations of a loop header, so the switch keeps fresh arrow bindings.
+    [Test]
+    public async Task ClosureCapturingADesignator_KeepsTheArrow()
+    {
+        var output = Transpile(
+            """
+                public static int Count(Shape[] shapes)
+                {
+                    var fs = new System.Collections.Generic.List<Func<int>>();
+                    var i = 0;
+                    Func<int>? f;
+                    while ((f = (i < shapes.Length ? shapes[i++] : null) switch { Circle c => () => c.Radius, _ => null }) != null)
+                        fs.Add(f);
+                    return fs.Count;
+                }
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    while ((f = (($s) => {
+                        if ($s instanceof Circle) {
+                          const c = $s;
+
+                          return () => c.radius;
+                        }
+
+                        return null;
+                      })(i < shapes.length ? shapes[((i = (i + 1) | 0) - 1) | 0]! : null)) != null) {
+                """
+            );
+
+        await Assert.That(output).DoesNotContain("let $c");
+    }
+
+    // The BCL exception lowers its arguments once, so the switch in one
+    // declares one set of temporaries.
+    [Test]
+    public async Task ThrowExpressionWithASwitchArgument_ThrowsThroughTheHelperOnce()
+    {
+        var output = Transpile(
+            """
+                public static object Pick(object? o, Shape s)
+                {
+                    var z = o ?? throw new ArgumentException(s switch { Circle c => "c" + c.Radius, _ => "?" });
+                    return z;
+                }
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    let $s;
+                    let $c: Circle;
+                    const z = o ?? throwError(new ArgumentException(($s = s, $s instanceof Circle && ($c = $s, true) ? "c" + $c.radius : "?")));
+                """
             );
     }
 

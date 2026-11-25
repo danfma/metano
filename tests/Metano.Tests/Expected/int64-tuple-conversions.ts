@@ -1,5 +1,5 @@
 import { List, throwModified } from "metano-runtime/system/collections";
-import { checkedInt32, checkedNarrow, tupleEquals } from "metano-runtime";
+import { checkedInt32, checkedNarrow, throwError, tupleEquals } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Pairs {
@@ -142,9 +142,7 @@ export class Pairs {
         if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
         if ($i === $n) break;
         const pair$element = $a[$i]!;
-        const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? (() => {
-          throw new InvalidOperationException("Nullable object must have a value.");
-        })());
+        const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? throwError(new InvalidOperationException("Nullable object must have a value.")));
         total = BigInt.asIntN(64, total + BigInt.asIntN(64, pair[0] + pair[1]));
       }
     }
@@ -173,15 +171,11 @@ export class Pairs {
   }
 
   unwrappedElement(pair: [number | null, number]): [bigint, bigint] {
-    return [BigInt(pair[0] ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })()), BigInt(pair[1])] as [bigint, bigint];
+    return [BigInt(pair[0] ?? throwError(new InvalidOperationException("Nullable object must have a value."))), BigInt(pair[1])] as [bigint, bigint];
   }
 
   unwrappedNested(pair: [[number, number] | null, number]): [[bigint, bigint], bigint] {
-    return [((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair[0] ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })()), BigInt(pair[1])] as [[bigint, bigint], bigint];
+    return [((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair[0] ?? throwError(new InvalidOperationException("Nullable object must have a value."))), BigInt(pair[1])] as [[bigint, bigint], bigint];
   }
 
   liftedCast(pair: [number, number] | null): [bigint, bigint] | null {
@@ -189,15 +183,11 @@ export class Pairs {
   }
 
   literalUnwrapped(first: number | null, second: number): [bigint, bigint] {
-    return [BigInt(first ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })()), BigInt(second)] as [bigint, bigint];
+    return [BigInt(first ?? throwError(new InvalidOperationException("Nullable object must have a value."))), BigInt(second)] as [bigint, bigint];
   }
 
   literalNested(first: number | null, second: number): [[bigint, bigint], bigint] {
-    return [[BigInt(first ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })()), BigInt(second)] as [bigint, bigint], BigInt(second)] as [[bigint, bigint], bigint];
+    return [[BigInt(first ?? throwError(new InvalidOperationException("Nullable object must have a value."))), BigInt(second)] as [bigint, bigint], BigInt(second)] as [[bigint, bigint], bigint];
   }
 
   literalNarrowed(first: bigint): [number, number] {

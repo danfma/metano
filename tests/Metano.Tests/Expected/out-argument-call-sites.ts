@@ -1,5 +1,5 @@
 import { Dictionary, type IReadOnlyDictionary } from "metano-runtime/system/collections";
-import { tryParseInt32 } from "metano-runtime";
+import { throwError, tryParseInt32 } from "metano-runtime";
 import { KeyNotFoundException } from "metano-runtime/system/exceptions/key-not-found-exception";
 
 export class Glossary {
@@ -13,9 +13,7 @@ export class Glossary {
   translate(key: string): string {
     const [$found0, text] = this._words.tryGetValue(key, null);
 
-    return $found0 ? text : (() => {
-      throw new KeyNotFoundException(key);
-    })();
+    return $found0 ? text : throwError(new KeyNotFoundException(key));
   }
 
   countOrZero(key: string): number {

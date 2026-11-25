@@ -1,4 +1,4 @@
-import { checkedNarrow, toException, tupleEquals } from "metano-runtime";
+import { checkedNarrow, throwError, toException, tupleEquals } from "metano-runtime";
 import { HashSet, List, throwModified } from "metano-runtime/system/collections";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
@@ -144,9 +144,7 @@ export function nullableIteratedStop(a: number, b: number): bigint {
         if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
         if ($i === $n) break;
         const pair$element = $a[$i]!;
-        const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? (() => {
-          throw new InvalidOperationException("Nullable object must have a value.");
-        })());
+        const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? throwError(new InvalidOperationException("Nullable object must have a value.")));
         count = (count + 1) | 0;
         total = BigInt.asIntN(64, total + pair[0]);
       }
@@ -220,9 +218,7 @@ export function literalCastStopsAtTheMissingElement(a: number): number {
     return a;
   };
   try {
-    const wide = [BigInt(missing() ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })()), BigInt(next())] as [bigint, bigint];
+    const wide = [BigInt(missing() ?? throwError(new InvalidOperationException("Nullable object must have a value."))), BigInt(next())] as [bigint, bigint];
 
     return Number(BigInt.asIntN(32, BigInt.asIntN(64, wide[0] + wide[1])));
   } catch (e$) {
@@ -237,9 +233,7 @@ export function literalCastStopsAtTheMissingElement(a: number): number {
 
 export function literalCastSum(a: number, b: number): bigint {
   const first = a;
-  const wide = [[BigInt(first ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })()), BigInt(b)] as [bigint, bigint], BigInt(a)] as [[bigint, bigint], bigint];
+  const wide = [[BigInt(first ?? throwError(new InvalidOperationException("Nullable object must have a value."))), BigInt(b)] as [bigint, bigint], BigInt(a)] as [[bigint, bigint], bigint];
 
   return BigInt.asIntN(64, BigInt.asIntN(64, wide[0][0] + wide[0][1]) + wide[1]);
 }
@@ -266,9 +260,7 @@ export function literalCastKeepsTheMissingTuple(a: number): bigint {
 export function literalCastThrowsOnTheMissingLong(a: bigint): number {
   const missing = () => null;
   try {
-    const wide = [Number(a), Number(missing() ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })())] as [number, number];
+    const wide = [Number(a), Number(missing() ?? throwError(new InvalidOperationException("Nullable object must have a value.")))] as [number, number];
 
     return wide[1] > 0 ? 1 : 2;
   } catch (e$) {
@@ -289,9 +281,7 @@ export function literalCastOfWrappedValues(a: number): bigint {
 
 export function literalCastWithDefault(a: number): bigint {
   const first = a;
-  const wide = [BigInt(first ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })()), null] as [bigint, bigint | null];
+  const wide = [BigInt(first ?? throwError(new InvalidOperationException("Nullable object must have a value."))), null] as [bigint, bigint | null];
 
   return BigInt.asIntN(64, wide[0] + (wide[1] ?? 1n));
 }

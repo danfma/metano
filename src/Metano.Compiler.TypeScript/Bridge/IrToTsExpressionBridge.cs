@@ -210,10 +210,7 @@ public static partial class IrToTsExpressionBridge
                 obj.Properties.Select(p => new TsObjectProperty(p.Name, Map(p.Value, context)))
                     .ToList()
             ),
-            IrThrowExpression th => new TsCallExpression(
-                new TsArrowFunction([], [new TsThrowStatement(Map(th.Expression, context))]),
-                Array.Empty<TsExpression>()
-            ),
+            IrThrowExpression th => ThrowFromExpression(Map(th.Expression, context)),
             IrLinqChain chain => MapLinqChain(chain, context),
             IrLetExpression let => TryMapBoundAsCast(let, context)
                 ?? MapLetExpression(let, context),
@@ -2367,6 +2364,12 @@ public static partial class IrToTsExpressionBridge
         if (MapCollectionLiteralConstruction(ne, context) is { } collectionLiteral)
             return collectionLiteral;
 
+        // A role-mapped BCL exception lowers its own arguments: mapping them
+        // here too would lower each one twice, and a switch expression among
+        // them would declare its temporaries twice (#735).
+        if (RoleMappedBclException(ne) is { } exception)
+            return IrToTsExceptionConstructionBridge.MapNewException(ne, exception, context);
+
         var args = ne.Arguments.Select(a => MapArgument(a, context)).ToList();
 
         var ordered = TsEvaluationOrder.Bind(args, ne.EvaluationOrder, BoundArgumentPrefix);
@@ -2883,6 +2886,17 @@ public static partial class IrToTsExpressionBridge
 
         return -1;
     }
+
+    /// <summary>
+    /// The role mapping of a BCL exception construction
+    /// (<see cref="MapBclExceptionCreation"/>), or <c>null</c> for any other
+    /// construction.
+    /// </summary>
+    private static IrExceptionConstruction? RoleMappedBclException(IrNewExpression ne) =>
+        ne.Type is IrNamedTypeRef { Semantics: not null } named
+        && BclExceptionClasses.IsBclException(named)
+            ? ne.ExceptionConstruction
+            : null;
 
     private static TsExpression MapBclExceptionCreation(
         IrNewExpression ne,

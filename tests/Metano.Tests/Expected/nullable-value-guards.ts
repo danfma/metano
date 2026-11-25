@@ -1,20 +1,17 @@
+import { throwError } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import type { Holder } from "./holder.js";
 
 export function checkedLocal(n: number | null): number {
   if (n != null) {
-    return n ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })();
+    return n ?? throwError(new InvalidOperationException("Nullable object must have a value."));
   }
 
   return -1;
 }
 
 export function suppressed(n: number | null): number {
-  return n ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })();
+  return n ?? throwError(new InvalidOperationException("Nullable object must have a value."));
 }
 
 export function lambdaCleared(n: number | null): number {
@@ -22,18 +19,14 @@ export function lambdaCleared(n: number | null): number {
   const clear = () => n = null;
   clear();
 
-  return n ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })();
+  return n ?? throwError(new InvalidOperationException("Nullable object must have a value."));
 }
 
 export function clearedByACall(h: Holder): number {
   if (h.p != null) {
     h.clear();
 
-    return h.p ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })();
+    return h.p ?? throwError(new InvalidOperationException("Nullable object must have a value."));
   }
 
   return -1;
@@ -42,33 +35,23 @@ export function clearedByACall(h: Holder): number {
 export async function awaited(pending: Promise<number | null>): Promise<number> {
   const n = await pending;
 
-  return n ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })();
+  return n ?? throwError(new InvalidOperationException("Nullable object must have a value."));
 }
 
 export function toDouble(nl: bigint | null): number {
-  return Number(nl ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })());
+  return Number(nl ?? throwError(new InvalidOperationException("Nullable object must have a value.")));
 }
 
 export function suppressedCast(n: number | null): number {
-  return n ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })();
+  return n ?? throwError(new InvalidOperationException("Nullable object must have a value."));
 }
 
 export function flag(b: boolean | null): string {
-  return b ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })() ? "t" : "f";
+  return b ?? throwError(new InvalidOperationException("Nullable object must have a value.")) ? "t" : "f";
 }
 
 export function widened(t: [number, number] | null): [bigint, bigint] {
-  return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(t ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })());
+  return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(t ?? throwError(new InvalidOperationException("Nullable object must have a value.")));
 }
 
 export function wrappedCast(x: number): number {
@@ -80,13 +63,9 @@ export function wrappedConstant(): number {
 }
 
 export function rewrappedNullable(n: number | null): number {
-  return n ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })();
+  return n ?? throwError(new InvalidOperationException("Nullable object must have a value."));
 }
 
 export function disabled(n: number | null): number {
-  return n ?? (() => {
-    throw new InvalidOperationException("Nullable object must have a value.");
-  })();
+  return n ?? throwError(new InvalidOperationException("Nullable object must have a value."));
 }

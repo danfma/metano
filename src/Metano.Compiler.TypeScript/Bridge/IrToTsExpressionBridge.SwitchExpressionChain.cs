@@ -61,6 +61,34 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
+    /// Whether a lambda in an arm's guard or result reads one of the arm's
+    /// designators. The chain binds a designator to one temporary of the
+    /// enclosing statement list, so a closure created in a loop header
+    /// (<c>while ((f = s switch { Circle c =&gt; () =&gt; c.R, … }) != null)</c>)
+    /// would see the value of the last evaluation. The arm allocates a
+    /// closure anyway, so such a switch keeps the self-invoking arrow, whose
+    /// bindings are fresh per evaluation.
+    /// </summary>
+    private static bool ClosureCapturesADesignator(IrSwitchExpression sw) =>
+        sw.Arms.Any(ArmClosureCapturesADesignator);
+
+    private static bool ArmClosureCapturesADesignator(IrSwitchArm arm)
+    {
+        var names = IrPatternDesignators.DeclaredBy(arm.Pattern).Select(d => d.Name).ToList();
+
+        IrExpression[] parts = arm.WhenClause is { } guard ? [guard, arm.Result] : [arm.Result];
+
+        return names.Count > 0
+            && parts.SelectMany(LambdasIn).Any(lambda => IrReferencedNames.AnyIn(lambda, names));
+    }
+
+    /// <summary>The outermost lambdas in <paramref name="expression"/>.</summary>
+    private static IEnumerable<IrExpression> LambdasIn(IrExpression expression) =>
+        expression is IrLambdaExpression
+            ? [expression]
+            : IrNodeChildren.ExpressionsOf(expression).SelectMany(LambdasIn);
+
+    /// <summary>
     /// The condition and value of one conditional arm: its pattern test,
     /// which assigns the designators, joined with its guard; then its result.
     /// </summary>

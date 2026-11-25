@@ -155,4 +155,84 @@ public static class SwitchChainProbes
             return exception.Message;
         }
     }
+
+    static int InSection(int selector, SrShape shape)
+    {
+        switch (selector)
+        {
+            case 1:
+                var a =
+                    1
+                    + shape switch
+                    {
+                        SrCircle c => c.Radius,
+                        _ => 0,
+                    };
+                return a;
+            case 2:
+                var b =
+                    2
+                    + shape switch
+                    {
+                        SrCircle c => c.Radius * 10,
+                        _ => 0,
+                    };
+                return b;
+            default:
+                return -1;
+        }
+    }
+
+    public static string TwoSwitchSections() =>
+        InSection(1, new SrCircle(4))
+        + ","
+        + InSection(2, new SrCircle(4))
+        + ","
+        + InSection(2, new SrSquare(4))
+        + ","
+        + InSection(3, new SrCircle(4));
+
+    public static string LoopHeaderClosures()
+    {
+        SrShape[] shapes = [new SrCircle(1), new SrCircle(2), new SrCircle(3)];
+        var readers = new List<Func<int>>();
+        var i = 0;
+        Func<int>? reader;
+
+        while (
+            (
+                reader = (i < shapes.Length ? shapes[i++] : null) switch
+                {
+                    SrCircle c => () => c.Radius,
+                    _ => null,
+                }
+            ) != null
+        )
+            readers.Add(reader);
+
+        return string.Join(",", readers.Select(r => r()));
+    }
+
+    public static string NullCoalescingThrowWithSwitch()
+    {
+        try
+        {
+            object? missing = null;
+            SrShape shape = new SrCircle(6);
+            var value = missing
+                ?? throw new ArgumentException(
+                    shape switch
+                    {
+                        SrCircle c => "circle " + c.Radius,
+                        _ => "?",
+                    }
+                );
+
+            return "" + value;
+        }
+        catch (ArgumentException exception)
+        {
+            return exception.Message;
+        }
+    }
 }

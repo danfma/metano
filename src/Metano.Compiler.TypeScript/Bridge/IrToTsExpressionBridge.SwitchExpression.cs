@@ -28,9 +28,11 @@ public static partial class IrToTsExpressionBridge
     /// chain. Everything else — designator bindings, non-exhaustive matches,
     /// a scrutinee with side effects — lowers to a conditional chain over
     /// temporaries of the enclosing statement list (see
-    /// <see cref="LowerSwitchAsChain"/>), and only where no statement list
-    /// encloses the switch (a field initializer) to a self-invoking arrow
-    /// (see <see cref="LowerSwitchAsIife"/>). Both evaluate the scrutinee once.
+    /// <see cref="LowerSwitchAsChain"/>). A self-invoking arrow (see
+    /// <see cref="LowerSwitchAsIife"/>) remains where no statement list
+    /// encloses the switch (a field initializer) and where a closure in an arm
+    /// captures a designator (see <see cref="ClosureCapturesADesignator"/>).
+    /// Both evaluate the scrutinee once.
     /// </summary>
     private static TsExpression MapSwitchExpression(
         IrSwitchExpression sw,
@@ -40,7 +42,7 @@ public static partial class IrToTsExpressionBridge
         if (CanLowerSwitchAsTernary(sw))
             return LowerSwitchAsTernary(sw, context);
 
-        return context.Temporaries is { } temporaries
+        return context.Temporaries is { } temporaries && !ClosureCapturesADesignator(sw)
             ? LowerSwitchAsChain(sw, temporaries, context)
             : LowerSwitchAsIife(sw, context);
     }

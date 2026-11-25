@@ -1,12 +1,11 @@
+import { throwError } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Unwrapping {
   constructor() { }
 
   of(pair: [number, number] | null): [bigint, bigint] {
-    return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })());
+    return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair ?? throwError(new InvalidOperationException("Nullable object must have a value.")));
   }
 
   ofWrapped(second: number): [bigint, bigint] {
@@ -18,23 +17,17 @@ export class Unwrapping {
   }
 
   ofChecked(first: number | null, second: number): [bigint, bigint] {
-    return first == null ? [0n, 0n] as [bigint, bigint] : [BigInt(first ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })()), BigInt(second)] as [bigint, bigint];
+    return first == null ? [0n, 0n] as [bigint, bigint] : [BigInt(first ?? throwError(new InvalidOperationException("Nullable object must have a value."))), BigInt(second)] as [bigint, bigint];
   }
 
   ofForgiven(first: number | null, second: number): [bigint, bigint] {
-    return [BigInt(first ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })()), BigInt(second)] as [bigint, bigint];
+    return [BigInt(first ?? throwError(new InvalidOperationException("Nullable object must have a value."))), BigInt(second)] as [bigint, bigint];
   }
 
   async ofAwaited(pending: Promise<bigint | null>, first: bigint): Promise<[number, number]> {
     const second = await pending;
 
-    return [Number(first), Number(second ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })())] as [number, number];
+    return [Number(first), Number(second ?? throwError(new InvalidOperationException("Nullable object must have a value.")))] as [number, number];
   }
 
   async ofAwaitedTuple(pending: Promise<[number, number] | null>, last: number): Promise<[[bigint, bigint] | null, bigint]> {
