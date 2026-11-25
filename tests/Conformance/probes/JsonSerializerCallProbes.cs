@@ -5,7 +5,10 @@ namespace Conformance;
 
 public sealed record JscBag(string Text, double Number, decimal Money, long Count);
 
+public sealed record JscFloats(float Single, float? Maybe, List<float> Items);
+
 [JsonSerializable(typeof(JscBag))]
+[JsonSerializable(typeof(JscFloats))]
 public partial class JscContext : JsonSerializerContext;
 
 /// <summary>
@@ -70,6 +73,12 @@ public static class JsonSerializerCallProbes
             return "ArgumentException";
         }
     }
+
+    public static string FloatsWriteTheirShortestText() =>
+        JsonSerializer.Serialize(
+            new JscFloats(0.1f, 3.4028235E+38f, [1E-10f, -0.0f, 16777217f]),
+            JscContext.Default.JscFloats
+        );
 
     public static string DefaultIsOneInstance() =>
         ReferenceEquals(JscContext.Default, JscContext.Default)

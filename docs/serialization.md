@@ -154,8 +154,9 @@ const back = JsonSerializer.deserializeText(json, JsonContext.default.todoItem);
 A `null` text or type info throws `ArgumentNullException` (parameter `json` /
 `jsonTypeInfo`), as .NET does. The overloads that take `JsonSerializerOptions`,
 a `Type`, a stream, a `Utf8JsonWriter`, a span or a `JsonElement` stay unmapped
-(`MS0001`). Known gap: a `float` property is written from its double value
-(`0.10000000149011612` where STJ writes `0.1`).
+(`MS0001`). `serializeText` always writes compact text: it ignores the context's
+`WriteIndented`, `IndentCharacter`, `IndentSize` and `NewLine` options, so a context
+with `WriteIndented = true` still gets the text without whitespace.
 
 ## What the transpiler does
 
@@ -1631,7 +1632,11 @@ the text are gone:
 - lone surrogates in strings are accepted, and a syntax error is reported
   before a contract error earlier in the text.
 
-**Written text.**
+**Written text.** The items below describe `JSON.stringify(JsonSerializer.serialize(…))`,
+the tree path TypeScript callers use. `serializeText` (the target of a transpiled
+`JsonSerializer.Serialize`, [above](#serializing-from-transpiled-c-741)) writes .NET's
+text instead for `NaN` / `±Infinity` (it throws `ArgumentException`) and for numbers
+(`1E+21`, `-0`).
 
 - `decimal` drops trailing zeros (`1.10m` → `1.1`), and engines without
   `JSON.rawJSON` write `toNumber()` ([Decimals](#decimals));

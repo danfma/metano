@@ -1015,7 +1015,9 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   number text, exact `decimal` / 64-bit digits, `null` for a null root, `ArgumentException`
   for NaN and the infinities), and `Deserialize(string, JsonTypeInfo<T>)` /
   `Deserialize(string, JsonTypeInfo)` MUST lower to `deserializeText` (FR-048 item 7). A
-  null text or type info throws `ArgumentNullException`. The declarations are
+  null text or type info throws `ArgumentNullException`. `serializeText` writes compact text
+  only: it ignores the context's `WriteIndented`, `IndentCharacter`, `IndentSize` and `NewLine`
+  options (a follow-up tracks mirroring them). The declarations are
   `[MapMethod]` entries in `src/Metano/Runtime/Json.cs`; the other overloads stay unmapped
   (MS0001).
 
