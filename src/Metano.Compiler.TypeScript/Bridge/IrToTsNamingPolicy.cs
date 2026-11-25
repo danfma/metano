@@ -139,7 +139,7 @@ public static class IrToTsNamingPolicy
     public static string ToTypeName(string irName, IReadOnlyList<IrAttribute>? attributes)
     {
         var overrideName = FindNameOverride(attributes);
-        return overrideName ?? irName;
+        return overrideName ?? TypeScriptNaming.EscapeIfReserved(irName);
     }
 
     /// <summary>
