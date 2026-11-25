@@ -351,8 +351,17 @@ public sealed class IrStatementExtractor(
             ),
             TryStatementSyntax ts => ExtractTry(ts),
             SwitchStatementSyntax sw => ExtractSwitch(sw),
-            BreakStatementSyntax => new IrBreakStatement(),
-            ContinueStatementSyntax => new IrContinueStatement(),
+            BreakStatementSyntax jump => new IrBreakStatement(jump.Name?.Identifier.ValueText),
+            ContinueStatementSyntax jump => new IrContinueStatement(
+                jump.Name?.Identifier.ValueText
+            ),
+            LabeledStatementSyntax labeled => ExtractLabeled(labeled),
+            GotoStatementSyntax jump => DroppedCodeDiagnostics.UnsupportedStatement(
+                jump,
+                "'goto' is not supported by the transpiler: JavaScript has no 'goto', so a "
+                    + "label used as its target has no equivalent. Use a labeled 'break' or "
+                    + "'continue' instead."
+            ),
             YieldStatementSyntax ys
                 when ys.IsKind(SyntaxKind.YieldReturnStatement) && ys.Expression is not null =>
                 new IrExpressionStatement(
@@ -361,6 +370,20 @@ public sealed class IrStatementExtractor(
             YieldStatementSyntax ys when ys.IsKind(SyntaxKind.YieldBreakStatement) =>
                 new IrYieldBreakStatement(),
             _ => DroppedCodeDiagnostics.UnsupportedStatement(statement),
+        };
+
+    /// <summary>
+    /// A labeled statement (#772). A loop or <c>switch</c> keeps its label,
+    /// which the labeled <c>break</c> / <c>continue</c> of C# 15 target. Any
+    /// other statement can only be reached through its label by a
+    /// <c>goto</c>, which reports where it jumps, so it is extracted without
+    /// one.
+    /// </summary>
+    private IrStatement ExtractLabeled(LabeledStatementSyntax labeled) =>
+        ExtractStatement(labeled.Statement) switch
+        {
+            IrBreakableStatement target => target with { Label = labeled.Identifier.ValueText },
+            var statement => statement,
         };
 
     /// <summary>

@@ -128,16 +128,16 @@ public static class IrBodyPrinter
                 sb.Append(indent).AppendLine("rethrow;");
                 break;
 
-            case IrBreakStatement:
-                sb.Append(indent).AppendLine("break;");
+            case IrBreakStatement jump:
+                sb.Append(indent).AppendLine(Jump("break", jump.Label));
                 break;
 
-            case IrContinueStatement:
-                sb.Append(indent).AppendLine("continue;");
+            case IrContinueStatement jump:
+                sb.Append(indent).AppendLine(Jump("continue", jump.Label));
                 break;
 
             case IrForEachStatement fe:
-                sb.Append(indent).Append("for (");
+                sb.Append(indent).Append(LabelOf(fe)).Append("for (");
                 if (fe.VariableType is not null)
                     sb.Append(FormatType(fe.VariableType)).Append(' ');
                 else
@@ -151,7 +151,7 @@ public static class IrBodyPrinter
                 break;
 
             case IrWhileStatement ws:
-                sb.Append(indent).Append("while (");
+                sb.Append(indent).Append(LabelOf(ws)).Append("while (");
                 PrintExpression(sb, ws.Condition);
                 sb.AppendLine(") {");
                 foreach (var s in ws.Body)
@@ -160,7 +160,7 @@ public static class IrBodyPrinter
                 break;
 
             case IrDoWhileStatement dw:
-                sb.Append(indent).AppendLine("do {");
+                sb.Append(indent).Append(LabelOf(dw)).AppendLine("do {");
                 foreach (var s in dw.Body)
                     PrintStatement(sb, s, indentLevel + 1);
                 sb.Append(indent).Append("} while (");
@@ -207,7 +207,7 @@ public static class IrBodyPrinter
                 break;
 
             case IrSwitchStatement sw:
-                sb.Append(indent).Append("switch (");
+                sb.Append(indent).Append(LabelOf(sw)).Append("switch (");
                 PrintExpression(sb, sw.Expression);
                 sb.AppendLine(") {");
                 foreach (var c in sw.Cases)
@@ -241,6 +241,18 @@ public static class IrBodyPrinter
                 break;
         }
     }
+
+    /// <summary>
+    /// The Dart label a loop or <c>switch</c> starts with (<c>outer: </c>), the
+    /// target of a labeled <c>break</c> / <c>continue</c> (#772); empty when
+    /// it has none.
+    /// </summary>
+    private static string LabelOf(IrBreakableStatement target) =>
+        target.Label is { } label ? $"{label}: " : string.Empty;
+
+    /// <summary><c>break;</c> / <c>continue;</c>, naming the label it targets, if any.</summary>
+    private static string Jump(string keyword, string? label) =>
+        label is null ? $"{keyword};" : $"{keyword} {label};";
 
     /// <summary>
     /// Appends a placeholder that drops code, reporting it as an error (W9-13).

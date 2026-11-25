@@ -1564,6 +1564,19 @@ Product requirements added after the migration (normative; each one is traced by
   `switch`, a `not` pattern in a `switch`, an unsupported pattern). An empty statement (`;`) is
   not a placeholder: it emits nothing. Tests: `tests/Metano.Tests/DiagnosticsTests.cs`.
 
+- **FR-100** (labeled statements, #772, decision W9-12): A C# label on a loop (`while`, `do`,
+  `for`, `foreach`) or a `switch` statement MUST be kept, and the labeled `break label;` /
+  `continue label;` of C# 15 MUST lower to the native label and jumps of the target: in
+  TypeScript `outer: for (…) { … continue outer; }` and `dispatch: switch (…) { … break
+  dispatch; }`, on the loop itself when a lowering wraps it in a block (the indexed
+  `List<T>` / `string` `foreach`) and on the `switch` inside the block that holds a hoisted
+  subject; in Dart the same label syntax. A labeled `continue` from a nested loop counts as a
+  `continue` of the loop it names, so a lowering that moves a `for` increment into the body does
+  not skip it. A label on any other statement can only be a `goto` target; it is emitted without
+  the label, and the `goto` (also `goto case` / `goto default`), which has no JavaScript
+  equivalent, reports `MS0001` as an error (FR-099). Tests:
+  `tests/Metano.Tests/LabeledStatementTests.cs`; conformance `LabeledJumpProbes`.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

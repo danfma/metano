@@ -61,7 +61,10 @@ internal sealed partial class ExpressionVariableLowering
         {
             IrIfStatement ifs when SplitAtGuardedCall(ifs, following ?? []) is { } split => split,
             IrWhileStatement loop => [LowerWhile(loop)],
-            IrDoWhileStatement loop when !ContinuesLoop(loop.Body) => [LowerDoWhile(loop)],
+            IrDoWhileStatement loop when !ContinuesLoop(loop.Body, loop.Label) =>
+            [
+                LowerDoWhile(loop),
+            ],
             IrForStatement loop when CanRestructureFor(loop) => [LowerFor(loop)],
             IrForStatement loop when CanMoveIncrementIntoBody(loop) =>
             [
@@ -411,7 +414,7 @@ internal sealed partial class ExpressionVariableLowering
     /// would skip it there.
     /// </summary>
     private static bool CanMoveIncrementIntoBody(IrForStatement loop) =>
-        IncrementReadsConditionLocals(loop) && !ContinuesLoop(loop.Body);
+        IncrementReadsConditionLocals(loop) && !ContinuesLoop(loop.Body, loop.Label);
 
     /// <summary>Whether an incrementor reads a local the condition declares.</summary>
     private static bool IncrementReadsConditionLocals(IrForStatement loop)
@@ -582,16 +585,27 @@ internal sealed partial class ExpressionVariableLowering
 
     /// <summary>
     /// Whether <paramref name="body"/> holds a <c>continue</c> for the loop it
-    /// belongs to (not one of a nested loop).
+    /// belongs to: an unlabeled one outside nested loops, or one naming the
+    /// loop's <paramref name="label"/> anywhere (<c>continue outer;</c> from a
+    /// nested loop).
     /// </summary>
-    private static bool ContinuesLoop(IEnumerable<IrStatement> body) =>
+    private static bool ContinuesLoop(IEnumerable<IrStatement> body, string? label) =>
+        ContinuesLoop(body, label, nested: false);
+
+    private static bool ContinuesLoop(IEnumerable<IrStatement> body, string? label, bool nested) =>
         body.Any(statement =>
             statement switch
             {
-                IrContinueStatement => true,
+                IrContinueStatement { Label: null } => !nested,
+                IrContinueStatement jump => jump.Label == label,
                 IrWhileStatement or IrDoWhileStatement or IrForStatement or IrForEachStatement =>
-                    false,
-                _ => ContinuesLoop(IrNodeChildren.StatementsOf(statement)),
+                    label is not null
+                        && ContinuesLoop(
+                            IrNodeChildren.StatementsOf(statement),
+                            label,
+                            nested: true
+                        ),
+                _ => ContinuesLoop(IrNodeChildren.StatementsOf(statement), label, nested),
             }
         );
 

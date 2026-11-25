@@ -1438,6 +1438,9 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
                 break;
 
             case TsSwitchStatement switchStmt:
+                if (switchStmt.Label is { } label)
+                    _sb.Write($"{label}: ");
+
                 _sb.Write("switch (");
                 PrintExpression(switchStmt.Discriminant);
                 _sb.Write(")");

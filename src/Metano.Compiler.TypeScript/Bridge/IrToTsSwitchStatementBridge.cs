@@ -46,7 +46,10 @@ internal static class IrToTsSwitchStatementBridge
             return new TsSwitchStatement(
                 subject,
                 [.. sw.Cases.SelectMany(section => MapConstantSection(section, context))]
-            );
+            )
+            {
+                Label = sw.Label,
+            };
         }
 
         var (sharedLocals, hoistedSwitch) = SwitchSharedLocals.Hoist(sw);
@@ -146,7 +149,7 @@ internal static class IrToTsSwitchStatementBridge
             MapTestedSection(section, subject, promoteCatchAllToDefault, context)
         );
 
-        return new TsSwitchStatement(new TsLiteral("true"), [.. cases]);
+        return new TsSwitchStatement(new TsLiteral("true"), [.. cases]) { Label = sw.Label };
     }
 
     private static bool IsDefaultLabel(IrCaseLabel label) => label is IrDefaultCaseLabel;

@@ -66,7 +66,7 @@ public static class IrToTsStatementBridge
         var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
         var body = MapBody(fe.Body, context);
         var loopVariable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
-        var loop = fe.IsAwait ? "for await" : "for";
+        var loop = $"{LabelOf(fe)}{(fe.IsAwait ? "for await" : "for")}";
         var header = $"{loop} (const {loopVariable} of {PrintExpression(collection)}) {{";
 
         return new TsRawStatement(WrapLoop(header, body))
@@ -124,7 +124,7 @@ public static class IrToTsStatementBridge
             $"  const {items} = {list}._items;",
             $"  const {length} = {items}.length;",
             $"  const {version} = {checks} ? {list}._version : 0;",
-            $"  for (let {index} = 0; ; {index}++) {{",
+            $"  {LabelOf(fe)}for (let {index} = 0; ; {index}++) {{",
             $"    if ({checks} && ({list}._version !== {version} || {items}.length !== {length})) {PrintExpression(throwModified)};",
             $"    if ({index} === {length}) break;",
             $"    const {loopVariable} = {items}[{index}]!;"
@@ -159,7 +159,7 @@ public static class IrToTsStatementBridge
             "\n",
             "{",
             $"  const {text} = {PrintExpression(collection)};",
-            $"  for (let {index} = 0; {index} < {text}.length; {index}++) {{",
+            $"  {LabelOf(fe)}for (let {index} = 0; {index} < {text}.length; {index}++) {{",
             $"    const {loopVariable} = {text}[{index}]!;"
         );
 
@@ -203,7 +203,7 @@ public static class IrToTsStatementBridge
         var conditionText = condition is null ? string.Empty : PrintExpression(condition);
 
         var header =
-            $"for ({RenderForInitializers(initializers)}; {conditionText}; {RenderCommaList(incrementors)}) {{";
+            $"{LabelOf(fs)}for ({RenderForInitializers(initializers)}; {conditionText}; {RenderCommaList(incrementors)}) {{";
 
         return new TsRawStatement(WrapLoop(header, body))
         {
@@ -314,12 +314,27 @@ public static class IrToTsStatementBridge
     private static string RenderCommaList(IReadOnlyList<TsExpression> expressions) =>
         string.Join(", ", expressions.Select(PrintExpression));
 
+    /// <summary>
+    /// The JavaScript label a loop's header starts with (<c>outer: </c>), the
+    /// target of a labeled <c>break</c> / <c>continue</c> (#772); empty for a
+    /// loop without one. A loop lowered inside its own block carries the
+    /// label on the inner loop, which the jumps target.
+    /// </summary>
+    private static string LabelOf(IrBreakableStatement loop) =>
+        loop.Label is { } label ? $"{label}: " : string.Empty;
+
+    /// <summary><c>break</c> / <c>continue</c>, naming the label it targets, if any.</summary>
+    private static TsExpressionStatement Jump(string keyword, string? label) =>
+        new(new TsIdentifier(label is null ? keyword : $"{keyword} {label}"));
+
     private static TsStatement MapWhile(IrWhileStatement ws, IrToTsBridgeContext context)
     {
         var condition = IrToTsExpressionBridge.Map(ws.Condition, context);
         var body = MapBody(ws.Body, context);
 
-        return new TsRawStatement(WrapLoop($"while ({PrintExpression(condition)}) {{", body))
+        var header = $"{LabelOf(ws)}while ({PrintExpression(condition)}) {{";
+
+        return new TsRawStatement(WrapLoop(header, body))
         {
             EmbeddedStatements = body,
             EmbeddedExpressions = [condition],
@@ -332,7 +347,9 @@ public static class IrToTsStatementBridge
         var body = MapBody(dw.Body, context);
         var inner = RenderIndentedBody(body);
 
-        return new TsRawStatement($"do {{\n{inner}}} while ({PrintExpression(condition)});")
+        return new TsRawStatement(
+            $"{LabelOf(dw)}do {{\n{inner}}} while ({PrintExpression(condition)});"
+        )
         {
             EmbeddedStatements = body,
             EmbeddedExpressions = [condition],
@@ -538,8 +555,8 @@ public static class IrToTsStatementBridge
                 )
             ),
             IrBlockStatement block => new TsBlockStatement(MapBody(block.Statements, context)),
-            IrBreakStatement => new TsExpressionStatement(new TsIdentifier("break")),
-            IrContinueStatement => new TsExpressionStatement(new TsIdentifier("continue")),
+            IrBreakStatement jump => Jump("break", jump.Label),
+            IrContinueStatement jump => Jump("continue", jump.Label),
             IrSwitchStatement sw => IrToTsSwitchStatementBridge.Map(sw, context),
             IrYieldBreakStatement => new TsYieldBreakStatement(),
             IrForEachStatement fe => MapForEach(fe, context),
