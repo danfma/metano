@@ -286,8 +286,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var parentName = Context.ResolveTsName(parent);
 
+        // A closed type lowered to a union declares its runtime class as
+        // `Name$Base` (spec 010 FR-C5); the namespace still merges with `Name`.
+        var runtimeName = parentName + ClosedFamilyLowering.RuntimeClassSuffix;
+
         var index = statements.FindIndex(statement =>
-            statement is TsClass cls && cls.Name == parentName
+            statement is TsClass cls && (cls.Name == parentName || cls.Name == runtimeName)
         );
 
         if (index < 0)
@@ -318,7 +322,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 new TsNamespaceDeclaration(
                     parentName,
                     Functions: [],
-                    Exported: owner.Exported,
+                    Exported: owner.Exported || owner.Name == runtimeName,
                     Members: TypeAliasesOf(exposed, moduleLocal),
                     Declare: true
                 )
@@ -1070,6 +1074,27 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
 
     /// <summary>
+    /// Reports the closed-family diagnostics of <paramref name="type"/> (spec 010
+    /// FR-C5, <c>MS0073</c>): at the root of a family, why it keeps the plain
+    /// abstract-class shape (whatever shape the root itself emits as); on a type that
+    /// inherits a tag from another assembly's union, a <c>kind</c> member it declares.
+    /// </summary>
+    private void ReportClosedFamilyDiagnostics(INamedTypeSymbol type)
+    {
+        if (
+            Context.ClosedFamilies.PlanOf(type) is { } plan
+            && SymbolEqualityComparer.Default.Equals(plan.Root, type.OriginalDefinition)
+            && ClosedFamilyLowering.SuppressionDiagnostic(plan) is { } suppressed
+        )
+        {
+            Context.ReportDiagnostic(suppressed);
+        }
+
+        if (Context.ClosedFamilies.InheritedTagConflict(type) is { } conflict)
+            Context.ReportDiagnostic(conflict);
+    }
+
+    /// <summary>
     /// Builds the top-level statements for a single type into <paramref name="sink"/>,
     /// without computing the file path or collecting imports. Returns true if the type
     /// produced any statements (and is therefore part of a file group); false if it's
@@ -1101,6 +1126,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // no declaration, with or without [External]/[Import] (per research D9).
         if (SymbolHelper.HasJsCallable(type))
             return false;
+
+        ReportClosedFamilyDiagnostics(type);
 
         var startCount = sink.Count;
 
@@ -1455,7 +1482,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var produced = TransformGroup(
             group,
-            IrToTsBridgeContext.ForGroup(Context.DeclarativeMappings, casts, Context.RuntimeTypes)
+            IrToTsBridgeContext.ForGroup(
+                Context.DeclarativeMappings,
+                casts,
+                Context.RuntimeTypes
+            ) with
+            {
+                IsUnionFamily = Context.IsLoweredClosedType,
+            }
         );
 
         outcomes.Files[index] = produced;

@@ -93,6 +93,12 @@ public sealed record IrClassDeclaration(
     public IrRecordPrinting? Printing { get; init; }
 
     /// <summary>
+    /// The direct cases of a C# 15 <c>closed</c> class, in declaration order;
+    /// <c>null</c> for any other type (<see cref="IrTypeSemantics.IsClosed"/>).
+    /// </summary>
+    public IReadOnlyList<IrClosedCase>? ClosedCases { get; init; }
+
+    /// <summary>
     /// The constructed root <paramref name="method"/> is anchored on: a branch
     /// of that root's runtime dispatcher, not a fast path; <c>null</c> otherwise.
     /// </summary>
@@ -195,3 +201,22 @@ public sealed record IrDelegateDeclaration(
     IReadOnlyList<IrTypeParameter>? TypeParameters = null,
     IReadOnlyList<IrAttribute>? Attributes = null
 ) : IrTypeDeclaration(Name, Visibility, TypeParameters, Attributes);
+
+/// <summary>
+/// One direct case of a C# 15 <c>closed</c> class
+/// (<see cref="IrClassDeclaration.ClosedCases"/>).
+/// </summary>
+/// <param name="Type">The case written with the closed class's type parameters
+/// (<c>Leaf&lt;U&gt; : Tree&lt;U&gt;</c> → <c>Leaf&lt;T&gt;</c>) when
+/// <paramref name="Shape"/> is <see cref="ClosedCaseShape.SameTypeParameters"/>;
+/// the case's definition otherwise.</param>
+/// <param name="Shape">How the case relates to the closed class's type
+/// parameters.</param>
+/// <param name="FixedTypeArguments">The closed class's type arguments a
+/// <see cref="ClosedCaseShape.FixedTypeArguments"/> case derives from
+/// (<c>IntLeaf : Tree&lt;int&gt;</c> → <c>[int]</c>); empty otherwise.</param>
+public sealed record IrClosedCase(
+    IrTypeRef Type,
+    ClosedCaseShape Shape,
+    IReadOnlyList<IrTypeRef> FixedTypeArguments
+);

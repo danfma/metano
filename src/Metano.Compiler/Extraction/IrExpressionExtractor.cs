@@ -4083,6 +4083,11 @@ public sealed partial class IrExpressionExtractor
                 IFieldSymbol result => MapElementType(result.Type),
                 _ => null,
             },
+            IsProtected =
+                symbol.DeclaredAccessibility
+                    is Accessibility.Protected
+                        or Accessibility.ProtectedOrInternal
+                        or Accessibility.ProtectedAndInternal,
         };
     }
 

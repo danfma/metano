@@ -34,7 +34,7 @@ public static partial class IrToTsExpressionBridge
                 "&&",
                 AssignDesignator(
                     designator,
-                    UnboxedBindingValue(value, typePattern, context.RuntimeTypes.BoxingEnabled),
+                    UnboxedBindingValue(value, typePattern, context),
                     context
                 )
             ),
@@ -99,12 +99,7 @@ public static partial class IrToTsExpressionBridge
             typeTest,
             .. OwnDesignatorAssignment(
                 pattern.Designator,
-                UnboxedBindingValue(
-                    value,
-                    pattern.Type,
-                    pattern.InputType,
-                    context.RuntimeTypes.BoxingEnabled
-                ),
+                UnboxedBindingValue(value, pattern.Type, pattern.InputType, context),
                 context
             ),
             .. memberTests.OfType<TsExpression>(),

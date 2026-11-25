@@ -1166,6 +1166,16 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
                 PrintTupleType(tuple);
                 break;
 
+            case TsConditionalType conditional:
+                PrintType(conditional.Check);
+                _sb.Write(" extends ");
+                PrintType(conditional.Extends);
+                _sb.Write(" ? ");
+                PrintType(conditional.WhenTrue);
+                _sb.Write(" : ");
+                PrintType(conditional.WhenFalse);
+                break;
+
             case TsBooleanLiteralType booleanLiteral:
                 _sb.Write(booleanLiteral.Value ? "true" : "false");
                 break;
@@ -1248,7 +1258,7 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
     /// </summary>
     private void PrintTypeInUnion(TsType type)
     {
-        if (type is TsFunctionType)
+        if (type is TsFunctionType or TsConditionalType)
         {
             _sb.Write("(");
             PrintType(type);

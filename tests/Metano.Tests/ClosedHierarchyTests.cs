@@ -175,16 +175,19 @@ public class ClosedHierarchyTests
         );
     }
 
+    /// <summary>
+    /// The family files take the union shape (spec 010 FR-C5); code that only uses
+    /// the family lowers exactly as for the abstract hierarchy.
+    /// </summary>
     [Test]
-    public async Task ClosedHierarchy_LowersExactlyAsTheAbstractOne()
+    public async Task ClosedHierarchy_ChangesOnlyTheFamilyDeclarations()
     {
         var closed = TranspileHelper.Transpile(ClosedSource);
         var abstractOutput = TranspileHelper.Transpile(AbstractSource);
 
         await Assert.That(closed.Keys.Order()).IsEquivalentTo(abstractOutput.Keys.Order());
-
-        foreach (var (file, content) in closed)
-            await Assert.That(content).IsEqualTo(abstractOutput[file]);
+        await Assert.That(closed["describer.ts"]).IsEqualTo(abstractOutput["describer.ts"]);
+        await Assert.That(closed["job-status.ts"]).IsNotEqualTo(abstractOutput["job-status.ts"]);
     }
 
     [Test]
@@ -197,7 +200,7 @@ public class ClosedHierarchyTests
     }
 
     [Test]
-    public async Task ClosedPolymorphicJsonBase_LowersAsTheAbstractOne()
+    public async Task ClosedPolymorphicJsonBase_KeepsTheAbstractContract()
     {
         const string source = """
             using System.Text.Json.Serialization;
@@ -240,11 +243,19 @@ public class ClosedHierarchyTests
             source.Replace("KIND", "abstract")
         );
 
+        // FR-C5 asserts the spec of a union-lowered family to its union type; the
+        // contract itself is the abstract one (FR-C3).
         await Assert
-            .That(closed.Files["wire-context.ts"])
+            .That(
+                System.Text.RegularExpressions.Regex.Replace(
+                    closed.Files["wire-context.ts"],
+                    @" as TypeSpec<\w+>",
+                    ""
+                )
+            )
             .IsEqualTo(abstractOutput.Files["wire-context.ts"]);
 
-        await Assert.That(closed.Files["command.ts"]).IsEqualTo(abstractOutput.Files["command.ts"]);
+        await Assert.That(closed.Files["wire-context.ts"]).Contains(" as TypeSpec<Command>");
 
         await Assert
             .That(closed.Diagnostics.Select(d => d.Code))

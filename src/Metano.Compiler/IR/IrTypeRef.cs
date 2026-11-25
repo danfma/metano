@@ -231,6 +231,11 @@ public sealed record IrNamedTypeSemantics(
     /// parameterless constructor (rather than only the C# implicit one).
     /// </summary>
     public bool HasExplicitParameterlessCtor { get; init; }
+
+    /// <summary>
+    /// The referenced type is a C# 15 <c>closed</c> class (spec 010 FR-C1).
+    /// </summary>
+    public bool IsClosed { get; init; }
 }
 
 /// <summary>

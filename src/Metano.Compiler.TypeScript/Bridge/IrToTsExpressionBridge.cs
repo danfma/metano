@@ -106,7 +106,10 @@ public static partial class IrToTsExpressionBridge
             IrIdentifier id when context.BoundElements.TryGetValue(id.Name, out var element) =>
                 element,
             IrIdentifier id => new TsIdentifier(IrToTsNamingPolicy.ToLocalName(id.Name)),
-            IrTypeReference tr => MapTypeReference(tr),
+            IrTypeReference tr => ClosedSelfLowering.RuntimeClassValue(
+                MapTypeReference(tr),
+                context.ClosedSelf
+            ),
             IrIndexerUpdateExpression update => MapIndexerUpdate(
                 update,
                 context,
@@ -119,7 +122,7 @@ public static partial class IrToTsExpressionBridge
                 initialization,
                 context
             ),
-            IrThisExpression => new TsIdentifier(context.ThisReceiver),
+            IrThisExpression => ClosedSelfLowering.ThisValue(context),
             IrBaseExpression => new TsIdentifier("super"),
             IrMemberAccess ma => MapMemberAccess(ma, context),
             IrElementAccess ea => MapElementAccess(ea, context),
@@ -861,7 +864,11 @@ public static partial class IrToTsExpressionBridge
         if (ma.Origin is { IsBrandedValueMember: true })
             return Map(ma.Target, context);
 
-        var loweredTarget = MapNullTolerant(ma.Target, context);
+        var loweredTarget = ClosedSelfLowering.ProtectedReceiver(
+            MapNullTolerant(ma.Target, context),
+            ma,
+            context.ClosedSelf
+        );
 
         // `[JsTuple]` positional member read: `value.First` / `value.Second`
         // lowers to array-index access `value[0]` / `value[1]`. The element

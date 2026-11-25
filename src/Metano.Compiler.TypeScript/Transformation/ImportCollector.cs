@@ -1573,6 +1573,7 @@ public sealed class ImportCollector(
 
         if (type is null)
             return;
+
         switch (type)
         {
             case TsNamedType named when named.RuntimeHelperBinding is { } binding:
@@ -1632,6 +1633,12 @@ public sealed class ImportCollector(
             case TsTupleType tuple:
                 foreach (var t in tuple.Elements)
                     CollectFromType(t, sink);
+                break;
+            case TsConditionalType conditional:
+                CollectFromType(conditional.Check, sink);
+                CollectFromType(conditional.Extends, sink);
+                CollectFromType(conditional.WhenTrue, sink);
+                CollectFromType(conditional.WhenFalse, sink);
                 break;
             case TsTypePredicateType predicate:
                 CollectFromType(predicate.Type, sink);
