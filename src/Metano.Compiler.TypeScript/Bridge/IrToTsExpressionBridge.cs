@@ -1499,7 +1499,8 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var helperName = method.EmittedName ?? TypeScriptNaming.ToCamelCase(method.MemberName);
+        var helperName = method.EmittedName
+            ?? IrToTsNamingPolicy.ToFunctionIdentifier(method.MemberName);
 
         return new TsCallExpression(
             ModuleExportReference(helperName, method.CompanionOwner),

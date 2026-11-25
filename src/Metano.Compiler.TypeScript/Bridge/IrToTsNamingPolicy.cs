@@ -160,8 +160,15 @@ public static class IrToTsNamingPolicy
     public static string ToFunctionName(string irName, IReadOnlyList<IrAttribute>? attributes)
     {
         var overrideName = FindNameOverride(attributes);
-        return overrideName ?? TypeScriptNaming.ToCamelCase(irName);
+        return overrideName ?? ToFunctionIdentifier(irName);
     }
+
+    /// <summary>
+    /// The camelCase name of a top-level function: an identifier position, so a
+    /// strict-mode reserved word is escaped too (<c>package</c> → <c>package_</c>).
+    /// </summary>
+    internal static string ToFunctionIdentifier(string irName) =>
+        TypeScriptNaming.EscapeIfReserved(TypeScriptNaming.ToCamelCase(irName));
 
     /// <summary>
     /// The name a module function declares: a dispatched group's dispatcher
@@ -175,7 +182,7 @@ public static class IrToTsNamingPolicy
         ?? (
             FindMemberNameOverride(function.Attributes, function.OverloadName) is { } overrideName
                 ? overrideName + AccessorSuffixOf(function.Name)
-                : TypeScriptNaming.ToCamelCase(function.Name)
+                : ToFunctionIdentifier(function.Name)
         );
 
     /// <summary>

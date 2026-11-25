@@ -492,7 +492,9 @@ public static class IrBodyPrinter
                         sb.Append(", ");
                     var a = withExpr.Assignments[i];
 
-                    sb.Append(a.EmittedName ?? IrToDartNamingPolicy.ToParameterName(a.MemberName))
+                    sb.Append(
+                            a.EmittedName ?? IrToDartNamingPolicy.ToMemberName(a.MemberName, null)
+                        )
                         .Append(": ");
 
                     PrintExpression(sb, a.Value);
@@ -1036,7 +1038,7 @@ public static class IrBodyPrinter
                     {
                         sb.Append(
                                 member.EmittedName
-                                    ?? IrToDartNamingPolicy.ToParameterName(member.Name)
+                                    ?? IrToDartNamingPolicy.ToMemberName(member.Name, null)
                             )
                             .Append(": ");
                     }
@@ -1539,7 +1541,7 @@ public static class IrBodyPrinter
     private static string MemberNameOf(IrMemberAccess access) =>
         access.Origin is { IsStringEnumMember: false, EmittedName: { } emittedName }
             ? emittedName
-            : IrToDartNamingPolicy.ToParameterName(access.MemberName);
+            : IrToDartNamingPolicy.ToMemberName(access.MemberName, null);
 
     private static void PrintCallTypeArguments(StringBuilder sb, IrCallExpression call)
     {

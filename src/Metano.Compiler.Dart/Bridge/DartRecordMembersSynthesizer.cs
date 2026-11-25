@@ -25,7 +25,7 @@ internal static class DartRecordMembersSynthesizer
         var equalityFields = (ir.EqualityMembers ?? [])
             .Select(m =>
                 (
-                    Name: m.EmittedName ?? IrToDartNamingPolicy.ToParameterName(m.Name),
+                    Name: m.EmittedName ?? IrToDartNamingPolicy.ToMemberName(m.Name, null),
                     Type: IrToDartTypeMapper.Map(m.Type)
                 )
             )
