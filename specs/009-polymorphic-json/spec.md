@@ -1026,7 +1026,8 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   differ from the defaults) only for an indented context; `createSpec` / `createValueSpec`
   attach it to every spec, and `serializeText` reads it from the spec. A value System.Text.Json
   rejects (another indent character, a size above 127, another `NewLine`) warns `MS0037` and
-  keeps the default. The declarations are
+  keeps the default. Behavior change vs 3.1.0, where `serializeText` always wrote compact text: a
+  context with `WriteIndented = true` now produces indented text. The declarations are
   `[MapMethod]` entries in `src/Metano/Runtime/Json.cs`; the other overloads stay unmapped
   (MS0001).
 

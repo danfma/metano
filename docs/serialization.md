@@ -166,6 +166,10 @@ text and is unaffected. A value System.Text.Json rejects (an indent character ot
 space or a tab, a size above 127, another `NewLine`) warns `MS0037`. Options passed to the
 context's constructor at runtime are invisible, as for every other option.
 
+> **Behavior change since 3.1.0.** In 3.1.0 `serializeText` always wrote compact text. A context
+> with `WriteIndented = true` now produces indented text; call sites that relied on the compact
+> text of such a context must set `WriteIndented = false` (as .NET itself would).
+
 ## What the transpiler does
 
 When it sees a class that inherits from `JsonSerializerContext`:
