@@ -221,12 +221,34 @@ public static class IrBodyPrinter
                 sb.Append(indent).AppendLine("}");
                 break;
 
-            default:
+            // Already reported where it was extracted.
+            case IrUnsupportedStatement unsupported:
                 sb.Append(indent)
                     .Append("// TODO: unsupported IR statement ")
-                    .AppendLine(stmt.GetType().Name);
+                    .AppendLine(unsupported.Kind);
+
+                break;
+
+            default:
+                sb.Append(indent);
+
+                AppendDropped(
+                    sb,
+                    $"// TODO: unsupported IR statement {stmt.GetType().Name}\n",
+                    $"Statement '{stmt.GetType().Name}'"
+                );
+
                 break;
         }
+    }
+
+    /// <summary>
+    /// Appends a placeholder that drops code, reporting it as an error (W9-13).
+    /// </summary>
+    private static void AppendDropped(StringBuilder sb, string placeholder, string construct)
+    {
+        DroppedCodeDiagnostics.Report($"{construct} is not supported by the Dart target.");
+        sb.Append(placeholder);
     }
 
     // ── Expressions ───────────────────────────────────────────────────────
@@ -481,9 +503,12 @@ public static class IrBodyPrinter
                 // marker — real usage should gate [Emit] methods with
                 // `[Ignore(TargetLanguage.Dart)]` or provide a Dart-
                 // specific implementation.
-                sb.Append("/* TODO: [Emit] template ‘")
-                    .Append(tpl.Template)
-                    .Append("’ has no Dart mapping */ null");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: [Emit] template ‘{tpl.Template}’ has no Dart mapping */ null",
+                    $"[Emit] template '{tpl.Template}'"
+                );
+
                 break;
             case IrNullConditionalAccess access:
                 PrintNullConditionalAccess(sb, access);
@@ -504,7 +529,12 @@ public static class IrBodyPrinter
                     .Append("'))");
                 break;
             default:
-                sb.Append("/* TODO: ").Append(expr.GetType().Name).Append(" */");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: {expr.GetType().Name} */",
+                    $"Expression '{expr.GetType().Name}'"
+                );
+
                 break;
         }
     }
@@ -603,9 +633,12 @@ public static class IrBodyPrinter
                 PrintSubPatternAsBooleanExpression(sb, node.Expression, node.Pattern);
                 break;
             default:
-                sb.Append("/* TODO: unsupported is-pattern ")
-                    .Append(node.Pattern.GetType().Name)
-                    .Append(" */");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: unsupported is-pattern {node.Pattern.GetType().Name} */",
+                    $"Pattern '{node.Pattern.GetType().Name}' in an 'is' expression"
+                );
+
                 break;
         }
     }
@@ -696,12 +729,20 @@ public static class IrBodyPrinter
                 // List / positional patterns in an `is` expression need a
                 // destructuring binding to reach the sub-pattern values,
                 // which Dart only offers inside switch arms — emit a TODO.
-                sb.Append("/* TODO: Dart list/positional pattern outside switch */ false");
+                AppendDropped(
+                    sb,
+                    "/* TODO: Dart list/positional pattern outside switch */ false",
+                    "A list or positional pattern outside a switch"
+                );
+
                 break;
             default:
-                sb.Append("/* TODO: unsupported pattern ")
-                    .Append(pattern.GetType().Name)
-                    .Append(" */");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: unsupported pattern {pattern.GetType().Name} */",
+                    $"Pattern '{pattern.GetType().Name}'"
+                );
+
                 break;
         }
     }
@@ -884,7 +925,12 @@ public static class IrBodyPrinter
                 // through a best-effort wildcard + negated test by lowering to
                 // a `_` pattern with a TODO marker for callers that should
                 // rewrite into a when-guard.
-                sb.Append("/* TODO: Dart lacks `not` patterns — rewrite as when-guard */ _");
+                AppendDropped(
+                    sb,
+                    "/* TODO: Dart lacks `not` patterns — rewrite as when-guard */ _",
+                    "A 'not' pattern in a switch"
+                );
+
                 break;
             case IrLogicalPattern log:
                 PrintSwitchPattern(sb, log.Left);
@@ -947,9 +993,12 @@ public static class IrBodyPrinter
 
                 break;
             default:
-                sb.Append("/* TODO: unsupported pattern ")
-                    .Append(pattern.GetType().Name)
-                    .Append(" */");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: unsupported pattern {pattern.GetType().Name} */",
+                    $"Pattern '{pattern.GetType().Name}'"
+                );
+
                 break;
         }
     }

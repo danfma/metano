@@ -2,6 +2,8 @@ using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Dart.AST;
 using Metano.Compiler.Dart.Transformation;
+using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -38,11 +40,25 @@ public sealed class DartTarget : ITranspilerTarget
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
 
-        var printer = new Printer();
-        var generated = sourceFiles
-            .Select(f => new GeneratedFile(f.FileName, printer.Print(f)))
-            .ToList();
+        var printingDiagnostics = new List<MetanoDiagnostic>();
+        var generated = Print(sourceFiles, printingDiagnostics);
 
-        return new TargetOutput(generated, transformer.Diagnostics);
+        return new TargetOutput(generated, [.. transformer.Diagnostics, .. printingDiagnostics]);
+    }
+
+    /// <summary>
+    /// Prints the files with a diagnostic sink open: the body printer reports
+    /// the placeholders it emits for IR it cannot render (W9-13).
+    /// </summary>
+    private static List<GeneratedFile> Print(
+        IReadOnlyList<DartSourceFile> sourceFiles,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        using var sink = ExtractionDiagnostics.Open(diagnostics.Add);
+
+        var printer = new Printer();
+
+        return [.. sourceFiles.Select(f => new GeneratedFile(f.FileName, printer.Print(f)))];
     }
 }

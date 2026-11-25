@@ -550,8 +550,23 @@ public static class IrToTsStatementBridge
             IrUnsupportedStatement u => new TsExpressionStatement(
                 new TsIdentifier($"/* TODO: unsupported IR statement {u.Kind} */")
             ),
-            _ => new TsExpressionStatement(
-                new TsIdentifier($"/* TODO: {statement.GetType().Name} */")
-            ),
+            _ => DroppedStatement(statement),
         };
+
+    /// <summary>
+    /// A node the bridge has no lowering for: its placeholder drops the
+    /// statement, so it reports an error (W9-13). An
+    /// <see cref="IrUnsupportedStatement"/> was already reported where it was
+    /// extracted.
+    /// </summary>
+    private static TsStatement DroppedStatement(IrStatement statement)
+    {
+        var kind = statement.GetType().Name;
+
+        DroppedCodeDiagnostics.Report(
+            $"Statement '{kind}' is not supported by the TypeScript target."
+        );
+
+        return new TsExpressionStatement(new TsIdentifier($"/* TODO: {kind} */"));
+    }
 }

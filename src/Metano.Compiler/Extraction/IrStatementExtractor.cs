@@ -287,14 +287,21 @@ public sealed class IrStatementExtractor(
     /// <summary>
     /// The statements one C# statement of a scope extracts to: a local
     /// declaration contributes one declaration per declarator
-    /// (<c>int a = 1, b = 2;</c>), every other statement exactly one. A
-    /// declaration statement only appears directly in a scope — C# rejects it
-    /// as an embedded statement — so it never needs a single-statement form.
+    /// (<c>int a = 1, b = 2;</c>), an empty statement (<c>;</c>) none, every
+    /// other statement exactly one. A declaration statement only appears
+    /// directly in a scope — C# rejects it as an embedded statement — so it
+    /// never needs a single-statement form.
     /// </summary>
     private IEnumerable<IrStatement> ExtractStatementInScope(StatementSyntax statement) =>
-        statement is LocalDeclarationStatementSyntax local
-            ? ExtractDeclarators(local.Declaration, local.IsConst)
-            : [ExtractStatement(statement)];
+        statement switch
+        {
+            LocalDeclarationStatementSyntax local => ExtractDeclarators(
+                local.Declaration,
+                local.IsConst
+            ),
+            EmptyStatementSyntax => [],
+            _ => [ExtractStatement(statement)],
+        };
 
     private IrStatement ExtractStatement(StatementSyntax statement) =>
         InlineCodeStatementOf(statement)
@@ -310,6 +317,7 @@ public sealed class IrStatementExtractor(
         statement switch
         {
             BlockSyntax block => new IrBlockStatement(ExtractStatementSequence(block.Statements)),
+            EmptyStatementSyntax => new IrBlockStatement([]),
             // `checked { }` / `unchecked { }`: Roslyn folds the context into the
             // IsChecked flag of every operation inside, so the statement lowers
             // to its block.
@@ -352,7 +360,7 @@ public sealed class IrStatementExtractor(
                 ),
             YieldStatementSyntax ys when ys.IsKind(SyntaxKind.YieldBreakStatement) =>
                 new IrYieldBreakStatement(),
-            _ => new IrUnsupportedStatement(statement.Kind().ToString()),
+            _ => DroppedCodeDiagnostics.UnsupportedStatement(statement),
         };
 
     /// <summary>

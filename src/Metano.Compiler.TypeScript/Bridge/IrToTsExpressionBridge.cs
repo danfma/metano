@@ -237,8 +237,23 @@ public static partial class IrToTsExpressionBridge
             IrBoxExpression box => IrToTsBoxingBridge.MapBox(box, context),
             IrUnboxExpression unbox => IrToTsBoxingBridge.MapUnbox(unbox, context),
             IrTextValue text => IrToTsBoxingBridge.MapTextValue(text, context),
-            _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
+            _ => DroppedExpression(expression),
         };
+    }
+
+    /// <summary>
+    /// A node the bridge has no lowering for: its placeholder drops the
+    /// expression, so it reports an error (W9-13).
+    /// </summary>
+    private static TsExpression DroppedExpression(IrExpression expression)
+    {
+        var kind = expression.GetType().Name;
+
+        DroppedCodeDiagnostics.Report(
+            $"Expression '{kind}' is not supported by the TypeScript target."
+        );
+
+        return new TsIdentifier($"/* TODO: {kind} */");
     }
 
     /// <summary>

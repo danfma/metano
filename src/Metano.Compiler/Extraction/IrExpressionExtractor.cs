@@ -1365,7 +1365,7 @@ public sealed partial class IrExpressionExtractor
     ///   <item>A user-written <c>Deconstruct</c> may compute its outputs.</item>
     /// </list>
     /// Every element left unresolved (<c>null</c> entry) is reported as an
-    /// MS0001 warning, never dropped silently.
+    /// MS0001 error (the element would read nothing), never dropped silently.
     /// </summary>
     private IReadOnlyList<IrPositionalElementMember?>? ResolvePositionalElementMembers(
         RecursivePatternSyntax recursive,
@@ -1454,14 +1454,10 @@ public sealed partial class IrExpressionExtractor
         RecursivePatternSyntax recursive,
         IMethodSymbol deconstruct
     ) =>
-        ExtractionDiagnostics.Report(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Warning,
-                DiagnosticCodes.UnsupportedFeature,
-                $"Positional pattern over '{deconstruct.ContainingType.Name}.Deconstruct' is not "
-                    + "supported: some of its outputs cannot be mapped to members.",
-                recursive.GetLocation()
-            )
+        DroppedCodeDiagnostics.Report(
+            $"Positional pattern over '{deconstruct.ContainingType.Name}.Deconstruct' is not "
+                + "supported: some of its outputs cannot be mapped to members.",
+            recursive.GetLocation()
         );
 
     private IrPositionalElementMember? ToPositionalElementMember(ITypeSymbol record, string name) =>
@@ -4375,7 +4371,7 @@ public sealed partial class IrExpressionExtractor
             ExpressionSyntax expr => LowerExpressionVariables(
                 InlineCodeStatementOf(expr) ?? new IrReturnStatement(Extract(expr))
             ),
-            _ => [new IrUnsupportedStatement(body.Kind().ToString())],
+            _ => [DroppedCodeDiagnostics.UnsupportedStatement(body)],
         };
 
     // ── String interpolation ─────────────────────────────────────────────
