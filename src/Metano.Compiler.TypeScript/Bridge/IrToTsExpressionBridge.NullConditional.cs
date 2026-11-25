@@ -331,6 +331,9 @@ public static partial class IrToTsExpressionBridge
             IrCallExpression { IsOptional: true } call => MapCall(call, context),
             IrBinaryExpression { Operator: IrBinaryOp.NullCoalescing } coalesce =>
                 MapNullCoalescing(coalesce, rightToleratesUndefined: true, context),
+            // A receiver keeps the bare `this`: only a `this` read as a value
+            // takes the closed-family assertion (ClosedSelfLowering.ThisValue).
+            IrThisExpression => new TsIdentifier(context.ThisReceiver),
             _ => Map(expression, context),
         };
 

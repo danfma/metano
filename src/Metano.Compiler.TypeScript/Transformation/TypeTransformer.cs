@@ -274,8 +274,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var parentName = Context.ResolveTsName(parent);
 
+        // A closed type lowered to a union declares its runtime class as
+        // `Name$Base` (spec 010 FR-C5); the namespace still merges with `Name`.
+        var runtimeName = parentName + ClosedFamilyLowering.RuntimeClassSuffix;
+
         var index = statements.FindIndex(statement =>
-            statement is TsClass cls && cls.Name == parentName
+            statement is TsClass cls && (cls.Name == parentName || cls.Name == runtimeName)
         );
 
         if (index < 0)
@@ -306,7 +310,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 new TsNamespaceDeclaration(
                     parentName,
                     Functions: [],
-                    Exported: owner.Exported,
+                    Exported: owner.Exported || owner.Name == runtimeName,
                     Members: TypeAliasesOf(exposed, moduleLocal),
                     Declare: true
                 )
@@ -1053,6 +1057,23 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
 
     /// <summary>
+    /// Reports, at the root of a closed family, why the family keeps the plain
+    /// abstract-class shape instead of the union (spec 010 FR-C5, <c>MS0073</c>),
+    /// whatever shape the root itself emits as.
+    /// </summary>
+    private void ReportSuppressedClosedFamily(INamedTypeSymbol type)
+    {
+        if (
+            Context.ClosedFamilies.PlanOf(type) is { } plan
+            && SymbolEqualityComparer.Default.Equals(plan.Root, type.OriginalDefinition)
+            && ClosedFamilyLowering.SuppressionDiagnostic(plan) is { } suppressed
+        )
+        {
+            Context.ReportDiagnostic(suppressed);
+        }
+    }
+
+    /// <summary>
     /// Builds the top-level statements for a single type into <paramref name="sink"/>,
     /// without computing the file path or collecting imports. Returns true if the type
     /// produced any statements (and is therefore part of a file group); false if it's
@@ -1084,6 +1105,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // no declaration, with or without [External]/[Import] (per research D9).
         if (SymbolHelper.HasJsCallable(type))
             return false;
+
+        ReportSuppressedClosedFamily(type);
 
         var startCount = sink.Count;
 

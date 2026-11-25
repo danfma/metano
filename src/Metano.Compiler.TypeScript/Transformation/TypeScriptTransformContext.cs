@@ -128,6 +128,13 @@ public sealed class TypeScriptTransformContext(
     internal NestedTypeHoisting NestedTypes =>
         field ??= new NestedTypeHoisting(AssemblyWideTranspile, CurrentAssembly);
 
+    /// <summary>
+    /// The TypeScript shape of every C# 15 <c>closed</c> family the transform meets
+    /// (spec 010 FR-C5), decided once per family root.
+    /// </summary>
+    internal Bridge.ClosedFamilyLowering ClosedFamilies =>
+        field ??= new Bridge.ClosedFamilyLowering(ResolveOwnTsName);
+
     private IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildExtensionHelperFunctions()
     {
         var map = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);

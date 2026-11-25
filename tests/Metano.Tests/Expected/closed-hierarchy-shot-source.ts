@@ -1,6 +1,8 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
 
-export abstract class ShotSource {
+abstract class ShotSource$Base {
+  abstract readonly kind: "Fresh" | "Reused";
+
   constructor() { }
 
   static get Fresh(): typeof ShotSource$Fresh {
@@ -22,7 +24,7 @@ export abstract class ShotSource {
   }
 
   with(overrides?: Partial<ShotSource>): ShotSource {
-    return copyRecordWith<ShotSource>(this, overrides);
+    return copyRecordWith<ShotSource>(this as unknown as ShotSource, overrides);
   }
 
   protected $printMembers(): string {
@@ -42,9 +44,17 @@ export declare namespace ShotSource {
   export type Reused = ShotSource$Reused;
 }
 
+export type ShotSource = ShotSource$Fresh | ShotSource$Reused;
+
+export const ShotSource: typeof ShotSource$Base = ShotSource$Base;
+
 class ShotSource$Fresh extends ShotSource {
   constructor() {
     super();
+  }
+
+  override get kind(): "Fresh" {
+    return "Fresh";
   }
 
   override equals(other: any): boolean {
@@ -76,6 +86,10 @@ class ShotSource$Fresh extends ShotSource {
 class ShotSource$Reused extends ShotSource {
   constructor(readonly from: number) {
     super();
+  }
+
+  override get kind(): "Reused" {
+    return "Reused";
   }
 
   override equals(other: any): boolean {

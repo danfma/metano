@@ -63,6 +63,13 @@ internal sealed record IrToTsBridgeContext(
     /// </summary>
     public string ThisReceiver { get; private init; } = "this";
 
+    /// <summary>
+    /// The closed type being emitted when its family lowers to a union (spec 010
+    /// FR-C5): its <c>this</c> read as a value is asserted to the union, and its own
+    /// name in value position names the runtime class. <c>null</c> elsewhere.
+    /// </summary>
+    public ClosedSelfLowering? ClosedSelf { get; init; }
+
     public IrToTsBridgeContext WithTypeParameters(TsTypeParameterScope scope) =>
         this with
         {

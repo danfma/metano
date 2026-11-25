@@ -78,7 +78,7 @@ internal sealed class JsonSpecBuilder
         );
     }
 
-    private (TsType SpecType, TsCallExpression Factory) BuildSpec(JsonContractEntry entry)
+    private (TsType SpecType, TsExpression Factory) BuildSpec(JsonContractEntry entry)
     {
         if (entry.Kind == JsonPropertyKind.Ref)
             return BuildTypeSpec((INamedTypeSymbol)entry.Type);
@@ -131,14 +131,24 @@ internal sealed class JsonSpecBuilder
     /// which the getter's type rejects (FR-033). Other contracts keep the bare
     /// call.
     /// </summary>
-    private (TsType SpecType, TsCallExpression Factory) BuildTypeSpec(INamedTypeSymbol objectType)
+    /// <para>
+    /// A closed type lowered to a union (spec 010 FR-C5) infers the spec from its
+    /// runtime class (<c>type: Command</c> is <c>typeof Command$Base</c>), so the
+    /// call is asserted to the union's <c>TypeSpec&lt;Command&gt;</c>.
+    /// </para>
+    private (TsType SpecType, TsExpression Factory) BuildTypeSpec(INamedTypeSymbol objectType)
     {
         var contractType = JsonTsTypes.MapContract(_context, objectType);
         var spec = BuildTypeSpecObject(objectType, SpecTypeReferenceName(objectType, contractType));
+        var specType = new TsNamedType("TypeSpec", [contractType], JsonRuntimeModule.Origin);
+
+        var factory = ContextFactoryCall("createSpec", spec, ExplicitTypeArgumentsOf(contractType));
 
         return (
-            new TsNamedType("TypeSpec", [contractType], JsonRuntimeModule.Origin),
-            ContextFactoryCall("createSpec", spec, ExplicitTypeArgumentsOf(contractType))
+            specType,
+            _context.ClosedFamilies.IsLowered(objectType)
+                ? new TsCastExpression(factory, specType)
+                : factory
         );
     }
 
