@@ -254,3 +254,14 @@ describe("clampDecimal", () => {
     );
   });
 });
+
+describe("clamp messages", () => {
+  test("format the bounds as .NET does", async () => {
+    const { Decimal } = await import("#/system/decimal.ts");
+
+    expect(() => clampDecimal(new Decimal(0), new Decimal("0.0000001"), new Decimal("0.00000001"))).toThrow(
+      "'0.0000001' cannot be greater than 0.00000001.",
+    );
+    expect(() => clampNumber(0, 1.5, 0.5)).toThrow("'1.5' cannot be greater than 0.5.");
+  });
+});

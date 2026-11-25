@@ -20,6 +20,9 @@ public class MathClampMappingTests
                 public byte Byte(byte v) => Math.Clamp(v, (byte)1, (byte)9);
                 public long Long(long v) => Math.Clamp(v, 0L, 10L);
                 public decimal Decimal(decimal v) => Math.Clamp(v, 0m, 1m);
+                public int StaticInt(int v) => int.Clamp(v, 0, 10);
+                public double StaticDouble(double v) => double.Clamp(v, 0.5, 1.5);
+                public decimal StaticDecimal(decimal v) => decimal.Clamp(v, 0m, 1m);
             }
             """
         );

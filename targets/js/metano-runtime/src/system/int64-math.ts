@@ -6,6 +6,7 @@
  * every 64-bit overload here.
  */
 import { ArgumentException, OverflowException } from "./exceptions/index.ts";
+import { throwMinGreaterThanMax } from "./min-max.ts";
 import { divInt64, divUInt64, INT64_MIN, remInt64, remUInt64 } from "./int64.ts";
 
 /** .NET's message for `Math.Abs(long.MinValue)`. */
@@ -130,7 +131,7 @@ export function compareInt64(left: bigint, right: bigint): number {
 
 function clamp(value: bigint, min: bigint, max: bigint): bigint {
   if (min > max) {
-    throw new ArgumentException(`'${min}' cannot be greater than ${max}.`);
+    throwMinGreaterThanMax(min, max);
   }
 
   return maxInt64(min, minInt64(value, max));

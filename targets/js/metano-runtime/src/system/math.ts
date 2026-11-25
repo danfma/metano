@@ -12,6 +12,7 @@
 import { ArgumentException } from "./exceptions/argument-exception.ts";
 import { ArgumentOutOfRangeException } from "./exceptions/argument-out-of-range-exception.ts";
 import { OverflowException } from "./exceptions/overflow-exception.ts";
+import { throwMinGreaterThanMax } from "./min-max.ts";
 
 /**
  * Mirror of `System.MidpointRounding`. The numeric values match the .NET enum, so a
@@ -209,7 +210,7 @@ export function absInt32(value: number): number {
  */
 export function clampNumber(value: number, min: number, max: number): number {
   if (min > max) {
-    throw new ArgumentException(`'${min}' cannot be greater than ${max}.`);
+    throwMinGreaterThanMax(min, max);
   }
 
   if (value < min) {
@@ -233,7 +234,7 @@ export interface DecimalClampable<D> {
  */
 export function clampDecimal<D extends DecimalClampable<D>>(value: D, min: D, max: D): D {
   if (min.gt(max)) {
-    throw new ArgumentException(`'${min}' cannot be greater than ${max}.`);
+    throwMinGreaterThanMax(min, max);
   }
 
   if (value.lt(min)) {

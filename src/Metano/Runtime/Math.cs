@@ -324,6 +324,64 @@ using Metano.Annotations;
     RuntimeImports = "clampNumber"
 )]
 
+// The `INumber<T>.Clamp` statics (`int.Clamp`, `double.Clamp`, ...) lower like `Math.Clamp`;
+// `long` / `ulong` are mapped above, and `decimal.Clamp` must not reach decimal.js's own
+// `clamp`, which has no `min > max` check.
+[assembly: MapMethod(
+    typeof(byte),
+    nameof(byte.Clamp),
+    JsTemplate = "clampNumber($0, $1, $2)",
+    RuntimeImports = "clampNumber"
+)]
+[assembly: MapMethod(
+    typeof(sbyte),
+    nameof(sbyte.Clamp),
+    JsTemplate = "clampNumber($0, $1, $2)",
+    RuntimeImports = "clampNumber"
+)]
+[assembly: MapMethod(
+    typeof(short),
+    nameof(short.Clamp),
+    JsTemplate = "clampNumber($0, $1, $2)",
+    RuntimeImports = "clampNumber"
+)]
+[assembly: MapMethod(
+    typeof(ushort),
+    nameof(ushort.Clamp),
+    JsTemplate = "clampNumber($0, $1, $2)",
+    RuntimeImports = "clampNumber"
+)]
+[assembly: MapMethod(
+    typeof(int),
+    nameof(int.Clamp),
+    JsTemplate = "clampNumber($0, $1, $2)",
+    RuntimeImports = "clampNumber"
+)]
+[assembly: MapMethod(
+    typeof(uint),
+    nameof(uint.Clamp),
+    JsTemplate = "clampNumber($0, $1, $2)",
+    RuntimeImports = "clampNumber"
+)]
+[assembly: MapMethod(
+    typeof(float),
+    nameof(float.Clamp),
+    JsTemplate = "clampNumber($0, $1, $2)",
+    RuntimeImports = "clampNumber"
+)]
+[assembly: MapMethod(
+    typeof(double),
+    nameof(double.Clamp),
+    JsTemplate = "clampNumber($0, $1, $2)",
+    RuntimeImports = "clampNumber"
+)]
+[assembly: MapMethod(
+    typeof(decimal),
+    nameof(decimal.Clamp),
+    JsTemplate = "clampDecimal($0, $1, $2)",
+    RuntimeImports = "clampDecimal"
+)]
+
 [assembly: MapMethod(typeof(Math), nameof(Math.Floor), JsMethod = "floor")]
 [assembly: MapMethod(typeof(Math), nameof(Math.Ceiling), JsMethod = "ceil")]
 [assembly: MapMethod(typeof(Math), nameof(Math.Truncate), JsMethod = "trunc")]

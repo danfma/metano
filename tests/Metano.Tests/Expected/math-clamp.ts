@@ -27,4 +27,16 @@ export class Clamps {
   decimal(v: Decimal): Decimal {
     return clampDecimal(v, new Decimal("0"), new Decimal("1"));
   }
+
+  staticInt(v: number): number {
+    return clampNumber(v, 0, 10);
+  }
+
+  staticDouble(v: number): number {
+    return clampNumber(v, 0.5, 1.5);
+  }
+
+  staticDecimal(v: Decimal): Decimal {
+    return clampDecimal(v, new Decimal("0"), new Decimal("1"));
+  }
 }
