@@ -19,16 +19,32 @@ internal static class ClosedFamilyNarrowing
     /// typed as <paramref name="type"/> when <paramref name="inputType"/> (the value's
     /// declared type) leaves it narrowed to the runtime class.
     /// </summary>
-    public static TsExpression Bind(TsExpression value, IrTypeRef? type, IrTypeRef? inputType) =>
-        NeedsAssertion(type, inputType)
+    public static TsExpression Bind(
+        TsExpression value,
+        IrTypeRef? type,
+        IrTypeRef? inputType,
+        IrToTsBridgeContext context
+    ) =>
+        NeedsAssertion(type, inputType, context)
             ? new TsCastExpression(
                 new TsCastExpression(value, new TsNamedType("unknown")),
                 IrToTsTypeMapper.Map(type!)
             )
             : value;
 
-    private static bool NeedsAssertion(IrTypeRef? type, IrTypeRef? inputType) =>
-        IsClosed(type) && !IsClosed(StripNullable(inputType));
+    /// <summary>
+    /// The tested type is a closed type of a family lowered to the union (a suppressed
+    /// family keeps its class, which narrowing already reaches), and the input is not
+    /// itself typed as a closed type.
+    /// </summary>
+    private static bool NeedsAssertion(
+        IrTypeRef? type,
+        IrTypeRef? inputType,
+        IrToTsBridgeContext context
+    ) =>
+        type is IrNamedTypeRef { Semantics.IsClosed: true } closed
+        && context.IsUnionFamily(closed)
+        && !IsClosed(StripNullable(inputType));
 
     private static bool IsClosed(IrTypeRef? type) =>
         type is IrNamedTypeRef { Semantics.IsClosed: true };

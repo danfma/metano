@@ -220,7 +220,11 @@ internal sealed class ClosedFamilyLowering(Func<INamedTypeSymbol, string> tagNam
         if (walk.TagByOwner.Values.GroupBy(tag => tag).Any(group => group.Count() > 1))
             return ClosedFamilySuppression.DuplicateTag;
 
-        if (walk.Members.Concat(EmittedAncestors(root)).Any(DeclaresKindMember))
+        var kindCandidates = walk
+            .Members.Concat(EmittedAncestors(root))
+            .Concat(DescendantsOfOpenCases(walk));
+
+        if (kindCandidates.Any(DeclaresKindMember))
             return ClosedFamilySuppression.KindMember;
 
         if (walk.TagsByClosedType.Keys.Any(TakesRuntimeClassName))
@@ -258,20 +262,119 @@ internal sealed class ClosedFamilyLowering(Func<INamedTypeSymbol, string> tagNam
     private static bool IsNoEmitOrPlainObject(INamedTypeSymbol type) =>
         SymbolHelper.HasAttribute(type, "NoEmit") || type.HasPlainObject();
 
+    /// <summary>
+    /// <paramref name="type"/> declares an instance member TypeScript emits as
+    /// <c>kind</c>, an explicit interface implementation (<c>string IKinded.Kind</c>)
+    /// included: it lowers to a public member named after the interface's.
+    /// </summary>
     private static bool DeclaresKindMember(INamedTypeSymbol type) =>
         type.GetMembers()
-            .Where(member =>
-                member is IPropertySymbol or IFieldSymbol or IMethodSymbol or IEventSymbol
-            )
-            .Where(member =>
-                !member.IsStatic && !member.IsImplicitlyDeclared && member.CanBeReferencedByName
-            )
-            .Any(member =>
-                (
-                    member.GetNameOverride(TargetLanguage.TypeScript)
-                    ?? SymbolHelper.ToCamelCase(member.Name)
-                ) == KindMemberName
+            .Where(member => !member.IsStatic && !member.IsImplicitlyDeclared)
+            .SelectMany(EmittedNamesOf)
+            .Contains(KindMemberName);
+
+    private static IEnumerable<string> EmittedNamesOf(ISymbol member) =>
+        member switch
+        {
+            IPropertySymbol property => NamesOf(
+                property,
+                property.ExplicitInterfaceImplementations
+            ),
+            IEventSymbol @event => NamesOf(@event, @event.ExplicitInterfaceImplementations),
+            IMethodSymbol
+            {
+                MethodKind: MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation,
+            } method => NamesOf(method, method.ExplicitInterfaceImplementations),
+            IFieldSymbol field => [EmittedNameOf(field)],
+            _ => [],
+        };
+
+    private static IEnumerable<string> NamesOf<T>(T member, IEnumerable<T> implemented)
+        where T : ISymbol
+    {
+        var interfaceMembers = implemented.ToList();
+
+        return interfaceMembers.Count > 0
+            ? interfaceMembers.Select(m => EmittedNameOf(m))
+            : [EmittedNameOf(member)];
+    }
+
+    private static string EmittedNameOf(ISymbol member) =>
+        member.GetNameOverride(TargetLanguage.TypeScript) ?? SymbolHelper.ToCamelCase(member.Name);
+
+    /// <summary>
+    /// The types of the open cases' own assembly that derive from them: they inherit
+    /// the case's tag accessor, so a <c>kind</c> member there suppresses the family.
+    /// </summary>
+    private static IEnumerable<INamedTypeSymbol> DescendantsOfOpenCases(FamilyWalk walk)
+    {
+        var openCases = walk
+            .TagByOwner.Keys.Where(owner => !owner.IsSealed)
+            .ToHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        if (openCases.Count == 0)
+            return [];
+
+        return openCases
+            .Select(owner => owner.ContainingAssembly)
+            .Distinct<IAssemblySymbol>(SymbolEqualityComparer.Default)
+            .SelectMany(assembly => TypesIn(assembly.GlobalNamespace))
+            .Where(type => InheritsFromAny(type, openCases));
+    }
+
+    private static IEnumerable<INamedTypeSymbol> TypesIn(INamespaceOrTypeSymbol container) =>
+        container
+            .GetMembers()
+            .OfType<INamespaceOrTypeSymbol>()
+            .SelectMany(member =>
+                member is INamedTypeSymbol type ? [type, .. TypesIn(type)] : TypesIn(member)
             );
+
+    private static bool InheritsFromAny(
+        INamedTypeSymbol type,
+        IReadOnlySet<INamedTypeSymbol> ancestors
+    )
+    {
+        for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
+        {
+            if (ancestors.Contains(ancestor.OriginalDefinition))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The error for a type that inherits a generated tag accessor yet declares its own
+    /// <c>kind</c> member (spec 010 FR-C5): its family lowered to the union in another
+    /// assembly, which cannot see this descendant, so the member would override the tag
+    /// and break the union's narrowing. <c>null</c> for any other type.
+    /// </summary>
+    public MetanoDiagnostic? InheritedTagConflict(INamedTypeSymbol type)
+    {
+        var definition = type.OriginalDefinition;
+
+        if (definition.IsClosed || !DeclaresKindMember(definition))
+            return null;
+
+        for (var ancestor = definition.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
+        {
+            if (TagOf(ancestor) is { } tag)
+            {
+                return new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.ClosedFamilyTagSuppressed,
+                    $"'{definition.Name}' declares a '{KindMemberName}' member, but it inherits the "
+                        + $"'{KindMemberName}' discriminant \"{tag}\" of closed family case "
+                        + $"'{ancestor.Name}', whose family lowered to a TypeScript union in its own "
+                        + $"assembly. Rename the member (or give it [Name]).",
+                    definition.Locations.FirstOrDefault()
+                );
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// A nested type whose module-level name would be the closed type's runtime class

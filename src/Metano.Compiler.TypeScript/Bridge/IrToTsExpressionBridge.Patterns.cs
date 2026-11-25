@@ -873,18 +873,13 @@ public static partial class IrToTsExpressionBridge
             [
                 new PatternBinding(
                     designator.Name,
-                    UnboxedBindingValue(value, typePattern, context.RuntimeTypes.BoxingEnabled)
+                    UnboxedBindingValue(value, typePattern, context)
                 ),
             ],
             IrVarPattern varPattern => [new PatternBinding(varPattern.Designator.Name, value)],
             IrPropertyPattern property => DesignatorBinding(
                     property.Designator,
-                    UnboxedBindingValue(
-                        value,
-                        property.Type,
-                        property.InputType,
-                        context.RuntimeTypes.BoxingEnabled
-                    )
+                    UnboxedBindingValue(value, property.Type, property.InputType, context)
                 )
                 .Concat(
                     property.Subpatterns.SelectMany(sub =>
@@ -941,18 +936,18 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression UnboxedBindingValue(
         TsExpression value,
         IrTypePattern pattern,
-        bool unboxes
-    ) => UnboxedBindingValue(value, pattern.Type, pattern.InputType, unboxes);
+        IrToTsBridgeContext context
+    ) => UnboxedBindingValue(value, pattern.Type, pattern.InputType, context);
 
     private static TsExpression UnboxedBindingValue(
         TsExpression value,
         IrTypeRef? type,
         IrTypeRef? inputType,
-        bool unboxes
+        IrToTsBridgeContext context
     ) =>
-        unboxes && EnumOnBoxCapableInput(type, inputType) is { } enumType
+        context.RuntimeTypes.BoxingEnabled && EnumOnBoxCapableInput(type, inputType) is { } enumType
             ? UnboxedEnum(value, enumType)
-            : ClosedFamilyNarrowing.Bind(value, type, inputType);
+            : ClosedFamilyNarrowing.Bind(value, type, inputType, context);
 
     private static IEnumerable<PatternBinding> DesignatorBinding(
         IrPatternDesignator? designator,

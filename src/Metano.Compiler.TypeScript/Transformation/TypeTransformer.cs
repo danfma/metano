@@ -1057,11 +1057,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
 
     /// <summary>
-    /// Reports, at the root of a closed family, why the family keeps the plain
-    /// abstract-class shape instead of the union (spec 010 FR-C5, <c>MS0073</c>),
-    /// whatever shape the root itself emits as.
+    /// Reports the closed-family diagnostics of <paramref name="type"/> (spec 010
+    /// FR-C5, <c>MS0073</c>): at the root of a family, why it keeps the plain
+    /// abstract-class shape (whatever shape the root itself emits as); on a type that
+    /// inherits a tag from another assembly's union, a <c>kind</c> member it declares.
     /// </summary>
-    private void ReportSuppressedClosedFamily(INamedTypeSymbol type)
+    private void ReportClosedFamilyDiagnostics(INamedTypeSymbol type)
     {
         if (
             Context.ClosedFamilies.PlanOf(type) is { } plan
@@ -1071,6 +1072,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             Context.ReportDiagnostic(suppressed);
         }
+
+        if (Context.ClosedFamilies.InheritedTagConflict(type) is { } conflict)
+            Context.ReportDiagnostic(conflict);
     }
 
     /// <summary>
@@ -1106,7 +1110,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (SymbolHelper.HasJsCallable(type))
             return false;
 
-        ReportSuppressedClosedFamily(type);
+        ReportClosedFamilyDiagnostics(type);
 
         var startCount = sink.Count;
 
@@ -1459,7 +1463,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var produced = TransformGroup(
             group,
-            IrToTsBridgeContext.ForGroup(Context.DeclarativeMappings, casts, Context.RuntimeTypes)
+            IrToTsBridgeContext.ForGroup(
+                Context.DeclarativeMappings,
+                casts,
+                Context.RuntimeTypes
+            ) with
+            {
+                IsUnionFamily = Context.IsLoweredClosedType,
+            }
         );
 
         outcomes.Files[index] = produced;

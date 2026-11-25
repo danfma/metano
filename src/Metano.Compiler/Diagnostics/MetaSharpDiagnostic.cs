@@ -638,6 +638,7 @@ public static class DiagnosticCodes
     /// member, the case set is incomplete, a nested type takes the runtime class's
     /// name, or the family sits inside an open case of another closed family. A
     /// warning at the closed root; the family still works, without the narrowing
-    /// union.</summary>
+    /// union. An error, with the same code, at a type of another assembly that inherits a
+    /// lowered family's tag accessor and declares its own <c>kind</c> member.</summary>
     public const string ClosedFamilyTagSuppressed = "MS0073";
 }

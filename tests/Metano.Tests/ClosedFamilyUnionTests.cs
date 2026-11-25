@@ -317,6 +317,14 @@ public class ClosedFamilyUnionTests
         "already emits a 'kind' member"
     )]
     [Arguments(
+        "public interface IKinded { string Kind { get; } } public closed record Ev : IKinded { string IKinded.Kind => \"ev\"; } public sealed record Click : Ev; public sealed record Key : Ev;",
+        "already emits a 'kind' member"
+    )]
+    [Arguments(
+        "public closed record Op; public record Add : Op; public sealed record AddMore : Add { public string Kind => \"more\"; } public sealed record Sub : Op;",
+        "already emits a 'kind' member"
+    )]
+    [Arguments(
         "public closed record Shape { public sealed record Dot : Shape; } namespace Other { public sealed record Dot : global::Shape; }",
         "two cases share the same TypeScript name"
     )]
@@ -366,6 +374,151 @@ public class ClosedFamilyUnionTests
             await Assert.That(content).DoesNotContain("$Base =");
             await Assert.That(content).DoesNotContain("override get kind(): \"");
         }
+    }
+
+    /// <summary>
+    /// A type of another assembly that inherits a generated tag yet declares its own
+    /// <c>kind</c> member: the library could not see it when it lowered the family, so
+    /// the consumer's emission fails loudly instead of overriding the tag.
+    /// </summary>
+    [Test]
+    public async Task KindMemberBelowAForeignOpenCase_IsAnError()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("closed-lib")]
+
+            namespace Lib
+            {
+                public closed record Op;
+
+                public record Add : Op;
+
+                public sealed record Sub : Op;
+            }
+            """ + ClosedPolyfill,
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed record AddMore : Lib.Add
+            {
+                public string Kind => "more";
+            }
+            """
+        );
+
+        var conflict = diagnostics.Single(d => d.Code == DiagnosticCodes.ClosedFamilyTagSuppressed);
+
+        await Assert.That(conflict.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(conflict.Message).Contains("'AddMore' declares a 'kind' member");
+        await Assert.That(conflict.Message).Contains("\"Add\" of closed family case 'Add'");
+    }
+
+    /// <summary>
+    /// The family's output, and a cross-package consumer, type-check under
+    /// <c>tsgo --strict</c>; a generic family with a fixed-instantiation case keeps a
+    /// valid static side once runtime type descriptors are emitted (the descriptor's
+    /// open type is written <c>Tree$Base&lt;any&gt;</c>).
+    /// </summary>
+    [Test]
+    public async Task FamilyOutput_TypeChecksStrictly()
+    {
+        const string library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("acme-lib")]
+
+            namespace Acme
+            {
+                public closed record Tree<T>;
+
+                public sealed record Leaf<T>(T Value) : Tree<T>;
+
+                public sealed record IntLeaf(int Number) : Tree<int>;
+
+                public closed record Signal;
+
+                public sealed record Go : Signal;
+
+                public sealed record Halt(string Reason) : Signal;
+
+                public static class Casts
+                {
+                    public static Tree<int> ToTree(object value) => (Tree<int>)value;
+                }
+            }
+            """;
+        const string consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App
+            {
+                public static class Reader
+                {
+                    public static string Read(Acme.Signal signal) => signal switch
+                    {
+                        Acme.Go => "go",
+                        Acme.Halt halt => halt.Reason,
+                    };
+
+                    public static Acme.Signal? Of(object value) => value as Acme.Signal;
+                }
+            }
+            """;
+
+        var libraryFiles = TranspileHelper.Transpile(library + ClosedPolyfill);
+
+        var consumerFiles = TranspileHelper.TranspileWithLibrary(
+            library + ClosedPolyfill,
+            consumer
+        );
+
+        await Assert
+            .That(libraryFiles["acme/tree.ts"])
+            .Contains("static get $runtimeType(): ClassType<Tree$Base<any>> {");
+
+        var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(libraryFiles, consumerFiles);
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+
+        var family = TranspileHelper.Transpile(FamilySource + ClosedPolyfill);
+
+        var (familyExit, familyOutput) = await TreeShaking.StrictTypeCheck.Run(
+            family,
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(familyOutput).IsEmpty();
+        await Assert.That(familyExit).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// A suppressed family keeps its class, which <c>instanceof</c> already narrows to:
+    /// its pattern bindings get no union assertion, as before FR-C5.
+    /// </summary>
+    [Test]
+    public async Task SuppressedFamily_BindsPatternsWithoutAssertions()
+    {
+        var reader = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public closed record Shape { public string Kind => "shape"; }
+
+            public sealed record Dot : Shape;
+
+            public static class Reader
+            {
+                public static string Of(object value) => value is Shape shape ? shape.Kind : "";
+
+                public static Shape? As(object value) => value as Shape;
+            }
+            """ + ClosedPolyfill
+        )["reader.ts"];
+
+        await Assert.That(reader).DoesNotContain("as unknown as");
+        await Assert.That(reader).Contains("value instanceof Shape ? value : null");
     }
 
     [Test]

@@ -42,7 +42,8 @@ public static partial class IrToTsExpressionBridge
                 ClosedFamilyNarrowing.Bind(
                     Map(asCast.WhenTrue, context),
                     asCast.AsTarget,
-                    AsInputTypeOf(asCast)
+                    AsInputTypeOf(asCast),
+                    context
                 ),
                 Map(asCast.WhenFalse, context)
             );

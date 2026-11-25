@@ -32,10 +32,7 @@ public static partial class IrToTsExpressionBridge
             IrTypePattern { Designator: { } designator } typePattern => new TsBinaryExpression(
                 BuildTypeTest(value, typePattern.Type, typePattern.InputType, context),
                 "&&",
-                AssignDesignator(
-                    designator,
-                    UnboxedBindingValue(value, typePattern, context.RuntimeTypes.BoxingEnabled)
-                )
+                AssignDesignator(designator, UnboxedBindingValue(value, typePattern, context))
             ),
             IrVarPattern varPattern => AssignDesignator(varPattern.Designator, value),
             IrPropertyPattern property => BuildBindingPropertyPatternTest(value, property, context),
@@ -98,12 +95,7 @@ public static partial class IrToTsExpressionBridge
             typeTest,
             .. OwnDesignatorAssignment(
                 pattern.Designator,
-                UnboxedBindingValue(
-                    value,
-                    pattern.Type,
-                    pattern.InputType,
-                    context.RuntimeTypes.BoxingEnabled
-                )
+                UnboxedBindingValue(value, pattern.Type, pattern.InputType, context)
             ),
             .. memberTests.OfType<TsExpression>(),
         ]);

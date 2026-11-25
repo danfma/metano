@@ -32,6 +32,21 @@ namespace Conformance
 
     public sealed record CfEnvelope(CfCommand Command, int Id);
 
+    /// <summary>An explicit <c>Kind</c> implementation: the family keeps its class shape (MS0073).</summary>
+    public interface ICfKinded
+    {
+        string Kind { get; }
+    }
+
+    public closed record CfEvent : ICfKinded
+    {
+        string ICfKinded.Kind => "ev";
+    }
+
+    public sealed record CfClick : CfEvent;
+
+    public sealed record CfKey : CfEvent;
+
     [JsonSerializable(typeof(CfEnvelope))]
     public partial class CfWireContext : JsonSerializerContext;
 
@@ -64,6 +79,13 @@ namespace Conformance
             var moved = seek with { Position = 9 };
 
             return moved + "|" + seek + "|" + (moved == new CfSeek(9));
+        }
+
+        public static string ClosedFamilyExplicitKind()
+        {
+            CfEvent click = new CfClick();
+
+            return ((ICfKinded)click).Kind + "|" + (click as ICfKinded).Kind + "|" + click;
         }
 
         public static string ClosedFamilyJson()

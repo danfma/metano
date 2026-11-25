@@ -63,7 +63,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
             return;
 
         var memoName = MemoNameOf(type);
-        var memo = MemoDeclaration(memoName, ClassTypeOf(type, declaration.Name));
+        var memo = MemoDeclaration(memoName, ClassTypeOf(type, declaration.Name, ArgumentOf(type)));
 
         sink[index] = declaration with
         {
@@ -309,7 +309,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
 
     private TsGetterMember Getter(INamedTypeSymbol type, TsClass declaration, string memoName)
     {
-        var classType = ClassTypeOf(type, declaration.Name);
+        var classType = ClassTypeOf(type, declaration.Name, ArgumentOf(type));
         var literal = ClassLiteral(type, declaration);
 
         return new TsGetterMember(
@@ -330,7 +330,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
     private TsObjectLiteral ClassLiteral(INamedTypeSymbol type, TsClass declaration)
     {
         var self = new TsIdentifier(declaration.Name);
-        var selfType = SelfType(type, declaration.Name);
+        var selfType = SelfType(type, declaration.Name, ArgumentOf(type));
         var slot = _context.ReifiedTypeAnalysis.TypeArgumentSlotOf(type);
 
         return new TsObjectLiteral([
@@ -679,8 +679,22 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
             )
         );
 
-    private static TsType ClassTypeOf(INamedTypeSymbol type, string tsName) =>
-        RuntimeTypeNamed("ClassType", SelfType(type, tsName));
+    private static TsType ClassTypeOf(
+        INamedTypeSymbol type,
+        string tsName,
+        string typeArgument = "unknown"
+    ) => RuntimeTypeNamed("ClassType", SelfType(type, tsName, typeArgument));
+
+    /// <summary>
+    /// The type argument a class descriptor's open type is written with:
+    /// <c>unknown</c>, or <c>any</c> for the runtime class of a closed family lowered
+    /// to a union (spec 010 FR-C5). Its <c>with</c> names the union, and
+    /// <c>Tree&lt;unknown&gt;</c> drops a fixed-instantiation case
+    /// (<c>[unknown] extends [number] ? IntLeaf : never</c>), so the case's static
+    /// side would no longer extend the root's (TS2417); <c>[any]</c> keeps it.
+    /// </summary>
+    private string ArgumentOf(INamedTypeSymbol type) =>
+        _context.ClosedFamilies.IsLowered(type) ? "any" : "unknown";
 
     private static TsNamedType RuntimeTypeNamed(string name, TsType describedType) =>
         new(name, [describedType], RuntimeHelperBinding: name);
@@ -691,13 +705,17 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
     /// static getter cannot name the class's own type parameters (TS2302), and the
     /// descriptor describes the open definition.
     /// </summary>
-    private static TsNamedType SelfType(INamedTypeSymbol type, string tsName)
+    private static TsNamedType SelfType(
+        INamedTypeSymbol type,
+        string tsName,
+        string typeArgument = "unknown"
+    )
     {
         var arity = GenericContainers.TypeParametersOf(type).Count + type.TypeParameters.Length;
 
         return arity == 0
             ? new TsNamedType(tsName)
-            : new TsNamedType(tsName, [.. Enumerable.Repeat(new TsNamedType("unknown"), arity)]);
+            : new TsNamedType(tsName, [.. Enumerable.Repeat(new TsNamedType(typeArgument), arity)]);
     }
 
     /// <summary><c>(v: unknown): v is X =&gt; test</c>.</summary>
