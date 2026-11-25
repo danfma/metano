@@ -37,6 +37,16 @@ public class StringComparisonMappingTests
             public static int CompareOrdinal(string? x, string? y) => string.CompareOrdinal(x, y);
 
             public static int CompareTo(string x, string? y) => x.CompareTo(y);
+
+            public static int CompareToObject(string x, object? y) => x.CompareTo(y);
+
+            public static int ThroughInterface(string x, string y) =>
+                ((IComparable<string>)x).CompareTo(y);
+
+            public static int Generic<T>(T x, T y)
+                where T : IComparable<T> => x.CompareTo(y);
+
+            public static int Hash(string x) => x.GetHashCode(StringComparison.OrdinalIgnoreCase);
         }
         """;
 
@@ -51,7 +61,8 @@ public class StringComparisonMappingTests
         await Assert
             .That(output)
             .Contains(
-                "import { StringComparison, stringCompare, stringEquals } from \"metano-runtime\";"
+                "import { StringComparison, comparableCompareTo, stringCompare, stringCompareTo, "
+                    + "stringEquals, stringHashCode, stringInstanceEquals } from \"metano-runtime\";"
             );
 
         await Assert
@@ -60,9 +71,21 @@ public class StringComparisonMappingTests
 
         await Assert
             .That(output)
-            .Contains("return stringEquals(x, y, StringComparison.InvariantCulture);");
+            .Contains("return stringInstanceEquals(x, y, StringComparison.InvariantCulture);");
 
         await Assert.That(output).Contains("return (x === y);");
+
+        await Assert
+            .That(output)
+            .Contains("return stringInstanceEquals(x, y, StringComparison.Ordinal);");
+
+        await Assert.That(output).Contains("return stringCompareTo(x, y);");
+        await Assert.That(output).Contains("return comparableCompareTo(x, y);");
+
+        await Assert
+            .That(output)
+            .Contains("return stringHashCode(x, StringComparison.OrdinalIgnoreCase);");
+
         await Assert.That(output).Contains("return stringCompare(x, y, StringComparison.Ordinal);");
 
         await Assert
@@ -78,6 +101,7 @@ public class StringComparisonMappingTests
 
         await Assert.That(output).DoesNotContain(".equals(");
         await Assert.That(output).DoesNotContain(".compareTo(");
+        await Assert.That(output).DoesNotContain(".getHashCode(");
         await Assert.That(output).DoesNotContain("String.");
     }
 

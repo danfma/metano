@@ -154,4 +154,44 @@ public static class StringComparisonProbes
             + Flag("xᾀ".EndsWith("ᾈ", StringComparison.OrdinalIgnoreCase))
             + "x𐐨".IndexOf("𐐀", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static int ThroughComparable<T>(T left, T right)
+        where T : IComparable<T> => Math.Sign(left.CompareTo(right));
+
+    public static string InstanceFormsAndComparables()
+    {
+        string? none = null;
+        var text = "";
+
+        try
+        {
+            text += Flag(none!.Equals("a", StringComparison.Ordinal));
+        }
+        catch (NullReferenceException)
+        {
+            text += "NRE";
+        }
+
+        try
+        {
+            text += "a".CompareTo((object)5);
+        }
+        catch (ArgumentException e)
+        {
+            text += "|" + e.Message;
+        }
+
+        text += "|" + "a".CompareTo((object?)null);
+        text += "|" + Math.Sign(((IComparable<string>)"a").CompareTo("b"));
+        text += "|" + ThroughComparable("b", "a") + ThroughComparable(1, 2);
+
+        text +=
+            "|"
+            + Flag(
+                "Hello".GetHashCode(StringComparison.OrdinalIgnoreCase)
+                    == "hELLO".GetHashCode(StringComparison.OrdinalIgnoreCase)
+            );
+
+        return text;
+    }
 }

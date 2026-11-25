@@ -699,12 +699,16 @@ A static member of a BCL type with no mapping (`string.Compare(a, i, b, j, n)`) 
 
 | C# | TypeScript |
 |----|----|
-| `string.Equals(a, b, comparison)` / `a.Equals(b, comparison)` | `stringEquals(a, b, comparison)` |
-| `string.Equals(a, b)` / `a.Equals(b)` | `(a === b)` |
+| `string.Equals(a, b, comparison)` | `stringEquals(a, b, comparison)` |
+| `a.Equals(b, comparison)` / `a.Equals(b)` | `stringInstanceEquals(a, b, comparison)` / `stringInstanceEquals(a, b, StringComparison.Ordinal)` |
+| `string.Equals(a, b)` | `(a === b)` |
 | `string.Compare(a, b, comparison)` | `stringCompare(a, b, comparison)` |
-| `string.Compare(a, b)` / `a.CompareTo(b)` | `stringCompare(a, b, StringComparison.CurrentCulture)` |
+| `string.Compare(a, b)` | `stringCompare(a, b, StringComparison.CurrentCulture)` |
 | `string.Compare(a, b, ignoreCase)` | `stringCompare(a, b, ignoreCase ? StringComparison.CurrentCultureIgnoreCase : StringComparison.CurrentCulture)` |
 | `string.CompareOrdinal(a, b)` | `stringCompare(a, b, StringComparison.Ordinal)` |
+| `a.CompareTo(b)` (`string` or `object` argument) | `stringCompareTo(a, b)` |
+| `a.GetHashCode(comparison)` | `stringHashCode(a, comparison)` |
+| `IComparable<T>.CompareTo` / `IComparable.CompareTo` through the interface or a type parameter | `comparableCompareTo(a, b)` |
 
 `Ordinal` compares UTF-16 code units. `OrdinalIgnoreCase` compares the ordinal uppercase of
 each code point, .NET's invariant simple case mapping (the rule `StringComparer.OrdinalIgnoreCase`
@@ -712,13 +716,21 @@ and the case-insensitive searches above share): `ß` never equals `SS`, `ı` and
 `I` and `S`, a surrogate pair folds as one code point, and Greek letters with iota subscript
 map to their prosgegrammeni form. The culture members compare with `Intl.Collator`:
 `CurrentCulture` with the engine's default locale, `InvariantCulture` with the root locale, at
-`sensitivity: "variant"`, or `"accent"` when ignoring case. This matches .NET running on ICU
-(the default on Linux and macOS); a .NET process with `InvariantGlobalization` compares the
-culture members ordinally instead. `null` equals only `null` and sorts first; an undefined
-`StringComparison` value throws `ArgumentException`. A `Compare` result has .NET's sign; the
-ordinal forms return the difference of the first differing code units (or of the lengths),
-since .NET does not specify the magnitude. The substring overload
-`Compare(a, i, b, j, n, comparison)` and `GetHashCode(comparison)` are not mapped.
+`sensitivity: "variant"`. The ignore-case members ignore case only, as .NET does on ICU: width
+and kana type still count (`"Ａ"` never equals `"a"`, `"ｶ"` sorts after `"カ"`), while
+compatibility forms and case variants are equal (`ß` / `ẞ`, `ﬀ` / `FF`, `ς` / `Σ`). This
+matches .NET running on ICU (the default on Linux and macOS); a .NET process with
+`InvariantGlobalization` compares the culture members ordinally instead. `null` equals only
+`null` and sorts first; the instance forms throw `NullReferenceException` for a `null`
+receiver, and `CompareTo(object)` throws `ArgumentException` for an argument that is not a
+string; an undefined `StringComparison` value throws `ArgumentException`. A `Compare` result
+has .NET's sign; the ordinal forms return the difference of the first differing code units
+(or of the lengths), since .NET does not specify the magnitude. `GetHashCode(comparison)`
+hashes as the ordinal `StringComparer` does; a culture comparison throws
+`NotSupportedException` (JavaScript has no culture sort key). `comparableCompareTo` compares a
+string receiver as `string.CompareTo` does and any other value in `Comparer<T>.Default`'s
+order, which calls an object's own `compareTo`. The substring overload
+`Compare(a, i, b, j, n, comparison)` is not mapped (`MS0001`).
 
 ## Math
 

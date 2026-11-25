@@ -745,8 +745,10 @@ using Metano.Annotations;
 // strings have no `equals` / `compareTo`, the case-insensitive forms fold each code point
 // by .NET's ordinal uppercase, and the culture forms compare with `Intl.Collator`.
 // `Compare(a, b)`, `Compare(a, b, ignoreCase)` and `CompareTo` are culture-sensitive
-// (CurrentCulture), `CompareOrdinal` is ordinal. The plain `Equals` forms are ordinal, so
-// they compare with `===`.
+// (CurrentCulture), `CompareOrdinal` is ordinal. The instance forms throw
+// NullReferenceException for a null receiver, as .NET does. `GetHashCode(comparison)`
+// hashes as the ordinal StringComparer does (a culture comparison throws
+// NotSupportedException: JavaScript has no culture sort key).
 
 [assembly: MapMethod(
     typeof(string),
@@ -758,8 +760,8 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(string),
     nameof(string.Equals),
-    JsTemplate = "stringEquals($this, $0, $1)",
-    RuntimeImports = "stringEquals",
+    JsTemplate = "stringInstanceEquals($this, $0, $1)",
+    RuntimeImports = "stringInstanceEquals",
     WhenParameterTypes = [typeof(string), typeof(StringComparison)]
 )]
 [assembly: MapMethod(
@@ -771,13 +773,15 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(string),
     nameof(string.Equals),
-    JsTemplate = "($this === $0)",
+    JsTemplate = "stringInstanceEquals($this, $0, StringComparison.Ordinal)",
+    RuntimeImports = "stringInstanceEquals, StringComparison",
     WhenParameterTypes = [typeof(string)]
 )]
 [assembly: MapMethod(
     typeof(string),
     nameof(string.Equals),
-    JsTemplate = "($this === $0)",
+    JsTemplate = "stringInstanceEquals($this, $0, StringComparison.Ordinal)",
+    RuntimeImports = "stringInstanceEquals, StringComparison",
     WhenParameterTypes = [typeof(object)]
 )]
 [assembly: MapMethod(
@@ -811,9 +815,23 @@ using Metano.Annotations;
 [assembly: MapMethod(
     typeof(string),
     nameof(string.CompareTo),
-    JsTemplate = "stringCompare($this, $0, StringComparison.CurrentCulture)",
-    RuntimeImports = "stringCompare, StringComparison",
+    JsTemplate = "stringCompareTo($this, $0)",
+    RuntimeImports = "stringCompareTo",
     WhenParameterTypes = [typeof(string)]
+)]
+[assembly: MapMethod(
+    typeof(string),
+    nameof(string.CompareTo),
+    JsTemplate = "stringCompareTo($this, $0)",
+    RuntimeImports = "stringCompareTo",
+    WhenParameterTypes = [typeof(object)]
+)]
+[assembly: MapMethod(
+    typeof(string),
+    nameof(string.GetHashCode),
+    JsTemplate = "stringHashCode($this, $0)",
+    RuntimeImports = "stringHashCode",
+    WhenParameterTypes = [typeof(StringComparison)]
 )]
 
 // ─── Null / empty checks ────────────────────────────────────
