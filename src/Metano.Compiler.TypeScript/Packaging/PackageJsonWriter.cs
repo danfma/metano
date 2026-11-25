@@ -86,6 +86,9 @@ public static class PackageJsonWriter
     /// <c>.ts</c> sources (default <c>source</c>, see <see cref="SourceCondition"/>). A
     /// previously written source condition under another name is replaced, see
     /// <see cref="DropReplacedDefaultSourceCondition"/>.</param>
+    /// <param name="packageVersion">When non-null, written to <c>package.json#version</c>,
+    /// replacing a hand-written value: the same source as the range a cross-package
+    /// consumer writes for this package, so the two cannot diverge (#765).</param>
     /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
     public static IReadOnlyList<MetanoDiagnostic> UpdateOrCreate(
         string packageRoot,
@@ -99,7 +102,8 @@ public static class PackageJsonWriter
         string? importAlias = null,
         PackageSubpathRoot subpathRoot = default,
         string? runtimePeerSpecifier = null,
-        SourceCondition sourceCondition = default
+        SourceCondition sourceCondition = default,
+        string? packageVersion = null
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
@@ -159,6 +163,7 @@ public static class PackageJsonWriter
         }
 
         ApplyAuthoritativePackageName(root, authoritativePackageName, diagnostics);
+        ApplyPackageVersion(root, packageVersion);
 
         // Seed defaults when the consumer has not picked their own
         // values. The transpiler must not flip a hand-curated `type`
@@ -167,7 +172,8 @@ public static class PackageJsonWriter
 
         // Imports exist only for a configured alias (spec 004 FR-014): generated
         // code imports its files relatively, so no key is seeded without one, and
-        // entries an earlier version wrote (`#`, `#/*`) are never deleted. They
+        // entries an earlier version wrote (`#`, `#/*`) are pruned only while they
+        // still hold the writer's own mapping (see PruneUnaliasedImports). Aliased entries
         // follow the same write-if-missing rule as the scalar fields above: a
         // consumer who has retargeted an alias by hand (e.g. pointing `#app/*` at
         // `./lib/*` for a non-default build directory) keeps that mapping across
@@ -176,6 +182,14 @@ public static class PackageJsonWriter
         // mapping, which then gains any condition introduced since (e.g. `source`).
         if (imports is not null)
             SeedOrUpgradeImports(root, imports, sourceCondition);
+        else
+            PruneUnaliasedImports(
+                root,
+                srcRelative,
+                distDirRelativeToPackageRoot,
+                outputPrefix,
+                sourceCondition
+            );
 
         // After the imports: a consumer who retargeted the compiled tree
         // (`#/*` → `./lib/*`) has the side-effect modules listed there too.
@@ -227,6 +241,65 @@ public static class PackageJsonWriter
         Directory.CreateDirectory(packageRoot);
         File.WriteAllText(packageJsonPath, root.ToJsonString(WriteOptions) + "\n");
         return diagnostics;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="version"/> to <c>package.json#version</c>: Metano owns the
+    /// field, because a consumer's dependency range derives from the same source and a
+    /// hand-written value could contradict it. A new field lands right after <c>name</c>.
+    /// </summary>
+    private static void ApplyPackageVersion(JsonObject root, string? version)
+    {
+        if (version is null)
+            return;
+
+        var nameIndex = root.IndexOf("name");
+
+        if (root.ContainsKey("version") || nameIndex < 0)
+            root["version"] = version;
+        else
+            root.Insert(nameIndex + 1, "version", version);
+    }
+
+    /// <summary>
+    /// Without an alias no <c>imports</c> are written, and the bare <c>#</c> and <c>#/*</c>
+    /// keys an earlier version seeded are rejected by Node 24 and Bun. An entry that still
+    /// holds exactly the mapping this writer would have produced (shape-based ownership,
+    /// as in <see cref="HoldsTranspilerMapping"/>) is removed; a retargeted or
+    /// host-authored one stays. An <c>imports</c> object left empty is removed too.
+    /// </summary>
+    private static void PruneUnaliasedImports(
+        JsonObject root,
+        string srcRelative,
+        string distRelative,
+        string outputPrefix,
+        SourceCondition sourceCondition
+    )
+    {
+        if (root["imports"] is not JsonObject existing)
+            return;
+
+        var owned = BuildImportEntries(
+            UnaliasedPrefix,
+            srcRelative,
+            distRelative,
+            hasRootIndex: true,
+            outputPrefix,
+            sourceCondition
+        );
+
+        foreach (var (key, generated) in owned)
+        {
+            if (
+                existing[key] is JsonObject entry
+                && generated is JsonObject generatedEntry
+                && HoldsTranspilerMapping(entry, generatedEntry, sourceCondition)
+            )
+                existing.Remove(key);
+        }
+
+        if (existing.Count == 0)
+            root.Remove("imports");
     }
 
     /// <summary>
@@ -760,16 +833,33 @@ public static class PackageJsonWriter
         SourceCondition sourceCondition
     )
     {
+        var aliasPrefix = PathNaming.NormalizeImportAliasPrefix(importAlias);
+
+        return aliasPrefix == UnaliasedPrefix
+            ? null
+            : BuildImportEntries(
+                aliasPrefix,
+                srcRelative,
+                distRelative,
+                hasRootIndex,
+                outputPrefix,
+                sourceCondition
+            );
+    }
+
+    private static JsonObject BuildImportEntries(
+        string aliasPrefix,
+        string srcRelative,
+        string distRelative,
+        bool hasRootIndex,
+        string outputPrefix,
+        SourceCondition sourceCondition
+    )
+    {
         var src = NormalizePath(srcRelative).TrimEnd('/');
         var dist = NormalizePath(distRelative).TrimEnd('/');
         var prefix = outputPrefix.TrimEnd('/');
         var distBase = prefix.Length > 0 ? $"{dist}/{prefix}" : dist;
-
-        var aliasPrefix = PathNaming.NormalizeImportAliasPrefix(importAlias);
-
-        if (aliasPrefix == UnaliasedPrefix)
-            return null;
-
         var starKey = $"{aliasPrefix}/*";
 
         var imports = new JsonObject

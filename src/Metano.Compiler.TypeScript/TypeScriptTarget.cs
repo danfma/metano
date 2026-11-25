@@ -240,7 +240,13 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             SubpathRoot: ir.PackageSubpathRoot,
             CrossPackageDependencies: crossPackageDependencies,
             IsExecutable: compilation.Options.OutputKind == OutputKind.ConsoleApplication,
-            RuntimePeerSpecifier: RuntimePeerDependency.PeerSpecifierFor(generatedFiles)
+            RuntimePeerSpecifier: RuntimePeerDependency.PeerSpecifierFor(generatedFiles),
+            PackageVersion: RoslynTypeQueries.ResolveOwnPackageVersion(
+                compilation.Assembly,
+                SymbolHelper
+                    .GetEmitPackageInfo(compilation.Assembly, (int)EmitTarget.JavaScript)
+                    ?.Version
+            )
         );
 
     private static Compilation RequireRoslynCompilation(Compilation? compilation) =>

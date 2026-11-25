@@ -40,9 +40,19 @@ The `Version` field is optional. Common values:
 
 - `"workspace:*"` — for Bun/pnpm/Yarn workspace siblings
 - `"^1.2.3"` — for a published npm version
-- Omit entirely — Metano falls back to `workspace:*` if the assembly has no
-  explicit `Version`, or `^Major.Minor.Patch` from the assembly's
-  `Identity.Version` otherwise
+- Omit entirely — Metano uses the assembly's informational version (the MSBuild
+  `Version`, without build metadata) as `^Major.Minor.Patch`, or `workspace:*` when
+  the assembly is unversioned (`0.0.0`)
+
+**One version rule.** The consumer's range and the `version` field Metano writes into
+the producer's own `package.json` come from the same source: `Version` when set (an
+exact `0.1.0` or a range such as `^1.2.3`; its base version is written, and a
+`workspace:*` protocol names none, so the assembly's version is written instead), else
+the assembly's informational version without build metadata. So a workspace always
+satisfies the range and `bun install` resolves the sibling locally instead of asking
+the registry. Metano owns `package.json#version`: it is rewritten on every run, so a
+hand-written value is replaced. Set the version in the C# project (`<Version>`) or in
+`EmitPackage`.
 
 ### Consumer project references the producer via `ProjectReference`
 
@@ -81,6 +91,13 @@ including ancestors of missing output folders. Thus macOS's `/var` and
 `/private/var` aliases compare equal without moving package ownership or changing
 the writer's relative import/export paths for outputs linked outside a repository.
 An explicit `MetanoPackageRoot` is still used as given.
+
+A `package.json` that declares `workspaces` (a Bun, npm or pnpm workspace root) is a
+workspace boundary, never a package: the walk stops below it, and a package that has
+no `package.json` of its own yet falls back as described next and gets its own file,
+while the workspace root's `package.json` is left untouched. A fallback folder that
+is itself such a workspace root is refused with `MS0044`, like one above the
+workspace. Pin `MetanoPackageRoot` to choose another root.
 
 If no package file is found, it falls back to the legacy convention: the parent
 directory of the output folder. When that parent lies above the topmost

@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Metano.Compiler.Diagnostics;
 
 namespace Metano.Packaging;
@@ -25,6 +27,12 @@ namespace Metano.Packaging;
 /// <item>else (the output is unrelated to the project, which shares only the filesystem
 /// root with it) the output directory itself.</item>
 /// </list>
+/// </para>
+/// <para>
+/// A <c>package.json</c> that declares <c>workspaces</c> is a workspace boundary, not a
+/// package: the walk stops below it, and the fallback below applies (#764). A fallback
+/// that would itself be such a workspace root is refused the same way as one outside the
+/// workspace, so a workspace root's <c>package.json</c> is never written.
 /// </para>
 /// <para>
 /// When the search finds nothing, the root falls back to the legacy default, the
@@ -73,12 +81,16 @@ public static class PackageRootResolver
         var defaultPackageRoot = Path.GetDirectoryName(outputDirectory);
 
         var nearestPackageJsonDirectory = SelfAndAncestorsUpTo(outputDirectory, topmostDirectory)
+            .TakeWhile(dir => !IsWorkspaceRoot(dir))
             .FirstOrDefault(HasPackageJson);
 
         if (nearestPackageJsonDirectory is not null)
             return PackageRootResolution.Resolved(nearestPackageJsonDirectory);
 
-        if (FallbackLeavesWorkspace(outputDirectory, topmostDirectory, defaultPackageRoot))
+        if (
+            FallbackLeavesWorkspace(outputDirectory, topmostDirectory, defaultPackageRoot)
+            || IsWorkspaceRoot(defaultPackageRoot)
+        )
             return PackageRootResolution.Refused(
                 CreateOutsideWorkspaceDiagnostic(outputDirectory, defaultPackageRoot)
             );
@@ -192,6 +204,30 @@ public static class PackageRootResolver
     private static bool HasPackageJson(string dir) =>
         File.Exists(Path.Combine(dir, PackageJsonWriter.PackageJsonFileName));
 
+    /// <summary>
+    /// Whether <paramref name="dir"/> holds a <c>package.json</c> that declares
+    /// <c>workspaces</c>: a workspace boundary that groups packages and is never a package
+    /// itself (#764). An unreadable or malformed file declares nothing.
+    /// </summary>
+    private static bool IsWorkspaceRoot(string dir)
+    {
+        var path = Path.Combine(dir, PackageJsonWriter.PackageJsonFileName);
+
+        if (!File.Exists(path))
+            return false;
+
+        try
+        {
+            return JsonNode.Parse(File.ReadAllText(path)) is JsonObject manifest
+                && manifest.ContainsKey("workspaces");
+        }
+        catch (Exception exception)
+            when (exception is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private static bool IsFilesystemRoot(string dir) => Path.GetDirectoryName(dir) is null;
 
     private static bool IsSamePath(string path, string? other) =>
@@ -231,9 +267,9 @@ public static class PackageRootResolver
         var cause = defaultPackageRoot is null
             ? "the output directory is the filesystem root, so there is no default package root"
             : $"the default package root (the parent of the output directory, '{defaultPackageRoot}') "
-                + "lies outside the workspace: the output directory is already the topmost "
-                + "directory the search may use (see the package root rules in "
-                + "docs/cross-package.md)";
+                + "cannot be used: it lies outside the workspace or is a workspace root "
+                + "(a package.json declaring workspaces), which is never written (see the "
+                + "package root rules in docs/cross-package.md)";
 
         return new MetanoDiagnostic(
             MetanoDiagnosticSeverity.Error,

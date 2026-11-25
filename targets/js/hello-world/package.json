@@ -1,7 +1,7 @@
 {
   "name": "hello-world",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "module": "src/program.ts",
   "scripts": {
@@ -18,13 +18,5 @@
   "sideEffects": [
     "./dist/program.js",
     "./src/program.ts"
-  ],
-  "imports": {
-    "#/*": {
-      "source": "./src/*.ts",
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "default": "./src/*.ts"
-    }
-  }
+  ]
 }
