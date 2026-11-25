@@ -350,4 +350,81 @@ public class SameNameTypeClashTests
         await Assert.That(guard).DoesNotContain("./zed/circle.js");
         await Assert.That(guard).Contains("from \"./circle.js\";");
     }
+
+    private const string GuardVariantsReferencingTwoNodes = """
+        using Metano.Annotations.TypeScript;
+
+        namespace Shapes
+        {
+            [Transpile, StringEnum, EmitInFile("shape")]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard, StrictUnionGuard, Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind)
+            {
+                public int F() => new Na.Node(1).V;
+            }
+
+            [Transpile, GenerateGuard]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind)
+            {
+                public string G() => new Nb.Node("x").S;
+            }
+        }
+
+        namespace Shapes.Zed
+        {
+            [Transpile, GenerateGuard]
+            public sealed record Circle(string Name);
+        }
+
+        namespace Na
+        {
+            [Transpile]
+            public sealed record Node(int V);
+        }
+
+        namespace Nb
+        {
+            [Transpile]
+            public sealed record Node(string S);
+        }
+
+        """;
+
+    [Test]
+    public async Task GuardModule_DoesNotReportWhatItsVariantBodiesReference()
+    {
+        // #743 review B1: the guard module declares the base and every variant, but it
+        // never emits what their bodies reference, so two variants that each name a
+        // different `Node` are not a clash in `shape.guard`.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            GuardVariantsReferencingTwoNodes
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
+            .IsEmpty();
+
+        await Assert.That(files["shapes/shape.guard.ts"]).Contains("from \"./circle.js\";");
+        await Assert.That(files["shapes/shape.guard.ts"]).DoesNotContain("./zed/circle.js");
+    }
+
+    [Test]
+    public async Task ClashInsideOneVariant_IsReportedOnce()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            GuardVariantsReferencingTwoNodes.Replace(
+                "public int F() => new Na.Node(1).V;",
+                "public int F() => new Na.Node(1).V + new Nb.Node(\"y\").S.Length;"
+            )
+        );
+
+        var clash = diagnostics.Single(d => d.Code == DiagnosticCodes.ImportedNameClash);
+
+        await Assert.That(clash.Message).Contains("in 'circle'");
+    }
 }

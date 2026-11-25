@@ -2017,8 +2017,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     /// <summary>
     /// Reports the MS0070 clashes of every group (#504) and returns, per group, the
-    /// project type each shared name binds (#743). Runs over every group, guard modules
-    /// and the groups the per-group cache reuses included, so a cache hit still reports.
+    /// project type each shared name binds (#743). Runs over every group, the groups the
+    /// per-group cache reuses included, so a cache hit still reports; a guard module
+    /// binds only the types it declares.
     /// </summary>
     private Dictionary<
         string,
@@ -2036,6 +2037,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var group in groups)
         {
+            // A guard module refers only to the base and the variants it declares, never
+            // to what their bodies reference: no clash to report, only declared bindings.
+            if (group.GuardModuleOf is not null)
+            {
+                bindings[GroupKey(group)] = references.BindingsIn(group.Types, []);
+
+                continue;
+            }
+
             var groupReferences = references.In(group.Types);
 
             foreach (
