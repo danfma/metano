@@ -93,6 +93,15 @@ jobs:
         with:
           user: danfma
 
+      # The smoke tests above build the repository with an isolated NuGet home. Stop
+      # any build server they left running and drop their restore outputs, so the
+      # pack inside semantic-release restores against the runner's own package
+      # folder (a stale node or obj/ caused NETSDK1152 on the 3.2.0 release).
+      - name: Reset build state before packing
+        run: |
+          dotnet build-server shutdown
+          git clean -fdX -- src
+
       # semantic-release: analyze commits → bump version → write CHANGELOG.md →
       # commit + tag + push → exec `dotnet pack && dotnet nuget push` → create
       # GitHub Release with notes generated from the commit log.

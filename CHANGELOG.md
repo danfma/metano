@@ -4,15 +4,6 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 3.2.0
-
-_2026-11-25_
-
-
-### ✨ Features
-
-* ship wave 9 (silent miscompile errors, Metanui defects, build gate, packaging) ([#792](https://github.com/danfma/metano/issues/792)) ([cfa69fb](https://github.com/danfma/metano/commit/cfa69fb81d78024fb11487402c168f54ceec78b3)), closes [#744](https://github.com/danfma/metano/issues/744) [#747](https://github.com/danfma/metano/issues/747) [#749](https://github.com/danfma/metano/issues/749) [#750](https://github.com/danfma/metano/issues/750) [#751](https://github.com/danfma/metano/issues/751) [#752](https://github.com/danfma/metano/issues/752) [#753](https://github.com/danfma/metano/issues/753) [#754](https://github.com/danfma/metano/issues/754) [#755](https://github.com/danfma/metano/issues/755) [#757](https://github.com/danfma/metano/issues/757) [#758](https://github.com/danfma/metano/issues/758) [#759](https://github.com/danfma/metano/issues/759) [#761](https://github.com/danfma/metano/issues/761) [#764](https://github.com/danfma/metano/issues/764) [#765](https://github.com/danfma/metano/issues/765) [#768](https://github.com/danfma/metano/issues/768) [#769](https://github.com/danfma/metano/issues/769) [#770](https://github.com/danfma/metano/issues/770) [#772](https://github.com/danfma/metano/issues/772) [#773](https://github.com/danfma/metano/issues/773) [#774](https://github.com/danfma/metano/issues/774) [#775](https://github.com/danfma/metano/issues/775) [#778](https://github.com/danfma/metano/issues/778) [#779](https://github.com/danfma/metano/issues/779) [#785](https://github.com/danfma/metano/issues/785) [#746](https://github.com/danfma/metano/issues/746) [#748](https://github.com/danfma/metano/issues/748) [#767](https://github.com/danfma/metano/issues/767) [#786](https://github.com/danfma/metano/issues/786)
-
 ## 3.1.0
 
 _2026-11-25_

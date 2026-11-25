@@ -535,6 +535,13 @@ check_missing_tool() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  # Shut down the build servers this run starts (MSBuild nodes, the compiler server)
+  # when it ends: reused nodes keep this script's NUGET_PACKAGES and DOTNET_CLI_HOME, so
+  # a later build in the same job (the release's `dotnet pack`) would restore against
+  # the smoke package folder and fail with NETSDK1152. Only the real run does this, not
+  # the sourced unit tests.
+  trap 'dotnet build-server shutdown >/dev/null 2>&1 || true; rm -rf "$WORK_DIR"' EXIT
+
   pack_packages
   check_package_layout
   check_consumer_build
