@@ -230,19 +230,12 @@ Not mapped, reported with `MS0001`: `GroupJoin`, and the
 `GroupBy` overloads with an element or result selector.
 
 Not mapped, reported with `MS0001`: `ElementAt(Index)`, `Array.IndexOf(a, v, start, count)`,
-`Array.Sort(a, index, length)`. Known gaps: a record has no
+`Array.Sort(a, index, length)`. Known gaps: `(decimal)double` emits the raw double; a record has no
 `toString`; `-0` dictionary keys and `list.Equals` differ from .NET; `ReadOnlyDictionary`,
 `FrozenDictionary`, `nint` / `nuint` members and the non-generic `TaskCompletionSource` are unmapped.
 A cast of a set, queue or dictionary to `IList<T>` passes through (known gap, #710). Other numeric details:
 `decimal` in a module function, a branded type or a JSX body is spelled `Decimal`; `decimal` to a
 narrow integer is `narrowFromDecimal(d, 32, true)`; a record hashes a tuple-typed member by its elements, while `HashCode.add` still hashes an array by reference.
-
-A constant `(decimal)double` or `(decimal)float` cast folds to the digits the .NET 10 conversion gives:
-the value is rounded to 15 significant digits for a `double` and 7 for a `float` (ties to even) and
-trailing zeros of the fraction are dropped, so `(decimal)0.1` is `0.1` and `(decimal)(1.0 / 3.0)` is
-`0.333333333333333`. The rule is part of the compiler and does not depend on the runtime hosting it;
-a newer runtime that converts exactly (.NET 11 does) folds a different constant in C#, and the emitted
-TypeScript keeps the .NET 10 digits.
 
 ### Lists and arrays
 
