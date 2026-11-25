@@ -514,6 +514,21 @@ public static class IrToTsStatementBridge
                     Const: vd.IsConst,
                     Type: new TsAnyType()
                 ),
+            // A reassigned local declared nullable (`Link? current = link;`):
+            // TypeScript would type it by its initializer and reject a later
+            // `null` store, so the declared type stays (#774). A `var` local
+            // has no declared type and follows its inferred one.
+            IrVariableDeclaration
+            {
+                Type: IrNullableTypeRef declaredType,
+                Initializer: { } initializer,
+                IsConst: false,
+            } vd => new TsVariableDeclaration(
+                IrToTsNamingPolicy.ToLocalName(vd.Name),
+                IrToTsExpressionBridge.Map(initializer, context),
+                Const: false,
+                Type: IrToTsTypeMapper.Map(declaredType, context.TypeOverrides)
+            ),
             IrVariableDeclaration { Initializer: { } initializer } vd
                 when EnumValueAssertion.IsClosedNumericEnum(vd.Type ?? vd.InferredType) =>
                 new TsVariableDeclaration(
