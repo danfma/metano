@@ -21,6 +21,10 @@ internal sealed record ClosedSelfLowering(
     TsType FamilyType
 )
 {
+    /// <summary>The runtime class applied to the class's own type parameters.</summary>
+    private TsNamedType RuntimeClassType =>
+        new(RuntimeClassName, (FamilyType as TsNamedType)?.TypeArguments);
+
     /// <summary>
     /// <paramref name="self"/> (the runtime class's <c>this</c>) asserted to the union.
     /// The assertion goes through <c>unknown</c>: a case that overrides a protected
@@ -76,10 +80,6 @@ internal sealed record ClosedSelfLowering(
         && access.Target is not (IrThisExpression or IrBaseExpression)
             ? new TsCastExpression(receiver, closed.RuntimeClassType)
             : receiver;
-
-    /// <summary>The runtime class applied to the class's own type parameters.</summary>
-    private TsNamedType RuntimeClassType =>
-        new(RuntimeClassName, (FamilyType as TsNamedType)?.TypeArguments);
 
     private static TsExpression RootOf(TsExpression reference) =>
         reference is TsPropertyAccess access ? RootOf(access.Object) : reference;

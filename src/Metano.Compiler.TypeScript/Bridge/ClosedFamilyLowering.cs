@@ -146,6 +146,7 @@ internal sealed class ClosedFamilyLowering(Func<INamedTypeSymbol, string> tagNam
         var tagsByClosedType = new Dictionary<INamedTypeSymbol, IReadOnlyList<string>>(
             SymbolEqualityComparer.Default
         );
+
         var tagByOwner = new Dictionary<INamedTypeSymbol, string>(SymbolEqualityComparer.Default);
         var walk = new FamilyWalk(tagsByClosedType, tagByOwner);
 

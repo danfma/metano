@@ -140,6 +140,7 @@ public class ClosedFamilyUnionTests
         await Assert.That(command).Contains("abstract class Command$Base {");
         await Assert.That(command).DoesNotContain("export abstract class");
         await Assert.That(command).Contains("export type Command = Play | Halt | Seek | Custom;");
+
         await Assert
             .That(command)
             .Contains("export const Command: typeof Command$Base = Command$Base;");
@@ -192,13 +193,17 @@ public class ClosedFamilyUnionTests
         await Assert.That(command).Contains("return this as unknown as Command;");
         await Assert.That(command).Contains("Reader.name(this as unknown as Command)");
         await Assert.That(command).Contains("(other as Command$Base).rank()");
+
         await Assert
             .That(command)
             .Contains("copyRecordWith<Command>(this as unknown as Command, overrides)");
+
         await Assert.That(reader).Contains("(seek = value as unknown as Seek, true)");
+
         await Assert
             .That(reader)
             .Contains("value instanceof Seek ? value as unknown as Seek : null");
+
         await Assert.That(reader).Contains("const seek = value as unknown as Seek;");
         await Assert.That(reader).Contains("$s instanceof SeekTo");
         await Assert.That(reader).DoesNotContain("$s as unknown");
@@ -280,6 +285,7 @@ public class ClosedFamilyUnionTests
         ];
 
         await Assert.That(output).Contains("import { Go, Halt, Signal } from \"closed-lib/lib\";");
+
         await Assert
             .That(output)
             .Contains("value instanceof Signal ? value as unknown as Signal : null");
