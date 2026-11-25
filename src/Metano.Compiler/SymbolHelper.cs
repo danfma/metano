@@ -890,10 +890,16 @@ public static class SymbolHelper
         && Extraction.IrTypeRefMapper.IsTranspilableType(type, target)
         && type.HasExtensionMembers();
 
+    /// <summary>
+    /// A classic extension method, or a C# 14 extension block: the block's
+    /// type for a type read from metadata (#761), its syntax for a source
+    /// type.
+    /// </summary>
     private static bool DeclaresExtensionMembers(INamedTypeSymbol type) =>
         type.GetMembers()
             .OfType<IMethodSymbol>()
             .Any(method => method is { IsExtensionMethod: true, MethodKind: MethodKind.Ordinary })
+        || type.GetTypeMembers().Any(member => member.TypeKind == TypeKind.Extension)
         || type.DeclaringSyntaxReferences.Any(reference =>
             reference
                 .GetSyntax()

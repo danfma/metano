@@ -1,3 +1,4 @@
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -291,6 +292,13 @@ public static class IrModuleFunctionExtractor
 
                     if (setterFn is not null)
                         acc.Add(setterFn);
+
+                    break;
+
+                case OperatorDeclarationSyntax
+                or ConversionOperatorDeclarationSyntax:
+                    if (ExtensionOperatorOf(member, model, context) is { } operatorFn)
+                        acc.Add(operatorFn);
 
                     break;
 
@@ -666,6 +674,62 @@ public static class IrModuleFunctionExtractor
     }
 
     /// <summary>
+    /// The module function of an operator declared inside a C# 14
+    /// <c>extension</c> block (#761): a static function named, by the
+    /// target, like the class-level helper of its operator kind, whose
+    /// parameters are the operator's (the block's receiver is one of them
+    /// already) and whose type parameters are the block's and the
+    /// operator's. An operator <see cref="ExtensionOperators"/> does not lower
+    /// reports <c>MS0001</c> here and at each application, and a target that
+    /// keeps user operators as the source wrote them
+    /// (<see cref="IrExtractionContext.KeepsUserOperatorSourceForms"/>) gets
+    /// no function.
+    /// </summary>
+    private static IrModuleFunction? ExtensionOperatorOf(
+        MemberDeclarationSyntax syntax,
+        SemanticModel model,
+        IrExtractionContext context
+    )
+    {
+        if (
+            context.KeepsUserOperatorSourceForms
+            || model.GetDeclaredSymbol(syntax) is not IMethodSymbol method
+            || ExtensionOperators.ContainerOf(method) is not { } container
+        )
+            return null;
+
+        if (ExtensionOperators.UnsupportedReasonOf(method, container) is { } reason)
+        {
+            ExtractionDiagnostics.Report(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.UnsupportedFeature,
+                    $"The extension operator '{method.Name}' of '{container.Name}' is not "
+                        + $"emitted: {reason} (#761).",
+                    method.Locations.FirstOrDefault()
+                )
+            );
+
+            return null;
+        }
+
+        var function = ConvertStaticExtensionMethod(method, context);
+
+        return function with
+        {
+            Semantics = function.Semantics with
+            {
+                IsOperator = true,
+                OperatorKind = IrMethodExtractor.OperatorKindOf(method),
+            },
+            TypeParameters = IrTypeParameterExtractor.ExtractAll(
+                [.. method.ContainingType.TypeParameters, .. method.TypeParameters],
+                context.OriginResolver
+            ),
+        };
+    }
+
+    /// <summary>
     /// Lowers a <c>static</c> property declared inside a C# 14
     /// <c>extension(R r)</c> block to a getter-shaped module function with
     /// no receiver parameter. Auto-property getters (no body) are skipped
@@ -842,7 +906,8 @@ public static class IrModuleFunctionExtractor
     {
         var syntax =
             method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-            as MethodDeclarationSyntax;
+            as BaseMethodDeclarationSyntax;
+
         if (syntax is null || (syntax.Body is null && syntax.ExpressionBody is null))
             return null;
 

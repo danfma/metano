@@ -9,7 +9,8 @@ namespace Metano.Compiler.Extraction;
 /// <summary>
 /// The applications of user-defined operators and conversions (baseline
 /// FR-077, FR-079): each one C# binds to an <c>operator</c> method of a
-/// transpiled class or struct becomes a neutral
+/// transpiled class or struct, or of a C# 14 <c>extension</c> block of an
+/// emitted static class (#761), becomes a neutral
 /// <see cref="IrUserOperatorApplication"/>, <see cref="IrUserOperatorStore"/>
 /// or <see cref="IrUserConversion"/> carrying the method's facts
 /// (<see cref="IrUserOperator"/>) and Roslyn's bound operands. Each target
@@ -31,12 +32,29 @@ public sealed partial class IrExpressionExtractor
                 MethodKind: MethodKind.UserDefinedOperator or MethodKind.Conversion,
                 IsImplicitlyDeclared: false,
                 IsStatic: true,
-                ContainingType.TypeKind: TypeKind.Class or TypeKind.Struct,
             }
-        && EmittedTypes.IsEmittedContainingType(method.ContainingType.OriginalDefinition, _target)
-        && !IsJsxComponentFamily(method.ContainingType)
+        && (IsAppliedTypeOperator(method) || IsAppliedExtensionOperator(method))
             ? method
             : null;
+
+    private bool IsAppliedTypeOperator(IMethodSymbol method) =>
+        method.ContainingType.TypeKind is TypeKind.Class or TypeKind.Struct
+        && EmittedTypes.IsEmittedContainingType(method.ContainingType.OriginalDefinition, _target)
+        && !IsJsxComponentFamily(method.ContainingType);
+
+    /// <summary>
+    /// An operator of a C# 14 <c>extension</c> block (#761) whose static
+    /// class the toolchain emits as a module, and which
+    /// <see cref="ExtensionOperators"/> lowers. A target that keeps user
+    /// operators as the source wrote them
+    /// (<see cref="IrExtractionContext.KeepsUserOperatorSourceForms"/>) keeps
+    /// the operator.
+    /// </summary>
+    private bool IsAppliedExtensionOperator(IMethodSymbol method) =>
+        !_context.KeepsUserOperatorSourceForms
+        && ExtensionOperators.ContainerOf(method) is { } container
+        && container.IsEmittedExtensionContainer(_target)
+        && ExtensionOperators.UnsupportedReasonOf(method, container) is null;
 
     /// <summary>
     /// A <c>[JsxComponentBuilder]</c> family: its conversion to its element
@@ -69,6 +87,9 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
+        if (UnsupportedExtensionOperator(method, node) is { } unsupportedExtension)
+            return unsupportedExtension;
+
         if (!method.IsStatic)
         {
             return ReportUnsupported(
@@ -88,6 +109,31 @@ public sealed partial class IrExpressionExtractor
                     + "(baseline FR-077)."
             )
             : null;
+    }
+
+    /// <summary>
+    /// The <c>MS0001</c> placeholder of an application of an extension
+    /// operator of an emitted class that <see cref="ExtensionOperators"/>
+    /// does not lower (#761); <c>null</c> for any other operator.
+    /// </summary>
+    private IrUnsupportedExpression? UnsupportedExtensionOperator(
+        IMethodSymbol method,
+        SyntaxNode node
+    )
+    {
+        if (
+            ExtensionOperators.ContainerOf(method) is not { } container
+            || !container.IsEmittedExtensionContainer(_target)
+            || ExtensionOperators.UnsupportedReasonOf(method, container) is not { } reason
+        )
+            return null;
+
+        return ReportUnsupported(
+            node,
+            node.Kind().ToString(),
+            $"'{node}' uses the extension operator '{method.Name}' of '{container.Name}': "
+                + $"{reason} (#761)."
+        );
     }
 
     /// <summary>
@@ -142,24 +188,29 @@ public sealed partial class IrExpressionExtractor
     private IrUserOperator UserOperatorOf(IMethodSymbol method)
     {
         var definition = method.OriginalDefinition;
+        var extensionContainer = ExtensionOperators.ContainerOf(definition);
+        var isGroupable = definition.MethodKind == MethodKind.UserDefinedOperator;
 
+        // An extension operator is never overloaded (ExtensionOperators), so
+        // it has no group and its [Name] renames it whole.
         var overload =
-            definition.MethodKind == MethodKind.UserDefinedOperator
+            isGroupable && extensionContainer is null
                 ? DispatchedMethodCalls.RefOf(method, _context)
                 : null;
 
         var pin =
-            definition.MethodKind == MethodKind.UserDefinedOperator && !IsOperatorGroup(definition)
+            isGroupable && (extensionContainer is not null || !IsOperatorGroup(definition))
                 ? definition.GetNameOverride(_target)
                 : null;
 
         return new IrUserOperator(
-            TypeReferenceTo(method.ContainingType),
+            TypeReferenceTo(extensionContainer ?? method.ContainingType),
             definition.Name,
             IrMethodExtractor.OperatorKindOf(definition)!.Value,
             overload,
             pin,
-            ConversionNaming.Of(definition, _target)
+            ConversionNaming.Of(definition, _target),
+            IsExtension: extensionContainer is not null
         );
     }
 

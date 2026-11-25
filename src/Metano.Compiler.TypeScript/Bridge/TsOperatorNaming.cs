@@ -36,6 +36,24 @@ internal static class TsOperatorNaming
             ?? kindName;
     }
 
+    /// <summary>
+    /// The function a C# 14 extension operator declares in its class's
+    /// module (#761): the static helper name its kind takes on a class
+    /// (<c>__add</c>), renamed whole by a <c>[Name]</c>; <c>null</c> for any
+    /// other module function. An extension operator is never overloaded, so
+    /// no group extends the name.
+    /// </summary>
+    public static string? ExtensionOperatorFunctionName(IrModuleFunction function)
+    {
+        if (function.Semantics.OperatorKind is not { } kind || KindNameOf(kind) is not { } kindName)
+            return null;
+
+        return StaticHelperName(
+            IrToTsNamingPolicy.FindMemberNameOverride(function.Attributes, overloadName: null)
+                ?? kindName
+        );
+    }
+
     /// <summary>The static helper of an operator: <c>__</c> + its name.</summary>
     public static string StaticHelperName(string operatorName) => StaticPrefix + operatorName;
 

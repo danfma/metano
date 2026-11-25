@@ -11,7 +11,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// declares (FR-078): <c>Money.__add(a, b)</c>, the fast path of a dispatched
 /// group (<c>Vec.__multiplyDoubleVec(2, v)</c>) or, for a type this
 /// compilation reads only from metadata, its dispatcher, and
-/// <c>Money.__implicitFromInt32(7)</c>. A lifted <c>==</c> / <c>!=</c> and a
+/// <c>Money.__implicitFromInt32(7)</c>. A C# 14 extension operator calls the
+/// function its class's module exports under the same name
+/// (<c>__add(a, b)</c>, #761). A lifted <c>==</c> / <c>!=</c> and a
 /// lifted conversion handle <c>null</c> here, evaluating each operand once.
 /// </summary>
 internal static class IrToTsUserOperatorBridge
@@ -96,14 +98,25 @@ internal static class IrToTsUserOperatorBridge
         IrUserOperator user,
         IReadOnlyList<TsExpression> arguments,
         IrToTsBridgeContext context
-    ) =>
-        new(
-            new TsPropertyAccess(
-                IrToTsExpressionBridge.Map(user.DeclaringType, context),
-                HelperNameOf(user)
-            ),
-            arguments
+    ) => new(HelperReference(user, context), arguments);
+
+    /// <summary>
+    /// The helper of a class's operator (<c>Money.__add</c>), or the function
+    /// of an extension operator, which its class's module exports (#761).
+    /// </summary>
+    private static TsExpression HelperReference(IrUserOperator user, IrToTsBridgeContext context)
+    {
+        if (user.IsExtension)
+            return IrToTsExpressionBridge.ModuleExportReference(
+                HelperNameOf(user),
+                user.DeclaringType
+            );
+
+        return new TsPropertyAccess(
+            IrToTsExpressionBridge.Map(user.DeclaringType, context),
+            HelperNameOf(user)
         );
+    }
 
     /// <summary>
     /// A lifted <c>==</c> is <c>true</c> when both operands are <c>null</c>,

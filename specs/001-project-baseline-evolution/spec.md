@@ -1550,6 +1550,30 @@ Product requirements added after the migration (normative; each one is traced by
   derived arguments with the same type and requiredness. A type-level attribute on a type with
   no constructor (a static class) reports that there is no constructor to lower.
 
+- **FR-097** (C# 14 extension operators, #761, decision W9-3, extends FR-077 / FR-078 to the
+  extension-member model of #156): An operator declared in a C# 14 `extension` block
+  (`static class SigOps { extension(Sig) { public static Sig operator +(Sig a, Sig b) … } }`)
+  MUST run at every application C# binds to it, never as the native JS operator. The TypeScript
+  target emits it as an exported function of the extension class's module (the file of
+  `SigOps`, beside its extension methods and properties), named like the class-level static
+  helper of FR-078 (`__add`, `__negate`, `__increment`, `__lessThan`, `__checkedMultiply`; a
+  `[Name]` on the operator renames it whole, `[Name("plus")]` → `__plus`), with the operator's
+  parameters and the block's and the operator's type parameters (`extension<T>(Box<T>)` →
+  `__add<T>(a: Box<T>, b: Box<T>): Box<T>`). Each application is FR-077's
+  `IrUserOperatorApplication`, whose `BoundOperator` names the extension class as its declaring
+  type and carries the neutral fact `IsExtension`, so binary, unary, relational, equality
+  (lifted included), `++` / `--`, compound assignment and `checked` applications keep FR-077's
+  evaluation rules and call the module function (`__add(a, b)`, `c = __increment(c)`), which the
+  consumer imports from the class's module, or from its package for a referenced one. Not
+  lowered, reporting `MS0001` (warning) at the declaration and at each application (the
+  throwing placeholder): an instance (compound-assignment or increment) extension operator, a
+  `true` / `false` extension operator, and an extension operator whose class declares another
+  extension operator of the same metadata name (an overload, in the same or another block),
+  since extension-block members are not dispatched yet (#156). A file that reads the same
+  operator function from two extension classes reports `MS0021`, as two extension helpers of
+  one name do; a `[Name]` on either operator resolves it. Dart output is unchanged: Dart keeps
+  user operators as the source wrote them.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
