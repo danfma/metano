@@ -24,6 +24,16 @@ internal sealed class InternalTypeReachability : ITranspiledReferenceRule
         IReadOnlySet<INamedTypeSymbol>
     > ReachedByAssembly = new();
 
+    /// <summary>
+    /// The assemblies whose reachability this thread is computing. <see cref="Compute"/>
+    /// runs inside <see cref="ConditionalWeakTable{TKey,TValue}.GetValue"/>, so a walk step
+    /// that asked <see cref="IsReached"/> (or <c>IsTranspilable</c> with reached types) for
+    /// the same assembly would re-enter it without bound. The walk uses only the
+    /// declared-transpilability predicates; this guard turns a future slip into an error.
+    /// </summary>
+    [ThreadStatic]
+    private static HashSet<IAssemblySymbol>? _computing;
+
     private readonly IAssemblySymbol _assembly;
     private readonly HashSet<INamedTypeSymbol> _reached = new(SymbolEqualityComparer.Default);
     private readonly Queue<INamedTypeSymbol> _pending = new();
@@ -49,6 +59,26 @@ internal sealed class InternalTypeReachability : ITranspiledReferenceRule
     }
 
     private static IReadOnlySet<INamedTypeSymbol> Compute(IAssemblySymbol assembly)
+    {
+        _computing ??= new HashSet<IAssemblySymbol>(SymbolEqualityComparer.Default);
+
+        if (!_computing.Add(assembly))
+            throw new InvalidOperationException(
+                $"Internal type reachability of '{assembly.Name}' was re-entered while it "
+                    + "was being computed."
+            );
+
+        try
+        {
+            return Walk(assembly);
+        }
+        finally
+        {
+            _computing.Remove(assembly);
+        }
+    }
+
+    private static IReadOnlySet<INamedTypeSymbol> Walk(IAssemblySymbol assembly)
     {
         var compilation = ((ISourceAssemblySymbol)assembly).Compilation;
         var reachability = new InternalTypeReachability(assembly);

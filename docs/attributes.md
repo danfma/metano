@@ -46,7 +46,9 @@ such type) gets its own module, imported where it is used, but no barrel
 re-exports it, so it stays out of the package's public surface
 (`package.json#exports`) and out of every consumer's imports. An internal type
 nothing transpiled references is not emitted. A reference to a type that still
-cannot be emitted (a `file`-local type) reports `MS0002`; `[Ignore]` keeps
+cannot be emitted (a `file`-local type), or a friend package's
+(`[InternalsVisibleTo]`) reference to a non-public type of a Metano package, reports
+`MS0002`; `[Ignore]` keeps
 winning and its references keep reporting `MS0013`.
 
 ## Naming

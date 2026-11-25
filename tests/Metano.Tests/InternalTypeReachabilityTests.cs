@@ -3,7 +3,7 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Tests;
 
 /// <summary>
-/// #770 (decision W9-9, baseline FR-097): under <c>[assembly: TranspileAssembly]</c> an
+/// #770 (decision W9-9, baseline FR-101): under <c>[assembly: TranspileAssembly]</c> an
 /// internal type that emitted code reaches is transpiled into its own module and imported
 /// where used, but no barrel re-exports it; a type that still cannot be emitted reports
 /// <c>MS0002</c> at the reference site.
@@ -276,5 +276,51 @@ public class InternalTypeReachabilityTests
         await Assert
             .That(consumerFiles["app/client.ts"])
             .Contains("import { Store } from \"@scope/lib/my-lib\";");
+    }
+
+    [Test]
+    public async Task FriendConsumerReferencingAPackageInternal_ReportsMS0002()
+    {
+        // The producer emits Codec but exports it nowhere, so a consumer granted
+        // [InternalsVisibleTo] cannot import it: the reference is reported, never left bare.
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@scope/lib")]
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TestConsumer")]
+
+            namespace MyLib;
+
+            internal static class Codec
+            {
+                internal static string Encode(int value) => "#" + value;
+            }
+
+            public sealed class Store
+            {
+                public string Put(int value) => Codec.Encode(value);
+            }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public sealed class Client
+            {
+                public string Save() => MyLib.Codec.Encode(1);
+            }
+            """;
+
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            library,
+            consumer
+        );
+
+        var unresolved = diagnostics.Single(diagnostic =>
+            diagnostic.Code == DiagnosticCodes.UnresolvedType
+        );
+
+        await Assert.That(unresolved.Message).Contains("'Codec'");
     }
 }

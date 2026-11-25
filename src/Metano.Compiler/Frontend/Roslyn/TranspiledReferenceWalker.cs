@@ -78,7 +78,10 @@ internal sealed class TranspiledReferenceWalker
     /// <summary>
     /// A walker for <see cref="InternalTypeReachability"/>: it skips only what no target
     /// emits (an untargeted <c>[Ignore]</c>), descends into every nested type, and hands
-    /// each reference to <paramref name="rule"/>.
+    /// each reference to <paramref name="rule"/>. Nothing on this walk may ask whether a
+    /// type is transpiled with reached types included (<c>IsTranspilable</c>,
+    /// <see cref="InternalTypeReachability.IsReached"/>): the reachability is being
+    /// computed, and the question would re-enter it (it throws).
     /// </summary>
     public static TranspiledReferenceWalker ForReachability(
         Compilation compilation,
@@ -112,7 +115,7 @@ internal sealed class TranspiledReferenceWalker
                 new IgnoredReferenceRule(target, diagnostics),
                 new TargetSpecificReferenceRule(target, diagnostics),
                 unionRule,
-                .. UnemittedTypeReferenceRule.For(
+                UnemittedTypeReferenceRule.For(
                     compilation,
                     assemblyWideTranspile,
                     target,

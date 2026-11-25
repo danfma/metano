@@ -1550,7 +1550,7 @@ Product requirements added after the migration (normative; each one is traced by
   derived arguments with the same type and requiredness. A type-level attribute on a type with
   no constructor (a static class) reports that there is no constructor to lower.
 
-- **FR-097** (internal types reached from emitted code, #770, decision W9-9, amends the
+- **FR-101** (internal types reached from emitted code, #770, decision W9-9, amends the
   `[assembly: TranspileAssembly]` selection rule): under `[assembly: TranspileAssembly]`, a
   non-public type of the assembly that emitted code reaches MUST be transpiled, so the output
   never names a symbol it does not declare. A type is reached when the signature or body of a
@@ -1562,7 +1562,8 @@ Product requirements added after the migration (normative; each one is traced by
   and a referencing package never imports it. `[Ignore]` keeps winning (a reference stays
   `MS0013`), and `[External]` / `[JsCallable]` types stay ambient. A reference from emitted code
   to a type of the assembly that is still not emitted (a `file`-local type) MUST report
-  `MS0002` (warning) at the reference site instead of producing a silent `ReferenceError`. The
+  `MS0002` (warning) at the reference site instead of producing a silent `ReferenceError`. So MUST a reference from a referencing package to a non-public type of a
+  Metano package (reached through `[InternalsVisibleTo]`), which it cannot import. The
   explicit `[Transpile]` mode is unchanged: an internal type with `[Transpile]` keeps its barrel
   entry, and only `[TranspileAssembly]` assemblies reach types automatically.
 
