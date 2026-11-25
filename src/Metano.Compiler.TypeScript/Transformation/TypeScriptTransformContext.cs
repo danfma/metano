@@ -343,10 +343,6 @@ public sealed class TypeScriptTransformContext(
     }
 
     /// <summary>
-    /// The module function name of an extension operator the TypeScript
-    /// target lowers; <c>null</c> for one it reports as unsupported.
-    /// </summary>
-    /// <summary>
     /// The static class a registered member belongs to, named for a
     /// diagnostic: an extension-block member's block is unnamed, so it is
     /// named by the class that holds the block.
@@ -356,6 +352,10 @@ public sealed class TypeScriptTransformContext(
             ? member.ContainingType.ContainingType.Name
             : member.ContainingType?.Name ?? "<global>";
 
+    /// <summary>
+    /// The module function name of an extension operator the TypeScript
+    /// target lowers; <c>null</c> for one it reports as unsupported.
+    /// </summary>
     private static string? ExtensionOperatorFunctionNameOf(IMethodSymbol op) =>
         ExtensionOperators.ContainerOf(op) is { } container
         && ExtensionOperators.UnsupportedReasonOf(op, container, TargetLanguage.TypeScript) is null
@@ -415,6 +415,7 @@ public sealed class TypeScriptTransformContext(
             );
             return;
         }
+
         map[helperName] = ownerRef;
         firstClaim[helperName] = member;
     }

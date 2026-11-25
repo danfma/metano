@@ -213,6 +213,7 @@ public class ExtensionOperatorTests
         await Assert
             .That(files["sig-ops.ts"])
             .Contains("export function __plus$Sig(a: Sig, b: Sig)");
+
         await Assert.That(files["use.ts"]).Contains("return __plus$Sig(a, b);");
     }
 
@@ -373,9 +374,11 @@ public class ExtensionOperatorTests
         await Assert
             .That(files["sig-ops.ts"])
             .Contains("export function __plusSig$Sig(a: Sig, b: Sig)");
+
         await Assert
             .That(files["sig-ops.ts"])
             .Contains("export function __plusInt$Sig(a: Sig, k: number)");
+
         await Assert
             .That(files["use.ts"])
             .Contains("return __plusInt$Sig(__plusSig$Sig(a, b), 1).value;");
@@ -430,9 +433,11 @@ public class ExtensionOperatorTests
         await Assert
             .That(files["demo/index.ts"])
             .Contains("export { __multiply$Other } from \"./other-ops.js\";");
+
         await Assert
             .That(files["demo/index.ts"])
             .Contains("export { __multiply$Sig } from \"./sig-ops.js\";");
+
         await Assert
             .That(files["demo/use.ts"])
             .Contains("__multiply$Sig(s, s).value + __multiply$Other(o, o).value");
@@ -532,9 +537,11 @@ public class ExtensionOperatorTests
         await Assert
             .That(messages.Count(m => m.Contains("'HiddenOps' is not emitted")))
             .IsEqualTo(1);
+
         await Assert
             .That(messages.Count(m => m.Contains("the operator is [Ignore]d")))
             .IsEqualTo(1);
+
         await Assert.That(files["sig-ops.ts"]).DoesNotContain("__multiply");
         await Assert.That(files["use.ts"]).DoesNotContain("a - b");
         await Assert.That(files["use.ts"]).DoesNotContain("a * b");
