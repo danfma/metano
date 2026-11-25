@@ -174,6 +174,168 @@ public class UsingAliasScopeFileTests
         await Assert.That(output).Contains("import type { Node } from \"../g/node.js\";");
     }
 
+    private const string ExternalType = """
+        using Metano.Annotations;
+
+        namespace App.D
+        {
+            [Transpile]
+            [Import("External", "ext-lib")]
+            public sealed class External
+            {
+                public int Y;
+            }
+        }
+        """;
+
+    private const string ExternalModule = """
+        declare module "ext-lib" {
+          export class External {
+            y: number;
+          }
+        }
+        """;
+
+    /// <summary>
+    /// A global <c>using</c> alias of an <c>[Import]</c> type imports it from its
+    /// external module under the alias (#754 round 2).
+    /// </summary>
+    [Test]
+    public async Task GlobalAliasOfAnImportType_ImportsFromItsModule()
+    {
+        var files = TranspileFiles(
+            ("Globals.cs", "global using Ext = App.D.External;"),
+            ("External.cs", ExternalType),
+            (
+                "Use.cs",
+                """
+                using Metano.Annotations;
+
+                namespace App.U
+                {
+                    [Transpile]
+                    public static class Use
+                    {
+                        public static int ExtY(Ext e) => e.Y;
+                    }
+                }
+                """
+            )
+        );
+
+        var output = files["app/u/use.ts"];
+
+        await Assert.That(output).Contains("import type { External as Ext } from \"ext-lib\";");
+        await Assert.That(output).Contains("static extY(e: Ext): number {");
+        await AssertTypeChecks(files);
+    }
+
+    /// <summary>A file-level alias of an <c>[Import]</c> type, used as a value too.</summary>
+    [Test]
+    public async Task LocalAliasOfAnImportType_ImportsFromItsModule()
+    {
+        var files = TranspileFiles(
+            ("External.cs", ExternalType),
+            (
+                "Use.cs",
+                """
+                using Metano.Annotations;
+                using Ext = App.D.External;
+
+                namespace App.U
+                {
+                    [Transpile]
+                    public static class Use
+                    {
+                        public static int ExtY(Ext e) => e.Y;
+
+                        public static Ext Make() => new Ext();
+                    }
+                }
+                """
+            )
+        );
+
+        var output = files["app/u/use.ts"];
+
+        await Assert.That(output).Contains("import { External as Ext } from \"ext-lib\";");
+        await Assert.That(output).Contains("new Ext()");
+        await AssertTypeChecks(files);
+    }
+
+    /// <summary>
+    /// Two files of one <c>[EmitInFile]</c> group that declare one alias name for two
+    /// types cannot share the emitted module's binding: MS0070 (#754 round 2).
+    /// </summary>
+    [Test]
+    public async Task OneAliasNameForTwoTypesInOneEmittedFile_ReportsMs0070()
+    {
+        var directory = Directory.CreateTempSubdirectory("metano-alias-conflict-");
+
+        try
+        {
+            File.WriteAllText(Path.Combine(directory.FullName, "Nodes.cs"), Nodes);
+
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "F1.cs"),
+                """
+                using Metano.Annotations;
+                using N = App.A.Node;
+
+                namespace App.F
+                {
+                    [Transpile, EmitInFile("shared")]
+                    public static class First
+                    {
+                        public static bool IsA(object o) => o is N;
+                    }
+                }
+                """
+            );
+
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "F2.cs"),
+                """
+                using Metano.Annotations;
+                using N = App.B.Node;
+
+                namespace App.F
+                {
+                    [Transpile, EmitInFile("shared")]
+                    public static class Second
+                    {
+                        public static bool IsB(object o) => o is N;
+                    }
+                }
+                """
+            );
+
+            var (_, diagnostics) = TranspileHelper.TranspileSourceDirectory(directory.FullName);
+
+            var clashes = diagnostics
+                .Where(d => d.Code == DiagnosticCodes.ImportedNameClash)
+                .ToList();
+
+            await Assert.That(clashes.Count).IsEqualTo(1);
+            await Assert.That(clashes[0].Message).Contains("The alias 'N' names both");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    private static async Task AssertTypeChecks(Dictionary<string, string> files)
+    {
+        var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(
+            files,
+            new Dictionary<string, string> { ["ext-lib.d.ts"] = ExternalModule }
+        );
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
+
     private static Dictionary<string, string> TranspileFiles(
         params (string Name, string Source)[] sources
     )

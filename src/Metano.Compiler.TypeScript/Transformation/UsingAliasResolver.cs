@@ -46,26 +46,40 @@ public static class UsingAliasResolver
     }
 
     /// <summary>
-    /// The aliases in scope of one emitted file: the <c>global using</c> aliases of
-    /// every tree of the compilation, then, for every tree that declares one of
+    /// The <c>global using</c> aliases of every tree of <paramref name="compilation"/>,
+    /// read once per compilation and filtered per emitted file by
+    /// <see cref="ResolveForGroup"/>.
+    /// </summary>
+    public static IReadOnlyList<UsingAlias> GlobalAliases(Compilation compilation)
+    {
+        var aliases = new List<UsingAlias>();
+
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            var globals = tree.GetCompilationUnitRoot().Usings.Where(IsGlobal).ToList();
+
+            if (globals.Count > 0)
+                Collect(globals, compilation.GetSemanticModel(tree), _ => false, aliases);
+        }
+
+        return aliases;
+    }
+
+    /// <summary>
+    /// The aliases in scope of one emitted file: the <paramref name="globalAliases"/>
+    /// (<see cref="GlobalAliases"/>), then, for every tree that declares one of
     /// <paramref name="fileTypes"/> (a partial type, an <c>[EmitInFile]</c> group),
     /// its compilation unit's aliases and those of the namespace blocks enclosing the
     /// types. A later alias of the same type wins.
     /// </summary>
     public static IReadOnlyList<UsingAlias> ResolveForGroup(
         Compilation compilation,
+        IReadOnlyList<UsingAlias> globalAliases,
         IReadOnlyList<INamedTypeSymbol> fileTypes,
         Func<INamedTypeSymbol, bool> declaresHere
     )
     {
-        var aliases = new List<UsingAlias>();
-
-        foreach (var tree in compilation.SyntaxTrees)
-        {
-            var globals = tree.GetCompilationUnitRoot().Usings.Where(IsGlobal);
-
-            Collect(globals, compilation.GetSemanticModel(tree), declaresHere, aliases);
-        }
+        var aliases = globalAliases.Where(alias => !declaresHere(alias.Symbol)).ToList();
 
         var declaringTrees = fileTypes
             .SelectMany(type => type.DeclaringSyntaxReferences)
@@ -165,6 +179,31 @@ public static class UsingAliasResolver
             aliasName,
             new UsingAliasTarget(@namespace, definition.Name),
             definition
-        );
+        )
+        {
+            Location = directive.GetLocation(),
+        };
+    }
+
+    /// <summary>
+    /// The aliases of one emitted file that reuse an earlier alias's name for another
+    /// type: two files of one <c>[EmitInFile]</c> group (or of one partial type) may
+    /// each declare <c>using N = …;</c> for a different type, but the emitted module
+    /// binds the name once.
+    /// </summary>
+    public static IEnumerable<(UsingAlias First, UsingAlias Second)> Conflicts(
+        IReadOnlyList<UsingAlias> aliases
+    )
+    {
+        var byName = new Dictionary<string, UsingAlias>(StringComparer.Ordinal);
+
+        foreach (var alias in aliases)
+        {
+            if (
+                !byName.TryAdd(alias.Alias, alias)
+                && !SymbolEqualityComparer.Default.Equals(byName[alias.Alias].Symbol, alias.Symbol)
+            )
+                yield return (byName[alias.Alias], alias);
+        }
     }
 }

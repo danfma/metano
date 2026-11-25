@@ -119,4 +119,8 @@ public sealed class UsingAliasScope
 public sealed record UsingAliasTarget(string? Namespace, string Name);
 
 /// <summary>A C# <c>using Alias = Target;</c> directive that renames a type.</summary>
-public sealed record UsingAlias(string Alias, UsingAliasTarget Target, INamedTypeSymbol Symbol);
+public sealed record UsingAlias(string Alias, UsingAliasTarget Target, INamedTypeSymbol Symbol)
+{
+    /// <summary>The directive's location, for a diagnostic about the alias.</summary>
+    public Location? Location { get; init; }
+}

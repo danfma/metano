@@ -62,6 +62,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     > _sameNameBindings =
         new Dictionary<string, IReadOnlyDictionary<string, IrTranspilableTypeRef>>();
 
+    /// <summary>
+    /// The compilation's <c>global using</c> aliases, read once before the groups
+    /// transform (<see cref="UsingAliasResolver.GlobalAliases"/>).
+    /// </summary>
+    private IReadOnlyList<UsingAlias>? _globalAliases;
+
     private string? _groupCacheFingerprint;
 
     /// <summary>
@@ -909,6 +915,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // takes the miss branch.
             var typeGroups = GroupTypesByFile(transpilableTypes);
             List<TypeFileGroup> groups = [.. typeGroups, .. GuardModuleGroups(typeGroups)];
+
+            _globalAliases = UsingAliasResolver.GlobalAliases(compilation);
+
+            ReportAliasConflicts(groups);
 
             _sameNameBindings = ResolveSameNameTypes(
                 groups,
@@ -1762,14 +1772,52 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IReadOnlyList<INamedTypeSymbol> groupTypes
     )
     {
-        var layerA = UsingAliasResolver.ResolveForGroup(Context.Compilation, groupTypes, type =>
-            DeclaresType(groupTypes, type)
-        );
+        var layerA = UsingAliasesOf(groupTypes);
 
         var filePath = primarySyntaxTree?.FilePath ?? string.Empty;
         Context.SynthesizedAliasesByFile.TryGetValue(filePath, out var synthesized);
         Context.ImportAliasOverrides.TryGetValue(filePath, out var layerB);
         return ImportAliasResolver.Merge(layerA, synthesized, layerB);
+    }
+
+    /// <summary>The <c>using</c> aliases in scope of one emitted file.</summary>
+    private IReadOnlyList<UsingAlias> UsingAliasesOf(IReadOnlyList<INamedTypeSymbol> groupTypes)
+    {
+        _globalAliases ??= UsingAliasResolver.GlobalAliases(Context.Compilation);
+
+        return UsingAliasResolver.ResolveForGroup(
+            Context.Compilation,
+            _globalAliases,
+            groupTypes,
+            type => DeclaresType(groupTypes, type)
+        );
+    }
+
+    /// <summary>
+    /// Reports MS0070 for an emitted file whose files declare one alias name for two
+    /// types (two files of an <c>[EmitInFile]</c> group or a partial type): the module
+    /// binds the name to one of them, so the other uses would silently read it.
+    /// </summary>
+    private void ReportAliasConflicts(IEnumerable<TypeFileGroup> groups)
+    {
+        foreach (var group in groups.Where(group => group.GuardModuleOf is null))
+        {
+            foreach (
+                var (first, second) in UsingAliasResolver.Conflicts(UsingAliasesOf(group.Types))
+            )
+            {
+                ReportDiagnostic(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.ImportedNameClash,
+                        $"The alias '{second.Alias}' names both '{first.Symbol.ToDisplayString()}' "
+                            + $"and '{second.Symbol.ToDisplayString()}' in '{group.FileName}'; the "
+                            + "emitted module binds it to one of them. Rename one of the aliases.",
+                        second.Location
+                    )
+                );
+            }
+        }
     }
 
     /// <summary>

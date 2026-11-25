@@ -191,11 +191,22 @@ public sealed class ImportCollector(
         var spelledCanonically = referencedTypes.ToHashSet(Ordinal);
         var aliasBindings = new Dictionary<string, List<(string Alias, bool IsValue)>>(Ordinal);
         var symbolAliases = new List<SymbolAliasImport>();
+        var externalAliases = new List<ExternalAliasImport>();
 
         if (IrToTsTypeMapper.UsingAliases is { } activeScope)
         {
             foreach (var name in referencedTypes.ToList())
             {
+                if (ExternalTypeAliasedBy(activeScope, name) is { } external)
+                {
+                    var isValue = valueTypes.Remove(name);
+
+                    externalAliases.Add(new ExternalAliasImport(name, external, isValue));
+                    referencedTypes.Remove(name);
+
+                    continue;
+                }
+
                 if (ProjectTypeAliasedBy(activeScope, name) is { } target)
                 {
                     symbolAliases.Add(new SymbolAliasImport(name, target, valueTypes.Remove(name)));
@@ -743,6 +754,9 @@ public sealed class ImportCollector(
             var typeOnly = !valueTypes.Contains(typeName);
             AddLocalType(importPath, typeName, referencedRef.TsName, typeOnly);
         }
+
+        foreach (var externalAlias in externalAliases)
+            imports.Add(ExternalAliasImportOf(externalAlias));
 
         foreach (var symbolAlias in symbolAliases)
         {
@@ -1844,9 +1858,52 @@ public sealed class ImportCollector(
         return TranspilableTypeProjection.Of(target, _context.ResolveTsName(target));
     }
 
+    /// <summary>
+    /// The <c>[Import]</c> declaration of the type the <c>using</c> alias
+    /// <paramref name="name"/> names: such a type lives in its external module, which
+    /// the alias imports from under its own name. <c>null</c> for any other name.
+    /// </summary>
+    private IrExternalImport? ExternalTypeAliasedBy(UsingAliasScope scope, string name) =>
+        scope.UsingTargetOf(name) is { } target && SymbolHelper.HasImport(target)
+            ? _context.ExternalImportMap.GetValueOrDefault(target.Name)
+            : null;
+
+    /// <summary>
+    /// <c>import { External as Alias } from "module"</c>, or the default import bound
+    /// to the alias; records the declared package version.
+    /// </summary>
+    private TsImport ExternalAliasImportOf(ExternalAliasImport alias)
+    {
+        var external = alias.External;
+
+        if (external.Version is { Length: > 0 } version)
+            _typeMappingContext.CrossPackageDependencies.Record(external.From, version);
+
+        if (external.IsDefault)
+            return new TsImport([alias.Alias], new TsPackageModule(external.From), IsDefault: true);
+
+        return new TsImport(
+            [external.Name],
+            new TsPackageModule(external.From),
+            TypeOnly: !alias.IsValue,
+            Aliases: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [external.Name] = alias.Alias,
+            }
+        );
+    }
+
+    /// <summary>A <c>using</c> alias the file spells for an <c>[Import]</c> type.</summary>
+    private sealed record ExternalAliasImport(
+        string Alias,
+        IrExternalImport External,
+        bool IsValue
+    );
+
     /// <summary>A top-level type of the project being transpiled that it emits.</summary>
     private bool IsOwnTopLevelType(INamedTypeSymbol type) =>
-        type.ContainingType is null
+        !SymbolHelper.HasImport(type)
+        && type.ContainingType is null
         && SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _context.CurrentAssembly)
         && SymbolHelper.IsTranspilable(
             type,
