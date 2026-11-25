@@ -174,4 +174,63 @@ public class SwitchSharedLocalTests
         await Assert.That(output).IsEmpty();
         await Assert.That(exitCode).IsEqualTo(0);
     }
+
+    private const string UsedResultSource = """
+        [Transpile]
+        public static class Lookup
+        {
+            static bool TryGet(string s, out int value)
+            {
+                value = s.Length;
+                return s.Length > 2;
+            }
+
+            public static string InCondition(int k, string s)
+            {
+                switch (k)
+                {
+                    case 1:
+                        if (int.TryParse(s, out var p))
+                            return "ok" + p;
+
+                        return "no" + p;
+                    default:
+                        p = 9;
+                        return "d" + p;
+                }
+            }
+
+            public static string InLocal(int k, string s)
+            {
+                switch (k)
+                {
+                    case 1:
+                        var ok = TryGet(s, out var q);
+                        return ok + ":" + q;
+                    default:
+                        q = 9;
+                        return "d" + q;
+                }
+            }
+        }
+        """;
+
+    [Test]
+    public async Task OutCallWithAUsedResult_KeepsTheResultWhenHoisted()
+    {
+        var output = TranspileHelper.Transpile(UsedResultSource)["lookup.ts"];
+
+        await Assert.That(output).Contains("let $found0: boolean;");
+        await Assert.That(output).Contains("[$found0, p] = tryParseInt32(s);");
+        await Assert.That(output).Contains("let ok: boolean;");
+        await Assert.That(output).Contains("[ok, q] = Lookup.tryGet(s);");
+
+        var (exitCode, typeCheck) = await TreeShaking.StrictTypeCheck.Run(
+            TranspileHelper.Transpile(UsedResultSource),
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(typeCheck).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
 }

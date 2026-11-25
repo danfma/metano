@@ -56,4 +56,41 @@ public static class SwitchSharedLocalProbes
     }
 
     public static string OutVarLaterSection() => $"{OutVar(1)},{OutVar(2)}";
+
+    static bool TryGet(string s, out int value)
+    {
+        value = s.Length;
+        return s.Length > 2;
+    }
+
+    static string InCondition(int k, string s)
+    {
+        switch (k)
+        {
+            case 1:
+                if (int.TryParse(s, out var p))
+                    return "ok" + p;
+
+                return "no" + p;
+            default:
+                p = 9;
+                return "d" + p;
+        }
+    }
+
+    static string InLocal(int k, string s)
+    {
+        switch (k)
+        {
+            case 1:
+                var ok = TryGet(s, out var q);
+                return ok + ":" + q;
+            default:
+                q = 9;
+                return "d" + q;
+        }
+    }
+
+    public static string OutCallResultLaterSection() =>
+        $"{InCondition(1, "7")} {InCondition(1, "x")} {InCondition(2, "7")} {InLocal(1, "abc")} {InLocal(2, "abc")}";
 }

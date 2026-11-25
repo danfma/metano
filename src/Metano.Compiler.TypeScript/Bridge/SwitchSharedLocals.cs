@@ -11,9 +11,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// binds pattern designators is emitted in a block of its own, which would
 /// hide the local altogether. Each local another section uses is therefore
 /// declared ahead of the switch and its declaration in the section becomes a
-/// plain assignment. An <c>out var</c> of a call in statement position
-/// declares its locals too: when one of them is hoisted, all of them are, and
-/// the call stores into them instead of destructuring.
+/// plain assignment. An <c>out</c> call in statement position declares its
+/// locals too (its result and its <c>out</c> locals): when one of them is
+/// hoisted, all of them are, and the call stores into them
+/// (<c>[$found0, p] = call</c>) instead of declaring them.
 /// </summary>
 internal static class SwitchSharedLocals
 {
@@ -73,13 +74,38 @@ internal static class SwitchSharedLocals
         statement switch
         {
             IrVariableDeclaration declaration => [declaration],
-            IrTupleDeconstruction { Initializer: IrOutArgumentCall call } => OutLocalsOf(call)
-                .Select(local => new IrVariableDeclaration(local.Name, local.Type, null)),
+            IrTupleDeconstruction { Initializer: IrOutArgumentCall call } deconstruction =>
+                OutCallLocalsOf(deconstruction, call),
             _ => [],
         };
 
-    private static IEnumerable<IrOutLocalDeclaration> OutLocalsOf(IrOutArgumentCall call) =>
-        call.OutArguments.Select(argument => argument.Target).OfType<IrOutLocalDeclaration>();
+    /// <summary>
+    /// Every local an <c>out</c> call's deconstruction binds, in slot order
+    /// <c>[result, out1, …]</c>: the call's result (a condition's
+    /// <c>$found</c>, or <c>ok</c> in <c>var ok = TryGet(s, out var p)</c>)
+    /// typed by the call's result type, and each <c>out</c> local or the
+    /// temporary of an existing target, typed by its declaration.
+    /// </summary>
+    private static IEnumerable<IrVariableDeclaration> OutCallLocalsOf(
+        IrTupleDeconstruction deconstruction,
+        IrOutArgumentCall call
+    )
+    {
+        var slotTypes = call
+            .OutArguments.Select(argument => (argument.Target as IrOutLocalDeclaration)?.Type)
+            .ToList();
+
+        if (call.ResultType is not null)
+            slotTypes.Insert(0, call.ResultType);
+
+        return deconstruction
+            .Elements.Select(
+                (element, slot) =>
+                    (element.Name, Type: element.Type ?? slotTypes.ElementAtOrDefault(slot))
+            )
+            .Where(local => local.Name is not null)
+            .Select(local => new IrVariableDeclaration(local.Name!, local.Type, null));
+    }
 
     /// <summary>
     /// <paramref name="hoisted"/> plus every other <c>out var</c> local of a
@@ -166,8 +192,8 @@ internal static class SwitchSharedLocals
         HashSet<string> names
     )
     {
-        if (statement is IrTupleDeconstruction { Initializer: IrOutArgumentCall call })
-            return [StoringOutLocals(statement, call, names)];
+        if (statement is IrTupleDeconstruction { Initializer: IrOutArgumentCall } deconstruction)
+            return [StoringOutLocals(deconstruction, names)];
 
         if (statement is not IrVariableDeclaration declaration || !names.Contains(declaration.Name))
             return [statement];
@@ -190,36 +216,21 @@ internal static class SwitchSharedLocals
     }
 
     /// <summary>
-    /// The <c>out var</c> call <paramref name="statement"/> as a plain call
-    /// that stores into its hoisted locals; the statement itself when none of
-    /// its locals is hoisted.
+    /// The <c>out</c> call deconstruction storing into its locals, declared
+    /// ahead of the switch, when any of them is hoisted (all of them are, see
+    /// <see cref="WithOutDeclarationSiblings"/>); the declaration itself
+    /// otherwise.
     /// </summary>
-    private static IrStatement StoringOutLocals(
-        IrStatement statement,
-        IrOutArgumentCall call,
+    private static IrTupleDeconstruction StoringOutLocals(
+        IrTupleDeconstruction deconstruction,
         HashSet<string> names
-    )
-    {
-        if (!OutLocalsOf(call).Any(local => names.Contains(local.Name)))
-            return statement;
-
-        var storing = call with
-        {
-            OutArguments =
-            [
-                .. call.OutArguments.Select(argument =>
-                    argument.Target is IrOutLocalDeclaration local
-                        ? argument with
-                        {
-                            Target = new IrOutAssignment(new IrIdentifier(local.Name)),
-                        }
-                        : argument
-                ),
-            ],
-        };
-
-        return new IrExpressionStatement(storing);
-    }
+    ) =>
+        deconstruction.Elements.Any(element => element.Name is { } name && names.Contains(name))
+            ? deconstruction with
+            {
+                IsAssignment = true,
+            }
+            : deconstruction;
 
     /// <summary>
     /// A constant keeps its initializer, since C# needs no assignment to run

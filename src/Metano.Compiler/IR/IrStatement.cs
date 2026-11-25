@@ -46,10 +46,15 @@ public sealed record IrVariableDeclaration(
 /// <param name="Initializer">The right-hand side that produces the tuple value.</param>
 /// <param name="IsConst">True when no bound local is reassigned (mirrors
 /// <see cref="IrVariableDeclaration.IsConst"/>); false promotes the binding to <c>let</c>.</param>
+/// <param name="IsAssignment">True when the named locals are declared earlier
+/// (a switch-section local hoisted ahead of its switch, #755), so the
+/// statement stores into them (<c>[a, b] = expr</c>) instead of declaring
+/// them.</param>
 public sealed record IrTupleDeconstruction(
     IReadOnlyList<IrDeconstructionElement> Elements,
     IrExpression Initializer,
-    bool IsConst = true
+    bool IsConst = true,
+    bool IsAssignment = false
 ) : IrStatement;
 
 /// <summary>
