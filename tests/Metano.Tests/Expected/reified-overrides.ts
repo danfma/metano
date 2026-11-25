@@ -9,8 +9,6 @@ import { isString, type RuntimeType } from "metano-runtime";
 import type { IChecker } from "./i-checker.js";
 
 export class BaseChecker implements IChecker {
-  constructor() { }
-
   checkString(value: string): string {
     return value;
   }

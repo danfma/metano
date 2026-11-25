@@ -3,7 +3,7 @@ import { Money } from "./money.js";
 import { Pt } from "./pt.js";
 
 export class Uses {
-  constructor() { }
+  private constructor() { }
 
   static arithmetic(a: Money, b: Money): Money {
     return Money.__add(Money.__add(Money.__add(a, b), Money.__negate(a)), Money.__implicitFromInt32(3));

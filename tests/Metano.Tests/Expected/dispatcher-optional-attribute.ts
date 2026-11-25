@@ -1,8 +1,6 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Tagger {
-  constructor() { }
-
   tagCountExtra(count: number, extra: number): string {
     return "pair";
   }

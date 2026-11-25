@@ -36,7 +36,6 @@ internal sealed partial class LazyTypeInitializerLowering(
 
     private readonly List<TsStatement> _slotDefaults = [];
     private readonly List<TsStatement> _staticInitializers = [];
-    private readonly List<TsStatement> _structFieldInitializers = [];
 
     private readonly Dictionary<string, IrMemberDeclaration> _slotOwners = new(
         StringComparer.Ordinal
@@ -51,7 +50,7 @@ internal sealed partial class LazyTypeInitializerLowering(
             return [built];
 
         if (!field.IsStatic)
-            return [LowerInstanceStorage(built, field.Type, field.Initializer is not null)];
+            return [built];
 
         return LowerStaticStorage(
             built,
@@ -69,24 +68,8 @@ internal sealed partial class LazyTypeInitializerLowering(
         IReadOnlyList<TsClassMember> built
     )
     {
-        if (target.IsStruct && !property.IsStatic)
-            return built
-                .Select(member =>
-                    member is TsFieldMember field
-                        ? LowerInstanceStorage(
-                            field,
-                            property.Type,
-                            property.Initializer is not null
-                        )
-                        : member
-                )
-                .ToList();
-
-        if (built is not [TsFieldMember { Abstract: false } storage])
+        if (!property.IsStatic || built is not [TsFieldMember { Abstract: false } storage])
             return built;
-
-        if (!property.IsStatic)
-            return [LowerInstanceStorage(storage, property.Type, property.Initializer is not null)];
 
         return LowerStaticStorage(
             storage,
@@ -110,7 +93,7 @@ internal sealed partial class LazyTypeInitializerLowering(
             )
             .ToList();
 
-        var constructor = GuardConstructor(body.Constructor, members);
+        var constructor = GuardConstructor(body.Constructor);
 
         members.Insert(0, InitializerField());
         members.Insert(1, InitializerBridge());

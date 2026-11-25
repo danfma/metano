@@ -11,8 +11,11 @@ import { JobFinished } from "./job-finished.js";
 let JobCompleted$rt: ClassType<JobCompleted> | undefined;
 
 export class JobCompleted extends JobFinished {
-  constructor(readonly seconds: number) {
+  declare readonly seconds: number;
+
+  constructor(seconds: number) {
     super();
+    this.seconds = seconds;
   }
 
   static override get $runtimeType(): ClassType<JobCompleted> {

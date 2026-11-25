@@ -2,8 +2,6 @@ import { isInt32, isString } from "metano-runtime";
 import { Circle } from "./circle.js";
 
 export class Patterns {
-  constructor() { }
-
   classify(d: any): number {
     let c: Circle;
 

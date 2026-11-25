@@ -4,8 +4,8 @@ export class Bag {
   static readonly #$init = /* @__PURE__ */ typeInitializer("Bag", () => {
   }) as () => void;
 
-  w: number = 0;
-  count: number = 0;
+  declare w: number;
+  declare count: number;
 
   constructor(...values: number[]) {
     Bag.#$init();

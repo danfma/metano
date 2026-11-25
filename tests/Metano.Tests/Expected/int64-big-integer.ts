@@ -3,8 +3,6 @@ import { Decimal } from "metano-runtime/system/decimal";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Big {
-  constructor() { }
-
   toDecimal(b: bigint): Decimal {
     return new Decimal(decimalTextFromBigInteger(b));
   }

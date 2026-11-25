@@ -8,12 +8,17 @@ export class Conv {
   static readonly huge: bigint = 9007199254740993n;
   static readonly uMax: bigint = 18446744073709551615n;
   static readonly small: number = 5;
-  field: bigint = 0n;
-  uField: bigint = 0n;
-  nField: bigint | null = null;
-  initialized: bigint = 7n;
+  declare field: bigint;
+  declare uField: bigint;
+  declare nField: bigint | null;
+  declare initialized: bigint;
 
-  constructor() { }
+  constructor() {
+    this.field = 0n;
+    this.uField = 0n;
+    this.nField = null;
+    this.initialized = 7n;
+  }
 
   take(v: bigint): void {
   }

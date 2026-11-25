@@ -5,8 +5,6 @@ import { IPlain$runtimeType, type IPlain } from "./i-plain.js";
 let Person$rt: ClassType<Person> | undefined;
 
 export class Person implements IPlain, IBox<string> {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Person> {
     return (Person$rt ??= {
       kind: "class",

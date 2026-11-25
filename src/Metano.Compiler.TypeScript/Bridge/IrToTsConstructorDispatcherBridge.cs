@@ -540,13 +540,18 @@ public static class IrToTsConstructorDispatcherBridge
         if (chainDepth == 0 && typeArgumentSlot is not null)
             statements.Add(IrToTsClassBridge.BuildSlotDefineProperty(typeArgumentSlot));
 
-        statements.AddRange(IrToTsClassBridge.BuildCapturedAssignments(ctor));
-
-        // A record positional or C# 12 primary constructor promotes its
-        // parameters; the dispatcher's `(...args)` cannot declare parameter
-        // properties, so the branch assigns them before the moved initializers.
-        if (ctor.IsPrimary)
-            statements.AddRange(IrToTsClassBridge.BuildPromotedAssignments(ctor));
+        // The constructor that runs the C# initializers stores the fields; a
+        // record positional or C# 12 primary constructor also stores the
+        // members it promotes, which the dispatcher's `(...args)` cannot declare.
+        if (ctor.ThisChain is null)
+        {
+            statements.Add(
+                IrToTsClassBridge.FieldStoresOf(
+                    ctor,
+                    ctor.IsPrimary ? IrToTsClassBridge.PromotedBranchBinding : null
+                )
+            );
+        }
 
         // The body references the original parameter names, which the caller
         // already brought into scope.

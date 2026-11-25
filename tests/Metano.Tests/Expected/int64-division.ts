@@ -1,11 +1,15 @@
 import { checkedInt64, divInt64, divUInt64, intDiv, intRem, remInt64, remUInt64 } from "metano-runtime";
 
 export class Divide {
-  private _cursor: number = 0;
-  total: bigint = 0n;
-  slots: bigint[] = [1n, 2n, 3n];
+  declare private _cursor: number;
+  declare total: bigint;
+  declare slots: bigint[];
 
-  constructor() { }
+  constructor() {
+    this._cursor = 0;
+    this.total = 0n;
+    this.slots = [1n, 2n, 3n];
+  }
 
   next(): number {
     return ((this._cursor = (this._cursor + 1) | 0) - 1) | 0;

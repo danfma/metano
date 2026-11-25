@@ -5,8 +5,8 @@ export class Probe {
   protected static readonly byProbeDefault = /* @__PURE__ */ Symbol("Probe()");
   protected static readonly byProbeX = /* @__PURE__ */ Symbol("Probe(int x)");
   protected static readonly byProbeS = /* @__PURE__ */ Symbol("Probe(string s)");
-  value: any = null;
-  items: List<any> = new List<any>();
+  declare value: any;
+  declare items: List<any>;
 
   constructor(overload: typeof Probe.byProbeDefault);
   constructor(overload: typeof Probe.byProbeX, x: number);
@@ -16,26 +16,44 @@ export class Probe {
   constructor();
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Probe.byProbeDefault) {
+      this.value = null;
+      this.items = new List<any>();
+
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Probe.byProbeX) {
+      this.value = null;
+      this.items = new List<any>();
+
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Probe.byProbeS) {
+      this.value = null;
+      this.items = new List<any>();
+
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
+      this.value = null;
+      this.items = new List<any>();
+
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
+      this.value = null;
+      this.items = new List<any>();
+
       return;
     }
 
     if (args.length === 0) {
+      this.value = null;
+      this.items = new List<any>();
+
       return;
     }
 

@@ -1,8 +1,6 @@
 import { checkedInt32, checkedNarrowNumber, intDiv } from "metano-runtime";
 
 export class Consumers {
-  constructor() { }
-
   productPlus(a: number, b: number, c: number): number {
     return (Math.imul(a, b) + c) | 0;
   }

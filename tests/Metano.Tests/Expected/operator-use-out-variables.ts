@@ -1,7 +1,7 @@
 import { Money } from "./money.js";
 
 export class Uses {
-  constructor() { }
+  private constructor() { }
 
   private static try(): readonly [found: boolean, value: number] {
     let value: number;

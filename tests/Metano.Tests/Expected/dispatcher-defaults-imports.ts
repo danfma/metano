@@ -5,7 +5,7 @@ import { Color } from "./color.js";
 export class Painter {
   protected static readonly byPainterC = /* @__PURE__ */ Symbol("Painter(Color c)");
   protected static readonly byPainterFlag = /* @__PURE__ */ Symbol("Painter(bool flag)");
-  readonly log: string = "";
+  declare readonly log: string;
 
   constructor(overload: typeof Painter.byPainterC, c?: Color);
   constructor(overload: typeof Painter.byPainterFlag, flag: boolean);

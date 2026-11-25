@@ -1,8 +1,6 @@
 import { HashSet, List } from "metano-runtime/system/collections";
 
 export class Spreads {
-  constructor() { }
-
   toList(ints: List<number>): List<bigint> {
     return List.of<bigint>([...Array.from(ints, (element$temp$0) => BigInt(element$temp$0))]);
   }

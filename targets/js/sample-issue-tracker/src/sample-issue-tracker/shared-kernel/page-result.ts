@@ -14,11 +14,15 @@ import type { PageRequest } from "./page-request.js";
 let PageResult$rt: ClassType<PageResult<unknown>> | undefined;
 
 export class PageResult<T> {
-  constructor(
-    readonly items: IReadOnlyList<T>,
-    readonly totalCount: number,
-    readonly page: PageRequest,
-  ) {}
+  declare readonly items: IReadOnlyList<T>;
+  declare readonly totalCount: number;
+  declare readonly page: PageRequest;
+
+  constructor(items: IReadOnlyList<T>, totalCount: number, page: PageRequest) {
+    this.items = items;
+    this.totalCount = totalCount;
+    this.page = page;
+  }
 
   static get $runtimeType(): ClassType<PageResult<unknown>> {
     return (PageResult$rt ??= {

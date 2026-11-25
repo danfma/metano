@@ -6,11 +6,11 @@ import { Estimate } from "./estimate.js";
 let BufferedEstimate$rt: ClassType<BufferedEstimate> | undefined;
 
 export class BufferedEstimate extends Estimate {
-  constructor(
-    points: number,
-    readonly buffer: number,
-  ) {
+  declare readonly buffer: number;
+
+  constructor(points: number, buffer: number) {
     super(Estimate.byEstimatePoints, points);
+    this.buffer = buffer;
     this.buffer = buffer;
   }
 

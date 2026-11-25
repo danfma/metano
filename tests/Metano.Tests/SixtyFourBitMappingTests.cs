@@ -68,9 +68,9 @@ public class SixtyFourBitMappingTests
 
         var holder = files["holder.ts"];
 
-        await Assert.That(holder).Contains("readonly u: bigint,");
-        await Assert.That(holder).Contains("readonly nU: bigint | null,");
-        await Assert.That(holder).Contains("readonly us: bigint[]");
+        await Assert.That(holder).Contains("u: bigint,");
+        await Assert.That(holder).Contains("nU: bigint | null,");
+        await Assert.That(holder).Contains("declare readonly us: bigint[];");
         await Assert.That(holder).Contains("typeof v.u === \"bigint\"");
         await Assert.That(files["u-id.ts"]).Contains("bigint & { readonly __brand: \"UId\" }");
     }

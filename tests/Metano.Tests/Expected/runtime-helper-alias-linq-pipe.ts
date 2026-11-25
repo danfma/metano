@@ -5,8 +5,6 @@ export function where(x: number): boolean {
 }
 
 export class Queries {
-  constructor() { }
-
   static positive(xs: number[]): number {
     return linq(xs, where$rt((x: number) => x > 0), count());
   }

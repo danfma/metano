@@ -2,11 +2,15 @@ import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
 import type { Tag } from "./tag.js";
 
 export class Shelf {
-  private readonly _items: List<number> = new List<number>();
-  private readonly _tags: HashSet<Tag> = HashSet.withCapacity<Tag>(4);
-  private readonly _byName: Dictionary<string, Tag | null> = new Dictionary<string, Tag | null>();
+  declare private readonly _items: List<number>;
+  declare private readonly _tags: HashSet<Tag>;
+  declare private readonly _byName: Dictionary<string, Tag | null>;
 
-  constructor() { }
+  constructor() {
+    this._items = new List<number>();
+    this._tags = HashSet.withCapacity<Tag>(4);
+    this._byName = (new Dictionary<string, Tag | null>());
+  }
 
   size(source: List<number>, capacity: number): number {
     const empty = new List<string | null>();

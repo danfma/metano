@@ -19,9 +19,11 @@ public class ObjectArgsTranspileTests
         );
 
         var output = result["app/ui.ts"];
+
         await Assert
             .That(output)
             .Contains("function column(args: { gap?: number; width?: number }): number");
+
         await Assert.That(output).Contains("const { gap = 0, width = 100 } = args;");
     }
 
@@ -42,6 +44,7 @@ public class ObjectArgsTranspileTests
         );
 
         var output = result["app/ui.ts"];
+
         await Assert
             .That(output)
             .Contains("function layout(args: { width: number; padding?: number }): number");
@@ -151,6 +154,7 @@ public class ObjectArgsTranspileTests
         );
 
         var output = result["app/renderer.ts"];
+
         await Assert
             .That(output)
             .Contains("layout(args: { width: number; padding?: number }): number");
@@ -223,9 +227,11 @@ public class ObjectArgsTranspileTests
         );
 
         var output = result["app/renderer.ts"];
+
         await Assert
             .That(output)
             .Contains("static make(args: { gap?: number; width?: number }): number");
+
         await Assert.That(output).Contains("const { gap = 0, width = 100 } = args;");
     }
 
@@ -271,9 +277,11 @@ public class ObjectArgsTranspileTests
         );
 
         var output = result["app/ui.ts"];
+
         await Assert
             .That(output)
             .Contains("function plain(gap: number = 0, width: number = 100): number");
+
         await Assert.That(output).DoesNotContain("function plain(args:");
     }
 
@@ -301,12 +309,12 @@ public class ObjectArgsTranspileTests
         );
 
         var output = result["app/column.ts"];
-        await Assert
-            .That(output)
-            .Contains("constructor(readonly gap: number = 0, readonly width: number = 100)");
+        await Assert.That(output).Contains("constructor(gap: number = 0, width: number = 100)");
+
         await Assert
             .That(output)
             .Contains("static create(args: { gap?: number; width?: number }): Column");
+
         await Assert.That(output).Contains("const { gap = 0, width = 100 } = args;");
         await Assert.That(output).Contains("return new Column(gap, width);");
     }
@@ -490,9 +498,11 @@ public class ObjectArgsTranspileTests
 
         await Assert.That(result.Keys).Contains("app/my-column.ts");
         var emitted = result["app/my-column.ts"];
+
         await Assert
             .That(emitted)
             .Contains("static create(args: { gap?: number; width?: number }): MyColumn");
+
         await Assert.That(emitted).Contains("return new MyColumn(gap, width);");
 
         var caller = result["app/caller.ts"];

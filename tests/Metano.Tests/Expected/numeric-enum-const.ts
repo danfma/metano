@@ -9,7 +9,7 @@ export type Color = typeof Color[keyof typeof Color];
 export class Palette {
   static initial: Color = 0 as Color;
 
-  constructor() { }
+  private constructor() { }
 
   static fromNumber(n: number): Color {
     return n as Color;

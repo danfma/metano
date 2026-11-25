@@ -3,7 +3,7 @@ import { isString } from "metano-runtime";
 export class Cap {
   protected static readonly byCapName = /* @__PURE__ */ Symbol("Cap(string name)");
   protected static readonly byCapDefault = /* @__PURE__ */ Symbol("Cap()");
-  private readonly _name: string;
+  declare private readonly _name: string;
 
   constructor(overload: typeof Cap.byCapName, name: string);
   constructor(overload: typeof Cap.byCapDefault);

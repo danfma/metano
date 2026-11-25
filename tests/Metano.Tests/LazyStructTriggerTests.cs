@@ -48,7 +48,7 @@ public class LazyStructTriggerTests
         await Assert.That(output).Contains("set value(value: number) {\n    LazyValue.#$init();");
         await Assert.That(output).Contains("get readOnly(): number {\n    LazyValue.#$init();");
         await Assert.That(output).DoesNotContain("set readOnly(");
-        await Assert.That(output).Contains("field: number = 0;");
+        await Assert.That(output).Contains("this.field = 0;");
         await Assert.That(output).Contains("value$LazyValue_");
         await Assert.That(output).Contains("readOnly$LazyValue_");
         await Assert.That(output).Contains("toJSON(): unknown");
@@ -95,7 +95,7 @@ public class LazyStructTriggerTests
             .That(output)
             .Contains("equals(other: any): boolean {\n    LazyEmpty.#$init();");
 
-        await Assert.That(output).Contains("constructor() { }");
+        await Assert.That(output).DoesNotContain("constructor(");
     }
 
     [Test]

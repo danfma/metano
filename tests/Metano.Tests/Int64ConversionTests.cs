@@ -194,8 +194,7 @@ public class Int64ConversionTests
         await Assert
             .That(files["snowflake.ts"])
             .Contains(
-                "constructor(readonly id: bigint, readonly mask: bigint, "
-                    + "readonly parent: bigint | null, readonly ids: bigint[])"
+                "constructor(id: bigint, mask: bigint, parent: bigint | null, ids: bigint[])"
             );
     }
 

@@ -9,7 +9,7 @@ import { JobRunning } from "./job-running.js";
 import type { JobStatus } from "./job-status.js";
 
 export class JobStatuses {
-  constructor() {}
+  private constructor() {}
 
   static asFinished(value: Object): JobFinished | null {
     return value instanceof JobFinished ? value : null;

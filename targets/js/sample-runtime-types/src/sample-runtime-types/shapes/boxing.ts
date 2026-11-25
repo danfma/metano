@@ -11,7 +11,7 @@ import {
 import { Color, Color$runtimeType } from "./color.js";
 
 export class Boxing {
-  constructor() {}
+  private constructor() {}
 
   static boxRed(): Object {
     return box(Color.Red, Color$runtimeType);

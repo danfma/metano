@@ -1,11 +1,17 @@
 export class Cells {
-  signed: number = 0;
-  unsigned: number = 0;
-  small: number = 0;
-  slots: number[] = new Array<number>(4).fill(0);
-  tracked: number = 0;
+  declare signed: number;
+  declare unsigned: number;
+  declare small: number;
+  declare slots: number[];
+  declare tracked: number;
 
-  constructor() { }
+  constructor() {
+    this.signed = 0;
+    this.unsigned = 0;
+    this.small = 0;
+    this.slots = new Array<number>(4).fill(0);
+    this.tracked = 0;
+  }
 
   next(): Cells {
     return this;

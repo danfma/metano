@@ -4,7 +4,7 @@ import { StateHolder } from "./state-holder.js";
 import type { StatefulWidget } from "./stateful-widget.js";
 
 export class App {
-  constructor() {}
+  private constructor() {}
 
   static run<TState>(containerId: string, widget: StatefulWidget<TState>): void {
     const holder = new StateHolder(widget.initial());

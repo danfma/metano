@@ -12,14 +12,28 @@ import type { Decimal } from "metano-runtime/system/decimal";
 let Product$rt: ClassType<Product> | undefined;
 
 export class Product {
+  declare readonly id: number;
+  declare readonly name: string;
+  declare readonly displayName: string;
+  declare readonly unitPrice: Decimal;
+  declare readonly stockCount: number;
+  declare readonly isActive: boolean;
+
   constructor(
-    readonly id: number,
-    readonly name: string,
-    readonly displayName: string,
-    readonly unitPrice: Decimal,
-    readonly stockCount: number,
-    readonly isActive: boolean,
-  ) {}
+    id: number,
+    name: string,
+    displayName: string,
+    unitPrice: Decimal,
+    stockCount: number,
+    isActive: boolean,
+  ) {
+    this.id = id;
+    this.name = name;
+    this.displayName = displayName;
+    this.unitPrice = unitPrice;
+    this.stockCount = stockCount;
+    this.isActive = isActive;
+  }
 
   static get $runtimeType(): ClassType<Product> {
     return (Product$rt ??= {

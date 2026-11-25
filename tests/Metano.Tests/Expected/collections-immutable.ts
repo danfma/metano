@@ -2,7 +2,7 @@ import { Dictionary, ImmutableArray, ImmutableArrayBuilder, ImmutableDictionary,
 import { formatBoolean } from "metano-runtime";
 
 export class Snapshots {
-  constructor() { }
+  private constructor() { }
 
   static listed(source: number[]): ImmutableList<number> {
     return ImmutableList.from<number>(source);

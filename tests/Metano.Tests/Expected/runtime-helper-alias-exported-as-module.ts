@@ -5,7 +5,11 @@ export function valueEquals(a: number, b: number): boolean {
 }
 
 export class Inner {
-  constructor(readonly n: number) { }
+  declare readonly n: number;
+
+  constructor(n: number) {
+    this.n = n;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.n === other.n;
@@ -32,7 +36,11 @@ export class Inner {
 }
 
 export class Part {
-  constructor(readonly item: Inner) { }
+  declare readonly item: Inner;
+
+  constructor(item: Inner) {
+    this.item = item;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && valueEquals$rt(this.item, other.item);

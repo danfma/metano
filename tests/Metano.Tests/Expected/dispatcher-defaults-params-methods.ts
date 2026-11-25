@@ -1,8 +1,6 @@
 import { isBool, isInt32, isString } from "metano-runtime";
 
 export class Ops {
-  constructor() { }
-
   mA(a: number = 5): string {
     return "int:" + a;
   }

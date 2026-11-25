@@ -10,10 +10,13 @@ import {
 let SingleBox$rt: ClassType<SingleBox> | undefined;
 
 export class SingleBox {
-  constructor(
-    readonly f: number,
-    readonly g: number | null,
-  ) {}
+  declare readonly f: number;
+  declare readonly g: number | null;
+
+  constructor(f: number, g: number | null) {
+    this.f = f;
+    this.g = g;
+  }
 
   static get $runtimeType(): ClassType<SingleBox> {
     return (SingleBox$rt ??= {

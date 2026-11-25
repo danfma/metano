@@ -4,7 +4,7 @@ import type { Shape } from "./shape.js";
 import { Square } from "./square.js";
 
 export class Describer {
-  constructor() { }
+  private constructor() { }
 
   static describe(o: Object | null): string {
     switch (true) {

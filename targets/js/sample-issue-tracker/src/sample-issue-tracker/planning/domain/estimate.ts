@@ -13,8 +13,8 @@ export class Estimate {
     "Estimate(Estimate first, Estimate second)",
   );
   static readonly none = /* @__PURE__ */ Estimate.fromPoints(0) as Estimate;
-  readonly points: number = 0;
-  readonly note: string;
+  declare readonly points: number;
+  declare readonly note: string;
 
   constructor(overload: typeof Estimate.byEstimatePoints, points: number);
   constructor(overload: typeof Estimate.byEstimatePointsNote, points: number, note: string);
@@ -31,6 +31,8 @@ export class Estimate {
       {
         const points = __chain0Arg0;
         const note = __chain0Arg1;
+        this.points = 0;
+        this.note = undefined!;
         this.points = points;
         this.note = note;
       }
@@ -41,6 +43,8 @@ export class Estimate {
     if (typeof args[0] === "symbol" && args[0] === Estimate.byEstimatePointsNote) {
       const points = args[1] as number;
       const note = args[2] as string;
+      this.points = 0;
+      this.note = undefined!;
       this.points = points;
       this.note = note;
 
@@ -56,6 +60,8 @@ export class Estimate {
       {
         const points = __chain0Arg0;
         const note = __chain0Arg1;
+        this.points = 0;
+        this.note = undefined!;
         this.points = points;
         this.note = note;
       }
@@ -66,6 +72,8 @@ export class Estimate {
     if (args.length === 2 && isInt32(args[0]) && isString(args[1])) {
       const points = args[0] as number;
       const note = args[1] as string;
+      this.points = 0;
+      this.note = undefined!;
       this.points = points;
       this.note = note;
 
@@ -81,6 +89,8 @@ export class Estimate {
       {
         const points = __chain0Arg0;
         const note = __chain0Arg1;
+        this.points = 0;
+        this.note = undefined!;
         this.points = points;
         this.note = note;
       }
@@ -96,6 +106,8 @@ export class Estimate {
       {
         const points = __chain0Arg0;
         const note = __chain0Arg1;
+        this.points = 0;
+        this.note = undefined!;
         this.points = points;
         this.note = note;
       }

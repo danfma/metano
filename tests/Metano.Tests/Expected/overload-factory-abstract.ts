@@ -3,7 +3,7 @@ import { isInt32, isString } from "metano-runtime";
 export abstract class Shape {
   protected static readonly byShapeScale = /* @__PURE__ */ Symbol("Shape(int scale)");
   protected static readonly byShapeName = /* @__PURE__ */ Symbol("Shape(string name)");
-  readonly scale: number = 0;
+  declare readonly scale: number;
 
   protected constructor(overload: typeof Shape.byShapeScale, scale: number);
   protected constructor(overload: typeof Shape.byShapeName, name: string);
@@ -12,6 +12,7 @@ export abstract class Shape {
   protected constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Shape.byShapeScale) {
       const scale = args[1] as number;
+      this.scale = 0;
       this.scale = scale;
 
       return;
@@ -19,6 +20,7 @@ export abstract class Shape {
 
     if (typeof args[0] === "symbol" && args[0] === Shape.byShapeName) {
       const name = args[1] as string;
+      this.scale = 0;
       this.scale = name.length;
 
       return;
@@ -26,6 +28,7 @@ export abstract class Shape {
 
     if (args.length === 1 && isInt32(args[0])) {
       const scale = args[0] as number;
+      this.scale = 0;
       this.scale = scale;
 
       return;
@@ -33,6 +36,7 @@ export abstract class Shape {
 
     if (args.length === 1 && isString(args[0])) {
       const name = args[0] as string;
+      this.scale = 0;
       this.scale = name.length;
 
       return;

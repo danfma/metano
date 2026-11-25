@@ -12,12 +12,11 @@ import type { IssueActivity } from "../domain/issue-activity.js";
 let IssueActivityLog$rt: ClassType<IssueActivityLog> | undefined;
 
 export class IssueActivityLog {
-  private readonly _activities: Dictionary<bigint, IssueActivity> = new Dictionary<
-    bigint,
-    IssueActivity
-  >();
+  private declare readonly _activities: Dictionary<bigint, IssueActivity>;
 
-  constructor() {}
+  constructor() {
+    this._activities = new Dictionary<bigint, IssueActivity>();
+  }
 
   static get $runtimeType(): ClassType<IssueActivityLog> {
     return (IssueActivityLog$rt ??= {

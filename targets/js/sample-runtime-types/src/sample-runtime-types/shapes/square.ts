@@ -5,10 +5,11 @@ import { Shape } from "./shape.js";
 let Square$rt: ClassType<Square> | undefined;
 
 export class Square extends Shape {
-  readonly side: number = 1;
+  declare readonly side: number;
 
   constructor() {
     super();
+    this.side = 1;
   }
 
   static override get $runtimeType(): ClassType<Square> {

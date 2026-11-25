@@ -13,9 +13,7 @@ export class PriorityLabels {
 
   static #labels$: Dictionary<Priority, string> | null = null;
 
-  constructor() {
-    PriorityLabels.#$init();
-  }
+  private constructor() {}
 
   static get labels(): Dictionary<Priority, string> {
     PriorityLabels.#$init();

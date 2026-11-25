@@ -2,7 +2,7 @@ import { MidpointRounding, roundDecimal, roundNumber } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Numbers {
-  constructor() { }
+  private constructor() { }
 
   static whole(x: number): number {
     return roundNumber(x);

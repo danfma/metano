@@ -6,11 +6,15 @@ import type { Clip } from "./clip.js";
 let Timeline$rt: ClassType<Timeline> | undefined;
 
 export class Timeline {
-  constructor(
-    readonly name: string,
-    readonly main: Clip,
-    readonly clips: IReadOnlyList<Clip>,
-  ) {}
+  declare readonly name: string;
+  declare readonly main: Clip;
+  declare readonly clips: IReadOnlyList<Clip>;
+
+  constructor(name: string, main: Clip, clips: IReadOnlyList<Clip>) {
+    this.name = name;
+    this.main = main;
+    this.clips = clips;
+  }
 
   static get $runtimeType(): ClassType<Timeline> {
     return (Timeline$rt ??= {

@@ -4,7 +4,11 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let NBase$rt: ClassType<NBase> | undefined;
 
 export abstract class NBase {
-  constructor(readonly a: number) {}
+  declare readonly a: number;
+
+  constructor(a: number) {
+    this.a = a;
+  }
 
   static get $runtimeType(): ClassType<NBase> {
     return (NBase$rt ??= {

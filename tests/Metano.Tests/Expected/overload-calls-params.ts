@@ -1,8 +1,6 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Extra {
-  constructor() { }
-
   pS(s: string): number {
     return s.length;
   }
@@ -59,8 +57,6 @@ export class Extra {
 import type { Extra } from "./extra.js";
 
 export class Use {
-  constructor() { }
-
   expanded(e: Extra): number {
     return e.pARest(1, 2, 3);
   }

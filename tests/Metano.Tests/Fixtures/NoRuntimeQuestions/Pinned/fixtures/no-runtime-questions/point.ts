@@ -1,7 +1,13 @@
 import { HashCode, absInt32, copyRecordWith } from "metano-runtime";
 
 export class Point {
-  constructor(readonly x: number, readonly y: number) { }
+  declare readonly x: number;
+  declare readonly y: number;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
 
   translate(dx: number, dy: number): Point {
     return this.with({ x: (this.x + dx) | 0, y: (this.y + dy) | 0 });

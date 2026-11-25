@@ -22,9 +22,7 @@ public class ObjectArgsPrimaryConstructorTests
 
         var output = result["app/point.ts"];
 
-        await Assert
-            .That(output)
-            .Contains("constructor(readonly x: number, readonly y: number = 2) { }");
+        await Assert.That(output).Contains("constructor(x: number, y: number = 2) {");
 
         await Assert
             .That(output)
@@ -58,9 +56,7 @@ public class ObjectArgsPrimaryConstructorTests
 
         var output = result["app/entry.ts"];
 
-        await Assert
-            .That(output)
-            .Contains("constructor(readonly a: number, readonly b: string = \"x\") { }");
+        await Assert.That(output).Contains("constructor(a: number, b: string = \"x\") {");
 
         await Assert
             .That(output)
@@ -152,7 +148,7 @@ public class ObjectArgsPrimaryConstructorTests
 
         await Assert
             .That(derived)
-            .Contains("constructor(x: number, y: number = 2, readonly z: number = 0) {");
+            .Contains("constructor(x: number, y: number = 2, z: number = 0) {");
 
         await Assert.That(derived).Contains("super(x, y);");
 

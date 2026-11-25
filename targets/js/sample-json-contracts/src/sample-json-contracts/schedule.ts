@@ -11,13 +11,25 @@ import {
 let Schedule$rt: ClassType<Schedule> | undefined;
 
 export class Schedule {
+  declare readonly at: Temporal.PlainDateTime;
+  declare readonly starts: Temporal.PlainTime;
+  declare readonly day: Temporal.PlainDate;
+  declare readonly duration: Temporal.Duration;
+  declare readonly moment: Temporal.ZonedDateTime;
+
   constructor(
-    readonly at: Temporal.PlainDateTime,
-    readonly starts: Temporal.PlainTime,
-    readonly day: Temporal.PlainDate,
-    readonly duration: Temporal.Duration,
-    readonly moment: Temporal.ZonedDateTime,
-  ) {}
+    at: Temporal.PlainDateTime,
+    starts: Temporal.PlainTime,
+    day: Temporal.PlainDate,
+    duration: Temporal.Duration,
+    moment: Temporal.ZonedDateTime,
+  ) {
+    this.at = at;
+    this.starts = starts;
+    this.day = day;
+    this.duration = duration;
+    this.moment = moment;
+  }
 
   static get $runtimeType(): ClassType<Schedule> {
     return (Schedule$rt ??= {

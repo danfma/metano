@@ -5,8 +5,11 @@ import { GBase } from "./g-base.js";
 let GDer$rt: ClassType<GDer> | undefined;
 
 export class GDer extends GBase<number> {
-  constructor(readonly extra: number) {
+  declare readonly extra: number;
+
+  constructor(extra: number) {
     super(1);
+    this.extra = extra;
   }
 
   static override get $runtimeType(): ClassType<GDer> {

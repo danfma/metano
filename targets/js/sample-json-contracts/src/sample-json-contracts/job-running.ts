@@ -5,8 +5,11 @@ import { JobStatus } from "./job-status.js";
 let JobRunning$rt: ClassType<JobRunning> | undefined;
 
 export class JobRunning extends JobStatus {
-  constructor(readonly percent: number) {
+  declare readonly percent: number;
+
+  constructor(percent: number) {
     super();
+    this.percent = percent;
   }
 
   static override get $runtimeType(): ClassType<JobRunning> {

@@ -192,7 +192,7 @@ public class PrimaryConstructorCaptureTests
         );
 
         var output = result["quota.ts"];
-        await Assert.That(output).Contains("constructor(readonly limit: number)");
+        await Assert.That(output).Contains("constructor(limit: number)");
         await Assert.That(output).Contains("this.twice = Math.imul(limit, 2);");
         await Assert.That(output).Contains("return Math.imul(this.limit, 2);");
         await Assert.That(output).Contains("return amount <= this.limit;");
@@ -218,7 +218,7 @@ public class PrimaryConstructorCaptureTests
         );
 
         var output = result["settable.ts"];
-        await Assert.That(output).Contains("constructor(public limit: number)");
+        await Assert.That(output).Contains("constructor(limit: number)");
         await Assert.That(output).Contains("this._limit = limit;");
         await Assert.That(output).Contains("return this._limit;");
         await Assert.That(output).Contains("private readonly _limit: number;");
@@ -242,7 +242,7 @@ public class PrimaryConstructorCaptureTests
         );
 
         var output = result["sized.ts"];
-        await Assert.That(output).Contains("constructor(readonly size: number)");
+        await Assert.That(output).Contains("constructor(size: number)");
         await Assert.That(output).Contains("return this._size;");
         await Assert.That(output).Contains("private readonly _size: number;");
     }
@@ -302,7 +302,7 @@ public class PrimaryConstructorCaptureTests
         );
 
         var counted = result["counted.ts"];
-        await Assert.That(counted).Contains("constructor(readonly x: number)");
+        await Assert.That(counted).Contains("constructor(x: number)");
         await Assert.That(counted).Contains("this.y = ((x = (x + 1) | 0) - 1) | 0;");
         await Assert.That(counted).Contains("return this.x;");
         await Assert.That(counted).DoesNotContain("private _x");
@@ -310,7 +310,7 @@ public class PrimaryConstructorCaptureTests
         // The record struct pins the same lowering with its mutable
         // positional property (`public`).
         var countedValue = result["counted-value.ts"];
-        await Assert.That(countedValue).Contains("constructor(public x: number)");
+        await Assert.That(countedValue).Contains("constructor(x: number)");
         await Assert.That(countedValue).Contains("this.y = ((x = (x + 1) | 0) - 1) | 0;");
     }
 
@@ -563,7 +563,7 @@ public class PrimaryConstructorCaptureTests
         );
 
         var output = result["cased.ts"];
-        await Assert.That(output).Contains("constructor(readonly value: number)");
+        await Assert.That(output).Contains("constructor(value: number)");
         await Assert.That(output).DoesNotContain("_value");
     }
 
@@ -625,7 +625,7 @@ public class PrimaryConstructorCaptureTests
         );
 
         var output = result["presenter.ts"];
-        await Assert.That(output).Contains("private _view: number = 0");
+        await Assert.That(output).Contains("this._view = 0");
         await Assert.That(output).Contains("private readonly _view2: ICounterView");
         await Assert.That(output).Contains("this._view2.showCounter(this._view)");
     }

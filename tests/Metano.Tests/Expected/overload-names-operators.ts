@@ -1,8 +1,6 @@
 import { isInt32, isUInt32 } from "metano-runtime";
 
 export class Money {
-  constructor() { }
-
   static __addMoneyInt32(a: Money, b: number): Money {
     return a;
   }

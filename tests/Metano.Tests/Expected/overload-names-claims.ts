@@ -4,7 +4,7 @@ import type { Decimal } from "metano-runtime/system/decimal";
 export class Cash {
   protected static readonly byCashAmount = /* @__PURE__ */ Symbol("Cash(decimal amount)");
   protected static readonly byCashCents = /* @__PURE__ */ Symbol("Cash(int cents)");
-  readonly how: string = "";
+  declare readonly how: string;
 
   constructor(overload: typeof Cash.byCashAmount, amount: Decimal);
   constructor(overload: typeof Cash.byCashCents, cents: number);

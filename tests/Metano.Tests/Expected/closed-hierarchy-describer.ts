@@ -15,7 +15,7 @@ import { Square } from "./square.js";
 import type { Tree } from "./tree.js";
 
 export class Describer {
-  constructor() { }
+  private constructor() { }
 
   static describe(status: JobStatus): string {
     {

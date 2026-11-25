@@ -4,10 +4,13 @@ import type { ClassType } from "metano-runtime";
 let SetClass$rt: ClassType<SetClass> | undefined;
 
 export class SetClass {
-  readonly n: number = 0;
-  count: number = 5;
+  declare readonly n: number;
+  declare count: number;
 
-  constructor() {}
+  constructor() {
+    this.n = 0;
+    this.count = 5;
+  }
 
   static get $runtimeType(): ClassType<SetClass> {
     return (SetClass$rt ??= {

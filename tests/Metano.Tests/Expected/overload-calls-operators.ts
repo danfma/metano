@@ -1,7 +1,7 @@
 import { Money } from "./money.js";
 
 export class Ledger {
-  constructor() { }
+  private constructor() { }
 
   static addCents(m: Money): Money {
     return Money.__addMoneyInt32(m, 5);

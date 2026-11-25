@@ -6,7 +6,7 @@ import { IHasArea$runtimeType, type IHasArea } from "./i-has-area.js";
 import { ShapeFactory } from "./shape-factory.js";
 
 export class ShapeQuestions {
-  constructor() {}
+  private constructor() {}
 
   static nameOf(kind: string): string {
     return getRuntimeType(ShapeFactory.create(kind)).name;

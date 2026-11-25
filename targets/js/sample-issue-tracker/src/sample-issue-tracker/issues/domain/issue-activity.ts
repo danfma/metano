@@ -8,13 +8,25 @@ import type { IssueActivityKind } from "./issue-activity-kind.js";
 let IssueActivity$rt: ClassType<IssueActivity> | undefined;
 
 export class IssueActivity {
+  declare readonly id: SnowflakeId;
+  declare readonly issueKey: string;
+  declare readonly kind: IssueActivityKind;
+  declare readonly occurredAtTicks: bigint;
+  declare readonly durationTicks: bigint | null;
+
   constructor(
-    readonly id: SnowflakeId,
-    readonly issueKey: string,
-    readonly kind: IssueActivityKind,
-    readonly occurredAtTicks: bigint,
-    readonly durationTicks: bigint | null,
-  ) {}
+    id: SnowflakeId,
+    issueKey: string,
+    kind: IssueActivityKind,
+    occurredAtTicks: bigint,
+    durationTicks: bigint | null,
+  ) {
+    this.id = id;
+    this.issueKey = issueKey;
+    this.kind = kind;
+    this.occurredAtTicks = occurredAtTicks;
+    this.durationTicks = durationTicks;
+  }
 
   static get $runtimeType(): ClassType<IssueActivity> {
     return (IssueActivity$rt ??= {

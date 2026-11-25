@@ -5,10 +5,13 @@ import type { Dog } from "./dog.js";
 import { Holder } from "./holder.js";
 
 export class Lists {
-  private readonly _field: List<number | null> = List.of<number | null>([1]);
-  private _pets: List<Animal> = List.of<Animal>([]);
+  declare private readonly _field: List<number | null>;
+  declare private _pets: List<Animal>;
 
-  constructor() { }
+  constructor() {
+    this._field = List.of<number | null>([1]);
+    this._pets = List.of<Animal>([]);
+  }
 
   nullableLocal(): number {
     const l = List.of<number | null>([1]);

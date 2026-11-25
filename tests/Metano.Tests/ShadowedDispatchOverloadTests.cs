@@ -27,7 +27,7 @@ public class ShadowedDispatchOverloadTests
 
     private const string ExpectedReactivity = """
         export class Reactivity {
-          constructor() { }
+          private constructor() { }
 
           static rootFuncOfActionT<T>(body: (arg: () => void) => T): T {
             return body(() => {

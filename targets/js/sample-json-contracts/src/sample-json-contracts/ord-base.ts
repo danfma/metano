@@ -4,11 +4,15 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let OrdBase$rt: ClassType<OrdBase> | undefined;
 
 export class OrdBase {
-  constructor(
-    readonly second: number,
-    readonly first: number,
-    readonly third: number,
-  ) {}
+  declare readonly second: number;
+  declare readonly first: number;
+  declare readonly third: number;
+
+  constructor(second: number, first: number, third: number) {
+    this.second = second;
+    this.first = first;
+    this.third = third;
+  }
 
   static get $runtimeType(): ClassType<OrdBase> {
     return (OrdBase$rt ??= {

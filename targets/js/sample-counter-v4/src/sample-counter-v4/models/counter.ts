@@ -4,9 +4,12 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let Counter$rt: ClassType<Counter> | undefined;
 
 export class Counter {
+  declare readonly count: number;
   static readonly zero = /* @__PURE__ */ new Counter(0) as Counter;
 
-  constructor(readonly count: number) {}
+  constructor(count: number) {
+    this.count = count;
+  }
 
   static get $runtimeType(): ClassType<Counter> {
     return (Counter$rt ??= {

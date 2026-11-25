@@ -499,7 +499,11 @@ public static class IrConstructorExtractor
 
                 return new IrConstructorParameter(
                     new IrParameter(
-                        p.Name,
+                        IrParameterNaming.IrNameOf(
+                            p,
+                            compilation,
+                            context.Extraction.GroupingPolicy
+                        ),
                         IrTypeRefMapper.Map(p.Type, originResolver),
                         p.HasExplicitDefaultValue,
                         ParameterDefaultValues.Extract(p, context.Extraction),
@@ -531,7 +535,7 @@ public static class IrConstructorExtractor
         // whole declaration, so the `: base(...)` / `: this(...)` argument
         // lambdas and the body share it — a collision renames one name every
         // half agrees on.
-        var localNames = LocalBindingDisambiguator.ForMember(ctor, context.Extraction);
+        var localNames = LocalBindingDisambiguator.ForConstructor(ctor, context.Extraction);
 
         var baseCall = TryExtractBaseCall(ctor, compilation, context.Extraction, localNames);
 

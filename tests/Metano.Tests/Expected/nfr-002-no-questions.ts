@@ -1,8 +1,10 @@
 // fixtures/no-runtime-questions/counter.ts
 export class Counter {
-  private _count: number = 0;
+  declare private _count: number;
 
-  constructor() { }
+  constructor() {
+    this._count = 0;
+  }
 
   get count(): number {
     return this._count;
@@ -27,7 +29,7 @@ import { Priority } from "./priority.js";
 import { TodoItem } from "./todo-item.js";
 
 export class Geometry {
-  constructor() { }
+  private constructor() { }
 
   static distance(a: Point, b: Point): number {
     return (absInt32((a.x - b.x) | 0) + absInt32((a.y - b.y) | 0)) | 0;
@@ -49,7 +51,13 @@ export { TodoItem } from "./todo-item.js";
 import { HashCode, absInt32, copyRecordWith } from "metano-runtime";
 
 export class Point {
-  constructor(readonly x: number, readonly y: number) { }
+  declare readonly x: number;
+  declare readonly y: number;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
 
   translate(dx: number, dy: number): Point {
     return this.with({ x: (this.x + dx) | 0, y: (this.y + dy) | 0 });
@@ -99,7 +107,15 @@ import type { Point } from "./point.js";
 import { Priority } from "./priority.js";
 
 export class TodoItem {
-  constructor(readonly title: string, readonly priority: Priority, readonly location: Point) { }
+  declare readonly title: string;
+  declare readonly priority: Priority;
+  declare readonly location: Point;
+
+  constructor(title: string, priority: Priority, location: Point) {
+    this.title = title;
+    this.priority = priority;
+    this.location = location;
+  }
 
   get isUrgent(): boolean {
     return this.priority === Priority.High;

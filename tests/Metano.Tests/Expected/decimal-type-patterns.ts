@@ -2,7 +2,7 @@ import { isDecimal } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Checker {
-  constructor() { }
+  private constructor() { }
 
   static isDecimal(o: Object): boolean {
     return isDecimal(o);

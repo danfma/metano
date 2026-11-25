@@ -472,17 +472,20 @@ export class NarrowStatics {
   static count: number = 0;
   static level: number = 0;
 
-  constructor() { }
+  private constructor() { }
 }
 
 let NarrowSource$rt: ClassType<NarrowSource> | undefined;
 
 export class NarrowSource {
-  value: number = 0;
-  signed: number = 0;
-  evaluations: number = 0;
+  declare value: number;
+  declare signed: number;
+  declare evaluations: number;
 
   constructor(value: number) {
+    this.value = 0;
+    this.signed = 0;
+    this.evaluations = 0;
     this.value = value;
   }
 
@@ -511,18 +514,28 @@ export class NarrowSource {
 let ShiftCells$rt: ClassType<ShiftCells> | undefined;
 
 export class ShiftCells {
-  signed: number = 0;
-  unsigned: number = 0;
-  small: number = 0;
-  slots: number[];
-  unsignedSlots: number[] = new Array<number>(2).fill(0);
-  evaluations: number = 0;
-  indexEvaluations: number = 0;
-  countEvaluations: number = 0;
-  reads: number = 0;
-  writes: number = 0;
+  declare signed: number;
+  declare unsigned: number;
+  declare small: number;
+  declare slots: number[];
+  declare unsignedSlots: number[];
+  declare evaluations: number;
+  declare indexEvaluations: number;
+  declare countEvaluations: number;
+  declare reads: number;
+  declare writes: number;
 
   constructor(seed: number) {
+    this.signed = 0;
+    this.unsigned = 0;
+    this.small = 0;
+    this.slots = undefined!;
+    this.unsignedSlots = new Array<number>(2).fill(0);
+    this.evaluations = 0;
+    this.indexEvaluations = 0;
+    this.countEvaluations = 0;
+    this.reads = 0;
+    this.writes = 0;
     this.signed = seed;
     this.slots = [seed, seed];
   }

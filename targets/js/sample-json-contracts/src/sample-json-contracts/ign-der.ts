@@ -5,11 +5,11 @@ import { IgnBase } from "./ign-base.js";
 let IgnDer$rt: ClassType<IgnDer> | undefined;
 
 export class IgnDer extends IgnBase {
-  constructor(
-    v: number,
-    readonly w: number,
-  ) {
+  declare readonly w: number;
+
+  constructor(v: number, w: number) {
     super(v);
+    this.w = w;
   }
 
   static override get $runtimeType(): ClassType<IgnDer> {

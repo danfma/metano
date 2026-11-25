@@ -1,6 +1,4 @@
 export class Wrap {
-  constructor() { }
-
   add(l: bigint, m: bigint): bigint {
     return BigInt.asIntN(64, l + m);
   }

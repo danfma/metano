@@ -2,7 +2,11 @@ import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
 import { Inner } from "./inner.js";
 
 export class Boxed {
-  constructor(readonly value: Inner) { }
+  declare readonly value: Inner;
+
+  constructor(value: Inner) {
+    this.value = value;
+  }
 
   static make(x: number): Boxed {
     return new Boxed(new Inner(x));

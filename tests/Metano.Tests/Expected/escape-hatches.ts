@@ -2,8 +2,6 @@ import type { Holder } from "./holder.js";
 import type { UserDto } from "./user-dto.js";
 
 export class Hatches {
-  constructor() { }
-
   dto(raw: Object): UserDto {
     return raw as unknown as UserDto;
   }

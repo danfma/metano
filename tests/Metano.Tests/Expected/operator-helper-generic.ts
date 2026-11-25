@@ -1,8 +1,8 @@
 import { isInt32, isInt64 } from "metano-runtime";
 
 export class Box<T> {
-  item: T;
-  count: number = 0;
+  declare item: T;
+  declare count: number;
 
   constructor(item: T, count: number) {
     this.item = item;

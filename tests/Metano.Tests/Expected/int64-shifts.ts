@@ -1,9 +1,13 @@
 export class Shift {
-  private _cursor: number = 0;
-  total: bigint = 0n;
-  slots: bigint[] = [1n, 2n, 3n];
+  declare private _cursor: number;
+  declare total: bigint;
+  declare slots: bigint[];
 
-  constructor() { }
+  constructor() {
+    this._cursor = 0;
+    this.total = 0n;
+    this.slots = [1n, 2n, 3n];
+  }
 
   next(): number {
     return ((this._cursor = (this._cursor + 1) | 0) - 1) | 0;

@@ -37,12 +37,17 @@ export const U = {
 export type U = typeof U[keyof typeof U];
 
 export class Box {
-  mode: I = I.A;
-  narrow: B = B.Zero;
-  flags: F = F.None;
-  wide: L = L.Zero;
+  declare mode: I;
+  declare narrow: B;
+  declare flags: F;
+  declare wide: L;
 
-  constructor() { }
+  constructor() {
+    this.mode = I.A;
+    this.narrow = B.Zero;
+    this.flags = F.None;
+    this.wide = L.Zero;
+  }
 
   static get(value: Box): Box {
     return value;

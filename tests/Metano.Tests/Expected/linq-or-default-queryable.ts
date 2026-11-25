@@ -2,8 +2,6 @@ import { firstOrDefault, linq } from "metano-runtime/system/linq";
 import type { Person } from "./person.js";
 
 export class Queries {
-  constructor() { }
-
   queried(xs: Iterable<Person>): Person | null {
     return linq(xs, firstOrDefault((p: Person) => p.name === "ana", undefined, {
       tree: {

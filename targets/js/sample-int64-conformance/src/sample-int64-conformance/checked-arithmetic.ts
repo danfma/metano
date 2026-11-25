@@ -218,7 +218,7 @@ export function intFieldCompoundChecked(start: number, amount: number): number {
 let Tally$rt: ClassType<Tally> | undefined;
 
 export class Tally {
-  total: number = 0;
+  declare total: number;
 
   constructor(total: number) {
     this.total = total;

@@ -2,8 +2,6 @@ import { Point } from "./point.js";
 import { createElement } from "inferno-create-element";
 
 export class View {
-  constructor() { }
-
   div(): Object {
     return (createElement('div')) as any;
   }

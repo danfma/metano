@@ -5,8 +5,6 @@ import type { B } from "./b.js";
 import { Decimal } from "./numerics/decimal.js";
 
 export class Climbs {
-  constructor() { }
-
   kNumericsDecimal(d: Decimal): number {
     return 1;
   }

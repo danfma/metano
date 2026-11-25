@@ -2,9 +2,11 @@ import { Dictionary, List } from "metano-runtime/system/collections";
 import { aggregate, firstOrDefault, lastOrDefault, linq, select, singleOrDefault, toDictionary, toList, where, zip } from "metano-runtime/system/linq";
 
 export class Stages {
-  private _count: number = 0;
+  declare private _count: number;
 
-  constructor() { }
+  constructor() {
+    this._count = 0;
+  }
 
   get seed(): number {
     return this.next();

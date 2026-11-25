@@ -17,7 +17,13 @@ export class IntList extends List<number> {
 import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Point {
-  constructor(readonly x: number, readonly y: number) { }
+  declare readonly x: number;
+  declare readonly y: number;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.x === other.x && this.y === other.y;
@@ -51,7 +57,7 @@ import { linq, toList } from "metano-runtime/system/linq";
 import { Point } from "./point.js";
 
 export class Probe {
-  constructor() { }
+  private constructor() { }
 
   static isList(o: Object): boolean {
     return isType(o, listType(StringType));

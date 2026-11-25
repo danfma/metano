@@ -5,10 +5,13 @@ import type { Title } from "./title.js";
 let EpisodeRec$rt: ClassType<EpisodeRec> | undefined;
 
 export class EpisodeRec {
-  constructor(
-    readonly id: string,
-    readonly note: Title,
-  ) {}
+  declare readonly id: string;
+  declare readonly note: Title;
+
+  constructor(id: string, note: Title) {
+    this.id = id;
+    this.note = note;
+  }
 
   static get $runtimeType(): ClassType<EpisodeRec> {
     return (EpisodeRec$rt ??= {

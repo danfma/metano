@@ -7,7 +7,7 @@ export const B = {
 export type B = typeof B[keyof typeof B];
 
 export class EnumArithmetic {
-  constructor() { }
+  private constructor() { }
 
   static add(b: B, n: number): B {
     return ((b + n) & 0xFF) as B;

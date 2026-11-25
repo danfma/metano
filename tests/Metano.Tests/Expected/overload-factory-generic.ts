@@ -4,8 +4,8 @@ import { IRank$runtimeType, type IRank } from "./i-rank.js";
 export class Box<T extends IRank<T>> {
   protected static readonly byBoxValue = /* @__PURE__ */ Symbol("Box(T value)");
   protected static readonly byBoxN = /* @__PURE__ */ Symbol("Box(int n)");
-  readonly value: T | null = null;
-  readonly n: number = 0;
+  declare readonly value: T | null;
+  declare readonly n: number;
 
   constructor(overload: typeof Box.byBoxValue, value: T);
   constructor(overload: typeof Box.byBoxN, n: number);
@@ -14,6 +14,8 @@ export class Box<T extends IRank<T>> {
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Box.byBoxValue) {
       const value = args[1] as T;
+      this.value = null;
+      this.n = 0;
       this.value = value;
 
       return;
@@ -21,6 +23,8 @@ export class Box<T extends IRank<T>> {
 
     if (typeof args[0] === "symbol" && args[0] === Box.byBoxN) {
       const n = args[1] as number;
+      this.value = null;
+      this.n = 0;
       this.n = n;
 
       return;
@@ -28,6 +32,8 @@ export class Box<T extends IRank<T>> {
 
     if (args.length === 1 && isInt32(args[0])) {
       const n = args[0] as number;
+      this.value = null;
+      this.n = 0;
       this.n = n;
 
       return;
@@ -35,6 +41,8 @@ export class Box<T extends IRank<T>> {
 
     if (args.length === 1 && isType(args[0], IRank$runtimeType)) {
       const value = args[0] as T;
+      this.value = null;
+      this.n = 0;
       this.value = value;
 
       return;

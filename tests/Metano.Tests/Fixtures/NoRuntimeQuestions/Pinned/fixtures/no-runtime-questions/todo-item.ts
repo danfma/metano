@@ -3,7 +3,15 @@ import type { Point } from "./point.js";
 import { Priority } from "./priority.js";
 
 export class TodoItem {
-  constructor(readonly title: string, readonly priority: Priority, readonly location: Point) { }
+  declare readonly title: string;
+  declare readonly priority: Priority;
+  declare readonly location: Point;
+
+  constructor(title: string, priority: Priority, location: Point) {
+    this.title = title;
+    this.priority = priority;
+    this.location = location;
+  }
 
   get isUrgent(): boolean {
     return this.priority === Priority.High;

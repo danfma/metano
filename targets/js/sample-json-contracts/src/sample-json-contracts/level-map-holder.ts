@@ -6,7 +6,11 @@ import type { Level } from "./level.js";
 let LevelMapHolder$rt: ClassType<LevelMapHolder> | undefined;
 
 export class LevelMapHolder {
-  constructor(readonly byLevel: Dictionary<Level, string>) {}
+  declare readonly byLevel: Dictionary<Level, string>;
+
+  constructor(byLevel: Dictionary<Level, string>) {
+    this.byLevel = byLevel;
+  }
 
   static get $runtimeType(): ClassType<LevelMapHolder> {
     return (LevelMapHolder$rt ??= {

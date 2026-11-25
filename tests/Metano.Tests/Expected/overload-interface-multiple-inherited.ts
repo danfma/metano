@@ -23,8 +23,6 @@ import { isInt32 } from "metano-runtime";
 import type { IConv } from "./i-conv.js";
 
 export class C1 implements IConv<number> {
-  constructor() { }
-
   convXN(x: number, n: number): number {
     return 3;
   }

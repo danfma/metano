@@ -13,20 +13,46 @@ import type { IssueType } from "./issue-type.js";
 let IssueSnapshot$rt: ClassType<IssueSnapshot> | undefined;
 
 export class IssueSnapshot {
+  declare readonly id: IssueId;
+  declare readonly title: string;
+  declare readonly description: string;
+  declare readonly type: IssueType;
+  declare readonly priority: IssuePriority;
+  declare readonly status: IssueStatus;
+  declare readonly assigneeId: UserId | null;
+  declare readonly sprintKey: string | null;
+  declare readonly createdAt: Temporal.ZonedDateTime;
+  declare readonly updatedAt: Temporal.ZonedDateTime;
+  declare readonly estimatedHours: Decimal;
+  declare readonly comments: Comment[];
+
   constructor(
-    readonly id: IssueId,
-    readonly title: string,
-    readonly description: string,
-    readonly type: IssueType,
-    readonly priority: IssuePriority,
-    readonly status: IssueStatus,
-    readonly assigneeId: UserId | null,
-    readonly sprintKey: string | null,
-    readonly createdAt: Temporal.ZonedDateTime,
-    readonly updatedAt: Temporal.ZonedDateTime,
-    readonly estimatedHours: Decimal,
-    readonly comments: Comment[],
-  ) {}
+    id: IssueId,
+    title: string,
+    description: string,
+    type: IssueType,
+    priority: IssuePriority,
+    status: IssueStatus,
+    assigneeId: UserId | null,
+    sprintKey: string | null,
+    createdAt: Temporal.ZonedDateTime,
+    updatedAt: Temporal.ZonedDateTime,
+    estimatedHours: Decimal,
+    comments: Comment[],
+  ) {
+    this.id = id;
+    this.title = title;
+    this.description = description;
+    this.type = type;
+    this.priority = priority;
+    this.status = status;
+    this.assigneeId = assigneeId;
+    this.sprintKey = sprintKey;
+    this.createdAt = createdAt;
+    this.updatedAt = updatedAt;
+    this.estimatedHours = estimatedHours;
+    this.comments = comments;
+  }
 
   static get $runtimeType(): ClassType<IssueSnapshot> {
     return (IssueSnapshot$rt ??= {

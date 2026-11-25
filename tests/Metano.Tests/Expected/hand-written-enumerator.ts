@@ -1,7 +1,9 @@
 export class Countdown implements Iterator<number> {
-  private _value: number = 4;
+  declare private _value: number;
 
-  constructor() { }
+  constructor() {
+    this._value = 4;
+  }
 
   get current(): number {
     return this._value;

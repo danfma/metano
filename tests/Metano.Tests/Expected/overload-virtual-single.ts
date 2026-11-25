@@ -1,6 +1,4 @@
 export abstract class Widget {
-  constructor() { }
-
   abstract build(): string;
 }
 

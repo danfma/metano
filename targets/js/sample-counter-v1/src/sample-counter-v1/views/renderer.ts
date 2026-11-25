@@ -2,9 +2,10 @@
 import type { IView } from "./i-view.js";
 
 export class Renderer {
-  private readonly _container: HTMLElement;
+  private declare readonly _container: HTMLElement;
 
   constructor(containerId: string) {
+    this._container = undefined!;
     this._container = document.getElementById(containerId) ?? this.createElement(containerId);
   }
 

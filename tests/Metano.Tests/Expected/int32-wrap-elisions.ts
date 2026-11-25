@@ -2,8 +2,6 @@ import { Dictionary, HashSet, type ICollection, List } from "metano-runtime/syst
 import type { Bag } from "./bag.js";
 
 export class Elisions {
-  constructor() { }
-
   lastIndex(a: number[]): number {
     return a.length - 1;
   }

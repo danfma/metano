@@ -5,10 +5,13 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let PageRequest$rt: ClassType<PageRequest> | undefined;
 
 export class PageRequest {
-  constructor(
-    readonly number: number = 1,
-    readonly size: number = 20,
-  ) {}
+  declare readonly number: number;
+  declare readonly size: number;
+
+  constructor(number: number = 1, size: number = 20) {
+    this.number = number;
+    this.size = size;
+  }
 
   static get $runtimeType(): ClassType<PageRequest> {
     return (PageRequest$rt ??= {

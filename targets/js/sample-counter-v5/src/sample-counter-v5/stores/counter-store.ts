@@ -3,11 +3,13 @@ import { Counter } from "../models/counter.js";
 import { createEffect, createSignal } from "solid-js";
 
 export class CounterStore {
-  private readonly _get: () => Counter;
-  private readonly _set: ((value: Counter) => void) &
+  private declare readonly _get: () => Counter;
+  private declare readonly _set: ((value: Counter) => void) &
     ((updater: (arg: Counter) => Counter) => void);
 
   private constructor() {
+    this._get = undefined!;
+    this._set = undefined!;
     const [get, set] = createSignal(Counter.zero);
     this._get = get;
     this._set = set;

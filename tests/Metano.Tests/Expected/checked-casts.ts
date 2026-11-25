@@ -67,7 +67,7 @@ import { Perms$runtimeType, type Perms } from "./perms.js";
 import type { Shape } from "./shape.js";
 
 export class Conversions {
-  constructor() { }
+  private constructor() { }
 
   static toCircle(s: Shape): Circle {
     return castTo<Circle>(s, Circle);
@@ -161,9 +161,11 @@ export { Shape } from "./shape.js";
 import { HashCode, valueEquals } from "metano-runtime";
 
 export class Meter {
-  value: number = 0;
+  declare value: number;
 
-  constructor() { }
+  constructor() {
+    this.value = 0;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && valueEquals(this.value, other.value);
@@ -206,8 +208,6 @@ import type { ClassType } from "metano-runtime";
 let Shape$rt: ClassType<Shape> | undefined;
 
 export class Shape {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Shape> {
     return (Shape$rt ??= {
       kind: "class",

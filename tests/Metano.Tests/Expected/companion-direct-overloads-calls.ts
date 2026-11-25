@@ -2,8 +2,6 @@ import { Tag } from "./tag.js";
 import { UId } from "./u-id.js";
 
 export class Calls {
-  constructor() { }
-
   run(): string {
     const pick = Tag.sU;
 

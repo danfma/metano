@@ -1,17 +1,17 @@
 import { HashSet as HashSet$rt } from "metano-runtime/system/collections";
 
 export class HashSet {
-  constructor() { }
-
   has(x: number): boolean {
     return true;
   }
 }
 
 export class Holder {
-  items: HashSet$rt<number> = new HashSet$rt<number>();
+  declare items: HashSet$rt<number>;
 
-  constructor() { }
+  constructor() {
+    this.items = new HashSet$rt<number>();
+  }
 
   add(x: number): boolean {
     this.items.add(x);

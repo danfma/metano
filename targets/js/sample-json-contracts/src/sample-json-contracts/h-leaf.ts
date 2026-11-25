@@ -5,12 +5,11 @@ import { HMid } from "./h-mid.js";
 let HLeaf$rt: ClassType<HLeaf> | undefined;
 
 export class HLeaf extends HMid {
-  constructor(
-    a: number,
-    b: number,
-    readonly c: number,
-  ) {
+  declare readonly c: number;
+
+  constructor(a: number, b: number, c: number) {
     super(a, b);
+    this.c = c;
   }
 
   static override get $runtimeType(): ClassType<HLeaf> {

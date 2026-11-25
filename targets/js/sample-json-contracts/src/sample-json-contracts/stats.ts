@@ -10,11 +10,15 @@ import {
 let Stats$rt: ClassType<Stats> | undefined;
 
 export class Stats {
-  constructor(
-    readonly count: number,
-    readonly ratio: number,
-    readonly userName: string,
-  ) {}
+  declare readonly count: number;
+  declare readonly ratio: number;
+  declare readonly userName: string;
+
+  constructor(count: number, ratio: number, userName: string) {
+    this.count = count;
+    this.ratio = ratio;
+    this.userName = userName;
+  }
 
   static get $runtimeType(): ClassType<Stats> {
     return (Stats$rt ??= {

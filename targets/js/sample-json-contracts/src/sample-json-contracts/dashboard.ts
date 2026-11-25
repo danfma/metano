@@ -5,10 +5,13 @@ import type { IGauge } from "./i-gauge.js";
 let Dashboard$rt: ClassType<Dashboard> | undefined;
 
 export class Dashboard {
-  constructor(
-    readonly title: string,
-    readonly main: IGauge | null,
-  ) {}
+  declare readonly title: string;
+  declare readonly main: IGauge | null;
+
+  constructor(title: string, main: IGauge | null) {
+    this.title = title;
+    this.main = main;
+  }
 
   static get $runtimeType(): ClassType<Dashboard> {
     return (Dashboard$rt ??= {

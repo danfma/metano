@@ -47,58 +47,29 @@ internal sealed partial class LazyTypeInitializerLowering
             };
 
     /// <summary>
-    /// The constructor runs the guard before anything the instance runs. A derived
-    /// class runs it before <c>super(...)</c>; a base class's instance field
-    /// initializers run before its constructor body, so the guard folds into the
-    /// first one. A struct runs it, then its instance field initializers, on every
+    /// The constructor runs the guard before anything the instance runs: a derived
+    /// class before <c>super(...)</c>, a base class before its instance field
+    /// stores (<see cref="InstanceFieldStoreLowering"/>). A struct runs it on every
     /// path that runs a declared constructor, also one called with no arguments
-    /// (a <c>params</c> array left empty); the path that builds the implicit
-    /// default value runs neither, as <c>default(S)</c> runs no constructor.
+    /// (a <c>params</c> array left empty), before its field stores; the path that
+    /// builds the implicit default value runs neither, as <c>default(S)</c> runs no
+    /// constructor.
     /// </summary>
-    private TsConstructor GuardConstructor(TsConstructor constructor, List<TsClassMember> members)
-    {
-        if (target.IsStruct)
-            return constructor with { Body = WithStructPrologue(constructor.Body) };
-
-        if (!target.HasBaseClass && FoldIntoFirstFieldInitializer(members))
-            return constructor;
-
-        return constructor with
+    private TsConstructor GuardConstructor(TsConstructor constructor) =>
+        constructor with
         {
-            Body = WithGuard(constructor.Body, Guard()),
+            Body = target.IsStruct
+                ? WithStructPrologue(constructor.Body)
+                : WithGuard(constructor.Body, Guard()),
         };
-    }
 
     private IReadOnlyList<TsStatement> WithStructPrologue(IReadOnlyList<TsStatement> body)
     {
-        TsStatement[] prologue = [Guard(), .. _structFieldInitializers];
-
         return target.ImplicitDefault switch
         {
             ImplicitDefaultConstruction.WholeConstructor => body,
-            ImplicitDefaultConstruction.LeadingBranch => [body[0], .. prologue, .. body.Skip(1)],
-            _ => [.. prologue, .. body],
+            ImplicitDefaultConstruction.LeadingBranch => [body[0], Guard(), .. body.Skip(1)],
+            _ => [Guard(), .. body],
         };
-    }
-
-    private bool FoldIntoFirstFieldInitializer(List<TsClassMember> members)
-    {
-        var index = members.FindIndex(member =>
-            member is TsFieldMember { Static: false, Initializer: not null }
-        );
-
-        if (index < 0)
-            return false;
-
-        var field = (TsFieldMember)members[index];
-
-        members[index] = field with
-        {
-            Initializer = new TsParenthesized(
-                new TsBinaryExpression(GuardCall(), ",", field.Initializer!)
-            ),
-        };
-
-        return true;
     }
 }

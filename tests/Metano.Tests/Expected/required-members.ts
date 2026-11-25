@@ -1,12 +1,19 @@
 import { Point } from "./point.js";
 
 export class Person {
-  name!: string;
-  nick!: string;
-  readonly age: number = 0;
-  title: string = "Mx";
-  home: Point = new Point();
-  note: string | null = null;
+  declare name: string;
+  declare nick: string;
+  declare readonly age: number;
+  declare title: string;
+  declare home: Point;
+  declare note: string | null;
 
-  constructor() { }
+  constructor() {
+    this.name = undefined!;
+    this.nick = undefined!;
+    this.age = 0;
+    this.title = "Mx";
+    this.home = new Point();
+    this.note = null;
+  }
 }

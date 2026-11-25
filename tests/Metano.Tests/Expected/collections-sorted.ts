@@ -1,7 +1,7 @@
 import { SortedDictionary, SortedList, SortedSet, type IComparer, type IDictionary } from "metano-runtime/system/collections";
 
 export class Ordered {
-  constructor() { }
+  private constructor() { }
 
   static set(): SortedSet<number> {
     return SortedSet.of<number>([3, 1, 2]);

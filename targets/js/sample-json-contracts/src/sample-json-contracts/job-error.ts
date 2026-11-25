@@ -5,8 +5,11 @@ import { JobFinished } from "./job-finished.js";
 let JobError$rt: ClassType<JobError> | undefined;
 
 export class JobError extends JobFinished {
-  constructor(readonly error: string) {
+  declare readonly error: string;
+
+  constructor(error: string) {
     super();
+    this.error = error;
   }
 
   static override get $runtimeType(): ClassType<JobError> {

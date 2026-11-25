@@ -3,7 +3,7 @@ import { linq, select, where } from "metano-runtime/system/linq";
 import type { User } from "./user.js";
 
 export class UserQueries {
-  constructor() {}
+  private constructor() {}
 
   static adults(users: Iterable<User>): Iterable<User> {
     return linq(

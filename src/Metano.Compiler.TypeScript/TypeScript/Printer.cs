@@ -1519,6 +1519,11 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
                     }
                 });
                 break;
+
+            case TsInstanceFieldStores:
+                throw new InvalidOperationException(
+                    "The instance field stores of a constructor were not lowered before printing."
+                );
         }
     }
 

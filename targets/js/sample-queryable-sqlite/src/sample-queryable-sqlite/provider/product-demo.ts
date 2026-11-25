@@ -5,7 +5,7 @@ import type { Product } from "../product.js";
 import type { IProductRepository } from "./i-product-repository.js";
 
 export class ProductDemo {
-  constructor() {}
+  private constructor() {}
 
   static activeProducts(repo: IProductRepository): Product[] {
     return repo.toArray(

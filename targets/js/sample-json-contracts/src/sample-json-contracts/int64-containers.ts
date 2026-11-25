@@ -5,11 +5,19 @@ import type { Dictionary } from "metano-runtime/system/collections";
 let Int64Containers$rt: ClassType<Int64Containers> | undefined;
 
 export class Int64Containers {
+  declare readonly values: bigint[];
+  declare readonly byName: Dictionary<bigint, string>;
+  declare readonly byMask: Dictionary<bigint, string>;
+
   constructor(
-    readonly values: bigint[],
-    readonly byName: Dictionary<bigint, string>,
-    readonly byMask: Dictionary<bigint, string>,
-  ) {}
+    values: bigint[],
+    byName: Dictionary<bigint, string>,
+    byMask: Dictionary<bigint, string>,
+  ) {
+    this.values = values;
+    this.byName = byName;
+    this.byMask = byMask;
+  }
 
   static get $runtimeType(): ClassType<Int64Containers> {
     return (Int64Containers$rt ??= {

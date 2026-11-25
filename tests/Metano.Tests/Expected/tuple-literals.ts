@@ -1,8 +1,6 @@
 import type { Point } from "./point.js";
 
 export class Pairs {
-  constructor() { }
-
   positional(a: number): [number, string] {
     return [a, "x"] as [number, string];
   }

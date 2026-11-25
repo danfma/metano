@@ -1,7 +1,9 @@
 export class Counter {
-  private _count: number = 0;
+  declare private _count: number;
 
-  constructor() { }
+  constructor() {
+    this._count = 0;
+  }
 
   get count(): number {
     return this._count;

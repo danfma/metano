@@ -1,8 +1,6 @@
 export class Clock {
   private static readonly selector: string = "#app";
 
-  constructor() { }
-
   now(): number {
     return (performance.now()) as number;
   }

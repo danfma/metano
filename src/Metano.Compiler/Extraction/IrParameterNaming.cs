@@ -36,7 +36,7 @@ internal static class IrParameterNaming
         OverloadGroupingPolicy policy
     ) =>
         compilation is not null
-        && IsRenamableOwner(parameter.ContainingSymbol)
+        && (IsRenamableOwner(parameter.ContainingSymbol) || IsPlainConstructorParameter(parameter))
         && CollidingNamesOf(parameter.ContainingSymbol, compilation, policy)
             .Contains(parameter.Name)
             ? parameter.Name + CollisionSuffix
@@ -71,6 +71,24 @@ internal static class IrParameterNaming
             } method
         && !method.IsExtensionBlockMember()
         && !method.HasObjectArgs();
+
+    /// <summary>
+    /// A parameter of an explicit constructor that no property of the type is
+    /// named after, so it cannot be promoted to a member: it binds a bare
+    /// identifier like a method's, also in the instance initializers a target
+    /// emits inside the constructor (W10-1).
+    /// </summary>
+    private static bool IsPlainConstructorParameter(IParameterSymbol parameter) =>
+        parameter.ContainingSymbol
+            is IMethodSymbol { MethodKind: MethodKind.Constructor, IsStatic: false } constructor
+        && constructor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            is ConstructorDeclarationSyntax
+        && !constructor
+            .ContainingType.GetMembers()
+            .OfType<IPropertySymbol>()
+            .Any(property =>
+                string.Equals(property.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)
+            );
 
     private static bool IsOperator(ISymbol owner) =>
         owner is IMethodSymbol method && method.IsUserDefinedOperatorOrConversion();
@@ -110,7 +128,11 @@ internal static class IrParameterNaming
             SymbolHelper.ToCamelCase(parameter.Name)
         );
 
-        foreach (var calledName in FlattenedNamesCalledIn(declaration, model, policy))
+        var calledNames = InitializerRootsOf(method, declaration)
+            .Prepend(declaration)
+            .SelectMany(root => FlattenedNamesCalledIn(root, model, policy));
+
+        foreach (var calledName in calledNames)
         {
             colliding.UnionWith(
                 parametersByEmittedName[calledName].Select(parameter => parameter.Name)
@@ -119,6 +141,35 @@ internal static class IrParameterNaming
 
         return colliding;
     }
+
+    /// <summary>
+    /// The instance initializers an explicit constructor runs, declared in its
+    /// syntax tree: a target may emit them inside the constructor (W10-1).
+    /// </summary>
+    private static IEnumerable<SyntaxNode> InitializerRootsOf(
+        IMethodSymbol method,
+        SyntaxNode declaration
+    ) =>
+        method.MethodKind is MethodKind.Constructor && declaration is ConstructorDeclarationSyntax
+            ? method
+                .ContainingType.DeclaringSyntaxReferences.Where(reference =>
+                    reference.SyntaxTree == declaration.SyntaxTree
+                )
+                .Select(reference => reference.GetSyntax())
+                .OfType<TypeDeclarationSyntax>()
+                .SelectMany(part => part.Members)
+                .Where(member => !member.Modifiers.Any(m => m.ValueText is "static" or "const"))
+                .SelectMany(member =>
+                    member switch
+                    {
+                        FieldDeclarationSyntax field => field
+                            .Declaration.Variables.Select(v => v.Initializer)
+                            .OfType<SyntaxNode>(),
+                        PropertyDeclarationSyntax { Initializer: { } initializer } => [initializer],
+                        _ => [],
+                    }
+                )
+            : [];
 
     /// <summary>
     /// Every bare name a flattened call under <paramref name="root"/> may spell (<see

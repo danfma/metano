@@ -3,8 +3,8 @@ import { HashCode, isInt32 } from "metano-runtime";
 export class Pt {
   protected static readonly byPtX = /* @__PURE__ */ Symbol("Pt(int x)");
   protected static readonly byPtXY = /* @__PURE__ */ Symbol("Pt(int x, int y)");
-  x: number = 0;
-  name: string;
+  declare x: number;
+  declare name: string;
 
   constructor(overload: typeof Pt.byPtX, x: number);
   constructor(overload: typeof Pt.byPtXY, x: number, y: number);
@@ -82,7 +82,7 @@ import { HashCode, isInt32 } from "metano-runtime";
 export class Tick {
   protected static readonly byTickDefault = /* @__PURE__ */ Symbol("Tick()");
   protected static readonly byTickN = /* @__PURE__ */ Symbol("Tick(int n)");
-  readonly n: number = 0;
+  declare readonly n: number;
 
   constructor(overload: typeof Tick.byTickDefault);
   constructor(overload: typeof Tick.byTickN, n: number);
@@ -90,6 +90,7 @@ export class Tick {
   constructor();
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Tick.byTickDefault) {
+      this.n = 0;
       this.n = 7;
 
       return;
@@ -97,6 +98,7 @@ export class Tick {
 
     if (typeof args[0] === "symbol" && args[0] === Tick.byTickN) {
       const n = args[1] as number;
+      this.n = 0;
       this.n = n;
 
       return;
@@ -104,12 +106,14 @@ export class Tick {
 
     if (args.length === 1 && isInt32(args[0])) {
       const n = args[0] as number;
+      this.n = 0;
       this.n = n;
 
       return;
     }
 
     if (args.length === 0) {
+      this.n = 0;
       this.n = 7;
 
       return;
@@ -141,8 +145,6 @@ export class Tick {
 import { Pt } from "./pt.js";
 
 export class Use {
-  constructor() { }
-
   origin(): number {
     return new Pt().x;
   }

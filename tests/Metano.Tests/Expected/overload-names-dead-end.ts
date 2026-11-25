@@ -1,8 +1,6 @@
 import { isInt32 } from "metano-runtime";
 
 export class Generic {
-  constructor() { }
-
   mInt32$1<T>(x: number): number {
     return 1;
   }

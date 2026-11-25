@@ -41,6 +41,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                 IrToTsBridgeContext.For(null)
             )!
         );
+
         // One overload signature per constructor, most-specific first (same arity
         // here, so order is preserved by the input). The TS printer tags every
         // ctor parameter with `public` — we assert on the parameter shape alone.
@@ -82,6 +83,7 @@ public class IrToTsConstructorDispatcherBridgeTests
                 IrToTsBridgeContext.For(null)
             )!
         );
+
         // Each branch opens with the matching super(...) call derived from the
         // C# `: base(...)` initializer.
         await Assert.That(printed).Contains("super(x)");
@@ -101,6 +103,7 @@ public class IrToTsConstructorDispatcherBridgeTests
             }
             """
         );
+
         await Assert
             .That(
                 IrToTsConstructorDispatcherBridge.Build(
@@ -122,12 +125,15 @@ public class IrToTsConstructorDispatcherBridgeTests
         var compilation = IrTestHelper.Compile(source);
         var tree = compilation.SyntaxTrees.First();
         var typeDecls = tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
+
         var typeDecl =
             typeName.Length == 0
                 ? typeDecls.Last()
                 : typeDecls.First(t => t.Identifier.ValueText == typeName);
+
         var model = compilation.GetSemanticModel(tree);
         var typeSymbol = (INamedTypeSymbol)model.GetDeclaredSymbol(typeDecl)!;
+
         return IrConstructorExtractor.Extract(
             typeSymbol,
             new IrExtractionContext(Compilation: compilation)
@@ -169,7 +175,11 @@ public class IrToTsConstructorDispatcherBridgeTests
 
     private static string PrintConstructor(TsConstructor ctor)
     {
-        var cls = new TsClass("Box", Constructor: ctor, Members: []);
+        var lowered = InstanceFieldStoreLowering
+            .Apply(new TsClassBody(ctor, []), InstanceFieldStorePlan.None)
+            .Constructor;
+
+        var cls = new TsClass("Box", Constructor: lowered, Members: []);
         var file = new TsSourceFile("ctor.ts", [cls]);
         return new Printer().Print(file);
     }

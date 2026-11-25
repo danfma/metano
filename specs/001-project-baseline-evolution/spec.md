@@ -1651,6 +1651,24 @@ Product requirements added after the migration (normative; each one is traced by
   `es2024`) avoids. This is a documented limitation of the pair of versions, not of the
   runtime; removing it needs the polyfill, or a design that changes the Temporal-typed
   public API (see the issue).
+- **FR-108** (instance field shape, #795, #787 N4/N11, decisions W10-1 / W10-1a): An
+  instance field of an emitted TypeScript class, including an auto-property's storage, an
+  event's backing field and a promoted record or primary-constructor parameter, MUST be a
+  type-only declaration (`declare readonly x: number;`), and every constructor path MUST store
+  each such field exactly once, right after `super(...)` and the runtime type-argument slot, in
+  the constructor that runs the C# initializers (not one chaining with `: this(...)`): first
+  the promoted members in parameter order, then every other field in declaration order with its
+  C# initializer, its default, its captured parameter, or `undefined!` when it has none. The
+  own keys are therefore created in declaration order on every path. A trailing run of fields
+  without an initializer (or with a literal one) that every constructor assigns first, in
+  declaration order, before any code can observe the instance (no `this` or `base` in the
+  stored values) stores only that body assignment. Left as class fields: static, abstract and
+  `override` fields (`declare override` is TS1243), and `#private` fields. A static class MUST
+  emit `private constructor() { }`; a class that declares no constructor and has nothing to run
+  in one emits none. A constructor parameter or local named like a function an inlined
+  initializer calls is renamed (`compute$`, `compute$1`). Consumers compiling the output with
+  Babel's `preset-typescript` need `allowDeclareFields`. Tests:
+  `tests/Metano.Tests/InstanceFieldStoreTests.cs`, conformance `FieldStoreProbes`.
 - **FR-099** (placeholder severity, wave 9 decisions W9-13 / W9-13a): An unsupported construct
   whose emission replaces executable code with a placeholder — a `/* TODO … */` marker, a dropped
   statement or expression, a read that yields nothing instead of the value — MUST report `MS0001`

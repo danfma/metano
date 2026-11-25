@@ -2,8 +2,6 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Base {
-  constructor() { }
-
   addX(x: number): string {
     return "int";
   }
@@ -214,8 +212,6 @@ export class Leaf extends Middle {
 import { isInt32 } from "metano-runtime";
 
 export class Mapper {
-  constructor() { }
-
   mapXY(x: number, y: number): string {
     return "pair";
   }
@@ -330,8 +326,6 @@ export class Renamed extends Base {
 import { isInt32 } from "metano-runtime";
 
 export class Repo<T> {
-  constructor() { }
-
   putCount(count: number): string {
     return "count";
   }
@@ -359,8 +353,6 @@ export class Repo<T> {
 import { isInt32, isString } from "metano-runtime";
 
 export abstract class Shape {
-  constructor() { }
-
   abstract drawX(x: number): string;
 
   abstract drawS(s: string): string;
@@ -385,8 +377,6 @@ import { isBool, isInt32, isString } from "metano-runtime";
 import type { ISink } from "./i-sink.js";
 
 export class Sink implements ISink {
-  constructor() { }
-
   writeX(x: number): string {
     return "int";
   }

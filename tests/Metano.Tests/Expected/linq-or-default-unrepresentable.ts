@@ -4,8 +4,6 @@ import type { Point } from "./point.js";
 import { Tone } from "./tone.js";
 
 export class Zeroed {
-  constructor() { }
-
   at(xs: List<Point>): Point | null {
     return linq(xs, firstOrDefault());
   }

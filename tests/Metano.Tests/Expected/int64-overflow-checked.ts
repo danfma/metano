@@ -1,8 +1,6 @@
 import { checkedInt32, checkedInt64, checkedUInt64 } from "metano-runtime";
 
 export class Check {
-  constructor() { }
-
   add(l: bigint, m: bigint): bigint {
     return checkedInt64(l + m);
   }

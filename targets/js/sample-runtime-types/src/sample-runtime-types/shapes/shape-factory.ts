@@ -4,7 +4,7 @@ import type { Shape } from "./shape.js";
 import { Square } from "./square.js";
 
 export class ShapeFactory {
-  constructor() {}
+  private constructor() {}
 
   static create(kind: string): Shape {
     return kind === "circle" ? new Circle() : new Square();

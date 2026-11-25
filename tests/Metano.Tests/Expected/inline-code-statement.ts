@@ -1,6 +1,4 @@
 export class Effects {
-  constructor() { }
-
   log(message: string): void {
     console.log(message);
     const a = 1; console.log(a);

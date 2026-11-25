@@ -5,8 +5,11 @@ import { DBase } from "./d-base.js";
 let DBer$rt: ClassType<DBer> | undefined;
 
 export class DBer extends DBase {
-  constructor(readonly w: number) {
+  declare readonly w: number;
+
+  constructor(w: number) {
     super();
+    this.w = w;
   }
 
   static override get $runtimeType(): ClassType<DBer> {

@@ -106,7 +106,7 @@ public class ExtensionOperatorTests
                 import type { Sig } from "./sig.js";
 
                 export class Use {
-                  constructor() { }
+                  private constructor() { }
 
                   static run(a: Sig, b: Sig): number {
                     let c = __add$Sig(a, b);
@@ -261,7 +261,7 @@ public class ExtensionOperatorTests
                     import { __add$Sig, type Sig } from "sig-lib";
 
                     export class Use {
-                      constructor() { }
+                      private constructor() { }
 
                       static sum(a: Sig, b: Sig): Sig {
                         return __add$Sig(a, b);

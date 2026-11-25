@@ -793,13 +793,18 @@ let NarrowCells$rt: ClassType<NarrowCells> | undefined;
 
 export class NarrowCells {
   private static readonly notReadOnce: number = 65535;
-  private readonly _cells: number[];
-  private _cellReads: number = 0;
-  byteField: number = 0;
-  sByteField: number = 0;
-  shortProperty: number = 0;
+  declare private readonly _cells: number[];
+  declare private _cellReads: number;
+  declare byteField: number;
+  declare sByteField: number;
+  declare shortProperty: number;
 
   constructor(seed: number) {
+    this._cells = undefined!;
+    this._cellReads = 0;
+    this.byteField = 0;
+    this.sByteField = 0;
+    this.shortProperty = 0;
     this._cells = [0, seed];
   }
 

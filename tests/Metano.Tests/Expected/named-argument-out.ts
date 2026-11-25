@@ -5,7 +5,7 @@ import type { OutHost } from "./out-host.js";
 import { Trace } from "./trace.js";
 
 export class OutCalls {
-  constructor() { }
+  private constructor() { }
 
   static outFirstInOrder(o: OutHost): number {
     const [r, x] = o.outFirst(Trace.next("p"), Trace.next("q"));
@@ -135,7 +135,7 @@ import { Overloaded } from "./overloaded.js";
 import { Trace } from "./trace.js";
 
 export class OverloadedOutCalls {
-  constructor() { }
+  private constructor() { }
 
   static firstInOrder(o: Overloaded): number {
     const [r, x] = o.firstOutOfInt32Int32Int32(Trace.next("p"), Trace.next("q"));
