@@ -346,8 +346,7 @@ export class Handlers {
     try {
       this.work(kind);
     } catch (e$) {
-      const e0 = toException(e$);
-      const e = e0;
+      const e = toException(e$);
       this._log.add(e instanceof AppException ? "app" : "other");
       throw e$;
     }

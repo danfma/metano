@@ -35,6 +35,23 @@ internal static class ReferenceNullability
     }
 
     /// <summary>
+    /// <see cref="MayBeNull(SemanticModel, ExpressionSyntax)"/> for a string
+    /// compound assignment's target, where a <c>var</c> local trusts its flow
+    /// state: <c>var</c> is declared nullable-annotated whatever the
+    /// initializer, so its declared annotation says nothing, while the flow
+    /// state of a local that holds a string at that point is not-null
+    /// (nullable-enabled code only; disabled code has no flow state).
+    /// </summary>
+    public static bool MayBeNullAsTarget(SemanticModel model, ExpressionSyntax target) =>
+        MayBeNull(model, target) && !IsNotNullVarLocal(model, target);
+
+    private static bool IsNotNullVarLocal(SemanticModel model, ExpressionSyntax target) =>
+        model.GetSymbolInfo(target).Symbol is ILocalSymbol local
+        && local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            is VariableDeclaratorSyntax { Parent: VariableDeclarationSyntax { Type.IsVar: true } }
+        && model.GetTypeInfo(target).Nullability.FlowState == NullableFlowState.NotNull;
+
+    /// <summary>
     /// Whether a value read from a symbol of <paramref name="type"/> may hold
     /// <c>null</c>: the declared-annotation rule of the expression form, for a
     /// read the compiler synthesizes (a record member in its text, baseline FR-093).

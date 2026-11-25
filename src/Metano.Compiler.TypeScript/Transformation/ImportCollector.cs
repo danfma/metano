@@ -1855,7 +1855,12 @@ public sealed class ImportCollector(
                 CollectFromStatements(tryStmt.Body, sink);
 
                 if (tryStmt.Catch is { } handler)
-                    CollectInScope([handler.Parameter], handler.Body, [], sink);
+                    CollectInScope(
+                        handler.Parameter is { } parameter ? [parameter] : [],
+                        handler.Body,
+                        [],
+                        sink
+                    );
 
                 if (tryStmt.Finally is { } finallyBody)
                     CollectFromStatements(finallyBody, sink);

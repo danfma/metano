@@ -454,8 +454,8 @@ public class CatchClauseLoweringTests
         );
 
         await Assert.That(output).Contains("} catch (e$) {");
-        await Assert.That(output).Contains("const e0 = toException(e$);");
-        await Assert.That(output).Contains("const failure = e0;");
+        await Assert.That(output).Contains("const failure = toException(e$);");
+        await Assert.That(output).DoesNotContain("e0");
     }
 
     [Test]
@@ -488,8 +488,7 @@ public class CatchClauseLoweringTests
         );
 
         await Assert.That(output).Contains("} catch (e$) {");
-        await Assert.That(output).Contains("const e0 = toException(e$);");
-        await Assert.That(output).Contains("let failure = e0;");
+        await Assert.That(output).Contains("let failure = toException(e$);");
         await Assert.That(output).Contains("throw e$;");
     }
 

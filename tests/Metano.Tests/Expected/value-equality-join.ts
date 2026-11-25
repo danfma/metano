@@ -402,7 +402,7 @@ export class UBoth {
   }
 
   equalsO(o: UBoth | null): boolean {
-    return !(o == null) && o.v === this.v;
+    return o != null && o.v === this.v;
   }
 
   equalsByValue(other: unknown): boolean {

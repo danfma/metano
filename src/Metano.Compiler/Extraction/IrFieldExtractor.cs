@@ -69,6 +69,11 @@ public static class IrFieldExtractor
         && compilation is not null
         && IrStaticConstructorExtractor.WritesMember(field, compilation);
 
+    /// <summary>
+    /// The initializer of <paramref name="field"/>: a string <c>const</c> folds to
+    /// the literal Roslyn computed (<c>"a" + "b"</c> is <c>"ab"</c>, an interpolation
+    /// of constants too).
+    /// </summary>
     private static IrExpression? TryExtractInitializer(
         IFieldSymbol field,
         Compilation compilation,
@@ -81,6 +86,9 @@ public static class IrFieldExtractor
 
         if (declarator?.Initializer is null)
             return null;
+
+        if (field is { IsConst: true, ConstantValue: string folded })
+            return new IrLiteral(folded, IrLiteralKind.String);
 
         var model = compilation.GetSemanticModel(declarator.SyntaxTree);
         var expr = new IrExpressionExtractor(model, context);

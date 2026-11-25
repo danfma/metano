@@ -77,7 +77,7 @@ export class InMemoryIssueRepository implements IIssueRepository {
   }
 
   async existsAsync(id: IssueId): Promise<boolean> {
-    return !((await this.getByIdAsync(id)) == null);
+    return (await this.getByIdAsync(id)) != null;
   }
 
   listBySprintAsync(sprintKey: string): Promise<IReadOnlyList<Issue>> {

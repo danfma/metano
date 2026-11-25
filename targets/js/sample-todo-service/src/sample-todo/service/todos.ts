@@ -77,11 +77,11 @@ export class TodoStore {
 
     let item = existing.item;
 
-    if (!(patch.title == null)) {
+    if (patch.title != null) {
       item = item.with({ title: patch.title });
     }
 
-    if (!(patch.priority == null)) {
+    if (patch.priority != null) {
       item = item.with({
         priority:
           patch.priority ??
@@ -89,7 +89,7 @@ export class TodoStore {
       });
     }
 
-    if (!(patch.completed == null)) {
+    if (patch.completed != null) {
       item = item.with({
         completed:
           patch.completed ??

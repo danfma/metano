@@ -65,7 +65,7 @@ public class NullGuardDeclaredTypeTests
             """
         );
 
-        await Assert.That(files["probe.ts"]).Contains("r = (r ?? \"\") + (s ?? \"\");");
+        await Assert.That(files["probe.ts"]).Contains("r += s ?? \"\";");
     }
 
     [Test]

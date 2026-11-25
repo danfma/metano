@@ -262,7 +262,7 @@ public class SwitchExpressionChainTests
         await Assert
             .That(output)
             .Contains(
-                "const r = ($s = shape, $s instanceof Circle && ($c = $s, !(($c = new Circle(9)) == null)) ? $c.radius : 0);"
+                "const r = ($s = shape, $s instanceof Circle && ($c = $s, ($c = new Circle(9)) != null) ? $c.radius : 0);"
             );
     }
 

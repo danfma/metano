@@ -709,16 +709,17 @@ public static partial class IrToTsExpressionBridge
     /// Under <c>noUncheckedIndexedAccess</c> <c>a[i]</c> is
     /// <c>T | undefined</c>, which does not type-check where C# has a
     /// <c>T</c> (a throw replaces the missing element there): <c>a[i]!</c>
-    /// for a <c>T</c> element, and <c>(a[i] ?? null)</c> for a nullable one,
-    /// whose own <c>null</c> a <c>!</c> would strip from the type (#670).
+    /// for a <c>T</c> element, and <c>a[i] as T | null</c> for a nullable one,
+    /// whose own <c>null</c> a <c>!</c> would strip from the type (#670). The
+    /// nullable read is bare at run time: an out-of-range <c>undefined</c> is
+    /// not turned into a <c>null</c> where .NET throws (#787).
     /// </summary>
     private static TsExpression CheckedElementRead(TsExpression read, IrTypeRef? collectionType) =>
         collectionType switch
         {
-            IrArrayTypeRef when IsNullableElement(collectionType) => new TsBinaryExpression(
+            IrArrayTypeRef { ElementType: IrNullableTypeRef element } => new TsCastExpression(
                 read,
-                "??",
-                new TsLiteral("null")
+                IrToTsTypeMapper.Map(element)
             ),
             IrArrayTypeRef or IrPrimitiveTypeRef { Primitive: IrPrimitive.String } =>
                 new TsPostfixUnaryExpression(read, "!"),

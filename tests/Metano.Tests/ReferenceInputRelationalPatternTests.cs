@@ -48,7 +48,7 @@ public class ReferenceInputRelationalPatternTests
     {
         var output = Transpile("public static bool Positive(int? n) => n is > 0;");
 
-        await Assert.That(output).Contains("return !(n == null) && n > 0;");
+        await Assert.That(output).Contains("return n != null && n > 0;");
     }
 
     [Test]

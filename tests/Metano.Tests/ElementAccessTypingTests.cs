@@ -27,7 +27,7 @@ public class ElementAccessTypingTests
     }
 
     [Test]
-    public async Task NullableElementRead_IsNormalizedNotAsserted()
+    public async Task NullableElementRead_IsCastNotAsserted()
     {
         var output = Emit(
             """
@@ -36,7 +36,7 @@ public class ElementAccessTypingTests
             """
         );
 
-        await Assert.That(output).Contains("return values[0] ?? null;");
+        await Assert.That(output).Contains("return values[0] as string | null;");
         await Assert.That(output).Contains("return values[0] ?? \"d\";");
         await Assert.That(output).DoesNotContain("?? null ??");
     }
