@@ -271,10 +271,17 @@ public static class IrBodyPrinter
     /// Dart leaves out: a local or parameter read after <c>x!</c>, which Dart
     /// promotes itself. A member read keeps it: Dart never promotes a
     /// non-final field (its <c>!</c> may then throw where a call changed the
-    /// field, which C# does not track; FR-101).
+    /// field, which C# does not track; FR-101). Also the <c>!</c> over a
+    /// <c>null</c> literal (<c>null!</c>, <c>default!</c>), which on Dart would
+    /// throw: Dart takes the bare literal for a non-nullable type.
     /// </summary>
     private static bool IsLeftOutOnDart(IrUnaryExpression unary) =>
-        unary.FlowProof is IrFlowNonNullProof.ForgivenLocalRead;
+        unary.FlowProof is IrFlowNonNullProof.ForgivenLocalRead
+        || unary
+            is {
+                Operator: IrUnaryOp.NonNullAssertion,
+                Operand: IrLiteral { Kind: IrLiteralKind.Null }
+            };
 
     /// <summary>
     /// Appends a placeholder that drops code, reporting it (W9-13 / W9-13a).

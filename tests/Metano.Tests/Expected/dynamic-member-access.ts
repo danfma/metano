@@ -5,7 +5,7 @@ export class Probe {
   protected static readonly byProbeDefault = /* @__PURE__ */ Symbol("Probe()");
   protected static readonly byProbeX = /* @__PURE__ */ Symbol("Probe(int x)");
   protected static readonly byProbeS = /* @__PURE__ */ Symbol("Probe(string s)");
-  value: any = null;
+  value: any = null!;
   items: List<any> = new List<any>();
 
   constructor(overload: typeof Probe.byProbeDefault);

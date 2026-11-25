@@ -2489,7 +2489,7 @@ public sealed partial class IrExpressionExtractor
             node is PostfixUnaryExpressionSyntax suppress
             && suppress.IsKind(SyntaxKind.SuppressNullableWarningExpression)
         )
-            return AssertNonNull(suppress.Operand);
+            return AssertNonNull(suppress);
 
         if (node is PrefixUnaryExpressionSyntax prefix && TryExtractUserUnary(prefix) is { } user)
             return user;
@@ -2630,19 +2630,24 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// <c>x!</c>: a reference or type-parameter value keeps the assertion so a
     /// target that checks nullability statically reads it as non-null. A
-    /// nullable value type keeps its nullable type in C#, a literal
-    /// (<c>null!</c>) has no value to assert on, and any other operand has
-    /// nothing to assert, so those pass through.
+    /// <c>null!</c> / <c>default!</c> (a <c>null</c> literal for a reference type)
+    /// keeps it unless its destination accepts <c>null</c>, which a static check
+    /// would otherwise reject the bare <c>null</c> for (#794; see
+    /// <see cref="WithLiteralAssertion"/>). A nullable value type keeps its nullable type in
+    /// C#, any other literal has no value to assert on, and any other operand
+    /// has nothing to assert, so those pass through.
     /// </summary>
-    private IrExpression AssertNonNull(ExpressionSyntax operand)
+    private IrExpression AssertNonNull(PostfixUnaryExpressionSyntax suppress)
     {
+        var operand = suppress.Operand;
         var value = Extract(operand);
 
-        return
-            value is not IrLiteral
+        return value is IrLiteral { Kind: IrLiteralKind.Null }
+                ? WithLiteralAssertion(suppress, value)
+            : value is not IrLiteral
             && !IsUnsupportedPlaceholder(value)
             && MayBeNullReference(operand)
-            ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, value, IsPrefix: false)
+                ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, value, IsPrefix: false)
             : value;
     }
 
