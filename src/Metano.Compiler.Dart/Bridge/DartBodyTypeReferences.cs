@@ -13,9 +13,9 @@ namespace Metano.Compiler.Dart.Bridge;
 /// Covered positions: static-member receivers (<c>DelExt.twice(h.get)</c>, which includes the
 /// type hosting an extension helper), <c>new</c> expressions, casts, type tests and top-level
 /// <c>is Type</c> patterns, local-variable and <c>foreach</c> variable types, and catch
-/// exception types, and the types named by switch-expression arm patterns (including nested
-/// property, positional, list and logical patterns). Types only inside nested patterns of an
-/// <c>is</c> expression or generic type arguments of a call are not collected yet.
+/// exception types, and the types named by switch-expression arm, switch-statement label and
+/// <c>is</c> patterns (including nested property, positional, list and logical patterns).
+/// Generic type arguments of a call are not collected yet.
 /// </para>
 /// </summary>
 public static class DartBodyTypeReferences
@@ -43,6 +43,7 @@ public static class DartBodyTypeReferences
     private static void VisitStatement(IrStatement statement, List<DartType> types)
     {
         types.AddRange(TypesNamedBy(statement));
+        types.AddRange(PatternTypesOf(statement));
 
         foreach (var expression in IrNodeChildren.ExpressionsOf(statement))
             VisitExpression(expression, types);
@@ -83,10 +84,7 @@ public static class DartBodyTypeReferences
             IrNewExpression creation => [IrToDartTypeMapper.Map(creation.Type)],
             IrCastExpression cast => [IrToDartTypeMapper.Map(cast.TargetType)],
             IrTypeCheck check => [IrToDartTypeMapper.Map(check.Type)],
-            IrIsPatternExpression { Pattern: IrTypePattern pattern } =>
-            [
-                IrToDartTypeMapper.Map(pattern.Type),
-            ],
+            IrIsPatternExpression isPattern => TypesNamedBy(isPattern.Pattern),
             IrSwitchExpression sw => sw.Arms.SelectMany(arm => TypesNamedBy(arm.Pattern)),
             IrLambdaExpression lambda => lambda
                 .Parameters.Select(p => p.Type)
@@ -99,6 +97,14 @@ public static class DartBodyTypeReferences
             } => typeArgs.Select(IrToDartTypeMapper.Map),
             _ => [],
         };
+
+    private static IEnumerable<DartType> PatternTypesOf(IrStatement statement) =>
+        statement is IrSwitchStatement sw
+            ? sw
+                .Cases.SelectMany(c => c.Labels)
+                .OfType<IrPatternCaseLabel>()
+                .SelectMany(label => TypesNamedBy(label.Pattern))
+            : [];
 
     private static IEnumerable<DartType> TypesNamedBy(IrPattern pattern) =>
         pattern switch

@@ -813,20 +813,20 @@ public static class IrBodyPrinter
     /// A bound type pattern prints as the typed variable pattern <c>Circle c</c>. A
     /// bare <c>Circle</c> would be a constant pattern that matches the <c>Type</c>
     /// object and never an instance, so it prints as the object pattern
-    /// <c>Circle()</c>; a nullable type has no object-pattern form and prints as
-    /// the typed wildcard <c>Circle? _</c>.
+    /// <c>Circle()</c>; a nullable, record or function type has no object-pattern
+    /// form and prints as the typed wildcard (<c>Circle? _</c>, <c>(int, String) _</c>).
     /// </summary>
     private static void PrintTypePattern(StringBuilder sb, IrTypePattern typePat)
     {
-        var type = FormatType(typePat.Type);
-        sb.Append(type);
+        var type = IrToDartTypeMapper.Map(typePat.Type);
+        sb.Append(DartTypeFormatter.Format(type));
 
         if (typePat.Designator is not null)
             sb.Append(' ').Append(IrToDartNamingPolicy.ToParameterName(typePat.Designator.Name));
-        else if (type.EndsWith('?'))
-            sb.Append(" _");
-        else
+        else if (type is DartNamedType)
             sb.Append("()");
+        else
+            sb.Append(" _");
     }
 
     private static void PrintSwitchPattern(StringBuilder sb, IrPattern pattern)

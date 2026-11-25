@@ -67,4 +67,77 @@ public class DartTypePatternTests
 
         await Assert.That(output).IsEqualTo("OK");
     }
+
+    private const string NestedSource = """
+        [Transpile]
+        public class Square(int side)
+        {
+            public int Side { get; } = side;
+        }
+
+        [Transpile]
+        public class Pair(Square left)
+        {
+            public Square Left { get; } = left;
+        }
+
+        [Transpile]
+        public class Box<T>(T value)
+        {
+            public T Value { get; } = value;
+        }
+
+        [Transpile]
+        public static class Matcher
+        {
+            public static string Statement(object? pair)
+            {
+                switch (pair)
+                {
+                    case Pair { Left: Square }:
+                        return "square";
+                    default:
+                        return "other";
+                }
+            }
+
+            public static bool IsBox(object? o) => o is Box<int> && o.GetHashCode() > 0;
+
+            public static string Tuple(object? o) =>
+                o switch { ValueTuple<int, string> => "pair", Func<int> => "func", _ => "other" };
+        }
+        """;
+
+    [Test]
+    public async Task NestedPatternTypes_AreImportedAndRecordPatternsUseATypedWildcard_744()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(NestedSource);
+
+        await Assert.That(files["matcher.dart"]).Contains("case Pair(left: Square()):");
+        await Assert.That(files["matcher.dart"]).Contains("(int, String) _ => 'pair'");
+        await Assert.That(files["matcher.dart"]).Contains("int Function() _ => 'func'");
+
+        var output = await DartToolchain.AnalyzeAndRunAsync(
+            files,
+            """
+            import 'box.dart';
+            import 'pair.dart';
+            import 'square.dart';
+            import 'matcher.dart';
+
+            void main() {
+              var ok = Matcher.statement(Pair(Square(1))) == 'square'
+                && Matcher.isBox(Box<int>(1))
+                && !Matcher.isBox('x')
+                && Matcher.tuple((1, 'a')) == 'pair'
+                && Matcher.tuple(() => 1) == 'func'
+                && Matcher.tuple(5) == 'other';
+              if (!ok) throw StateError('nested pattern did not match');
+              print('OK');
+            }
+            """
+        );
+
+        await Assert.That(output).IsEqualTo("OK");
+    }
 }
