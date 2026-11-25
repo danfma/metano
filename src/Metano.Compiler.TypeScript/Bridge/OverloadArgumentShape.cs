@@ -120,10 +120,11 @@ internal sealed class OverloadArgumentShape
             return scope;
 
         var arities = peers
-            .Where(parameters => OverlapsCounts(new OverloadArgumentShape(parameters)))
-            .Select(parameters => parameters.ElementAtOrDefault(index))
-            .OfType<IrParameter>()
-            .Select(parameter => DelegateArityRange.ArityOf(parameter.Type))
+            .Select(parameters => new OverloadArgumentShape(parameters))
+            .Where(OverlapsCounts)
+            .Select(peer => peer.ArgumentTypeAt(index))
+            .OfType<IrTypeRef>()
+            .Select(DelegateArityRange.ArityOf)
             .OfType<int>();
 
         return scope with
@@ -131,6 +132,17 @@ internal sealed class OverloadArgumentShape
             DelegateArity = DelegateArityRange.Of(arity, arities),
         };
     }
+
+    /// <summary>
+    /// The type an argument at <paramref name="index"/> binds to: the declared
+    /// parameter's type, or the element type of the <c>params</c> parameter for
+    /// an index at or past it (a <c>params</c> delegate array takes delegates
+    /// there, so its arity counts against the peers').
+    /// </summary>
+    private IrTypeRef? ArgumentTypeAt(int index) =>
+        Rest is not null && index >= FixedCount
+            ? Rest.ParamsElementType
+            : _parameters.ElementAtOrDefault(index)?.Type;
 
     /// <summary>
     /// Whether some argument count both this overload and
@@ -180,7 +192,9 @@ internal sealed class OverloadArgumentShape
 
         var element = new TsIdentifier("value");
 
-        if (IrTypeCheckBuilder.Generate(elementType, element, scope) is not { } check)
+        var elementScope = ScopeForArgument(FixedCount, elementType, scope);
+
+        if (IrTypeCheckBuilder.Generate(elementType, element, elementScope) is not { } check)
             return null;
 
         var elementCheck = new TsArrowFunction(

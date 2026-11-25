@@ -364,6 +364,37 @@ public class ShadowedDispatchOverloadTests
         await Assert.That(output).DoesNotContain("args[0].length >= 1");
     }
 
+    /// <summary>
+    /// A <c>params</c> delegate array counts with its element type: its
+    /// elements take the larger arity range and the single-delegate overload
+    /// the smaller one, so a two-parameter callback reaches the <c>params</c>
+    /// overload as C# binds it (#778, wave 9 review round 2).
+    /// </summary>
+    [Test]
+    public async Task ParamsDelegateArray_TakesItsElementArityRange()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [Transpile, EmitInFile("probes")]
+            public static class Three
+            {
+                public static string P(Action<int> a) => "P1";
+                public static string P(params Action<int, int>[] xs) => "P2";
+            }
+            """
+        );
+
+        var output = files["probes.ts"];
+
+        await Assert
+            .That(output)
+            .Contains("args.length === 1 && typeof args[0] === \"function\" && args[0].length < 2");
+
+        await Assert.That(output).Contains("typeof value === \"function\" && value.length >= 2");
+    }
+
     [Test]
     public async Task DelegateArities_DispatchAsCSharpBinds()
     {
