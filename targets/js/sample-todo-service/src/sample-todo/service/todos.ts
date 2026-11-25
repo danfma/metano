@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { List, type IReadOnlyList } from "metano-runtime/system/collections";
-import { UUID } from "metano-runtime";
+import { UUID, throwError } from "metano-runtime";
 import { firstOrDefault, linq, orderBy, toList } from "metano-runtime/system/linq";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 import { TodoItem, type Priority } from "sample-todo/sample-todo";
@@ -85,9 +85,7 @@ export class TodoStore {
       item = item.with({
         priority:
           patch.priority ??
-          (() => {
-            throw new InvalidOperationException("Nullable object must have a value.");
-          })(),
+          throwError(new InvalidOperationException("Nullable object must have a value.")),
       });
     }
 
@@ -95,9 +93,7 @@ export class TodoStore {
       item = item.with({
         completed:
           patch.completed ??
-          (() => {
-            throw new InvalidOperationException("Nullable object must have a value.");
-          })(),
+          throwError(new InvalidOperationException("Nullable object must have a value.")),
       });
     }
 

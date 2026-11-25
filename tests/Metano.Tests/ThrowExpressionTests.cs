@@ -3,7 +3,7 @@ namespace Metano.Tests;
 public class ThrowExpressionTests
 {
     [Test]
-    public async Task NullCoalescingThrow_LowersToIifeWithThrow()
+    public async Task NullCoalescingThrow_ThrowsThroughTheHelper()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -20,15 +20,18 @@ public class ThrowExpressionTests
         );
 
         var output = result["app/widget.ts"];
-        await Assert.That(output).Contains("?? (() =>");
-        await Assert.That(output).Contains("throw new Exception(\"missing\")");
+
+        await Assert
+            .That(output)
+            .Contains("return this._ctx ?? throwError(new Exception(\"missing\"));");
+
         // Catches an IR-node `ToString()` leaking into the printed output
         // — records render as `IrNewExpression { … }`.
         await Assert.That(output).DoesNotContain("IrNewExpression {");
     }
 
     [Test]
-    public async Task ThrowExpression_NestedInTernary_LowersWithIife()
+    public async Task ThrowExpression_NestedInTernary_ThrowsThroughTheHelper()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -43,8 +46,11 @@ public class ThrowExpressionTests
         );
 
         var output = result["app/widget.ts"];
-        await Assert.That(output).Contains("(() =>");
-        await Assert.That(output).Contains("throw new Exception(\"nope\")");
+
+        await Assert
+            .That(output)
+            .Contains("return flag ? 1 : throwError(new Exception(\"nope\"));");
+
         // Catches an IR-node `ToString()` leaking into the printed output
         // — records render as `IrNewExpression { … }`.
         await Assert.That(output).DoesNotContain("IrNewExpression {");

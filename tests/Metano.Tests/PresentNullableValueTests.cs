@@ -47,7 +47,7 @@ public class PresentNullableValueTests
     {
         var output = TranspileHelper.Transpile(Source)["present.ts"];
 
-        await Assert.That(output).Contains("return [BigInt(n ?? (() => {");
+        await Assert.That(output).Contains("return [BigInt(n ?? throwError(");
         await Assert.That(output).Contains("Nullable object must have a value.");
     }
 }

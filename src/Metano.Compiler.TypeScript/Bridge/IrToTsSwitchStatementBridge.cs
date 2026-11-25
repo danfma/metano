@@ -165,7 +165,7 @@ internal static class IrToTsSwitchStatementBridge
                     ? IrToTsExpressionBridge.Map(constant.Value, context)
                     : null
             ),
-            IrToTsStatementBridge.MapBody(section.Body, context)
+            IrToTsStatementBridge.MapSectionBody(section.Body, context)
         );
 
     private static IEnumerable<TsSwitchCase> MapTestedSection(
@@ -216,7 +216,7 @@ internal static class IrToTsSwitchStatementBridge
         IrToTsBridgeContext context
     )
     {
-        var body = IrToTsStatementBridge.MapBody(section.Body, context);
+        var body = IrToTsStatementBridge.MapSectionBody(section.Body, context);
 
         if (!SwitchSharedLocals.BindsDesignators(section))
             return body;

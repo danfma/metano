@@ -362,13 +362,13 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return x != null && (x ?? (() => {\n    throw new InvalidOperationException(\"Nullable object must have a value.\");\n  })()) > 3;"
+                "return x != null && (x ?? throwError(new InvalidOperationException(\"Nullable object must have a value.\"))) > 3;"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "return o.qty ?? (() => {\n    throw new InvalidOperationException(\"Nullable object must have a value.\");\n  })();"
+                "return o.qty ?? throwError(new InvalidOperationException(\"Nullable object must have a value.\"));"
             );
     }
 
@@ -400,7 +400,7 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return o.qty ?? (() => {\n    throw new InvalidOperationException(\"Nullable object must have a value.\");\n  })();"
+                "return o.qty ?? throwError(new InvalidOperationException(\"Nullable object must have a value.\"));"
             );
     }
 
