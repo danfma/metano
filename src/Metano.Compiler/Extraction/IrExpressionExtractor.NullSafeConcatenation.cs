@@ -50,17 +50,40 @@ public sealed partial class IrExpressionExtractor
         if (!IsStringConcatenation(assign))
             return null;
 
-        var value = BoxTextOperand(assign.Right, ConcatenationOperand(assign.Right));
+        var value = StringCompoundOperand(assign);
 
         if (!MayFormatAsNull(assign.Left))
             return new IrBinaryExpression(target, IrBinaryOp.AddAssign, value);
 
-        return BuildReadModifyWrite(target, assign, current => new IrBinaryExpression(
-            new IrBinaryExpression(current, IrBinaryOp.NullCoalescing, EmptyStringLiteral),
+        return BuildReadModifyWrite(target, assign, current =>
+            StringCompoundValue(assign, current, value)
+        );
+    }
+
+    /// <summary>
+    /// The right-hand side of a string <c>target += value</c>, appended as
+    /// <c>""</c> when it may be <c>null</c>.
+    /// </summary>
+    private IrExpression StringCompoundOperand(AssignmentExpressionSyntax assign) =>
+        BoxTextOperand(assign.Right, ConcatenationOperand(assign.Right));
+
+    /// <summary>
+    /// The value a string <c>target += value</c> stores over the target's
+    /// <paramref name="current"/> value: <c>(current ?? "") + value</c> when
+    /// the target may be <c>null</c>, <c>current + value</c> otherwise.
+    /// </summary>
+    private IrExpression StringCompoundValue(
+        AssignmentExpressionSyntax assign,
+        IrExpression current,
+        IrExpression value
+    ) =>
+        new IrBinaryExpression(
+            MayFormatAsNull(assign.Left)
+                ? new IrBinaryExpression(current, IrBinaryOp.NullCoalescing, EmptyStringLiteral)
+                : current,
             IrBinaryOp.Add,
             value
-        ));
-    }
+        );
 
     /// <summary>
     /// An interpolation hole formats a <c>null</c> value as <c>""</c>

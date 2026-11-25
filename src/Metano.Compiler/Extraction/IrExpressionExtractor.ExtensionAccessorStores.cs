@@ -200,7 +200,8 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The value an extension accessor store passes to the setter: the
-    /// right-hand side for <c>=</c>; the three-valued result for a
+    /// right-hand side for <c>=</c>; the null-safe concatenation for a string
+    /// <c>+=</c>, as a string field stores it; the three-valued result for a
     /// <c>bool?</c> <c>&amp;=</c> / <c>|=</c> / <c>^=</c>, as a <c>bool?</c>
     /// field stores it; otherwise the compound value, lifted for a
     /// <c>Nullable&lt;T&gt;</c> accessor (see <see cref="ExtensionCompoundValue"/>).
@@ -277,6 +278,9 @@ public sealed partial class IrExpressionExtractor
     /// a backend may assign inline instead of scoping it, so no IIFE (W10-6a).
     /// </summary>
     private IrExpression BindStoreReceiverOnce(
+        if (IsStringConcatenation(assign))
+            return StringCompoundValue(assign, read(), StringCompoundOperand(assign));
+
         IrExpression receiver,
         Func<IrExpression, IrExpression> build
     ) =>
