@@ -170,9 +170,14 @@ export class HashCode {
 
   // ─── Static combine helpers ───────────────────────────────
 
-  static combine(v1: unknown): number {
+  /** `HashCode.Combine(v1 … v8)` (#749): the same accumulation as {@link add} per value. */
+  static combine(...values: unknown[]): number {
     const hc = new HashCode();
-    hc.add(v1);
+
+    for (const value of values) {
+      hc.add(value);
+    }
+
     return hc.toHashCode();
   }
 

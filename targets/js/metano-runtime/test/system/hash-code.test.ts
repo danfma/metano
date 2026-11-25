@@ -3,6 +3,24 @@ import { hashInt64 } from "#/system/int64.ts";
 import { HashCode } from "#/system/hash-code.ts";
 import { hashCode, valueHashCode } from "#/system/equality.ts";
 
+describe("HashCode.combine", () => {
+  test("is variadic and equals the accumulator for each arity", () => {
+    for (let count = 1; count <= 8; count++) {
+      const values = Array.from({ length: count }, (_, index) => index * 7 + 1);
+      const accumulator = new HashCode();
+
+      for (const value of values) accumulator.add(value);
+
+      expect(HashCode.combine(...values)).toBe(accumulator.toHashCode());
+    }
+  });
+
+  test("keeps the fixed-arity helpers consistent", () => {
+    expect(HashCode.combine(1, 2)).toBe(HashCode.combine2(1, 2));
+    expect(HashCode.combine(1, 2, 3, 4)).toBe(HashCode.combine4(1, 2, 3, 4));
+  });
+});
+
 describe("HashCode", () => {
   test("same values produce same hash", () => {
     const a = HashCode.combine2(42, "hello");
