@@ -1499,6 +1499,8 @@ public sealed class ImportCollector(
                     CollectFromStatements(func.Body, sink);
                 });
 
+                CollectFromOverloads(func.Overloads, sink);
+
                 break;
             case TsConstObject constObj:
                 foreach (var entry in constObj.Entries)
@@ -1540,6 +1542,10 @@ public sealed class ImportCollector(
                     CollectFromParameters(Signature(cls.Constructor.Parameters), sink, () =>
                         CollectFromStatements(cls.Constructor.Body, sink)
                     );
+
+                    foreach (var overload in cls.Constructor.Overloads ?? [])
+                    foreach (var parameter in overload.Parameters)
+                        CollectFromType(parameter.Type, sink);
                 }
 
                 foreach (var member in cls.Members)
@@ -1555,18 +1561,24 @@ public sealed class ImportCollector(
                                 CollectFromStatements(m.Body, sink);
                             });
 
-                            // Collect from overload signatures too
-                            if (m.Overloads is not null)
-                                foreach (var overload in m.Overloads)
-                                {
-                                    foreach (var p in overload.Parameters)
-                                        CollectFromType(p.Type, sink);
-                                    CollectFromType(overload.ReturnType, sink);
-                                }
+                            CollectFromOverloads(m.Overloads, sink);
+
+                            if (m.ComputedKey is not null)
+                                CollectFromExpression(m.ComputedKey, sink);
+
                             break;
                         case TsGetterMember g:
                             CollectFromType(g.ReturnType, sink);
                             CollectFromStatements(g.Body, sink);
+                            break;
+                        case TsSetterMember s:
+                            // #768: setter and init accessor bodies (static or instance,
+                            // block or expression bodied) reference names like any other
+                            // member body; the value parameter is bound over the body.
+                            CollectFromParameters(Signature([s.ValueParam]), sink, () =>
+                                CollectFromStatements(s.Body, sink)
+                            );
+
                             break;
                         case TsFieldMember f:
                             CollectFromType(f.Type, sink);
@@ -1588,6 +1600,27 @@ public sealed class ImportCollector(
                 // `export default name;` / `export { name };` references a binding that
                 // already exists locally — no external import to collect.
                 break;
+        }
+    }
+
+    /// <summary>
+    /// The overload signatures of a function or method: their parameter, return and
+    /// type-parameter constraint types are references even when the implementation
+    /// signature erases them (<c>...args: unknown[]</c>).
+    /// </summary>
+    private void CollectFromOverloads(
+        IReadOnlyList<TsMethodOverload>? overloads,
+        ImportCollectionSink sink
+    )
+    {
+        foreach (var overload in overloads ?? [])
+        {
+            CollectFromTypeParameters(overload.TypeParameters, sink);
+
+            foreach (var parameter in overload.Parameters)
+                CollectFromType(parameter.Type, sink);
+
+            CollectFromType(overload.ReturnType, sink);
         }
     }
 

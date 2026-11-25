@@ -992,6 +992,9 @@ public static class IrTypeRefMapper
         if (SymbolHelper.HasIgnore(named, target))
             return false;
 
+        if (Frontend.Roslyn.InternalTypeReachability.IsReached(named))
+            return true;
+
         if (
             named.DeclaredAccessibility != Accessibility.Public
             && !IsNestedInTranspilableContainer(named, target)

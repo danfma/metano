@@ -93,8 +93,6 @@ Round2Probes.exCtorArgs               #651  BCL exception identity and messages
 Round3Probes.mathCalls                #686  Math.PI is unmapped
 Round3Probes.timeProps                #686  TimeSpan members are unmapped
 StringProbes.chars                    #686  string.Concat over chars is unmapped
-StringProbes.compare                  #686  string.Compare is unmapped
-StringProbes.equalsCalls              #686  string.Equals is unmapped
 StringProbes.formatting               #686  string.Format is unmapped (composite formatting: #662)
 StringProbes.cases                    none  ToUpperInvariant("ß") gives SS in JavaScript
 StringProbes.emptyAndNullArgs         none  "abc".Contains(null) does not throw ArgumentNullException
@@ -128,3 +126,5 @@ W9N1Probes.tupleHashSet                #746  W9-N1 (needs design): a tuple is a 
 W9N1Probes.tupleDictionary             #746  W9-N1 (needs design): a Dictionary<(int, string), V> key built separately is not found (.NET: 1,11,False); MS0001 on each use
 W9N1Probes.tupleLinq                   #746  W9-N1 (needs design): LINQ Distinct / GroupBy over tuples compares by reference (.NET: 2,2,True); MS0001 on each stage
 W9N1Probes.tupleListIndexOf            #746  W9-N1 (needs design): List<(int, string)>.IndexOf / Contains compare tuples by reference (.NET: 1,False); MS0001 on each use
+StringComparisonProbes.cultureCompareSigns  none  the .NET recording runs with InvariantGlobalization (culture comparisons are ordinal); the runtime uses ICU collation, as .NET with ICU does (a < A < B)
+StringComparisonProbes.cultureIgnoreCaseWidthPairs  none  the .NET recording runs with InvariantGlobalization (U+3000 vs space is ordinal-unequal); the runtime answers as .NET with ICU does (TT0|TT0|)

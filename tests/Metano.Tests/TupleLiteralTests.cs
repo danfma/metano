@@ -397,7 +397,7 @@ public class TupleLiteralTests
         await Assert
             .That(output)
             .Contains(
-                "static stringy(a: string | null, b: string): boolean | null {\n    return a?.equals(b) ?? null;\n  }"
+                "static stringy(a: string | null, b: string): boolean | null {\n    return a == null ? null : stringInstanceEquals(a, b, StringComparison.Ordinal);\n  }"
             );
 
         await Assert

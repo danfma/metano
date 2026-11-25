@@ -40,6 +40,17 @@ default. Individual types can opt out with `[Ignore]`.
 Use this when most of your types should cross to TypeScript — less boilerplate
 than marking each type individually.
 
+Internal types that transpiled code uses are transpiled too (#770): a non-public
+type referenced from a transpiled signature or body (directly or through another
+such type) gets its own module, imported where it is used, but no barrel
+re-exports it, so it stays out of the package's public surface
+(`package.json#exports`) and out of every consumer's imports. An internal type
+nothing transpiled references is not emitted. A reference to a type that still
+cannot be emitted (a `file`-local type), or a friend package's
+(`[InternalsVisibleTo]`) reference to a non-public type of a Metano package, reports
+`MS0002`; `[Ignore]` keeps
+winning and its references keep reporting `MS0013`.
+
 ## Naming
 
 ### `[Name("x")]`

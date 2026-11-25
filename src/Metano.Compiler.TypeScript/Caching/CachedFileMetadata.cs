@@ -27,7 +27,8 @@ public sealed record CachedFileMetadata(
     string ContentHash,
     IReadOnlyList<CachedImport> Imports,
     IReadOnlyList<CachedExport> Exports,
-    bool HasModuleSideEffects = false
+    bool HasModuleSideEffects = false,
+    bool IsPackageInternal = false
 );
 
 /// <param name="From">The package specifier, or the file key when <paramref name="FromLocalFile"/> is set.</param>

@@ -43,6 +43,7 @@ FR-093 and FR-094: the .NET text of a record's synthesized `ToString`. Records i
 | Area | Feature | Backend | Status | Code area | Test | Constraints |
 | --- | --- | --- | --- | --- | --- | --- |
 | Selection | `[Transpile]`, `[TranspileAssembly]`, `[Ignore]` | TS | Implemented | `CSharpSourceFrontend.cs`, `src/Metano/Annotations/TranspileAttribute.cs` | `tests/Metano.Tests/AttributeTranspileTests.cs` | `[Ignore]` is the .NET-only boundary — transpilable code may not reference ignored types (MS0013); `[Ignore]` interfaces in a base list are erased (per target), attribute applications not read for emission and source-generator output are exempt. |
+| Selection | Internal types reached from emitted code (`[TranspileAssembly]`) | TS / Dart | Implemented | `Frontend/Roslyn/InternalTypeReachability.cs`, `Frontend/Roslyn/UnemittedTypeReferenceRule.cs`, `SymbolHelper.cs` (`IsTranspilable`, `IsReachedInternalType`), `Transformation/BarrelFileGenerator.cs` | `tests/Metano.Tests/InternalTypeReachabilityTests.cs` | Baseline FR-101 (#770, W9-9). A non-public type a transpiled signature or body references (transitively; a nested one through its outermost container) is emitted in its own module and imported, but no barrel re-exports it, so `package.json#exports` and referencing packages never see it. `[Ignore]` still wins (`MS0013`); a reference to a type that is still not emitted (`file`-local), or from a friend package (`[InternalsVisibleTo]`) to a non-public type of a Metano package, reports `MS0002`. |
 
 ## Types
 

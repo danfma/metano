@@ -57,7 +57,7 @@ export function ordinalIgnoreCaseKeyOf(name: string): string {
 }
 
 /** The ordinal uppercase of one code point (`character` may be a surrogate pair). */
-function ordinalUppercaseOf(character: string): string {
+export function ordinalUppercaseOf(character: string): string {
   const exception = ORDINAL_UPPERCASE_EXCEPTIONS().get(character);
 
   if (exception !== undefined) {

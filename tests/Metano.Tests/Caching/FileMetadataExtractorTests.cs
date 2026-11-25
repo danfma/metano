@@ -1,5 +1,6 @@
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Caching;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Tests.Caching;
 
@@ -233,6 +234,28 @@ public class FileMetadataExtractorTests
             var source = new TsSourceFile("coverage.ts", [placeholder]);
             FileMetadataExtractor.Extract(source, "ignored");
         }
+    }
+
+    [Test]
+    public async Task PackageInternalFlag_SurvivesTheCacheRoundTrip()
+    {
+        // #770: a module of reached internal types stays out of its barrel on a cache hit.
+        var source = new TsSourceFile("app/codec.ts", [new TsClass("Codec", null, [])])
+        {
+            IsPackageInternal = true,
+        };
+
+        var meta = FileMetadataExtractor.Extract(source, "content-placeholder");
+        var stub = FileMetadataExtractor.BuildStub(meta);
+        var visible = new TsSourceFile("app/store.ts", [new TsClass("Store", null, [])]);
+        var barrels = BarrelFileGenerator.Generate([stub, visible]);
+
+        await Assert.That(meta.IsPackageInternal).IsTrue();
+        await Assert.That(stub.IsPackageInternal).IsTrue();
+
+        await Assert
+            .That(barrels.Single().Statements.OfType<TsReExport>().SelectMany(e => e.Names))
+            .IsEquivalentTo(["Store"]);
     }
 
     /// <summary>
