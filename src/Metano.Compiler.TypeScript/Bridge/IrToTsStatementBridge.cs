@@ -419,6 +419,11 @@ public static class IrToTsStatementBridge
                 when IrToTsExpressionBridge.IsIndexerStore(store) => new TsExpressionStatement(
                 IrToTsExpressionBridge.MapIndexerStore(store, context, isStatement: true)
             ),
+            // A call storing its `out` values, its result unused (#755).
+            IrExpressionStatement { Expression: IrOutArgumentCall outCall } =>
+                new TsExpressionStatement(
+                    IrToTsExpressionBridge.MapOutArgumentStore(outCall, context)
+                ),
             IrExpressionStatement { Expression: IrIndexerUpdateExpression update } =>
                 new TsExpressionStatement(
                     IrToTsExpressionBridge.MapIndexerUpdate(update, context, isStatement: true)

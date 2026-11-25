@@ -66,6 +66,23 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
+        var store = MapOutArgumentStore(outCall, context);
+
+        return outCall.ResultType is null || store is not TsBinaryExpression
+            ? store
+            : new TsElementAccess(new TsParenthesized(store), new TsLiteral("0"));
+    }
+
+    /// <summary>
+    /// The call storing its <c>out</c> values into their targets, whose
+    /// result a statement discards: <c>[, v] = call</c>, or the bare call
+    /// when every <c>out</c> argument is a discard.
+    /// </summary>
+    internal static TsExpression MapOutArgumentStore(
+        IrOutArgumentCall outCall,
+        IrToTsBridgeContext context
+    )
+    {
         var value = MapOutArgumentCallValue(outCall, context);
 
         if (outCall.OutArguments.All(o => o.Target is IrOutDiscard))
@@ -73,11 +90,8 @@ public static partial class IrToTsExpressionBridge
 
         var targets = outCall.OutArguments.Select(o => MapOutTarget(o.Target, context));
         var pattern = outCall.ResultType is null ? targets : targets.Prepend(new TsArrayHole());
-        var assignment = new TsBinaryExpression(new TsArrayLiteral(pattern.ToList()), "=", value);
 
-        return outCall.ResultType is null
-            ? assignment
-            : new TsElementAccess(new TsParenthesized(assignment), new TsLiteral("0"));
+        return new TsBinaryExpression(new TsArrayLiteral(pattern.ToList()), "=", value);
     }
 
     private static TsExpression MapOutTarget(IrOutTarget target, IrToTsBridgeContext context) =>

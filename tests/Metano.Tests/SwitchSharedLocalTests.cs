@@ -116,4 +116,62 @@ public class SwitchSharedLocalTests
         await Assert.That(output).IsEmpty();
         await Assert.That(exitCode).IsEqualTo(0);
     }
+
+    private const string OutVarSource = """
+        [Transpile]
+        public static class Parser
+        {
+            public static string Read(int k)
+            {
+                switch (k)
+                {
+                    case 1:
+                        int.TryParse("5", out var p);
+                        return "o" + p;
+                    default:
+                        p = 9;
+                        return "o" + p;
+                }
+            }
+        }
+        """;
+
+    [Test]
+    public async Task OutVarUsedInALaterSection_IsDeclaredAheadOfTheSwitch()
+    {
+        var output = TranspileHelper.Transpile(OutVarSource)["parser.ts"];
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    {
+                      let p: number;
+
+                      switch (k) {
+                        case 1:
+                          [, p] = tryParseInt32("5");
+
+                          return "o" + p;
+                        default:
+                          p = 9;
+
+                          return "o" + p;
+                      }
+                    }
+                """
+            );
+    }
+
+    [Test]
+    public async Task OutVarUsedInALaterSection_PassesTsgo()
+    {
+        var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(
+            TranspileHelper.Transpile(OutVarSource),
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
 }

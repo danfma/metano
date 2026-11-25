@@ -41,4 +41,19 @@ public static class SwitchSharedLocalProbes
         $"{Constant(1)},{Constant(2)},{Constant(3)}";
 
     public static string TestedSwitchLaterSection() => $"{Tested(null)},{Tested("a")},{Tested(3)}";
+
+    static string OutVar(int k)
+    {
+        switch (k)
+        {
+            case 1:
+                int.TryParse("5", out var p);
+                return "o" + p;
+            default:
+                p = 9;
+                return "o" + p;
+        }
+    }
+
+    public static string OutVarLaterSection() => $"{OutVar(1)},{OutVar(2)}";
 }

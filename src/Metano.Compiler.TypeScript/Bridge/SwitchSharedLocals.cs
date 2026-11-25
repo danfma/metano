@@ -11,7 +11,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// binds pattern designators is emitted in a block of its own, which would
 /// hide the local altogether. Each local another section uses is therefore
 /// declared ahead of the switch and its declaration in the section becomes a
-/// plain assignment.
+/// plain assignment. An <c>out var</c> of a call in statement position
+/// declares its locals too: when one of them is hoisted, all of them are, and
+/// the call stores into them instead of destructuring.
 /// </summary>
 internal static class SwitchSharedLocals
 {
@@ -32,7 +34,7 @@ internal static class SwitchSharedLocals
         if (shared.Count == 0)
             return ([], sw);
 
-        var hoistedNames = WithConstantDependencies(shared, sw);
+        var hoistedNames = WithOutDeclarationSiblings(WithConstantDependencies(shared, sw), sw);
 
         var declarations = SectionDeclarations(sw)
             .Where(declaration => hoistedNames.Contains(declaration.Name))
@@ -56,11 +58,53 @@ internal static class SwitchSharedLocals
         IrSwitchStatement sw
     ) =>
         section
-            .Body.OfType<IrVariableDeclaration>()
+            .Body.SelectMany(DeclarationsOf)
             .Where(declaration => IsUsedInAnotherSection(declaration.Name, section, sw));
 
     private static IEnumerable<IrVariableDeclaration> SectionDeclarations(IrSwitchStatement sw) =>
-        sw.Cases.SelectMany(section => section.Body.OfType<IrVariableDeclaration>());
+        sw.Cases.SelectMany(section => section.Body.SelectMany(DeclarationsOf));
+
+    /// <summary>
+    /// The locals a section-level statement declares: a variable declaration,
+    /// or the <c>out var</c> locals of a call in statement position (#755),
+    /// as uninitialized declarations of their types.
+    /// </summary>
+    private static IEnumerable<IrVariableDeclaration> DeclarationsOf(IrStatement statement) =>
+        statement switch
+        {
+            IrVariableDeclaration declaration => [declaration],
+            IrTupleDeconstruction { Initializer: IrOutArgumentCall call } => OutLocalsOf(call)
+                .Select(local => new IrVariableDeclaration(local.Name, local.Type, null)),
+            _ => [],
+        };
+
+    private static IEnumerable<IrOutLocalDeclaration> OutLocalsOf(IrOutArgumentCall call) =>
+        call.OutArguments.Select(argument => argument.Target).OfType<IrOutLocalDeclaration>();
+
+    /// <summary>
+    /// <paramref name="hoisted"/> plus every other <c>out var</c> local of a
+    /// call that declares a hoisted one: the call then stores into all of
+    /// them, so none may stay declared in its section.
+    /// </summary>
+    private static HashSet<string> WithOutDeclarationSiblings(
+        HashSet<string> hoisted,
+        IrSwitchStatement sw
+    )
+    {
+        var names = new HashSet<string>(hoisted);
+
+        var siblings = sw
+            .Cases.SelectMany(section => section.Body)
+            .OfType<IrTupleDeconstruction>()
+            .Select(DeclarationsOf)
+            .Select(declarations => declarations.Select(declaration => declaration.Name).ToList())
+            .Where(locals => locals.Any(hoisted.Contains));
+
+        foreach (var locals in siblings)
+            names.UnionWith(locals);
+
+        return names;
+    }
 
     /// <summary>
     /// <paramref name="hoisted"/> plus every constant a hoisted constant's
@@ -122,6 +166,9 @@ internal static class SwitchSharedLocals
         HashSet<string> names
     )
     {
+        if (statement is IrTupleDeconstruction { Initializer: IrOutArgumentCall call })
+            return [StoringOutLocals(statement, call, names)];
+
         if (statement is not IrVariableDeclaration declaration || !names.Contains(declaration.Name))
             return [statement];
 
@@ -140,6 +187,38 @@ internal static class SwitchSharedLocals
                 )
             ),
         ];
+    }
+
+    /// <summary>
+    /// The <c>out var</c> call <paramref name="statement"/> as a plain call
+    /// that stores into its hoisted locals; the statement itself when none of
+    /// its locals is hoisted.
+    /// </summary>
+    private static IrStatement StoringOutLocals(
+        IrStatement statement,
+        IrOutArgumentCall call,
+        HashSet<string> names
+    )
+    {
+        if (!OutLocalsOf(call).Any(local => names.Contains(local.Name)))
+            return statement;
+
+        var storing = call with
+        {
+            OutArguments =
+            [
+                .. call.OutArguments.Select(argument =>
+                    argument.Target is IrOutLocalDeclaration local
+                        ? argument with
+                        {
+                            Target = new IrOutAssignment(new IrIdentifier(local.Name)),
+                        }
+                        : argument
+                ),
+            ],
+        };
+
+        return new IrExpressionStatement(storing);
     }
 
     /// <summary>
