@@ -303,12 +303,30 @@ public sealed class IrStatementExtractor(
         {
             LocalDeclarationStatementSyntax local => ExtractLocalDeclaration(local),
             EmptyStatementSyntax => [],
-            // A local function declaration emits nothing: no target lowers it
-            // yet, and each reference to it reports where it is used (its
-            // placeholder throws), so an unused one drops nothing that runs.
-            LocalFunctionStatementSyntax => [],
+            LocalFunctionStatementSyntax function => ExtractLocalFunction(function),
             _ => [ExtractStatement(statement)],
         };
+
+    /// <summary>
+    /// A local function declaration emits nothing: no target lowers local
+    /// functions yet. An unused one drops nothing that runs, so it reports
+    /// nothing; one referenced from outside its own body (a call, a method
+    /// group, an event handler, but not <c>nameof</c>) reports the dropped
+    /// declaration (W9-13) — each reference also reports where it is used.
+    /// </summary>
+    private List<IrStatement> ExtractLocalFunction(LocalFunctionStatementSyntax function)
+    {
+        if (LocalFunctionReferences.IsReferenced(_semantic, function))
+        {
+            DroppedCodeDiagnostics.Report(
+                $"The C# local function '{function.Identifier.ValueText}' is not supported by "
+                    + "the transpiler, and the code references it.",
+                function.Identifier.GetLocation()
+            );
+        }
+
+        return [];
+    }
 
     /// <summary>
     /// The declarators of a local declaration. A <c>using</c> declaration
