@@ -239,8 +239,10 @@ public sealed class ImportCollector(
 
         if (isOwnFile)
         {
-            referencedTypes.Remove(currentType.Name);
             referencedTypes.Remove(tsTypeName);
+
+            if (!NamesAnotherProjectType(currentType.Name, currentType))
+                referencedTypes.Remove(currentType.Name);
         }
 
         referencedTypes.Remove($"is{tsTypeName}"); // own guard — don't import
@@ -1966,6 +1968,16 @@ public sealed class ImportCollector(
     /// The project type a bare type name in this file refers to: the symbol-resolved
     /// binding when another project type prints under the same name (#743).
     /// </summary>
+    /// <summary>
+    /// Whether <paramref name="name"/> binds a project type other than
+    /// <paramref name="type"/>: a <c>[Name]</c>-renamed type's C# name may be
+    /// another type's emitted name (<c>[Name("Signals")] static class Signal</c>
+    /// beside <c>Signal&lt;T&gt;</c>), which the file then imports rather than
+    /// dropping as a reference to itself (#776).
+    /// </summary>
+    private bool NamesAnotherProjectType(string name, INamedTypeSymbol type) =>
+        ProjectTypeNamed(name) is { } named && named.Key != type.GetCrossAssemblyOriginKey();
+
     private IrTranspilableTypeRef? ProjectTypeNamed(string name) =>
         _sameNameBindings.GetValueOrDefault(name)
         ?? _context.TranspilableTypes.GetValueOrDefault(name);

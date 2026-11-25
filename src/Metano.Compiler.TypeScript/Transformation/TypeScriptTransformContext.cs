@@ -144,7 +144,7 @@ public sealed class TypeScriptTransformContext(
 
         foreach (var type in EnumerateTopLevelStaticTypes(CurrentAssembly.GlobalNamespace))
         {
-            if (!TranspilableTypes.TryGetValue(type.Name, out var ownerRef))
+            if (TranspilableTypeOf(TranspilableTypes, TypeNamesBySymbol, type) is not { } ownerRef)
                 continue;
 
             foreach (var member in type.GetMembers())
@@ -554,6 +554,18 @@ public sealed class TypeScriptTransformContext(
     /// </summary>
     public string ResolveTsName(INamedTypeSymbol type) =>
         NestedTypes.ModuleLevelName(type) ?? ResolveOwnTsName(type);
+
+    /// <summary>
+    /// The project-type entry of <paramref name="type"/>, looked up by its emitted
+    /// name: a <c>[Name]</c>-renamed type's C# name may be another type's emitted
+    /// name (<c>[Name("Signals")] static class Signal</c> beside <c>Signal&lt;T&gt;</c>,
+    /// #776), so a lookup by <see cref="ISymbol.Name"/> could find the other type.
+    /// </summary>
+    internal static IrTranspilableTypeRef? TranspilableTypeOf(
+        IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypes,
+        IReadOnlyDictionary<string, string>? typeNamesBySymbol,
+        INamedTypeSymbol type
+    ) => transpilableTypes.GetValueOrDefault(ResolveTsName(typeNamesBySymbol, type));
 
     /// <summary>
     /// The target-facing name of <paramref name="type"/> itself, read from the
