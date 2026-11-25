@@ -1,5 +1,5 @@
 import { Dictionary, HashSet, List } from "metano-runtime/system/collections";
-import type { Tag } from "./tag";
+import type { Tag } from "./tag.js";
 
 export class Shelf {
   private readonly _items: List<number> = new List<number>();

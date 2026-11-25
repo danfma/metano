@@ -57,4 +57,12 @@ export class PageRequest {
   with(overrides?: Partial<PageRequest>): PageRequest {
     return copyRecordWith<PageRequest>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `Number = ${this.number}, Size = ${this.size}, SafeNumber = ${this.safeNumber}, SafeSize = ${this.safeSize}, Skip = ${this.skip}`;
+  }
+
+  toString(): string {
+    return `PageRequest { ${this.$printMembers()} }`;
+  }
 }

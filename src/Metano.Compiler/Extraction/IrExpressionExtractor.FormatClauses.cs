@@ -96,7 +96,11 @@ public sealed partial class IrExpressionExtractor
     {
         var value = Extract(expression);
 
-        return DefaultTextCall(expression, value) ?? value;
+        return DefaultTextCall(
+            value,
+            _semantic.GetTypeInfo(expression).Type,
+            DefaultTextSites.ForOperand(expression, _semantic)
+        ) ?? value;
     }
 
     /// <summary>

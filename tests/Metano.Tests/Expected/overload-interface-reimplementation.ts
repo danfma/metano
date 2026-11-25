@@ -1,5 +1,5 @@
 import { isBool, isInt32, isString } from "metano-runtime";
-import type { IR } from "./ir";
+import type { IR } from "./ir.js";
 
 export class X implements IR {
   constructor() { }
@@ -37,7 +37,7 @@ export class X implements IR {
 }
 
 import { isFloat64 } from "metano-runtime";
-import { X } from "./x";
+import { X } from "./x.js";
 
 export class X4 extends X {
   constructor() {
@@ -62,8 +62,8 @@ export class X4 extends X {
 }
 
 import { isInt32 } from "metano-runtime";
-import type { IR } from "./ir";
-import { X } from "./x";
+import type { IR } from "./ir.js";
+import { X } from "./x.js";
 
 export class X3 extends X implements IR {
   constructor() {
@@ -87,7 +87,7 @@ export class X3 extends X implements IR {
 }
 
 import { isInt32, isString } from "metano-runtime";
-import type { IR } from "./ir";
+import type { IR } from "./ir.js";
 
 export class Bn implements IR {
   constructor() { }
@@ -116,8 +116,8 @@ export class Bn implements IR {
 }
 
 import { isInt32 } from "metano-runtime";
-import { Bn } from "./bn";
-import type { IR } from "./ir";
+import { Bn } from "./bn.js";
+import type { IR } from "./ir.js";
 
 export class Dn extends Bn implements IR {
   constructor() {
@@ -140,8 +140,8 @@ export class Dn extends Bn implements IR {
 }
 
 import { isBool, isInt32, isString } from "metano-runtime";
-import type { IB } from "./ib";
-import type { IR } from "./ir";
+import type { IB } from "./ib.js";
+import type { IR } from "./ir.js";
 
 export class Y implements IR, IB {
   constructor() { }
@@ -183,9 +183,9 @@ export class Y implements IR, IB {
 }
 
 import { isInt32 } from "metano-runtime";
-import type { IB } from "./ib";
-import type { IR } from "./ir";
-import { Y } from "./y";
+import type { IB } from "./ib.js";
+import type { IR } from "./ir.js";
+import { Y } from "./y.js";
 
 export class Y3 extends Y implements IR, IB {
   constructor() {

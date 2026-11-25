@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { UFail } from "./u-fail";
+import { UFail } from "./u-fail.js";
 
 let UFailX$rt: ClassType<UFailX> | undefined;
 
@@ -39,5 +39,15 @@ export class UFailX extends UFail {
 
   override with(overrides?: Partial<UFailX>): UFailX {
     return copyRecordWith<UFailX>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}A = ${this.a}`;
+  }
+
+  override toString(): string {
+    return `UFailX { ${this.$printMembers()} }`;
   }
 }

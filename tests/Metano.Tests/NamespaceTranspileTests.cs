@@ -68,8 +68,8 @@ public class NamespaceTranspileTests
         );
 
         var priceTs = result["app/domain/models/price.ts"];
-        // Different namespace → import the file directly via the alias.
-        await Assert.That(priceTs).Contains("from \"#/app/domain/currency\"");
+        // Different namespace → import the file directly, relative to the importer.
+        await Assert.That(priceTs).Contains("from \"../currency.js\"");
     }
 
     [Test]
@@ -94,12 +94,12 @@ public class NamespaceTranspileTests
         // app/domain leaf barrel re-exports Currency (StringEnum is a value, not type-only)
         await Assert.That(result).ContainsKey("app/domain/index.ts");
         var domainIndex = result["app/domain/index.ts"];
-        await Assert.That(domainIndex).Contains("export { Currency } from \"./currency\"");
+        await Assert.That(domainIndex).Contains("export { Currency } from \"./currency.js\"");
 
         // app/domain/models leaf barrel re-exports Price
         await Assert.That(result).ContainsKey("app/domain/models/index.ts");
         var modelsIndex = result["app/domain/models/index.ts"];
-        await Assert.That(modelsIndex).Contains("export { Price } from \"./price\"");
+        await Assert.That(modelsIndex).Contains("export { Price } from \"./price.js\"");
     }
 
     [Test]
@@ -123,7 +123,7 @@ public class NamespaceTranspileTests
         );
 
         var domainIndex = result["app/domain/index.ts"];
-        await Assert.That(domainIndex).DoesNotContain("export * from \"./models\"");
+        await Assert.That(domainIndex).DoesNotContain("export * from \"./models");
     }
 
     [Test]
@@ -145,7 +145,7 @@ public class NamespaceTranspileTests
         var moneyTs = result["app/domain/money.ts"];
         // Same namespace uses relative file import to avoid a cycle through
         // the namespace barrel (`money.ts -> barrel -> ./money.ts`).
-        await Assert.That(moneyTs).Contains("from \"./currency\"");
+        await Assert.That(moneyTs).Contains("from \"./currency.js\"");
     }
 
     [Test]
@@ -188,9 +188,9 @@ public class NamespaceTranspileTests
         var ticketTs = result["app/application/ticket.ts"];
         // Full-namespace layout: cross-namespace imports target each file
         // directly via the alias rather than merging through the barrel.
-        await Assert.That(ticketTs).Contains("import { Category } from \"#/app/domain/category\";");
-        await Assert.That(ticketTs).Contains("import { Priority } from \"#/app/domain/priority\";");
-        await Assert.That(ticketTs).Contains("import { Status } from \"#/app/domain/status\";");
+        await Assert.That(ticketTs).Contains("import { Category } from \"../domain/category.js\";");
+        await Assert.That(ticketTs).Contains("import { Priority } from \"../domain/priority.js\";");
+        await Assert.That(ticketTs).Contains("import { Status } from \"../domain/status.js\";");
     }
 
     [Test]
@@ -223,12 +223,15 @@ public class NamespaceTranspileTests
         );
 
         var handlerTs = result["app/application/i-handler.ts"];
+
         await Assert
             .That(handlerTs)
-            .Contains("import type { IReadable } from \"#/app/domain/i-readable\";");
+            .Contains("import type { IReadable } from \"../domain/i-readable.js\";");
+
         await Assert
             .That(handlerTs)
-            .Contains("import type { IWritable } from \"#/app/domain/i-writable\";");
+            .Contains("import type { IWritable } from \"../domain/i-writable.js\";");
+
         // No per-name type qualifier form.
         await Assert.That(handlerTs).DoesNotContain("{ type IReadable");
         await Assert.That(handlerTs).DoesNotContain("{ type IWritable");
@@ -270,9 +273,11 @@ public class NamespaceTranspileTests
         );
 
         var jobTs = result["app/application/job.ts"];
+
         await Assert
             .That(jobTs)
-            .Contains("import type { IReadable } from \"#/app/domain/i-readable\";");
-        await Assert.That(jobTs).Contains("import { Priority } from \"#/app/domain/priority\";");
+            .Contains("import type { IReadable } from \"../domain/i-readable.js\";");
+
+        await Assert.That(jobTs).Contains("import { Priority } from \"../domain/priority.js\";");
     }
 }

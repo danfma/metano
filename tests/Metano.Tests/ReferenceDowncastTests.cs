@@ -43,7 +43,7 @@ public class ReferenceDowncastTests
         await Assert.That(output).Contains("const circle = castTo<Circle>(shape, Circle);");
         await Assert.That(output).Contains("return castTo<Circle>(shape, Circle).radius;");
         await Assert.That(output).Contains("import { castTo } from \"metano-runtime\";");
-        await Assert.That(output).Contains("import { Circle } from \"./circle\";");
+        await Assert.That(output).Contains("import { Circle } from \"./circle.js\";");
     }
 
     [Test]
@@ -211,7 +211,7 @@ public class ReferenceDowncastTests
 
         await Assert.That(files["printer.ts"]).Contains("(n as Leaf).text");
         await Assert.That(files["printer.ts"]).DoesNotContain("castTo");
-        await Assert.That(files["printer.ts"]).Contains("import type { Leaf } from \"./leaf\";");
+        await Assert.That(files["printer.ts"]).Contains("import type { Leaf } from \"./leaf.js\";");
         await Assert.That(files["reader.ts"]).Contains("castTo<Leaf>(n, Leaf).text");
     }
 

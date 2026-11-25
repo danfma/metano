@@ -5,11 +5,13 @@
   <ItemGroup>
     <!-- Metano Compiler -->
     <PackageVersion Include="ConsoleAppFramework" Version="5.7.13" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.12.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.12.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.12.0" />
     <PackageVersion Include="Microsoft.Build.Locator" Version="1.11.2" />
-    <PackageVersion Include="Microsoft.Build.Framework" Version="17.14.8" />
+    <PackageVersion Include="Microsoft.Build.Framework" Version="18.7.1" />
+    <!-- A dependency of Microsoft.Build.Framework 18.x; MSBuild.Locator requires it runtime-excluded. -->
+    <PackageVersion Include="Microsoft.NET.StringTools" Version="18.7.1" />
     <!-- Versioning -->
     <PackageVersion Include="MinVer" Version="6.0.0" />
     <!-- Testing -->

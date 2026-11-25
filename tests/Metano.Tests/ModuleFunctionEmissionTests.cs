@@ -27,7 +27,7 @@ public class ModuleFunctionEmissionTests
 
         await Assert.That(module).StartsWith("function twice(l: bigint): bigint {");
         await Assert.That(module).Contains("return twice(l);");
-        await Assert.That(files["index.ts"]).IsEqualTo("export { use } from \"./helpers\";\n");
+        await Assert.That(files["index.ts"]).IsEqualTo("export { use } from \"./helpers.js\";\n");
     }
 
     [Test]
@@ -86,9 +86,9 @@ public class ModuleFunctionEmissionTests
 
         await Assert
             .That(use)
-            .Contains("import { inner, plainInt32, plainString } from \"./ign-host\";");
+            .Contains("import { inner, plainInt32, plainString } from \"./ign-host.js\";");
 
-        await Assert.That(use).Contains("import { solo } from \"./only-block\";");
+        await Assert.That(use).Contains("import { solo } from \"./only-block.js\";");
 
         await Assert
             .That(use)
@@ -217,7 +217,7 @@ public class ModuleFunctionEmissionTests
 
         var use = files["use.ts"];
 
-        await Assert.That(use).DoesNotContain("from \"./nc\"");
+        await Assert.That(use).DoesNotContain("from \"./nc");
         await Assert.That(use).DoesNotContain("return range;");
     }
 
@@ -294,7 +294,7 @@ public class ModuleFunctionEmissionTests
 
         await Assert.That(diagnostics).IsEmpty();
 
-        await Assert.That(files["p/use.ts"]).Contains("import { make } from \"./nc\";");
+        await Assert.That(files["p/use.ts"]).Contains("import { make } from \"./nc.js\";");
     }
 
     [Test]

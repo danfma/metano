@@ -1,4 +1,4 @@
-import { CounterStore } from "#/sample-counter-v5/stores";
+import { CounterStore } from "../sample-counter-v5/stores/index.js";
 
 export function AppView() {
   const store = CounterStore.create();

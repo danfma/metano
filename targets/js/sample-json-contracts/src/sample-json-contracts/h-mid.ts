@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { HBase } from "./h-base";
+import { HBase } from "./h-base.js";
 
 let HMid$rt: ClassType<HMid> | undefined;
 
@@ -42,5 +42,15 @@ export class HMid extends HBase {
 
   override with(overrides?: Partial<HMid>): HMid {
     return copyRecordWith<HMid>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}B = ${this.b}`;
+  }
+
+  override toString(): string {
+    return `HMid { ${this.$printMembers()} }`;
   }
 }

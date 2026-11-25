@@ -13,14 +13,14 @@ import {
   toList,
   where,
 } from "metano-runtime/system/linq";
-import type { Issue } from "#/sample-issue-tracker/issues/domain/issue";
-import type { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
-import type { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
-import type { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
-import type { PageRequest } from "#/sample-issue-tracker/shared-kernel/page-request";
-import { PageResult } from "#/sample-issue-tracker/shared-kernel/page-result";
-import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
-import { IIssueRepository$runtimeType, type IIssueRepository } from "./i-issue-repository";
+import type { PageRequest } from "../../shared-kernel/page-request.js";
+import { PageResult } from "../../shared-kernel/page-result.js";
+import type { UserId } from "../../shared-kernel/user-id.js";
+import type { IssueId } from "../domain/issue-id.js";
+import type { IssuePriority } from "../domain/issue-priority.js";
+import type { IssueStatus } from "../domain/issue-status.js";
+import type { Issue } from "../domain/issue.js";
+import { IIssueRepository$runtimeType, type IIssueRepository } from "./i-issue-repository.js";
 
 let InMemoryIssueRepository$rt: ClassType<InMemoryIssueRepository> | undefined;
 

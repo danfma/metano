@@ -9,15 +9,18 @@
  * Short-circuit terminals (`first`, `any`, `contains`) stop iterating
  * as soon as the answer is known.
  */
+import { elementEquals, type IEqualityComparer } from "../collections/default-comparer.ts";
 import { Dictionary } from "../collections/dictionary.ts";
 import { HashSet } from "../collections/hash-set.ts";
-import { throwOOR } from "../collections/throw-helpers.ts";
+import { throwArgumentNull, throwOOR } from "../collections/throw-helpers.ts";
 import { List } from "../collections/list.ts";
 import { ArgumentOutOfRangeException } from "../exceptions/argument-out-of-range-exception.ts";
 import { InvalidOperationException } from "../exceptions/invalid-operation-exception.ts";
 import type { RuntimeType } from "../reflection/runtime-type.ts";
 import { compareKeys } from "./compare-keys.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
+import { bucketsOf } from "./grouping.ts";
+import { Lookup } from "./lookup.ts";
 import type {
   AggregateTerm,
   AllTerm,
@@ -37,11 +40,13 @@ import type {
   MinTerm,
   SingleOrDefaultTerm,
   SingleTerm,
+  SequenceEqualTerm,
   SumTerm,
   ToArrayTerm,
   ToDictionaryTerm,
   ToHashSetTerm,
   ToListTerm,
+  ToLookupTerm,
   ToMapTerm,
   ToSetTerm,
 } from "./types.ts";
@@ -602,15 +607,92 @@ export function averageNullable<T>(
   };
 }
 
-export function contains<T>(value: T): ContainsTerm<T> {
+/**
+ * `Contains(value[, comparer])`: whether an element equals `value` by `comparer`, or, without
+ * one, by .NET's `EqualityComparer<T>.Default` (a record, `NaN` and a decimal by value).
+ */
+export function contains<T>(
+  value: T,
+  comparer?: IEqualityComparer<NoInfer<T>> | null,
+): ContainsTerm<T> {
   return {
     kind: "contains",
     value,
+    comparer,
     apply: (source) => {
-      for (const element of source) if (element === value) return true;
+      // A primitive other than NaN is equal to exactly what `===` says, with no comparer. `null`
+      // is left out: generated code can hold `undefined` where C# has null.
+      if (!comparer && value != null && typeof value !== "object" && !Number.isNaN(value)) {
+        for (const element of source) if (element === value) return true;
+        return false;
+      }
+
+      for (const element of source) if (equalsBy(comparer, element, value)) return true;
       return false;
     },
   };
+}
+
+/**
+ * `SequenceEqual(second[, comparer])`: whether both sequences have the same length and equal
+ * elements in order, equal by `comparer` or by `EqualityComparer<T>.Default`.
+ */
+export function sequenceEqual<T>(
+  second: Iterable<T>,
+  comparer?: IEqualityComparer<NoInfer<T>> | null,
+): SequenceEqualTerm<T> {
+  return {
+    kind: "sequenceEqual",
+    second,
+    comparer,
+    apply: (source) => {
+      if (second === null || second === undefined) throwArgumentNull("second");
+
+      const first = source[Symbol.iterator]();
+      const other = second[Symbol.iterator]();
+
+      try {
+        while (true) {
+          const a = first.next();
+          const b = other.next();
+
+          if (a.done || b.done) return a.done === b.done;
+          if (!equalsBy(comparer, a.value, b.value)) return false;
+        }
+      } finally {
+        first.return?.();
+        other.return?.();
+      }
+    },
+  };
+}
+
+/**
+ * `ToLookup(keySelector[, elementSelector][, comparer])`: a `Lookup` of the elements by key.
+ * The second argument is the `elementSelector` function or, in the `(keySelector, comparer)`
+ * overload, the comparer object.
+ */
+export function toLookup<T, K, V = T>(
+  keySelector: (item: T) => K,
+  elementSelector?: ((item: T) => V) | IEqualityComparer<NoInfer<K>> | null,
+  comparer?: IEqualityComparer<NoInfer<K>> | null,
+): ToLookupTerm<T, K, V> {
+  const selectsElement = typeof elementSelector === "function";
+  const keyComparer = selectsElement ? comparer : (elementSelector ?? comparer);
+  const select = selectsElement ? elementSelector : undefined;
+
+  return {
+    kind: "toLookup",
+    keySelector,
+    elementSelector: select,
+    comparer: keyComparer,
+    apply: (source) => new Lookup(bucketsOf(source, keySelector, keyComparer, select)),
+  };
+}
+
+/** `comparer.Equals(a, b)`, or `EqualityComparer<T>.Default` without a comparer. */
+function equalsBy<T>(comparer: IEqualityComparer<T> | null | undefined, a: T, b: T): boolean {
+  return comparer ? comparer.equals(a, b) : elementEquals(a, b);
 }
 
 export function aggregate<T, A>(seed: A, accumulator: (acc: A, item: T) => A): AggregateTerm<T, A> {

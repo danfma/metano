@@ -5,6 +5,7 @@ import type {
   PrimitiveDescriptor,
 } from "./types.ts";
 import type { ValueConverter } from "./value-converter.ts";
+import { formatSingle } from "../double-format.ts";
 import { JsonException } from "./errors.ts";
 import { isDecimalText, readDecimalText } from "./decimal-text.ts";
 import {
@@ -61,6 +62,9 @@ const passthroughConverter: ValueConverter = {
 /** The CLR name of a C# `char`, which reads as a one-code-unit `string`. */
 const CHAR_TYPE_NAME = "System.Char";
 
+/** The CLR name of a C# `float`, whose values read rounded to single precision. */
+const SINGLE_TYPE_NAME = "System.Single";
+
 /**
  * A `primitive`: values pass through both ways, except that a JSON string
  * for a numeric `numberType` is read by System.Text.Json's grammar when the
@@ -79,6 +83,10 @@ export function primitiveConverterOf(
     return charConverterOf(errorTypeName);
   }
 
+  if (numberType === SINGLE_TYPE_NAME) {
+    return singleConverterOf(readOptions, errorTypeName);
+  }
+
   if (numberType === undefined || !readsNumbersFromStrings(readOptions)) {
     return passthroughConverter;
   }
@@ -94,6 +102,53 @@ export function primitiveConverterOf(
 
       if (number === undefined) {
         throw cannotConvert(numberType, errorTypeName);
+      }
+
+      return number;
+    },
+  };
+}
+
+/**
+ * A `float`: a JSON number reads rounded to single precision, as
+ * System.Text.Json parses it into a `Single` (#695), and a string reads
+ * through the number grammar (which rounds too) when the context reads
+ * numbers from strings. A finite value writes the shortest text that reads
+ * back as the same `float`, as System.Text.Json writes it (`0.1`, not the
+ * double `0.10000000149011612`), through the exact-number leaf. A
+ * non-finite value passes through: System.Text.Json throws for it without
+ * `AllowNamedFloatingPointLiterals`, which Metano does not mirror.
+ */
+function singleConverterOf(
+  readOptions: JsonReadOptions | undefined,
+  errorTypeName: ErrorTypeName,
+): ValueConverter {
+  const readsStrings = readsNumbersFromStrings(readOptions);
+
+  return {
+    serialize: (value: unknown) =>
+      typeof value === "number" && Number.isFinite(value)
+        ? writeExactNumber(formatSingle(value), () => Math.fround(value))
+        : passthroughConverter.serialize(value),
+    deserialize: (value: unknown) => {
+      if (typeof value === "number") {
+        return Math.fround(value);
+      }
+
+      const exact = exactNumberTextOf(value);
+
+      if (exact !== undefined) {
+        return Math.fround(Number(exact));
+      }
+
+      if (typeof value !== "string" || !readsStrings) {
+        return value;
+      }
+
+      const number = readNumberTextAsNumber(value, SINGLE_TYPE_NAME);
+
+      if (number === undefined) {
+        throw cannotConvert(SINGLE_TYPE_NAME, errorTypeName);
       }
 
       return number;

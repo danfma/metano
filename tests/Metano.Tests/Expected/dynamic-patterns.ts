@@ -1,5 +1,5 @@
 import { isInt32, isString } from "metano-runtime";
-import { Circle } from "./circle";
+import { Circle } from "./circle.js";
 
 export class Patterns {
   constructor() { }
@@ -17,7 +17,9 @@ export class Patterns {
 
     const circle = d instanceof Circle ? d : null;
 
-    return (($s) => {
+    {
+      let $s = d;
+
       if (isInt32($s)) {
         const n = $s;
 
@@ -31,6 +33,6 @@ export class Patterns {
       }
 
       return -1;
-    })(d);
+    }
   }
 }

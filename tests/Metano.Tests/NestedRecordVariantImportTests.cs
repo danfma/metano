@@ -38,7 +38,9 @@ public class NestedRecordVariantImportTests
         // The variant `UserProfileLoaded(UserProfile)` references the renamed DTO in its
         // constructor — a symbol used ONLY inside the companion namespace. It must be imported.
         // Used purely as a type annotation, so a type-only import is the correct shape.
-        await Assert.That(output).Contains("import type { UserProfile } from \"./user-profile\"");
+        await Assert
+            .That(output)
+            .Contains("import type { UserProfile } from \"./user-profile.js\"");
     }
 
     [Test]

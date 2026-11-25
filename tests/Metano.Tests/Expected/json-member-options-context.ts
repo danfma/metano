@@ -1,13 +1,13 @@
 import { List } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import { Account } from "./account";
-import { Blob } from "./blob";
-import { BX } from "./bx";
-import { DX } from "./dx";
-import { Init } from "./init";
-import { Noted } from "./noted";
-import { OrdBase } from "./ord-base";
-import { OrdDer } from "./ord-der";
+import { Account } from "./account.js";
+import { Blob } from "./blob.js";
+import { BX } from "./bx.js";
+import { DX } from "./dx.js";
+import { Init } from "./init.js";
+import { Noted } from "./noted.js";
+import { OrdBase } from "./ord-base.js";
+import { OrdDer } from "./ord-der.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

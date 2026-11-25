@@ -290,8 +290,8 @@ public class JsTupleTranspileTests
         );
 
         var output = result["matcher.ts"];
-        await Assert.That(output).Contains("Array.isArray($v) && $v.length === 2");
-        await Assert.That(output).Contains("(next())");
+        await Assert.That(output).Contains("Array.isArray($subject0) && $subject0.length === 2");
+        await Assert.That(output).Contains("($subject0 = next(), true)");
         await Assert.That(output).DoesNotContain("Array.isArray(next())");
     }
 
@@ -322,7 +322,13 @@ public class JsTupleTranspileTests
 
         var output = result["probe.ts"];
         await Assert.That(output).Contains("return !(this.next() == null);");
-        await Assert.That(output).Contains("(($v) => $v != null && $v.x === 1)(await this.load())");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "($subject0 = await this.load(), true) && $subject0 != null && $subject0.x === 1"
+            );
+
         await Assert.That(output).DoesNotContain("async ($v)");
     }
 

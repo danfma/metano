@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { Token, type TokenKind } from "./token";
+import { Token, type TokenKind } from "./token.js";
 
 let TextToken$rt: ClassType<TextToken> | undefined;
 
@@ -42,6 +42,16 @@ export class TextToken extends Token {
 
   override with(overrides?: Partial<TextToken>): TextToken {
     return copyRecordWith<TextToken>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Text = ${this.text}`;
+  }
+
+  override toString(): string {
+    return `TextToken { ${this.$printMembers()} }`;
   }
 }
 

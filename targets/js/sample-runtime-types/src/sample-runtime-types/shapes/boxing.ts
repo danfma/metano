@@ -8,7 +8,7 @@ import {
   objectText,
   type RuntimeType,
 } from "metano-runtime";
-import { Color, Color$runtimeType } from "./color";
+import { Color, Color$runtimeType } from "./color.js";
 
 export class Boxing {
   constructor() {}

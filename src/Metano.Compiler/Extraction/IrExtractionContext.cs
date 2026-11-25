@@ -72,6 +72,15 @@ public sealed record IrExtractionContext(
     internal bool KeepsReflectionSourceForms => Target == Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
+    /// Whether the target can assign a local inside a test expression and go
+    /// on testing (an assignment in a comma expression:
+    /// <c>($subject0 = next(), true) &amp;&amp; …</c>), so a pattern that binds
+    /// nothing can capture a subject it reads more than once in a synthesized
+    /// designator (#735). Dart has no such form and keeps the uncaptured one.
+    /// </summary>
+    internal bool HasAssignmentInTestForm => Target != Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
     /// Whether the target's BCL collections are its native ones (Dart until
     /// spec 011 FR-038, D28): such a target gets the pre-011c lowering of every
     /// collection construct (the 2.x element-access reads, writes and
@@ -99,6 +108,18 @@ public sealed record IrExtractionContext(
     /// </summary>
     public Analysis.ReifiedTypeAnalysisResult ReifiedTypeAnalysis { get; init; } =
         Analysis.ReifiedTypeParameterAnalysis.Disabled;
+
+    /// <summary>
+    /// The port through which a target says that it cannot print a value of a
+    /// type at a default-text site (an interpolation hole, a concatenation
+    /// operand, a <c>ToString()</c> that binds to <c>object</c>'s or a record's
+    /// synthesized one): it returns the reason, which the extractor reports as
+    /// <c>MS0001</c> (a warning) at the site, or <c>null</c> when the target
+    /// prints the type. TypeScript answers for a <c>[PlainObject]</c> type, which
+    /// has no class (baseline FR-094.4). <c>null</c>, the default, for a target
+    /// that prints every type (Dart): nothing is reported.
+    /// </summary>
+    public Func<INamedTypeSymbol, string?>? UnprintableTextReason { get; init; }
 
     /// <summary>
     /// <see cref="KeepsNativeCollections"/> for a code path that holds only the

@@ -14,7 +14,7 @@ export class Box<T> {
 
 // ---
 import { Int32Type } from "metano-runtime";
-import { Box } from "./box";
+import { Box } from "./box.js";
 
 export class IntBox extends Box<number> {
   constructor() {
@@ -25,7 +25,7 @@ export class IntBox extends Box<number> {
 // ---
 import { List, listType } from "metano-runtime/system/collections";
 import { UnknownType, isType, type RuntimeType } from "metano-runtime";
-import { Box } from "./box";
+import { Box } from "./box.js";
 
 export class Pair<U, V> extends Box<List<U>> {
   declare readonly $typeArguments$Pair: readonly [RuntimeType<U>, RuntimeType<V>];
@@ -42,8 +42,8 @@ export class Pair<U, V> extends Box<List<U>> {
 
 // ---
 import { Int32Type, StringType } from "metano-runtime";
-import { IntBox } from "./int-box";
-import { Pair } from "./pair";
+import { IntBox } from "./int-box.js";
+import { Pair } from "./pair.js";
 
 export function check(a: Object, b: Object): boolean {
   const intBox = new IntBox();

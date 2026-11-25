@@ -2,13 +2,13 @@
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { IReadOnlyList } from "metano-runtime/system/collections";
 import { implementsInterface, type InterfaceType } from "metano-runtime";
-import type { Issue } from "#/sample-issue-tracker/issues/domain/issue";
-import type { IssueId } from "#/sample-issue-tracker/issues/domain/issue-id";
-import type { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
-import type { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
-import type { PageRequest } from "#/sample-issue-tracker/shared-kernel/page-request";
-import type { PageResult } from "#/sample-issue-tracker/shared-kernel/page-result";
-import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
+import type { PageRequest } from "../../shared-kernel/page-request.js";
+import type { PageResult } from "../../shared-kernel/page-result.js";
+import type { UserId } from "../../shared-kernel/user-id.js";
+import type { IssueId } from "../domain/issue-id.js";
+import type { IssuePriority } from "../domain/issue-priority.js";
+import type { IssueStatus } from "../domain/issue-status.js";
+import type { Issue } from "../domain/issue.js";
 
 export interface IIssueRepository {
   getByIdAsync(id: IssueId): Promise<Issue | null>;

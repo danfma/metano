@@ -40,4 +40,8 @@ export class Page<T> {
   with(overrides?: Partial<Page<T>>): Page<T> {
     return copyRecordWith<Page<T>>(this, overrides);
   }
+
+  toString(): string {
+    return `Page { Items = ${this.items} }`;
+  }
 }

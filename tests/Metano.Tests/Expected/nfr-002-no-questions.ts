@@ -21,15 +21,16 @@ export class Counter {
 }
 
 // fixtures/no-runtime-questions/geometry.ts
-import { Point } from "./point";
-import { Priority } from "./priority";
-import { TodoItem } from "./todo-item";
+import { absInt32 } from "metano-runtime";
+import { Point } from "./point.js";
+import { Priority } from "./priority.js";
+import { TodoItem } from "./todo-item.js";
 
 export class Geometry {
   constructor() { }
 
   static distance(a: Point, b: Point): number {
-    return (Math.abs((a.x - b.x) | 0) + Math.abs((a.y - b.y) | 0)) | 0;
+    return (absInt32((a.x - b.x) | 0) + absInt32((a.y - b.y) | 0)) | 0;
   }
 
   static plan(title: string, x: number, y: number): TodoItem {
@@ -38,14 +39,14 @@ export class Geometry {
 }
 
 // fixtures/no-runtime-questions/index.ts
-export { Counter } from "./counter";
-export { Geometry } from "./geometry";
-export { Point } from "./point";
-export { Priority } from "./priority";
-export { TodoItem } from "./todo-item";
+export { Counter } from "./counter.js";
+export { Geometry } from "./geometry.js";
+export { Point } from "./point.js";
+export { Priority } from "./priority.js";
+export { TodoItem } from "./todo-item.js";
 
 // fixtures/no-runtime-questions/point.ts
-import { HashCode, copyRecordWith } from "metano-runtime";
+import { HashCode, absInt32, copyRecordWith } from "metano-runtime";
 
 export class Point {
   constructor(readonly x: number, readonly y: number) { }
@@ -55,7 +56,7 @@ export class Point {
   }
 
   manhattanLength(): number {
-    return (Math.abs(this.x) + Math.abs(this.y)) | 0;
+    return (absInt32(this.x) + absInt32(this.y)) | 0;
   }
 
   equals(other: any): boolean {
@@ -73,6 +74,14 @@ export class Point {
   with(overrides?: Partial<Point>): Point {
     return copyRecordWith<Point>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `X = ${this.x}, Y = ${this.y}`;
+  }
+
+  toString(): string {
+    return `Point { ${this.$printMembers()} }`;
+  }
 }
 
 // fixtures/no-runtime-questions/priority.ts
@@ -85,9 +94,9 @@ export const Priority = {
 export type Priority = typeof Priority[keyof typeof Priority];
 
 // fixtures/no-runtime-questions/todo-item.ts
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
-import type { Point } from "./point";
-import { Priority } from "./priority";
+import { HashCode, copyRecordWith, formatBoolean, valueEquals } from "metano-runtime";
+import type { Point } from "./point.js";
+import { Priority } from "./priority.js";
 
 export class TodoItem {
   constructor(readonly title: string, readonly priority: Priority, readonly location: Point) { }
@@ -119,5 +128,13 @@ export class TodoItem {
 
   with(overrides?: Partial<TodoItem>): TodoItem {
     return copyRecordWith<TodoItem>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Title = ${this.title ?? ""}, Priority = ${this.priority}, Location = ${this.location ?? ""}, IsUrgent = ${formatBoolean(this.isUrgent)}`;
+  }
+
+  toString(): string {
+    return `TodoItem { ${this.$printMembers()} }`;
   }
 }

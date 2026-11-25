@@ -39,4 +39,12 @@ export abstract class HBase {
   with(overrides?: Partial<HBase>): HBase {
     return copyRecordWith<HBase>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `A = ${this.a}`;
+  }
+
+  toString(): string {
+    return `HBase { ${this.$printMembers()} }`;
+  }
 }

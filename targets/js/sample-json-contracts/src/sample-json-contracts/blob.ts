@@ -48,4 +48,8 @@ export class Blob {
   with(overrides?: Partial<Blob>): Blob {
     return copyRecordWith<Blob>(this, overrides);
   }
+
+  toString(): string {
+    return `Blob { Data = ${this.data}, Maybe = ${this.maybe ?? ""}, Numbers = ${this.numbers} }`;
+  }
 }

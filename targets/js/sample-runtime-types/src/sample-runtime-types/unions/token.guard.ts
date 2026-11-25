@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { isNumberToken, type NumberToken } from "./number-token";
-import { isTextToken, type TextToken } from "./text-token";
+import { isNumberToken, type NumberToken } from "./number-token.js";
+import { isTextToken, type TextToken } from "./text-token.js";
 
 const variants = [() => isNumberToken, () => isTextToken];
 

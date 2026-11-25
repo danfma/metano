@@ -34,4 +34,14 @@ export abstract class MixedBase {
   with(overrides?: Partial<MixedBase>): MixedBase {
     return copyRecordWith<MixedBase>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return "";
+  }
+
+  toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `MixedBase { ${members} }` : "MixedBase { }";
+  }
 }

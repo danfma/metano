@@ -1760,7 +1760,8 @@ export function linq(
   source: unknown,
   ...ops: (OperatorBase<any, any> | TerminalBase<any, any>)[]
 ): unknown {
-  const result = ops.reduce((acc, op) => op.apply(acc as Iterable<any>) as any, source as any);
+  const start = typeof source === "string" ? codeUnitsOf(source) : source;
+  const result = ops.reduce((acc, op) => op.apply(acc as Iterable<any>) as any, start as any);
   // Attach the original stage list to the materialized result so an
   // IQueryable-style consumer can introspect the chain. Skipped for
   // primitive results (terminals like `count` / `sum` return numbers
@@ -1814,3 +1815,24 @@ export function stages(...ops: Stage[]): Stage[] {
   return ops;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
+ * The UTF-16 code units of `text`, read lazily: a C# string enumerates them,
+ * where a JS string's own iterator yields code points, so a surrogate pair
+ * would be one element (#695). No array is built, so an early-exit operator
+ * (`first`, `any`, `take`) reads only the units it needs.
+ */
+function codeUnitsOf(text: string): Iterable<string> {
+  return {
+    [Symbol.iterator]: () => {
+      let index = 0;
+
+      return {
+        next: (): IteratorResult<string> =>
+          index < text.length
+            ? { done: false, value: text[index++]! }
+            : { done: true, value: undefined },
+      };
+    },
+  };
+}

@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { IView } from "./i-view";
+import type { IView } from "./i-view.js";
 
 export class Renderer {
   private readonly _container: HTMLElement;

@@ -29,7 +29,7 @@ export class Base {
 
 // circle.ts
 import { isBool } from "metano-runtime";
-import { Shape } from "./shape";
+import { Shape } from "./shape.js";
 
 export class Circle extends Shape {
   constructor() {
@@ -62,7 +62,7 @@ export class Circle extends Shape {
 
 // clash.ts
 import { isInt64 } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Clash extends Base {
   constructor() {
@@ -91,7 +91,7 @@ export class Clash extends Base {
 
 // derived.ts
 import { isBool } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Derived extends Base {
   constructor() {
@@ -120,7 +120,7 @@ export class Derived extends Base {
 
 // flag-mapper.ts
 import { isBool } from "metano-runtime";
-import { Mapper } from "./mapper";
+import { Mapper } from "./mapper.js";
 
 export class FlagMapper extends Mapper {
   constructor() {
@@ -156,25 +156,25 @@ export interface ISink {
 }
 
 // index.ts
-export { Base } from "./base";
-export { Circle } from "./circle";
-export { Clash } from "./clash";
-export { Derived } from "./derived";
-export { FlagMapper } from "./flag-mapper";
-export type { ISink } from "./i-sink";
-export { Leaf } from "./leaf";
-export { Mapper } from "./mapper";
-export { Middle } from "./middle";
-export { RenamedClash } from "./renamed-clash";
-export { Renamed } from "./renamed";
-export { Repo } from "./repo";
-export { Shape } from "./shape";
-export { Sink } from "./sink";
-export { StrRepo } from "./str-repo";
+export { Base } from "./base.js";
+export { Circle } from "./circle.js";
+export { Clash } from "./clash.js";
+export { Derived } from "./derived.js";
+export { FlagMapper } from "./flag-mapper.js";
+export type { ISink } from "./i-sink.js";
+export { Leaf } from "./leaf.js";
+export { Mapper } from "./mapper.js";
+export { Middle } from "./middle.js";
+export { RenamedClash } from "./renamed-clash.js";
+export { Renamed } from "./renamed.js";
+export { Repo } from "./repo.js";
+export { Shape } from "./shape.js";
+export { Sink } from "./sink.js";
+export { StrRepo } from "./str-repo.js";
 
 // leaf.ts
 import { isBool } from "metano-runtime";
-import { Middle } from "./middle";
+import { Middle } from "./middle.js";
 
 export class Leaf extends Middle {
   constructor() {
@@ -241,7 +241,7 @@ export class Mapper {
 
 // middle.ts
 import { isFloat64 } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Middle extends Base {
   constructor() {
@@ -270,7 +270,7 @@ export class Middle extends Base {
 
 // renamed-clash.ts
 import { isBool } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class RenamedClash extends Base {
   constructor() {
@@ -299,7 +299,7 @@ export class RenamedClash extends Base {
 
 // renamed.ts
 import { isBool } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Renamed extends Base {
   constructor() {
@@ -382,7 +382,7 @@ export abstract class Shape {
 
 // sink.ts
 import { isBool, isInt32, isString } from "metano-runtime";
-import type { ISink } from "./i-sink";
+import type { ISink } from "./i-sink.js";
 
 export class Sink implements ISink {
   constructor() { }
@@ -421,7 +421,7 @@ export class Sink implements ISink {
 
 // str-repo.ts
 import { isBool } from "metano-runtime";
-import { Repo } from "./repo";
+import { Repo } from "./repo.js";
 
 export class StrRepo extends Repo<string> {
   constructor() {

@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { GBase } from "./g-base";
+import { GBase } from "./g-base.js";
 
 let GDer$rt: ClassType<GDer> | undefined;
 
@@ -39,5 +39,15 @@ export class GDer extends GBase<number> {
 
   override with(overrides?: Partial<GDer>): GDer {
     return copyRecordWith<GDer>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Extra = ${this.extra}`;
+  }
+
+  override toString(): string {
+    return `GDer { ${this.$printMembers()} }`;
   }
 }

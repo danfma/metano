@@ -343,11 +343,28 @@ describe("List views and copies", () => {
     copy[0] = 9;
 
     expect(list.get(0)).toBe(1);
+    expect(list.length).toBe(2);
+    expect(list.asReadOnlyJsArray()).toBe(list.asJsArray());
     expect(list.asSpan()).toBe(list.asJsArray());
     expect(list.asReadOnlySpan()).toBe(list.asJsArray());
+    list.asJsArray().push(3);
+    expect(list.length).toBe(3);
+    expect(list.length).toBe(list.count);
     list.clear();
+    expect(list.length).toBe(0);
     list.add(5);
+    expect(list.length).toBe(1);
     expect(list.asJsArray()).toEqual([5]);
+
+    const raw = [7, 8];
+    const fixed = List.adopt(raw, { fixedSize: true });
+    const fixedCopy = fixed.toArray();
+
+    fixedCopy[0] = 99;
+
+    expect(fixed.length).toBe(2);
+    expect(fixed.asJsArray()).toBe(raw);
+    expect(raw[0]).toBe(7);
   });
 
   test("copyTo checks the destination", () => {

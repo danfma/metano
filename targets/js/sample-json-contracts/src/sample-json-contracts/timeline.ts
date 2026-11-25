@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
 import type { IReadOnlyList } from "metano-runtime/system/collections";
-import type { Clip } from "./clip";
+import type { Clip } from "./clip.js";
 
 let Timeline$rt: ClassType<Timeline> | undefined;
 
@@ -48,5 +48,9 @@ export class Timeline {
 
   with(overrides?: Partial<Timeline>): Timeline {
     return copyRecordWith<Timeline>(this, overrides);
+  }
+
+  toString(): string {
+    return `Timeline { Name = ${this.name}, Main = ${this.main}, Clips = ${this.clips} }`;
   }
 }

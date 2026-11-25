@@ -10,7 +10,7 @@
  */
 import { Database } from "bun:sqlite";
 import { Decimal } from "decimal.js";
-import { Product } from "#/sample-queryable-sqlite/product";
+import { Product } from "../product.js";
 
 // Loaded eagerly from disk so the bootstrap helper does not need to be
 // async. The transpiler copies samples/SampleQueryableSqlite/schema.sql

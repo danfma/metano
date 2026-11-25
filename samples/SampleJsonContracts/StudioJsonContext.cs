@@ -71,6 +71,10 @@ namespace SampleJsonContracts;
 [JsonSerializable(typeof(Color))]
 [JsonSerializable(typeof(Level))]
 [JsonSerializable(typeof(Flavor))]
+[JsonSerializable(typeof(Spice))]
+[JsonSerializable(typeof(Heat))]
+[JsonSerializable(typeof(Mood))]
+[JsonSerializable(typeof(Tone))]
 [JsonSerializable(typeof(Perms))]
 [JsonSerializable(typeof(Tiny))]
 [JsonSerializable(typeof(Dashboard))]
@@ -82,6 +86,7 @@ namespace SampleJsonContracts;
 [JsonSerializable(typeof(EpisodeRec))]
 [JsonSerializable(typeof(Int64Box))]
 [JsonSerializable(typeof(Int64Containers))]
+[JsonSerializable(typeof(SingleBox))]
 [JsonSerializable(typeof(long))]
 [JsonSerializable(typeof(ulong))]
 public partial class StudioJsonContext : JsonSerializerContext;

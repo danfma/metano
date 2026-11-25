@@ -32,4 +32,8 @@ export class Counter {
   with(overrides?: Partial<Counter>): Counter {
     return copyRecordWith<Counter>(this, overrides);
   }
+
+  toString(): string {
+    return `Counter { Count = ${this.count} }`;
+  }
 }

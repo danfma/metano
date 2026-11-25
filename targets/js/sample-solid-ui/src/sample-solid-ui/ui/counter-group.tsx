@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Counter } from "./counter";
+import { Counter } from "./counter.js";
 import { For, createSignal } from "solid-js";
 
 export type CounterGroupProps = {};

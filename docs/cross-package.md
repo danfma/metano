@@ -183,8 +183,10 @@ onto one import line. (This mirrors how the producing package emits its own file
 which keeps the two layouts in lock-step.)
 
 **Within a single package**, references between generated types import the
-**defining file directly** — `from "#/acme/shared/finance/money"` across
-namespaces, or `from "./money"` within the same namespace — never through a barrel.
+**defining file directly**, by a relative `.js` specifier —
+`from "../finance/money.js"` across namespaces, or `from "./money.js"` within the
+same namespace — never through a barrel and never through a subpath alias
+(spec 004 FR-011).
 This keeps internal correctness independent of barrel emission and structurally
 avoids ESM import cycles.
 
@@ -211,7 +213,7 @@ prefix that the package name stands for, and Metano strips it from the
 | `Acme.SharedKernel` (no segment match) | `src/acme/shared-kernel/index.ts` | `./acme/shared-kernel` | `from "@acme/shared/acme/shared-kernel"` |
 
 Only the package-facing subpaths change: generated files stay under their
-full-namespace folders, the `#/*` alias and internal imports are untouched, and
+full-namespace folders, the relative internal imports are untouched, and
 each entry's `source` / `types` / `import` targets still point at the real
 files. Matching is by whole namespace segment. The root lives on the attribute
 (not in MSBuild) because consumers read it from the referenced assembly, which
@@ -285,8 +287,10 @@ placeholder `package.json` there; the writer merges into it.)
 
 #### Resolving the generated sources: a package-specific condition
 
-Every managed `exports` and `imports` entry lists a source condition first (the
-`.ts` sources), then `types` / `import` (the compiled `dist`). By default the
+Every managed `exports` entry lists a source condition first (the `.ts` sources),
+then `types` / `import` (the compiled `dist`). The `imports` entries, written only
+with `--import-alias`, also list a `bun` condition (the `.ts` sources) between
+`types` and `import`. By default the
 condition is called `source`. That name is generic: a consumer that enables
 `source` for its bundler or type checker also opts every third-party package that
 exports `source` (for example `@internationalized/date`) into raw-source
@@ -332,8 +336,8 @@ sources in ordinary builds). Otherwise the run fails with
 Switching from the default to a custom name is safe. On that build the writer
 adds the new condition and removes the `source` entry it wrote before, in
 `exports` and `imports`, and only when `source` still points at the exact `.ts`
-file the writer emits now. Every other condition you own (`bun`,
-`development`, `require`, a retargeted `source`, ...) is left alone, and in a
+file the writer emits now. Every other condition (`development`,
+`require`, a retargeted `source`, ...) is left alone, and in a
 steady-state build nothing is ever removed. The writer does not remember an
 earlier custom name, so after renaming one custom name to another, or going back
 to `source`, delete the old key yourself.
@@ -343,13 +347,16 @@ with `-p:`) may not re-run the transpile target, whose inputs are the compile
 items and the project file. Touch the `.csproj` or delete the output
 directory's `.metano-stamp` after changing it.
 
-Two requirements of this layout:
+Requirements of this layout:
 
-- **TypeScript 6.0 or newer.** The generated sources import each other through the
-  package's `#/...` subpath imports, and resolving those from a consuming
-  project needs TypeScript 6.0+; with 5.9.3 the consumer reported `TS2307`
-  (cannot find module) on every `#/...` import. This minimum comes from that
-  report, not from a version bisect.
+- **TypeScript 6.0 or newer.** The consumer type-checks the generated `.ts`
+  sources with its own TypeScript. TypeScript 5.9.3 rejects generated generic
+  code in the sample-issue-tracker sources (`TS2322`: `OperationResult<null>` is
+  not assignable to `OperationResult<T>`); 6.0.3 accepts it. The generated
+  sources import each other by relative `.js` specifiers (spec 004 Amendment
+  A1), which every TypeScript version maps to the `.ts` files under `bundler`
+  and `nodenext`, so the `TS2307` that 5.9.3 once reported on the old `#/...`
+  imports no longer occurs.
 - **A fresh-clone order**, described above: `dotnet build` first, then
   `bun install`.
 - **Every consumer needs the condition.** The generated `exports` have no

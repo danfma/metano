@@ -35,6 +35,38 @@ public static partial class IrToTsExpressionBridge
             ? LowerSwitchAsTernary(sw, context)
             : LowerSwitchAsIife(sw, context);
 
+    /// <summary>
+    /// <c>return value switch { ... };</c> without a closure (#735): when the
+    /// switch cannot lower to a ternary chain, the return becomes a block
+    /// that binds the scrutinee once and walks the arms as <c>if</c>s that
+    /// each return or throw: <c>{ let $s = value; if (...) { return ...; } throw ...; }</c>.
+    /// The block keeps <c>$s</c> and the arm designators out of the enclosing
+    /// scope. <c>$s</c> is a <c>let</c>, which widens a literal type the way
+    /// the arrow's parameter did (a <c>const</c> bound to a C# <c>const</c>
+    /// keeps the literal type <c>2</c>, and TypeScript then rejects the
+    /// <c>$s === 1</c> arm as a comparison with no overlap). <c>null</c> when
+    /// the switch lowers as an expression.
+    /// </summary>
+    internal static TsStatement? TryMapSwitchReturn(
+        IrSwitchExpression sw,
+        IrToTsBridgeContext context
+    )
+    {
+        if (CanLowerSwitchAsTernary(sw))
+            return null;
+
+        var scrutinee = new TsIdentifier(ScrutineeParameterName);
+
+        return new TsBlockStatement([
+            new TsVariableDeclaration(
+                ScrutineeParameterName,
+                Map(sw.Scrutinee, context),
+                Const: false
+            ),
+            .. BuildSwitchArmStatements(sw, scrutinee, context),
+        ]);
+    }
+
     private static bool CanLowerSwitchAsTernary(IrSwitchExpression sw) =>
         sw.Arms.Count > 0
         && sw.Arms[^1] is { Pattern: IrDiscardPattern, WhenClause: null }
@@ -111,8 +143,22 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var scrutinee = new TsIdentifier(ScrutineeParameterName);
-        var conditionalArms = sw.Arms.TakeWhile(arm => !IsCatchAllArm(arm));
-        var catchAll = sw.Arms.FirstOrDefault(IsCatchAllArm);
+
+        return BuildSwitchIife(sw, BuildSwitchArmStatements(sw, scrutinee, context), context);
+    }
+
+    /// <summary>
+    /// The arms as statements that return or throw: every arm before the
+    /// first catch-all, then the catch-all or the non-exhaustive throw.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> BuildSwitchArmStatements(
+        IrSwitchExpression sw,
+        TsExpression scrutinee,
+        IrToTsBridgeContext context
+    )
+    {
+        var conditionalArms = sw.Arms.TakeWhile(arm => !arm.IsCatchAll);
+        var catchAll = sw.Arms.FirstOrDefault(arm => arm.IsCatchAll);
 
         var conditionalStatements = conditionalArms.Select(arm =>
             LowerConditionalSwitchArm(arm, scrutinee, context)
@@ -122,7 +168,7 @@ public static partial class IrToTsExpressionBridge
             ? [BuildNonExhaustiveSwitchThrow(scrutinee)]
             : LowerSwitchArmBody(catchAll, scrutinee, context);
 
-        return BuildSwitchIife(sw, [.. conditionalStatements, .. tail], context);
+        return [.. conditionalStatements, .. tail];
     }
 
     /// <summary>
@@ -152,9 +198,6 @@ public static partial class IrToTsExpressionBridge
     private static TsThrowStatement BuildNonExhaustiveSwitchThrow(TsExpression scrutinee) =>
         new(IrToTsExceptionConstructionBridge.MapNonExhaustiveSwitch(scrutinee));
 
-    private static bool IsCatchAllArm(IrSwitchArm arm) =>
-        arm.WhenClause is null && IsAlwaysMatchingPattern(arm.Pattern);
-
     /// <summary>
     /// <c>if (test) { bindings; outcome }</c>. Without designators the
     /// <c>when</c> guard joins the test; with designators it nests inside
@@ -168,7 +211,7 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        if (IsAlwaysMatchingPattern(arm.Pattern) && arm.WhenClause is { } guard)
+        if (arm.Pattern.AlwaysMatches && arm.WhenClause is { } guard)
             return LowerGuardedCatchAllArm(arm, guard, scrutinee, context);
 
         if (HasDesignators(arm.Pattern, context) || arm.WhenClause is null)

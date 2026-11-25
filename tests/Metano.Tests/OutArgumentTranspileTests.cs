@@ -806,7 +806,7 @@ public class OutArgumentTranspileTests
         var output = result["labeler.ts"];
 
         await Assert.That(output).Contains("let tag: Tag | null;");
-        await Assert.That(output).Contains("Tag } from \"./tag\"");
+        await Assert.That(output).Contains("Tag } from \"./tag.js\"");
     }
 
     [Test]

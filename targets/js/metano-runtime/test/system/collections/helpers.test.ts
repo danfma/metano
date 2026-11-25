@@ -8,13 +8,21 @@ import {
   asArray,
   asJsArray,
   asList,
+  asReadOnlyJsArray,
   asReadOnlySpan,
   asSpan,
   fromEnd,
   isIterable,
 } from "#/system/collections/helpers.ts";
 
+import { ImmutableArray } from "#/system/collections/immutable-array.ts";
+import { ImmutableArrayBuilder } from "#/system/collections/immutable-array-builder.ts";
+import { ImmutableList } from "#/system/collections/immutable-list.ts";
+import { ImmutableListBuilder } from "#/system/collections/immutable-list-builder.ts";
+import type { IReadOnlyList } from "#/system/collections/interfaces.ts";
 import { List } from "#/system/collections/list.ts";
+import { ReadOnlyList } from "#/system/collections/read-only-list.ts";
+import { SortedList } from "#/system/collections/sorted-list.ts";
 import { IndexOutOfRangeException } from "#/system/exceptions/index-out-of-range-exception.ts";
 import { InvalidCastException } from "#/system/exceptions/invalid-cast-exception.ts";
 
@@ -89,10 +97,73 @@ describe("helpers", () => {
     const list = List.of([1]);
 
     expect(asJsArray(list)).toBe(list.asJsArray());
+    expect(asReadOnlyJsArray(list)).toBe(list.asReadOnlyJsArray());
     expect(asSpan(list)).toBe(list.asJsArray());
     expect(asReadOnlySpan(list)).toBe(list.asJsArray());
     expect(asSpan(null)).toEqual([]);
     expect(asReadOnlySpan(undefined)).toEqual([]);
     expect(() => asJsArray(null)).toThrow("Value cannot be null. (Parameter 'list')");
+    expect(() => asJsArray(undefined)).toThrow("Value cannot be null. (Parameter 'list')");
+    expect(() => asReadOnlyJsArray(null)).toThrow("Value cannot be null. (Parameter 'list')");
+    expect(() => asReadOnlyJsArray(undefined)).toThrow("Value cannot be null. (Parameter 'list')");
+  });
+
+  test("asReadOnlyJsArray accepts every IReadOnlyList and native arrays", () => {
+    const list = List.of([1, 2]);
+    const roList: IReadOnlyList<number> = new ReadOnlyList(list);
+    const immutableList = ImmutableList.of([3, 4]);
+    const immutableArray = ImmutableArray.of([5, 6]);
+
+    const sorted = SortedList.of([
+      [1, "a"],
+      [2, "b"],
+    ]);
+
+    const listBuilder = new ImmutableListBuilder([7, 8]);
+    const arrayBuilder = new ImmutableArrayBuilder([9, 10]);
+    const raw = [11, 12];
+
+    expect(asReadOnlyJsArray(list)).toBe(list.asJsArray());
+    expect(asReadOnlyJsArray(roList)).toBe(list.asJsArray());
+    expect(asReadOnlyJsArray(immutableList)).toBe(immutableList._items);
+    expect(asReadOnlyJsArray(immutableArray)).toBe(immutableArray._items);
+    expect(asReadOnlyJsArray(sorted.keys)).toBe(sorted._keys);
+    expect(asReadOnlyJsArray(listBuilder)).toBe(listBuilder._list.asJsArray());
+    expect(asReadOnlyJsArray(arrayBuilder)).toBe(arrayBuilder._list.asJsArray());
+    expect(asReadOnlyJsArray(raw)).toBe(raw);
+    expect(() => asReadOnlyJsArray<number>(null as IReadOnlyList<number> | null)).toThrow(
+      "Value cannot be null. (Parameter 'list')",
+    );
+  });
+
+  test("asReadOnlyJsArray falls back to a snapshot copy when receiver lacks asReadOnlyJsArray", () => {
+    const backing = [10, 20, 30];
+
+    const custom = {
+      get count() {
+        return backing.length;
+      },
+
+      get(index: number) {
+        return backing[index]!;
+      },
+
+      [Symbol.iterator]() {
+        return backing[Symbol.iterator]();
+      },
+    } as unknown as IReadOnlyList<number>;
+
+    const snapshot1 = asReadOnlyJsArray(custom);
+
+    expect(snapshot1).toEqual([10, 20, 30]);
+
+    backing.push(40);
+
+    expect(snapshot1).toEqual([10, 20, 30]);
+
+    const snapshot2 = asReadOnlyJsArray(custom);
+
+    expect(snapshot2).toEqual([10, 20, 30, 40]);
+    expect(snapshot2).not.toBe(snapshot1);
   });
 });

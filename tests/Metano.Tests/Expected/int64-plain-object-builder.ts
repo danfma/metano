@@ -1,4 +1,4 @@
-import type { SnowflakeDto } from "./snowflake-dto";
+import type { SnowflakeDto } from "./snowflake-dto.js";
 
 export class Builder {
   constructor() { }

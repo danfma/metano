@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+import { HashCode, copyRecordWith, formatBoolean, type ClassType } from "metano-runtime";
 
 let User$rt: ClassType<User> | undefined;
 
@@ -46,5 +46,9 @@ export class User {
 
   with(overrides?: Partial<User>): User {
     return copyRecordWith<User>(this, overrides);
+  }
+
+  toString(): string {
+    return `User { Name = ${this.name}, Age = ${this.age}, Active = ${formatBoolean(this.active)} }`;
   }
 }

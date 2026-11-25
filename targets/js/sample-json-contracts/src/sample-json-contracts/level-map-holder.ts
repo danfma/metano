@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import type { Dictionary } from "metano-runtime/system/collections";
-import type { Level } from "./level";
+import type { Level } from "./level.js";
 
 let LevelMapHolder$rt: ClassType<LevelMapHolder> | undefined;
 
@@ -40,5 +40,9 @@ export class LevelMapHolder {
 
   with(overrides?: Partial<LevelMapHolder>): LevelMapHolder {
     return copyRecordWith<LevelMapHolder>(this, overrides);
+  }
+
+  toString(): string {
+    return `LevelMapHolder { ByLevel = ${this.byLevel} }`;
   }
 }

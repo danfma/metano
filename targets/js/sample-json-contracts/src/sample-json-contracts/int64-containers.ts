@@ -48,4 +48,8 @@ export class Int64Containers {
   with(overrides?: Partial<Int64Containers>): Int64Containers {
     return copyRecordWith<Int64Containers>(this, overrides);
   }
+
+  toString(): string {
+    return `Int64Containers { Values = ${this.values}, ByName = ${this.byName}, ByMask = ${this.byMask} }`;
+  }
 }

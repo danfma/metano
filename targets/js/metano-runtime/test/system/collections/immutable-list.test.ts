@@ -125,4 +125,33 @@ describe("ImmutableList", () => {
     expect(Object.keys(original)).toEqual([]);
     expect(ImmutableList.$runtimeType.test(original)).toBe(true);
   });
+
+  test("length and asReadOnlyJsArray respect immutability and tip-append sharing", () => {
+    const v1 = ImmutableList.of([1, 2]);
+    const view1 = v1.asReadOnlyJsArray();
+
+    expect(v1.length).toBe(2);
+    expect(v1.asReadOnlyJsArray()).toBe(view1);
+    expect(view1).toEqual([1, 2]);
+
+    const v2 = v1.add(3);
+
+    expect(v2.length).toBe(3);
+    expect(view1).toEqual([1, 2]);
+    expect(v2.asReadOnlyJsArray()).toEqual([1, 2, 3]);
+
+    const v3 = v2.add(4);
+
+    // v2 is now an older version sharing storage with v3: its view is detached to visible elements.
+    expect(v2.asReadOnlyJsArray()).toEqual([1, 2, 3]);
+    expect(v3.asReadOnlyJsArray()).toEqual([1, 2, 3, 4]);
+
+    const empty = ImmutableList.empty<number>();
+    const emptyView = empty.asReadOnlyJsArray();
+
+    expect(empty.length).toBe(0);
+    expect(emptyView).toEqual([]);
+    expect(empty.add(1).asReadOnlyJsArray()).toEqual([1]);
+    expect(emptyView).toEqual([]);
+  });
 });

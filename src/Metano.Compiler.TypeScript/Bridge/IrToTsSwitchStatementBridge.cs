@@ -153,7 +153,7 @@ internal static class IrToTsSwitchStatementBridge
 
     /// <summary>An unguarded <c>case var x:</c> or <c>case _:</c>.</summary>
     private static bool IsCatchAllLabel(IrCaseLabel label) =>
-        label is IrPatternCaseLabel { WhenClause: null, Pattern: IrVarPattern or IrDiscardPattern };
+        label is IrPatternCaseLabel { WhenClause: null, Pattern.AlwaysMatches: true };
 
     private static IEnumerable<TsSwitchCase> MapConstantSection(
         IrSwitchCase section,

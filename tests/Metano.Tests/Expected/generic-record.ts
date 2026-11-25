@@ -1,4 +1,4 @@
-import { HashCode, copyRecordWith, defaultEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, defaultEquals, formatBoolean, objectText } from "metano-runtime";
 
 export class Result<T> {
   constructor(readonly value: T, readonly success: boolean) { }
@@ -17,5 +17,13 @@ export class Result<T> {
 
   with(overrides?: Partial<Result<T>>): Result<T> {
     return copyRecordWith<Result<T>>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Value = ${objectText(this.value ?? "")}, Success = ${formatBoolean(this.success)}`;
+  }
+
+  toString(): string {
+    return `Result { ${this.$printMembers()} }`;
   }
 }

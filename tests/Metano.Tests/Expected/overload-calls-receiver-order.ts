@@ -1,5 +1,5 @@
-import { Engine } from "./engine";
-import { Log } from "./log";
+import { Engine } from "./engine.js";
+import { Log } from "./log.js";
 
 export class Caller {
   constructor() { }

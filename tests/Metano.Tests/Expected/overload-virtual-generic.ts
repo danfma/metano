@@ -26,7 +26,7 @@ export class Repo<T> {
   }
 }
 
-import { Repo } from "./repo";
+import { Repo } from "./repo.js";
 
 export class StrRepo extends Repo<string> {
   constructor() {
@@ -66,7 +66,7 @@ export class Box<T> {
   }
 }
 
-import { Box } from "./box";
+import { Box } from "./box.js";
 
 export class StrBox extends Box<string> {
   constructor() {

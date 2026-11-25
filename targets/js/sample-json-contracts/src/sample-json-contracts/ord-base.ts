@@ -47,4 +47,8 @@ export class OrdBase {
   with(overrides?: Partial<OrdBase>): OrdBase {
     return copyRecordWith<OrdBase>(this, overrides);
   }
+
+  toString(): string {
+    return `OrdBase { Second = ${this.second}, First = ${this.first}, Third = ${this.third} }`;
+  }
 }

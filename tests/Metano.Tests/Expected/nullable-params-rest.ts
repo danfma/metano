@@ -43,6 +43,14 @@ export class Bag {
   with(overrides?: Partial<Bag>): Bag {
     return copyRecordWith<Bag>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `Items = ${this.items ?? ""}`;
+  }
+
+  toString(): string {
+    return `Bag { ${this.$printMembers()} }`;
+  }
 }
 
 export class Box {

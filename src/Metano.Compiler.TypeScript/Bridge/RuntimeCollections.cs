@@ -249,6 +249,7 @@ public static class RuntimeCollections
         "isIterable",
         "asArray",
         "asJsArray",
+        "asReadOnlyJsArray",
         "asSpan",
         "asReadOnlySpan",
         "asList",

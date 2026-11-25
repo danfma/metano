@@ -20,11 +20,13 @@ public static partial class IrToTsExpressionBridge
     /// <summary>
     /// Lowers <c>expr is pattern</c> to a boolean TS expression. A pattern that
     /// declares locals lowers through <see cref="BuildBindingPatternTest"/>:
-    /// extraction declares them ahead of the statement (capturing a subject it
-    /// must not read twice in a <c>var</c> designator), and the test assigns
-    /// them — an arrow could not assign them visibly to TypeScript's
-    /// definite-assignment analysis. Any other side-effecting subject is
-    /// evaluated once, whatever the pattern reads.
+    /// extraction declares them ahead of the statement, in the innermost
+    /// function, and the test assigns them. A subject the pattern would read
+    /// more than once is captured in such a local by extraction too, so the
+    /// remaining patterns read their subject at most once or read a repeatable
+    /// one. Only an <c>is</c> node that did not come from C# source (a
+    /// synthesized one) with a subject that is neither falls back to binding
+    /// it as the argument of an arrow: <c>(($v) =&gt; test)(subject)</c>.
     /// </summary>
     private static TsExpression MapIsPattern(
         IrIsPatternExpression node,
@@ -36,7 +38,10 @@ public static partial class IrToTsExpressionBridge
         if (IrPatternDesignators.Declares(node.Pattern))
             return BuildBindingPatternTest(subject, node.Pattern, context);
 
-        if (IrEvaluationTraits.IsSideEffectFree(node.Expression) || ReadsSubjectOnce(node.Pattern))
+        if (
+            IrEvaluationTraits.IsRepeatableRead(node.Expression)
+            || IrEvaluationTraits.ReadsSubjectOnce(node.Pattern)
+        )
             return MapIsPatternTest(subject, node, context);
 
         var boundSubject = new TsIdentifier(PatternSubjectParameterName);
@@ -47,27 +52,6 @@ public static partial class IrToTsExpressionBridge
             isAsync: false
         );
     }
-
-    /// <summary>
-    /// Whether the test a pattern lowers to reads the subject at most once:
-    /// a constant or relational comparison, <c>_</c>, a type test other than
-    /// the two-read <see cref="IrRuntimeTypeTest.FixedTuple"/> shape, or the
-    /// negation of one of these.
-    /// Any other pattern reads the subject (or its members) repeatedly, so a
-    /// side-effecting subject is bound once first:
-    /// <c>(($v) =&gt; test)(subject)</c>.
-    /// </summary>
-    private static bool ReadsSubjectOnce(IrPattern pattern) =>
-        pattern switch
-        {
-            IrConstantPattern or IrRelationalPattern or IrDiscardPattern => true,
-            IrLogicalPattern { Operator: IrLogicalOp.Not } notPattern => ReadsSubjectOnce(
-                notPattern.Left
-            ),
-            IrTypePattern { Designator: null } typePattern => IrRuntimeTypeTest.Of(typePattern.Type)
-                is not IrRuntimeTypeTest.FixedTuple,
-            _ => false,
-        };
 
     private static TsExpression MapIsPatternTest(
         TsExpression lowered,
@@ -253,10 +237,7 @@ public static partial class IrToTsExpressionBridge
         TsExpression value,
         IrPattern pattern,
         IrToTsBridgeContext context
-    ) => IsAlwaysMatchingPattern(pattern) ? null : BuildPatternTest(value, pattern, context);
-
-    private static bool IsAlwaysMatchingPattern(IrPattern pattern) =>
-        pattern is IrDiscardPattern or IrVarPattern;
+    ) => pattern.AlwaysMatches ? null : BuildPatternTest(value, pattern, context);
 
     /// <summary>
     /// Joins a pattern test with a <c>when</c> guard as <c>test &amp;&amp; guard</c>.

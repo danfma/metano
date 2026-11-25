@@ -29,9 +29,9 @@ public class ImportContractTests
 
         var person = result["demo/users/person.ts"];
         // Paired assertion: the import must target the file, and must NOT degrade back
-        // to the namespace barrel (`#/demo/models`) — keep both so neither loosens.
-        await Assert.That(person).Contains("from \"#/demo/models/address\"");
-        await Assert.That(person).DoesNotContain("from \"#/demo/models\";");
+        // to the namespace barrel (`../models/index.js`) — keep both so neither loosens.
+        await Assert.That(person).Contains("from \"../models/address.js\"");
+        await Assert.That(person).DoesNotContain("from \"../models/index.js\";");
     }
 
     [Test]
@@ -50,6 +50,6 @@ public class ImportContractTests
         );
 
         var company = result["demo/models/company.ts"];
-        await Assert.That(company).Contains("from \"./address\"");
+        await Assert.That(company).Contains("from \"./address.js\"");
     }
 }

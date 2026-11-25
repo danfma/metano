@@ -1,6 +1,6 @@
-import type { Engine } from "./engine";
-import { Holder } from "./holder";
-import type { Point } from "./point";
+import type { Engine } from "./engine.js";
+import { Holder } from "./holder.js";
+import type { Point } from "./point.js";
 
 export class PlainCalls {
   constructor() { }

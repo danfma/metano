@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 import type { IReadOnlyList } from "metano-runtime/system/collections";
-import { Clip } from "./clip";
+import { Clip } from "./clip.js";
 
 let Group$rt: ClassType<Group> | undefined;
 
@@ -44,5 +44,15 @@ export class Group extends Clip {
 
   override with(overrides?: Partial<Group>): Group {
     return copyRecordWith<Group>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Name = ${this.name}, Members = ${this.members}`;
+  }
+
+  override toString(): string {
+    return `Group { ${this.$printMembers()} }`;
   }
 }

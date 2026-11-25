@@ -1403,6 +1403,84 @@ Product requirements added after the migration (normative; each one is traced by
      migration notes, no live document or project still names the `Metano.Build` package or the
      `Metano.Build.targets` file.
 
+- **FR-093** (record `ToString` text, #664): A record (class or struct) emitted as a class MUST
+  carry a `toString()` that returns the text .NET's synthesized `ToString` returns.
+  1. *Format.* `Name { P1 = v1, P2 = v2 }`, and `Name { }` when no member prints. `Name` is the
+     C# simple name of the record: no generic arity, no containing type, no `[Name]` rename
+     (`RsGeneric<int>` prints `RsGeneric { Value = 1 }`, a record nested in `Outer` prints
+     `Inner { X = 1 }`). Each `P` is the C# member name, also when `[Name]` renames the member.
+  2. *When.* The fate comes from Roslyn, not from a Metano rule: `toString()` is synthesized
+     exactly when the record's symbol has an implicitly declared parameterless `ToString`. A
+     user `ToString()` (emitted as the user's method, as today), a `sealed override ToString()`
+     in a record base (the derived record has no implicit member and inherits the base's) and
+     every other declared form are left untouched; an `abstract override ToString()` in a base,
+     and a non-sealed user `ToString()` in a base, make the derived record synthesize its own,
+     as .NET does.
+  3. *Printable members.* Exactly C#'s rule, at the record's own level: its public instance
+     fields and its public instance properties that have a getter (a `private get` included),
+     in declaration order (the positional properties first). Static, `const`, protected and
+     private members, indexers, `EqualityContract` and `override` properties are not printed;
+     an `override` property is printed once, by the record that declares the original, which
+     reads it through virtual dispatch. A property is read through its accessor (`this.p`), so a
+     computed property runs; this differs from equality, which reads storage (FR-060, #384).
+     A member marked `[Ignore]` does not exist on the emitted object and is skipped (W7-4).
+  4. *Member text.* Each value prints exactly what the interpolation hole `$"{this.P}"`
+     prints today (baseline FR-014, #308, #694; one shared default-text lowering in the core):
+     `True` / `False`, `float` and `double` in .NET's shortest round-trip form, a `decimal`
+     with its scale, an enum by member name, a `null` (reference or nullable value) as the
+     empty string, a `char` as its character, and any other object (a nested record, a runtime
+     collection) through its own `toString()`. A divergence of that lowering is a default-text
+     gap, not a record gap: records inherit it (a C# array prints its elements, a plain class
+     prints `[object Object]`, a `DateTime` prints its Temporal text) and those gaps are fixed
+     separately.
+  5. *Not covered.* A user `PrintMembers(StringBuilder)` in the record or in a record base
+     (W7-4, deferred), and a record that declares another member emitted as `toString` (a
+     `ToString(string)` overload, which would need the synthesized `ToString` to join the
+     overload group as spec 013 FR-038 does for `Equals`), report `MS0001` (a warning) on the
+     record and emit no synthesized text; the record keeps today's output. Dart is deferred
+     (W7-4): its output stays byte-identical.
+
+- **FR-094** (record `ToString` protocol and edges, #664): The TypeScript target MUST emit the
+  text of FR-093 through one protocol that chains like C#'s `PrintMembers`.
+  1. *Protocol.* A record that a record can derive from (not sealed, or with a record base)
+     declares `protected $printMembers(): string`, which returns its own members' text
+     (`P1 = v1, P2 = v2`); a derived record's override starts with the base's text, base first
+     and separated by `", "` only when both are non-empty (C#'s `if (base.PrintMembers(b))
+     b.Append(", ")`). `toString()` returns `` `Name { ${this.$printMembers()} }` `` when the
+     record's own list is non-empty, and the runtime-conditional
+     `` m ? `Name { ${m} }` : "Name { }" `` otherwise. A sealed record or a record struct with
+     no record base inlines its members into `toString()` and declares no `$printMembers`:
+     nothing can chain to it. The `$` prefix cannot collide with a C# identifier. Both members
+     carry `override` when the class extends an emitted base (`noImplicitOverride`).
+  2. *Cross-package base.* A derived record reads its base's text as
+     `super.$printMembers?.() ?? ""`, so a base package generated before this requirement (no
+     `$printMembers`) prints only the derived members at run time instead of throwing
+     (W7-4). The tolerance is run time only: a library whose records derive from a record of
+     another package MUST regenerate that base package, because an old base and a new derived
+     record (or the reverse) do not type-check together (TS4113, TS2339, TS4114); the release
+     note says so.
+  3. *Cycles.* There is no cycle detection (it would cost every record a per-call check and an
+     import). A record that reaches itself through its members overflows the stack with a
+     JavaScript `RangeError` (.NET's `PrintMembers` throws
+     `InsufficientExecutionStackException`); `toException` keeps it catchable as an
+     `Exception`. Documented divergence (W7-4: no mapping).
+  4. *`[PlainObject]` at a text site.* A `[PlainObject]` type has no class, so it has no
+     `toString()` and prints `[object Object]`. A value of such a type written at a default-text
+     site (an interpolation hole, a string concatenation operand, or a `ToString()` call that
+     binds to `object`'s or the record's synthesized `ToString`) MUST report `MS0001` (a
+     warning; loud over silent, W7-4). The TypeScript target decides and words it, through
+     the core's `UnprintableTextReason` port; Dart sets no answer and reports nothing. A `[PlainObject]` member of a record prints
+     `[object Object]` inside the record's text without a diagnostic: no source site asks for it.
+  5. *Cost (spec 011 NFR-008).* Class methods are not tree-shaken, so every used record keeps
+     its `toString` and the formatters its member types need (`formatDouble` / `formatSingle`
+     for the first floating-point member, `formatBoolean`, `enumText`). No opt-out (W7-4).
+     `size-budgets.json` records the measured rows `record toString (int/string members)` and
+     `record toString (double member)`; an unused record stays 0 bytes (golden side-effect
+     check).
+  6. *Unchanged.* JSON and runtime descriptors are not touched (the display name is a literal).
+     A record used as a key that the runtime turns into text (a `ConcurrentDictionary` key's
+     `toJSON`) now prints the record text instead of `[object Object]`.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

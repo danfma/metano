@@ -1,5 +1,5 @@
-import type { Holder } from "./holder";
-import type { UserDto } from "./user-dto";
+import type { Holder } from "./holder.js";
+import type { UserDto } from "./user-dto.js";
 
 export class Hatches {
   constructor() { }

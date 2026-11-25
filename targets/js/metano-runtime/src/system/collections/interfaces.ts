@@ -7,7 +7,23 @@ export interface IReadOnlyCollection<T> extends Iterable<T> {
   readonly count: number;
 }
 export interface IReadOnlyList<T> extends IReadOnlyCollection<T> {
+  /** Mirrors `count` for JavaScript/TypeScript array ergonomics. */
+  readonly length: number;
+
   get(index: number): T; // ArgumentOutOfRangeException
+
+  /** Detached shallow copy of the list's elements (spec 011 FR-055). */
+  toArray(): T[];
+
+  /**
+   * Read-only view over the backing JS array (spec 011 FR-056): zero-copy and
+   * live for runtime array-backed list kinds (reflects later mutations of a
+   * mutable source; array identity is not stable for older immutable versions
+   * sharing a grown store), and a shallow snapshot copy when `ReadOnlyList`
+   * wraps a custom `IList` without `asReadOnlyJsArray()`. Read-only for the
+   * consumer.
+   */
+  asReadOnlyJsArray(): readonly T[];
 }
 export interface ICollection<T> extends Iterable<T> {
   readonly count: number;

@@ -1,5 +1,5 @@
 import { isInt32, isInt64, isString } from "metano-runtime";
-import { UId } from "./u-id";
+import { UId } from "./u-id.js";
 
 export type Tag = string & { readonly __brand: "Tag" };
 

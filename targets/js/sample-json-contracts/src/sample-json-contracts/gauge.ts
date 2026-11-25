@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { IGauge$runtimeType, type IGauge } from "./i-gauge";
+import { IGauge$runtimeType, type IGauge } from "./i-gauge.js";
 
 let Gauge$rt: ClassType<Gauge> | undefined;
 
@@ -44,5 +44,9 @@ export class Gauge implements IGauge {
 
   with(overrides?: Partial<Gauge>): Gauge {
     return copyRecordWith<Gauge>(this, overrides);
+  }
+
+  toString(): string {
+    return `Gauge { Level = ${this.level}, Unit = ${this.unit} }`;
   }
 }

@@ -76,16 +76,52 @@ public sealed partial class IrExpressionExtractor
 
     private IrExpression ConcatenationOperand(ExpressionSyntax operand)
     {
-        var value = Extract(operand);
+        var type = _semantic.GetTypeInfo(operand).Type;
 
-        if (DefaultTextCall(operand, value) is { } text)
+        ReportUnprintableText(operand, type);
+
+        return DefaultText(
+            Extract(operand),
+            type,
+            DefaultTextSites.ForOperand(operand, _semantic),
+            MayFormatAsNull(operand)
+        );
+    }
+
+    /// <summary>
+    /// The default text of the record member <paramref name="member"/> read
+    /// through <c>this</c>: exactly what the interpolation hole
+    /// <c>$"{this.Member}"</c> extracts to, so a record's synthesized text
+    /// (baseline FR-093) and a source hole share one lowering.
+    /// </summary>
+    internal IrExpression ExtractMemberDefaultText(ISymbol member, ITypeSymbol memberType) =>
+        DefaultText(
+            new IrMemberAccess(new IrThisExpression(), member.Name, BuildOrigin(member)),
+            memberType,
+            DefaultTextSite.Implicit,
+            ReferenceNullability.MayBeNull(memberType)
+        );
+
+    /// <summary>
+    /// <paramref name="value"/> as text at a default-text site: the mapped
+    /// <c>ToString()</c> of its type (<see cref="DefaultTextConversion"/>), else the
+    /// value itself, coalesced to <c>""</c> when <paramref name="mayBeNull"/>.
+    /// </summary>
+    private IrExpression DefaultText(
+        IrExpression value,
+        ITypeSymbol? type,
+        DefaultTextSite site,
+        bool mayBeNull
+    )
+    {
+        if (DefaultTextCall(value, type, site) is { } text)
             return text;
 
         // A base-object member call lowers to `object`'s defaults (#506), and
         // none of them is null — `object.ToString`'s `string?` annotation
         // notwithstanding — so the coalesce would be unreachable code tsgo
         // rejects (TS2869) over a string literal.
-        if (!MayFormatAsNull(operand) || value is IrBaseObjectMemberCall)
+        if (!mayBeNull || value is IrBaseObjectMemberCall)
             return value;
 
         return new IrBinaryExpression(
@@ -111,23 +147,18 @@ public sealed partial class IrExpressionExtractor
     /// <c>null</c> as <c>""</c>, so the operand needs no coalesce. <c>null</c> for any other
     /// operand.
     /// </summary>
-    private IrCallExpression? DefaultTextCall(ExpressionSyntax operand, IrExpression value)
-    {
-        var type = _semantic.GetTypeInfo(operand).Type;
-
-        return
-            DefaultTextConversion.MappedToString(
-                type is ITypeParameterSymbol ? _semantic.Compilation.ObjectType : type,
-                new(
-                    _target,
-                    _context.LowersByDeclarativeMapping,
-                    DefaultTextSites.ForOperand(operand, _semantic)
-                )
-            )
-                is { } toString
+    private IrCallExpression? DefaultTextCall(
+        IrExpression value,
+        ITypeSymbol? type,
+        DefaultTextSite site
+    ) =>
+        DefaultTextConversion.MappedToString(
+            type is ITypeParameterSymbol ? _semantic.Compilation.ObjectType : type,
+            new(_target, _context.LowersByDeclarativeMapping, site)
+        )
+            is { } toString
             ? DefaultTextCall(value, toString, type)
             : null;
-    }
 
     private IrCallExpression DefaultTextCall(
         IrExpression value,
@@ -146,6 +177,8 @@ public sealed partial class IrExpressionExtractor
         IMethodSymbol? method
     )
     {
+        ReportUnprintableToString(invocation, method);
+
         if (
             !DefaultTextSites.IsInvocation(method)
             || QualifiedMemberSyntax.From(invocation.Expression) is not { } member

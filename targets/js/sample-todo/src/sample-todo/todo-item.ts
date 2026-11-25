@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import type { Priority } from "./priority";
+import { HashCode, copyRecordWith, formatBoolean, type ClassType } from "metano-runtime";
+import type { Priority } from "./priority.js";
 
 let TodoItem$rt: ClassType<TodoItem> | undefined;
 
@@ -59,5 +59,9 @@ export class TodoItem {
 
   with(overrides?: Partial<TodoItem>): TodoItem {
     return copyRecordWith<TodoItem>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Title = ${this.title}, Completed = ${formatBoolean(this.completed)}, Priority = ${this.priority}`;
   }
 }

@@ -90,6 +90,37 @@ public sealed record IrNumericConversion(
     public static bool IsDecimalToNarrowInteger(IrNumericEndpoint from, IrNumericEndpoint to) =>
         from is { Kind: IrNumericKind.Decimal, IsEnum: false } && to.IsNarrowIntegerValue();
 
+    /// <summary>A decimal read as a <c>char</c>: truncate, then range-check in every context, as an unsigned 16-bit integer (#695).</summary>
+    public static bool IsDecimalToChar(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        from is { Kind: IrNumericKind.Decimal, IsEnum: false }
+        && to is { Kind: IrNumericKind.Char, IsEnum: false };
+
+    /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> makes a <c>decimal</c> of a <c>double</c> or <c>float</c>, rounded to its significant digits (#695).</summary>
+    public static bool IsBinaryFloatingPointToDecimal(
+        IrNumericEndpoint from,
+        IrNumericEndpoint to
+    ) =>
+        from is { IsEnum: false }
+        && from.Kind.IsFloatingPoint()
+        && to is { Kind: IrNumericKind.Decimal, IsEnum: false };
+
+    /// <summary>
+    /// Whether a conversion from <paramref name="from"/> to <paramref name="to"/>
+    /// rounds to a <c>float</c> a value that single precision may not hold
+    /// (#695): a <c>double</c>, or an <c>int</c> / <c>uint</c> beyond 2^24.
+    /// The core also wraps every inexact <c>float</c> arithmetic result in
+    /// this conversion from <c>double</c>
+    /// (<c>SinglePrecisionRounding</c>): rounding the double result is the
+    /// single-precision result for <c>+</c>, <c>-</c>, <c>*</c> and <c>/</c>.
+    /// </summary>
+    public static bool IsRoundedToSingle(IrNumericEndpoint from, IrNumericEndpoint to) =>
+        from
+            is {
+                Kind: IrNumericKind.Double or IrNumericKind.Int32 or IrNumericKind.UInt32,
+                IsEnum: false
+            }
+        && to is { Kind: IrNumericKind.Single, IsEnum: false };
+
     /// <summary>Whether a conversion from <paramref name="from"/> to <paramref name="to"/> reads a <c>decimal</c> as a <c>double</c> or <c>float</c>.</summary>
     public static bool IsDecimalToBinaryFloatingPoint(
         IrNumericEndpoint from,

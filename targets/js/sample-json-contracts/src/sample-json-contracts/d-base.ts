@@ -35,4 +35,14 @@ export class DBase {
   with(overrides?: Partial<DBase>): DBase {
     return copyRecordWith<DBase>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return "";
+  }
+
+  toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `DBase { ${members} }` : "DBase { }";
+  }
 }

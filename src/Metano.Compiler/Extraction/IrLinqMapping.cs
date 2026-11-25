@@ -16,7 +16,7 @@ namespace Metano.Compiler.Extraction;
 /// <c>System.Linq.Queryable</c> and <c>ImmutableArrayExtensions</c> methods with a direct counterpart in
 /// the runtime <c>system/linq</c> module. Methods with no pipe
 /// equivalent (e.g. <c>Cast&lt;T&gt;</c>, <c>OfType&lt;T&gt;</c>,
-/// <c>SequenceEqual</c>) deliberately stay out — the chain walker
+/// <c>GroupJoin</c>) deliberately stay out — the chain walker
 /// short-circuits when it hits one, and its call reports MS0001 unless a
 /// declarative mapping lowers it (#648).
 /// </para>
@@ -40,6 +40,7 @@ public static class IrLinqMapping
             ["ThenBy"] = IrLinqOperator.ThenBy,
             ["ThenByDescending"] = IrLinqOperator.ThenByDescending,
             ["GroupBy"] = IrLinqOperator.GroupBy,
+            ["Join"] = IrLinqOperator.Join,
             ["Take"] = IrLinqOperator.Take,
             ["Skip"] = IrLinqOperator.Skip,
             ["TakeWhile"] = IrLinqOperator.TakeWhile,
@@ -63,6 +64,8 @@ public static class IrLinqMapping
             ["ToList"] = IrLinqOperator.ToList,
             ["ToDictionary"] = IrLinqOperator.ToMap,
             ["ToHashSet"] = IrLinqOperator.ToSet,
+            ["ToLookup"] = IrLinqOperator.ToLookup,
+            ["SequenceEqual"] = IrLinqOperator.SequenceEqual,
             ["First"] = IrLinqOperator.First,
             ["FirstOrDefault"] = IrLinqOperator.FirstOrDefault,
             ["Last"] = IrLinqOperator.Last,
@@ -99,6 +102,7 @@ public static class IrLinqMapping
             [IrLinqOperator.ThenBy] = "thenBy",
             [IrLinqOperator.ThenByDescending] = "thenByDescending",
             [IrLinqOperator.GroupBy] = "groupBy",
+            [IrLinqOperator.Join] = "join",
             [IrLinqOperator.Take] = "take",
             [IrLinqOperator.Skip] = "skip",
             [IrLinqOperator.TakeWhile] = "takeWhile",
@@ -118,6 +122,8 @@ public static class IrLinqMapping
             [IrLinqOperator.ToList] = "toList",
             [IrLinqOperator.ToMap] = "toDictionary",
             [IrLinqOperator.ToSet] = "toHashSet",
+            [IrLinqOperator.ToLookup] = "toLookup",
+            [IrLinqOperator.SequenceEqual] = "sequenceEqual",
             [IrLinqOperator.First] = "first",
             [IrLinqOperator.FirstOrDefault] = "firstOrDefault",
             [IrLinqOperator.Last] = "last",
@@ -161,7 +167,14 @@ public static class IrLinqMapping
         [IrLinqOperator.OrderByDescending] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
         [IrLinqOperator.ThenBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
         [IrLinqOperator.ThenByDescending] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
-        [IrLinqOperator.GroupBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
+        [IrLinqOperator.GroupBy] = IrLinqRuntimeSignature
+            .Of(2, Named("keySelector"), Named("keySelector", "comparer"))
+            .PaddingOmittedArguments(),
+        [IrLinqOperator.Join] = IrLinqRuntimeSignature.Of(
+            null,
+            Named("inner", "outerKeySelector", "innerKeySelector", "resultSelector"),
+            Named("inner", "outerKeySelector", "innerKeySelector", "resultSelector", "comparer")
+        ),
         [IrLinqOperator.Take] = IrLinqRuntimeSignature.Of(null, Named("count")),
         [IrLinqOperator.Skip] = IrLinqRuntimeSignature.Of(null, Named("count")),
         [IrLinqOperator.TakeWhile] = IrLinqRuntimeSignature.Of(1, Named("predicate")),
@@ -205,6 +218,20 @@ public static class IrLinqMapping
             Named("keySelector", "elementSelector")
         ),
         [IrLinqOperator.ToSet] = IrLinqRuntimeSignature.Of(null, Named()),
+        [IrLinqOperator.ToLookup] = IrLinqRuntimeSignature.Of(
+            null,
+            Named("keySelector"),
+            Named("keySelector", "comparer"),
+            Named("keySelector", "elementSelector"),
+            Named("keySelector", "elementSelector", "comparer")
+        ),
+        [IrLinqOperator.SequenceEqual] = IrLinqRuntimeSignature.Of(
+            null,
+            Named("second"),
+            Named("source2"),
+            Named("second", "comparer"),
+            Named("source2", "comparer")
+        ),
         [IrLinqOperator.First] = IrLinqRuntimeSignature.Of(1, Named(), Named("predicate")),
         [IrLinqOperator.FirstOrDefault] = OrDefaultSignature,
         [IrLinqOperator.Last] = IrLinqRuntimeSignature.Of(1, Named(), Named("predicate")),
@@ -220,7 +247,13 @@ public static class IrLinqMapping
         [IrLinqOperator.MinBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
         [IrLinqOperator.MaxBy] = IrLinqRuntimeSignature.Of(1, Named("keySelector")),
         [IrLinqOperator.Average] = IrLinqRuntimeSignature.Of(1, Named(), Named("selector")),
-        [IrLinqOperator.Contains] = IrLinqRuntimeSignature.Of(null, Named("value"), Named("item")),
+        [IrLinqOperator.Contains] = IrLinqRuntimeSignature.Of(
+            null,
+            Named("value"),
+            Named("item"),
+            Named("value", "comparer"),
+            Named("item", "comparer")
+        ),
         [IrLinqOperator.Aggregate] = IrLinqRuntimeSignature.Of(null, Named("seed", "func")),
         [IrLinqOperator.ElementAt] = IrLinqRuntimeSignature.Of(null, Named("index")),
         [IrLinqOperator.ElementAtOrDefault] = IrLinqRuntimeSignature.Of(null, Named("index")),
@@ -263,6 +296,8 @@ public static class IrLinqMapping
                 or IrLinqOperator.ToList
                 or IrLinqOperator.ToMap
                 or IrLinqOperator.ToSet
+                or IrLinqOperator.ToLookup
+                or IrLinqOperator.SequenceEqual
                 or IrLinqOperator.First
                 or IrLinqOperator.FirstOrDefault
                 or IrLinqOperator.Last
@@ -303,7 +338,10 @@ public static class IrLinqMapping
         op
             is IrLinqOperator.DefaultIfEmpty
                 or IrLinqOperator.ElementAt
-                or IrLinqOperator.ElementAtOrDefault;
+                or IrLinqOperator.ElementAtOrDefault
+                or IrLinqOperator.Join
+                or IrLinqOperator.ToLookup
+                or IrLinqOperator.SequenceEqual;
 
     /// <summary>
     /// The overloads the runtime operator of <paramref name="op"/> implements

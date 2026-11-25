@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { Counter } from "#/sample-counter-v1/models/counter";
-import { Renderer } from "#/sample-counter-v1/views/renderer";
-import type { ICounterView } from "./i-counter-view";
+import type { Counter } from "../models/counter.js";
+import { Renderer } from "../views/renderer.js";
+import type { ICounterView } from "./i-counter-view.js";
 
 export class CounterPresenter {
   private _state: Counter;

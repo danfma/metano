@@ -1,5 +1,5 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
-import { Entry } from "./entry";
+import { Entry } from "./entry.js";
 
 export class Note extends Entry {
   constructor(readonly id: number, readonly text: string) {
@@ -25,5 +25,15 @@ export class Note extends Entry {
 
   override with(overrides?: Partial<Note>): Note {
     return copyRecordWith<Note>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Text = ${this.text ?? ""}`;
+  }
+
+  override toString(): string {
+    return `Note { ${this.$printMembers()} }`;
   }
 }

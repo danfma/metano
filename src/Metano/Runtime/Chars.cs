@@ -1,7 +1,7 @@
 // Declarative BCL → JavaScript mappings for the `System.Char` category tests (#686). A `char`
 // is a one-code-unit string, so each test is a `metano-runtime` helper that reads the Unicode
 // general category as .NET does (`IsLetter` is `\p{L}`, `IsWhiteSpace` also admits U+0009-U+000D
-// and U+0085). Only the `char` overloads are mapped; `IsLetter(string, int)` and its siblings
+// and U+0085), and the `IsAscii*` family (#733) tests code units below 0x80. Only the `char` overloads are mapped; `IsLetter(string, int)` and its siblings
 // stay unmapped and report MS0001.
 
 using Metano.Annotations;
@@ -82,4 +82,74 @@ using Metano.Annotations;
     JsTemplate = "charIsWhiteSpace($0)",
     RuntimeImports = "charIsWhiteSpace",
     WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsAscii),
+    JsTemplate = "charIsAscii($0)",
+    RuntimeImports = "charIsAscii",
+    WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsAsciiDigit),
+    JsTemplate = "charIsAsciiDigit($0)",
+    RuntimeImports = "charIsAsciiDigit",
+    WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsAsciiLetter),
+    JsTemplate = "charIsAsciiLetter($0)",
+    RuntimeImports = "charIsAsciiLetter",
+    WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsAsciiLetterLower),
+    JsTemplate = "charIsAsciiLetterLower($0)",
+    RuntimeImports = "charIsAsciiLetterLower",
+    WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsAsciiLetterUpper),
+    JsTemplate = "charIsAsciiLetterUpper($0)",
+    RuntimeImports = "charIsAsciiLetterUpper",
+    WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsAsciiLetterOrDigit),
+    JsTemplate = "charIsAsciiLetterOrDigit($0)",
+    RuntimeImports = "charIsAsciiLetterOrDigit",
+    WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsAsciiHexDigit),
+    JsTemplate = "charIsAsciiHexDigit($0)",
+    RuntimeImports = "charIsAsciiHexDigit",
+    WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsAsciiHexDigitLower),
+    JsTemplate = "charIsAsciiHexDigitLower($0)",
+    RuntimeImports = "charIsAsciiHexDigitLower",
+    WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsAsciiHexDigitUpper),
+    JsTemplate = "charIsAsciiHexDigitUpper($0)",
+    RuntimeImports = "charIsAsciiHexDigitUpper",
+    WhenParameterTypes = [typeof(char)]
+)]
+[assembly: MapMethod(
+    typeof(char),
+    nameof(char.IsBetween),
+    JsTemplate = "charIsBetween($0, $1, $2)",
+    RuntimeImports = "charIsBetween",
+    WhenParameterTypes = [typeof(char), typeof(char), typeof(char)]
 )]

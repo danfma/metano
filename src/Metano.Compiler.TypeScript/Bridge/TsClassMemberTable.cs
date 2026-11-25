@@ -30,7 +30,12 @@ internal sealed class TsClassMemberTable
     {
         var table = UserMembersOf(ir);
 
-        foreach (var name in IrToTsRecordSynthesisBridge.SynthesizedMemberNames(ir, table))
+        var synthesized = IrToTsRecordSynthesisBridge
+            .SynthesizedMemberNames(ir, table)
+            .Concat(IrToTsRecordPrintingBridge.SynthesizedMemberNames(ir, table))
+            .ToList();
+
+        foreach (var name in synthesized)
             table.Declare(isStatic: false, name, ir.Name);
 
         return table;

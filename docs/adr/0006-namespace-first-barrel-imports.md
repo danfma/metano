@@ -204,3 +204,9 @@ The flag is **not** flipped on by default. Two concerns stay open:
 `MetanoNamespaceBarrels` in its `.csproj` so the generated
 `targets/js/sample-issue-tracker/src/index.ts` exercises the shape
 end-to-end (see `test/namespace-barrels.test.ts`).
+
+## Amendment (#573)
+
+Spec 004 Amendment A1 replaces the `#/…` specifiers of internal edges with
+relative `.js` file specifiers (`../domain/issue.js`, `./issue-id.js`). Barrels
+stay the external contract; nothing in generated code imports through an alias.

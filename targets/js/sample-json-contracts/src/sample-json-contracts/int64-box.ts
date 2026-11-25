@@ -47,4 +47,8 @@ export class Int64Box {
   with(overrides?: Partial<Int64Box>): Int64Box {
     return copyRecordWith<Int64Box>(this, overrides);
   }
+
+  toString(): string {
+    return `Int64Box { Id = ${this.id}, Mask = ${this.mask}, Parent = ${this.parent ?? ""} }`;
+  }
 }

@@ -15,69 +15,74 @@ import {
   type TypeSpec,
   type ValueSpec,
 } from "metano-runtime/system/json";
-import { Clip } from "./clip";
-import { Color } from "./color";
-import { DBase } from "./d-base";
-import { DBer } from "./d-ber";
-import { Dashboard } from "./dashboard";
-import { EpisodeRec } from "./episode-rec";
-import { EpisodeSummary } from "./episode-summary";
-import { Feed } from "./feed";
-import { Flavor } from "./flavor";
-import { GBase } from "./g-base";
-import { GDer } from "./g-der";
-import { Group } from "./group";
-import { GuidMapHolder } from "./guid-map-holder";
-import { HBase } from "./h-base";
-import { HLeaf } from "./h-leaf";
-import { HMid } from "./h-mid";
-import { HolderChar } from "./holder-char";
-import { HolderInt } from "./holder-int";
-import { HolderLevel } from "./holder-level";
-import { HolderSPoint } from "./holder-s-point";
-import { IBase } from "./i-base";
-import type { IGauge } from "./i-gauge";
-import type { IShape } from "./i-shape";
-import type { IShapeB } from "./i-shape-b";
-import { IA } from "./ia";
-import { ImageClip } from "./image-clip";
-import { ImmHolder } from "./imm-holder";
-import { IntMapHolder } from "./int-map-holder";
-import { Int64Box } from "./int64-box";
-import { Int64Containers } from "./int64-containers";
-import { IS } from "./is";
-import { Level } from "./level";
-import { LevelMapHolder } from "./level-map-holder";
-import { MixedBase } from "./mixed-base";
-import { MixedClass } from "./mixed-class";
-import { isMixedPoint, type MixedPoint } from "./mixed-point";
-import { NBase } from "./n-base";
-import { NLeaf } from "./n-leaf";
-import { NMid } from "./n-mid";
-import { OBase } from "./o-base";
-import { ODer } from "./o-der";
-import { Page } from "./page";
-import { Perms } from "./perms";
-import { isPoint, type Point } from "./point";
-import { isPoint3, type Point3 } from "./point3";
-import { isRect, type Rect } from "./rect";
-import { SBase } from "./s-base";
-import { SPoint } from "./s-point";
-import { Schedule } from "./schedule";
-import type { Shape } from "./shape";
-import { SilenceClip } from "./silence-clip";
-import { Sq } from "./sq";
-import { SqB } from "./sq-b";
-import { Timeline } from "./timeline";
-import { Tiny } from "./tiny";
-import { Title } from "./title";
-import { UBaseA } from "./u-base-a";
-import { UBaseH } from "./u-base-h";
-import { UFail } from "./u-fail";
-import { UFailY } from "./u-fail-y";
-import { UNear } from "./u-near";
-import { UNearA } from "./u-near-a";
-import { UNearAbs } from "./u-near-abs";
+import { Clip } from "./clip.js";
+import { Color } from "./color.js";
+import { DBase } from "./d-base.js";
+import { DBer } from "./d-ber.js";
+import { Dashboard } from "./dashboard.js";
+import { EpisodeRec } from "./episode-rec.js";
+import { EpisodeSummary } from "./episode-summary.js";
+import { Feed } from "./feed.js";
+import { Flavor } from "./flavor.js";
+import { GBase } from "./g-base.js";
+import { GDer } from "./g-der.js";
+import { Group } from "./group.js";
+import { GuidMapHolder } from "./guid-map-holder.js";
+import { HBase } from "./h-base.js";
+import { HLeaf } from "./h-leaf.js";
+import { HMid } from "./h-mid.js";
+import { Heat } from "./heat.js";
+import { HolderChar } from "./holder-char.js";
+import { HolderInt } from "./holder-int.js";
+import { HolderLevel } from "./holder-level.js";
+import { HolderSPoint } from "./holder-s-point.js";
+import { IBase } from "./i-base.js";
+import type { IGauge } from "./i-gauge.js";
+import type { IShapeB } from "./i-shape-b.js";
+import type { IShape } from "./i-shape.js";
+import { IA } from "./ia.js";
+import { ImageClip } from "./image-clip.js";
+import { ImmHolder } from "./imm-holder.js";
+import { IntMapHolder } from "./int-map-holder.js";
+import { Int64Box } from "./int64-box.js";
+import { Int64Containers } from "./int64-containers.js";
+import { IS } from "./is.js";
+import { LevelMapHolder } from "./level-map-holder.js";
+import { Level } from "./level.js";
+import { MixedBase } from "./mixed-base.js";
+import { MixedClass } from "./mixed-class.js";
+import { isMixedPoint, type MixedPoint } from "./mixed-point.js";
+import { Mood } from "./mood.js";
+import { NBase } from "./n-base.js";
+import { NLeaf } from "./n-leaf.js";
+import { NMid } from "./n-mid.js";
+import { OBase } from "./o-base.js";
+import { ODer } from "./o-der.js";
+import { Page } from "./page.js";
+import { Perms } from "./perms.js";
+import { isPoint, type Point } from "./point.js";
+import { isPoint3, type Point3 } from "./point3.js";
+import { isRect, type Rect } from "./rect.js";
+import { SBase } from "./s-base.js";
+import { SPoint } from "./s-point.js";
+import { Schedule } from "./schedule.js";
+import type { Shape } from "./shape.js";
+import { SilenceClip } from "./silence-clip.js";
+import { SingleBox } from "./single-box.js";
+import { Spice } from "./spice.js";
+import { SqB } from "./sq-b.js";
+import { Sq } from "./sq.js";
+import { Timeline } from "./timeline.js";
+import { Tiny } from "./tiny.js";
+import { Title } from "./title.js";
+import { Tone } from "./tone.js";
+import { UBaseA } from "./u-base-a.js";
+import { UBaseH } from "./u-base-h.js";
+import { UFailY } from "./u-fail-y.js";
+import { UFail } from "./u-fail.js";
+import { UNearA } from "./u-near-a.js";
+import { UNearAbs } from "./u-near-abs.js";
+import { UNear } from "./u-near.js";
 
 let StudioJsonContext$rt: ClassType<StudioJsonContext> | undefined;
 
@@ -146,6 +151,10 @@ export class StudioJsonContext extends SerializerContext {
   private _color?: ValueSpec<Color>;
   private _level?: ValueSpec<Level>;
   private _flavor?: ValueSpec<Flavor>;
+  private _spice?: ValueSpec<Spice>;
+  private _heat?: ValueSpec<Heat>;
+  private _mood?: ValueSpec<Mood>;
+  private _tone?: ValueSpec<Tone>;
   private _perms?: ValueSpec<Perms>;
   private _tiny?: ValueSpec<Tiny>;
   private _dashboard?: TypeSpec<Dashboard>;
@@ -157,6 +166,7 @@ export class StudioJsonContext extends SerializerContext {
   private _episodeRec?: TypeSpec<EpisodeRec>;
   private _int64Box?: TypeSpec<Int64Box>;
   private _int64Containers?: TypeSpec<Int64Containers>;
+  private _singleBox?: TypeSpec<SingleBox>;
   private _int64?: ValueSpec<bigint>;
   private _uInt64?: ValueSpec<bigint>;
   private _imageClip?: TypeSpec<ImageClip>;
@@ -1303,6 +1313,38 @@ export class StudioJsonContext extends SerializerContext {
     }));
   }
 
+  get spice(): ValueSpec<Spice> {
+    return (this._spice ??= this.createValueSpec({
+      descriptor: { kind: "enum", values: Spice, typeName: "SampleJsonContracts.Spice" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Spice",
+    }));
+  }
+
+  get heat(): ValueSpec<Heat> {
+    return (this._heat ??= this.createValueSpec({
+      descriptor: { kind: "numericEnum", values: Heat, typeName: "SampleJsonContracts.Heat" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Heat",
+    }));
+  }
+
+  get mood(): ValueSpec<Mood> {
+    return (this._mood ??= this.createValueSpec({
+      descriptor: { kind: "enum", values: Mood, typeName: "SampleJsonContracts.Mood" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Mood",
+    }));
+  }
+
+  get tone(): ValueSpec<Tone> {
+    return (this._tone ??= this.createValueSpec({
+      descriptor: { kind: "enum", values: Tone, typeName: "SampleJsonContracts.Tone" },
+      valueType: true,
+      typeName: "SampleJsonContracts.Tone",
+    }));
+  }
+
   get perms(): ValueSpec<Perms> {
     return (this._perms ??= this.createValueSpec({
       descriptor: { kind: "numericEnum", values: Perms, typeName: "SampleJsonContracts.Perms" },
@@ -1518,6 +1560,30 @@ export class StudioJsonContext extends SerializerContext {
             value: { kind: "primitive" },
             create: (entries) => Dictionary.assign(entries),
           },
+        },
+      ],
+    }));
+  }
+
+  get singleBox(): TypeSpec<SingleBox> {
+    return (this._singleBox ??= this.createSpec({
+      type: SingleBox,
+      runtimeType: () => SingleBox.$runtimeType,
+      factory: (p: Record<string, unknown>) => new SingleBox(p.f as number, p.g as number | null),
+      properties: [
+        {
+          ts: "f",
+          json: "F",
+          type: { kind: "primitive", numberType: "System.Single" },
+        },
+        {
+          ts: "g",
+          json: "G",
+          type: {
+            kind: "nullable",
+            inner: { kind: "primitive", numberType: "System.Single" },
+          },
+          optional: true,
         },
       ],
     }));

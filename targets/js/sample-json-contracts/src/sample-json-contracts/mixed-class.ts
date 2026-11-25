@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { MixedBase } from "./mixed-base";
+import { MixedBase } from "./mixed-base.js";
 
 let MixedClass$rt: ClassType<MixedClass> | undefined;
 
@@ -39,5 +39,15 @@ export class MixedClass extends MixedBase {
 
   override with(overrides?: Partial<MixedClass>): MixedClass {
     return copyRecordWith<MixedClass>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}W = ${this.w}`;
+  }
+
+  override toString(): string {
+    return `MixedClass { ${this.$printMembers()} }`;
   }
 }

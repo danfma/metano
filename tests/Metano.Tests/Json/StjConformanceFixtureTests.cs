@@ -747,6 +747,25 @@ public class StjConformanceFixtureTests
                 () => Flavor.Sweet,
                 async value => await Assert.That(value).IsEqualTo(Flavor.Sweet)
             ),
+            // #734: the built-in string-enum converter over a [StringEnum] writes the
+            // member names the descriptor writes; over a numeric enum it does not.
+            ["V14b"] = Roundtrip(
+                () => Spice.Hot,
+                async value => await Assert.That(value).IsEqualTo(Spice.Hot)
+            ),
+            ["V14c"] = Roundtrip(
+                () => Heat.Warm,
+                async value => await Assert.That(value).IsEqualTo(Heat.Warm)
+            ),
+            // A member renamed on one side only keeps the converter reported.
+            ["V14d"] = Roundtrip(
+                () => Mood.Calm,
+                async value => await Assert.That(value).IsEqualTo(Mood.Calm)
+            ),
+            ["V14e"] = Roundtrip(
+                () => Tone.Mild,
+                async value => await Assert.That(value).IsEqualTo(Tone.Mild)
+            ),
             ["V15"] = Roundtrip(
                 () => new HashSet<string> { "a", "b" },
                 async value => await Assert.That(((HashSet<string>)value!).Count).IsEqualTo(2)
@@ -1122,6 +1141,20 @@ public class StjConformanceFixtureTests
             ),
             // The 64-bit rows of spec 012 (slices 012e, 012h): both sides run
             // every row, the TypeScript side through deserializeText (#605).
+            // The Single rows (#695): the shortest float text, both ways.
+            ["F1"] = Roundtrip(
+                () => new SingleBox(0.1f, null),
+                async value =>
+                {
+                    var box = (SingleBox)value!;
+
+                    await Assert.That(box.F).IsEqualTo(0.1f);
+
+                    await Assert.That(box.G).IsNull();
+                }
+            ),
+            ["F2"] = WriteOnly(() => new SingleBox(float.MaxValue, 1e20f)),
+            ["F3"] = WriteOnly(() => new SingleBox(float.NaN, null)),
             ["I1"] = WriteOnly(() => new Int64Box(1152921504606846977, ulong.MaxValue, null)),
             ["I2"] = Roundtrip(
                 () => new Int64Box(42, 7, null),

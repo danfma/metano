@@ -1,10 +1,10 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Button as ButtonWidget } from "#/sample-counter-v3/mvu/widgets/button";
-import { Column as ColumnWidget } from "#/sample-counter-v3/mvu/widgets/column";
-import { Heading as HeadingWidget } from "#/sample-counter-v3/mvu/widgets/heading";
-import { Row as RowWidget } from "#/sample-counter-v3/mvu/widgets/row";
-import { Text as TextWidget } from "#/sample-counter-v3/mvu/widgets/text";
-import type { Widget } from "./widget";
+import type { Widget } from "./widget.js";
+import { Button as ButtonWidget } from "./widgets/button.js";
+import { Column as ColumnWidget } from "./widgets/column.js";
+import { Heading as HeadingWidget } from "./widgets/heading.js";
+import { Row as RowWidget } from "./widgets/row.js";
+import { Text as TextWidget } from "./widgets/text.js";
 
 export function Column(args: { gap: number; children: Widget[] }): ColumnWidget {
   const { gap, children } = args;

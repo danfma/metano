@@ -36,7 +36,10 @@ Five conventions, all load-bearing together:
    co-locating multiple types in one file when the C# source already
    models them as a group.
 
-3. **`#/` subpath alias for intra-package imports.** Consumers write
+3. **`#/` subpath alias for intra-package imports.** *Superseded for
+   generated code by spec 004 Amendment A1 (#573): internal imports are
+   relative `.js` specifiers, and an `imports` map is written only with
+   `--import-alias`.* Consumers write
    `import { X } from "#/issues/domain";` instead of fragile
    `../../issues/domain`. Implemented via `package.json#imports`
    conditional exports — dist (`.js` + `.d.ts`) is preferred, source

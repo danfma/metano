@@ -1,7 +1,7 @@
 import { Decimal } from "metano-runtime/system/decimal";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { Money } from "./money";
-import { Tag } from "./tag";
+import { Money } from "./money.js";
+import { Tag } from "./tag.js";
 
 export class ShopJsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new ShopJsonContext() as ShopJsonContext;

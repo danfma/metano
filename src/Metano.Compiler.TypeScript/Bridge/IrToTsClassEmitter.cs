@@ -715,6 +715,15 @@ internal sealed class IrToTsClassEmitter(
                 userMembers,
                 _context.ReportDiagnostic
             );
+
+            classMembers.AddRange(IrToTsRecordPrintingBridge.Generate(ir, userMembers, lowering));
+
+            IrToTsRecordPrintingBridge.ReportUnsupported(
+                type,
+                ir,
+                userMembers,
+                _context.ReportDiagnostic
+            );
         }
 
         classMembers.AddRange(IrToTsIterationProtocolBridge.BuildMembers(ir, BclOverrides));

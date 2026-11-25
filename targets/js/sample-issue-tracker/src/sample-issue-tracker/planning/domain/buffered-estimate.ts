@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { ClassType } from "metano-runtime";
-import { Estimate } from "./estimate";
+import { Estimate } from "./estimate.js";
 
 let BufferedEstimate$rt: ClassType<BufferedEstimate> | undefined;
 

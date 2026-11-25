@@ -15,7 +15,7 @@ export const Ranked$runtimeType: InterfaceType<Ranked> = {
 };
 
 import { isType } from "metano-runtime";
-import { Ranked$runtimeType, type Ranked } from "./ranked";
+import { Ranked$runtimeType, type Ranked } from "./ranked.js";
 
 export function maxABC<T extends Ranked>(a: T, b: T, c: T): T {
   return a;
@@ -39,8 +39,8 @@ export function max(...args: unknown[]): any {
   throw new Error("No matching overload for max");
 }
 
-import type { Ranked } from "./ranked";
-import { maxAB, maxABC } from "./ranks";
+import type { Ranked } from "./ranked.js";
+import { maxAB, maxABC } from "./ranks.js";
 
 export class Caller {
   constructor() { }
@@ -54,7 +54,7 @@ export class Caller {
   }
 }
 
-export { Caller } from "./caller";
-export { Ranked$runtimeType } from "./ranked";
-export type { Ranked } from "./ranked";
-export { max, maxAB, maxABC } from "./ranks";
+export { Caller } from "./caller.js";
+export { Ranked$runtimeType } from "./ranked.js";
+export type { Ranked } from "./ranked.js";
+export { max, maxAB, maxABC } from "./ranks.js";

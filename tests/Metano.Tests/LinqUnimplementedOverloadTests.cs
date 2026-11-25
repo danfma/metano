@@ -39,6 +39,11 @@ public class LinqUnimplementedOverloadTests
 
             public object GroupBy(List<int> xs) => xs.GroupBy(x => x % 2);
 
+            public object GroupByComparer(List<int> xs, IEqualityComparer<int> same) => xs.GroupBy(x => x % 2, same);
+
+            public object Join(List<int> xs, List<int> ys, IEqualityComparer<int> same) =>
+                xs.Join(ys, o => o, i => i, (o, i) => o + i).Join(ys, o => o, i => i, (o, i) => o * i, same);
+
             public object Paging(List<int> xs) => xs.Skip(1).Take(2).SkipWhile(x => x < 1).TakeWhile(x => x < 5);
 
             public object Distinct(List<int> xs, IEqualityComparer<int> same) => xs.Distinct().Distinct(same).DistinctBy(x => x % 3);
@@ -91,6 +96,14 @@ public class LinqUnimplementedOverloadTests
 
             public bool Contains(IEnumerable<int> xs) => xs.Contains(3);
 
+            public bool ContainsComparer(IEnumerable<int> xs, IEqualityComparer<int> same) => xs.Contains(3, same);
+
+            public bool SequenceEquals(List<int> xs, List<int> ys, IEqualityComparer<int> same) =>
+                xs.SequenceEqual(ys) && xs.SequenceEqual(ys, same);
+
+            public object ToLookups(List<int> xs, IEqualityComparer<int> same) =>
+                new object[] { xs.ToLookup(x => x), xs.ToLookup(x => x, same), xs.ToLookup(x => x, x => x * 2), xs.ToLookup(x => x, x => x * 2, same) };
+
             public int Aggregate(List<int> xs) => xs.Aggregate(0, (a, x) => a + x);
 
             public int ElementAts(List<int> xs, List<string> ss) => xs.ElementAt(1) + xs.ElementAtOrDefault(1) + ss.ElementAtOrDefault(2)!.Length;
@@ -102,6 +115,9 @@ public class LinqUnimplementedOverloadTests
 
             public int QueryableTerminals(IQueryable<int> q) =>
                 q.First(x => x > 1) + q.FirstOrDefault(x => x > 1, 7) + q.Count(x => x > 1) + q.Sum(x => x) + (q.Contains(3) ? 1 : 0);
+
+            public bool QueryableSearches(IQueryable<int> q, List<int> ys, IEqualityComparer<int> same) =>
+                q.Contains(3, same) && q.SequenceEqual(ys) && q.SequenceEqual(ys, same);
         }
         """;
 
@@ -126,15 +142,15 @@ public class LinqUnimplementedOverloadTests
     )]
     [Arguments(
         "xs.GroupBy(x => x % 2, x => x * 10)",
-        "The overload 'GroupBy(keySelector, elementSelector)' is not supported; the runtime implements only 'GroupBy(keySelector)'. The call throws at run time."
+        "The overload 'GroupBy(keySelector, elementSelector)' is not supported; the runtime implements only 'GroupBy(keySelector)' and 'GroupBy(keySelector, comparer)'. The call throws at run time."
     )]
     [Arguments(
         "xs.GroupBy(x => x % 2, (key, items) => key)",
-        "The overload 'GroupBy(keySelector, resultSelector)' is not supported; the runtime implements only 'GroupBy(keySelector)'. The call throws at run time."
+        "The overload 'GroupBy(keySelector, resultSelector)' is not supported; the runtime implements only 'GroupBy(keySelector)' and 'GroupBy(keySelector, comparer)'. The call throws at run time."
     )]
     [Arguments(
         "xs.GroupBy(x => x % 2, x => x, same)",
-        "The overload 'GroupBy(keySelector, elementSelector, comparer)' is not supported; the runtime implements only 'GroupBy(keySelector)'. The call throws at run time."
+        "The overload 'GroupBy(keySelector, elementSelector, comparer)' is not supported; the runtime implements only 'GroupBy(keySelector)' and 'GroupBy(keySelector, comparer)'. The call throws at run time."
     )]
     [Arguments(
         "xs.Zip(ys)",
@@ -177,11 +193,9 @@ public class LinqUnimplementedOverloadTests
     [Arguments("xs.OrderByDescending(x => x, order)", "OrderByDescending", "order")]
     [Arguments("xs.OrderBy(x => x).ThenBy(x => -x, order)", "ThenBy", "order")]
     [Arguments("xs.OrderBy(x => x).ThenByDescending(x => -x, order)", "ThenByDescending", "order")]
-    [Arguments("xs.GroupBy(x => x % 2, same)", "GroupBy", "same")]
     [Arguments("xs.ToDictionary(x => x, same)", "ToDictionary", "same")]
     [Arguments("xs.ToDictionary(x => x, x => x * 2, same)", "ToDictionary", "same")]
     [Arguments("xs.ToHashSet(same)", "ToHashSet", "same")]
-    [Arguments("xs.Contains(3, same)", "Contains", "same")]
     [Arguments("xs.DistinctBy(x => x % 3, same)", "DistinctBy", "same")]
     [Arguments("xs.MinBy(x => x, order)", "MinBy", "order")]
     [Arguments("xs.MaxBy(x => x, order)", "MaxBy", "order")]
@@ -227,7 +241,6 @@ public class LinqUnimplementedOverloadTests
         "xs.OrderBy(x => x).ThenBy(x => -x, (IComparer<int>?)null)",
         "xs.OrderBy(x => x).ThenBy(x => -x)"
     )]
-    [Arguments("xs.GroupBy(x => x % 2, comparer: null)", "xs.GroupBy(x => x % 2)")]
     [Arguments("xs.ToDictionary(x => x, x => x * 2, null)", "xs.ToDictionary(x => x, x => x * 2)")]
     [Arguments("xs.ToHashSet(null)", "xs.ToHashSet()")]
     [Arguments("xs.MinBy(x => x, null)", "xs.MinBy(x => x)")]
@@ -249,7 +262,8 @@ public class LinqUnimplementedOverloadTests
 
     /// <summary>
     /// <c>Contains</c> without a comparer binds <c>List&lt;T&gt;.Contains</c>,
-    /// so its <c>null</c>-comparer call is compared with the pipe terminal.
+    /// so its <c>null</c>-comparer call is the pipe terminal, which takes the
+    /// <c>null</c> as the default comparison.
     /// </summary>
     [Test]
     public async Task NullComparerOfContains_LowersAsTheContainsTerminal()
@@ -259,16 +273,62 @@ public class LinqUnimplementedOverloadTests
         );
 
         await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
-        await Assert.That(files["calls.ts"]).Contains("return linq(xs, contains(4));");
+        await Assert.That(files["calls.ts"]).Contains("return linq(xs, contains(4, null));");
+    }
+
+    /// <summary>
+    /// The searches the runtime lowers with the value equality of .NET (#664):
+    /// each overload becomes its pipe operator, with the comparer as written.
+    /// </summary>
+    [Test]
+    [Arguments("xs.GroupBy(x => x % 2, same)", "linq(xs, groupBy((x: number) => x % 2, same))")]
+    [Arguments("xs.Contains(3, same)", "linq(xs, contains(3, same))")]
+    [Arguments("xs.SequenceEqual(ys)", "linq(xs, sequenceEqual(ys))")]
+    [Arguments("Enumerable.SequenceEqual(xs, ys, same)", "linq(xs, sequenceEqual(ys, same))")]
+    [Arguments("xs.ToLookup(x => x % 2)", "linq(xs, toLookup((x: number) => x % 2))")]
+    [Arguments("xs.ToLookup(x => x % 2, same)", "linq(xs, toLookup((x: number) => x % 2, same))")]
+    [Arguments(
+        "xs.ToLookup(x => x % 2, x => x * 2, same)",
+        "linq(xs, toLookup((x: number) => x % 2, (x: number) => Math.imul(x, 2), same))"
+    )]
+    [Arguments(
+        "xs.Join(ys, o => o, i => i, (o, i) => o + i)",
+        "linq(xs, join(ys, (o: number) => o, (i: number) => i, (o: number, i: number) => (o + i) | 0))"
+    )]
+    public async Task EqualitySearches_LowerToPipeOperators(string call, string emitted)
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Body(call));
+
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["calls.ts"]).Contains(emitted);
+    }
+
+    /// <summary>
+    /// The runtime <c>Lookup</c> has no bracket access: reading <c>lookup[key]</c>
+    /// reports instead of reading a property of the object.
+    /// </summary>
+    [Test]
+    public async Task LookupIndexer_ReportsInsteadOfAPropertyRead()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Body("xs.ToLookup(x => x % 2)[1]")
+        );
+
+        var report = UnsupportedFeatures(diagnostics).Single();
+
+        await Assert
+            .That(report.Message)
+            .IsEqualTo(
+                "The indexer of 'ILookup<TKey, TElement>' is not supported; the call throws at run time."
+            );
+
+        await Assert.That(LocatedSource.TextOf(report)).IsEqualTo("xs.ToLookup(x => x % 2)[1]");
+        await Assert.That(files["calls.ts"]).Contains(Placeholder("UnsupportedLookupIndexer"));
     }
 
     [Test]
-    [Arguments("xs.Join(ys, o => o, i => i, (o, i) => o + i)", "Join")]
     [Arguments("xs.GroupJoin(ys, o => o, i => i, (o, i) => o)", "GroupJoin")]
-    [Arguments("xs.ToLookup(x => x % 2)", "ToLookup")]
-    [Arguments("xs.SequenceEqual(ys)", "SequenceEqual")]
     [Arguments("xs.Cast<object>()", "Cast")]
-    [Arguments("Enumerable.SequenceEqual(xs, ys)", "SequenceEqual")]
     public async Task UnloweredLinqMethod_ReportsInsteadOfAMemberCall(string call, string method)
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(Body(call));
@@ -297,12 +357,12 @@ public class LinqUnimplementedOverloadTests
     public async Task UnloweredLinqMethod_InsideAChain_ReportsAtItsName()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            Body("xs.Join(ys, o => o, i => i, (o, i) => o + i).Select(x => x * 2)")
+            Body("xs.GroupJoin(ys, o => o, i => i, (o, i) => o).Select(x => x * 2)")
         );
 
         var report = UnsupportedFeatures(diagnostics).Single();
 
-        await Assert.That(LocatedSource.TextOf(report)).IsEqualTo("Join");
+        await Assert.That(LocatedSource.TextOf(report)).IsEqualTo("GroupJoin");
 
         await Assert
             .That(files["calls.ts"])
@@ -586,6 +646,8 @@ public class LinqUnimplementedOverloadTests
     [Arguments("xs.GroupBy(x => x % 2, x => x * 10)")]
     [Arguments("xs.OrderBy(x => x, order)")]
     [Arguments("xs.Join(ys, o => o, i => i, (o, i) => o + i)")]
+    [Arguments("xs.ToLookup(x => x)")]
+    [Arguments("xs.ToLookup(x => x)[1]")]
     [Arguments("xs.AsQueryable().ToDictionary(x => x)")]
     [Arguments("Enumerable.Aggregate(xs, 100, (a, x) => a + x, r => r * 2)")]
     [Arguments("Enumerable.SequenceEqual(xs, ys)")]

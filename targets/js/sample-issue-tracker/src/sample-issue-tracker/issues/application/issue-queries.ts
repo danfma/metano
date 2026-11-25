@@ -15,10 +15,10 @@ import {
   toList,
   where,
 } from "metano-runtime/system/linq";
-import type { Issue } from "#/sample-issue-tracker/issues/domain/issue";
-import { IssuePriority } from "#/sample-issue-tracker/issues/domain/issue-priority";
-import { IssueStatus } from "#/sample-issue-tracker/issues/domain/issue-status";
-import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
+import type { UserId } from "../../shared-kernel/user-id.js";
+import { IssuePriority } from "../domain/issue-priority.js";
+import { IssueStatus } from "../domain/issue-status.js";
+import type { Issue } from "../domain/issue.js";
 
 export function openIssues(issues: IReadOnlyList<Issue>): IReadOnlyList<Issue> {
   return linq(

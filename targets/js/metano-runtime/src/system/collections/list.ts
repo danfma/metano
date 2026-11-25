@@ -135,6 +135,10 @@ export class List<T> implements IList<T>, IReadOnlyList<T> {
     return this._items.length;
   }
 
+  get length(): number {
+    return this._items.length;
+  }
+
   get isReadOnly(): boolean {
     return false;
   }
@@ -481,6 +485,11 @@ export class List<T> implements IList<T>, IReadOnlyList<T> {
 
   /** The backing array itself (FR-056). */
   asJsArray(): T[] {
+    return this._items;
+  }
+
+  /** The backing array itself, typed read-only (FR-056). */
+  asReadOnlyJsArray(): readonly T[] {
     return this._items;
   }
 

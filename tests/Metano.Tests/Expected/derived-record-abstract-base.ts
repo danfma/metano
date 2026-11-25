@@ -1,4 +1,4 @@
-import { HashCode, copyRecordWith, valueEquals } from "metano-runtime";
+import { HashCode, copyRecordWith, formatDouble, valueEquals } from "metano-runtime";
 
 export abstract class Clip {
   constructor(readonly seconds: number) { }
@@ -16,5 +16,13 @@ export abstract class Clip {
 
   with(overrides?: Partial<Clip>): Clip {
     return copyRecordWith<Clip>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Seconds = ${formatDouble(this.seconds)}`;
+  }
+
+  toString(): string {
+    return `Clip { ${this.$printMembers()} }`;
   }
 }

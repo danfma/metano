@@ -1,20 +1,20 @@
 import { List } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { isAnimal, type Animal } from "./animal";
-import { Circle } from "./circle";
-import { isDog, type Dog } from "./dog";
-import { Holder } from "./holder";
-import type { IShape } from "./i-shape";
-import { MC } from "./mc";
-import { Mixed } from "./mixed";
-import { isMP, type MP } from "./mp";
-import { isPoint, type Point } from "./point";
-import { isPoint3, type Point3 } from "./point3";
-import { isRect, type Rect } from "./rect";
-import { isSAnimal, type SAnimal } from "./s-animal";
-import { isSDog, type SDog } from "./s-dog";
-import type { Shape } from "./shape";
-import { Sq } from "./sq";
+import { isAnimal, type Animal } from "./animal.js";
+import { Circle } from "./circle.js";
+import { isDog, type Dog } from "./dog.js";
+import { Holder } from "./holder.js";
+import type { IShape } from "./i-shape.js";
+import { MC } from "./mc.js";
+import { Mixed } from "./mixed.js";
+import { isMP, type MP } from "./mp.js";
+import { isPoint, type Point } from "./point.js";
+import { isPoint3, type Point3 } from "./point3.js";
+import { isRect, type Rect } from "./rect.js";
+import { isSAnimal, type SAnimal } from "./s-animal.js";
+import { isSDog, type SDog } from "./s-dog.js";
+import type { Shape } from "./shape.js";
+import { Sq } from "./sq.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

@@ -1,5 +1,5 @@
 import { isType, type RuntimeType } from "metano-runtime";
-import { Circle } from "./circle";
+import { Circle } from "./circle.js";
 
 export function isA<T>(o: Object, T$type: RuntimeType<T>): boolean {
   return isType(o, T$type);

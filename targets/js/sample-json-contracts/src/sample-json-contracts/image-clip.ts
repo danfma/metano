@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { Clip } from "./clip";
+import { Clip } from "./clip.js";
 
 let ImageClip$rt: ClassType<ImageClip> | undefined;
 
@@ -42,5 +42,15 @@ export class ImageClip extends Clip {
 
   override with(overrides?: Partial<ImageClip>): ImageClip {
     return copyRecordWith<ImageClip>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Path = ${this.path}`;
+  }
+
+  override toString(): string {
+    return `ImageClip { ${this.$printMembers()} }`;
   }
 }

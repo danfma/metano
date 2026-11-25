@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
-import type { BuildContext } from "./build-context";
-import { Widget } from "./widget";
+import type { BuildContext } from "./build-context.js";
+import { Widget } from "./widget.js";
 
 export abstract class StatefulWidget<TState> extends Widget {
   private _context: BuildContext<TState> | null = null;

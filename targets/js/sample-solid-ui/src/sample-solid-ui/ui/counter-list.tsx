@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import { Counter } from "./counter";
+import { Counter } from "./counter.js";
 import { For } from "solid-js";
 
 export type CounterListProps = { seeds?: number[] };

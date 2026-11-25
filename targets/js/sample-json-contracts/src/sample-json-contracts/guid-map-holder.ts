@@ -40,4 +40,8 @@ export class GuidMapHolder {
   with(overrides?: Partial<GuidMapHolder>): GuidMapHolder {
     return copyRecordWith<GuidMapHolder>(this, overrides);
   }
+
+  toString(): string {
+    return `GuidMapHolder { ById = ${this.byId} }`;
+  }
 }

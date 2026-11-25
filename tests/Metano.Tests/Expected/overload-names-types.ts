@@ -1,6 +1,6 @@
 import { List } from "metano-runtime/system/collections";
 import { isInt32, isInt64, isString, isUInt32, isUInt64 } from "metano-runtime";
-import { Point } from "./point";
+import { Point } from "./point.js";
 
 export class Names {
   constructor() { }

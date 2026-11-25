@@ -31,6 +31,9 @@ public static partial class IrToTsExpressionBridge
 
     private const string ExprTreeUInt64TypeName = "System.UInt64";
 
+    /// <summary>The <c>metano-runtime</c> helper backing a C# <c>int</c> remainder that can throw.</summary>
+    private const string IntegerRemainderHelper = "intRem";
+
     /// <summary>The <c>metano-runtime</c> helper backing C# integer division.</summary>
     private static readonly string IntegerDivisionHelper =
         IrRuntimeRequirementToTsImport.ImportedNameOf("IntegerDivision");
@@ -265,6 +268,9 @@ public static partial class IrToTsExpressionBridge
         if (bin.Operator is IrBinaryOp.IntegerDivide)
             return MapIntegerDivision(bin, context);
 
+        if (IsThrowingIntegerRemainder(bin))
+            return MapIntegerRemainder(bin, context);
+
         if (bin.Operator.IsBooleanLogic())
             return MapBooleanLogic(bin, context);
 
@@ -406,6 +412,38 @@ public static partial class IrToTsExpressionBridge
         };
 
     /// <summary>
+    /// Whether <paramref name="bin"/> is an <c>int</c> or <c>uint</c>
+    /// remainder whose divisor is not a constant other than <c>-1</c>: .NET
+    /// throws for a zero divisor and for <c>int.MinValue % -1</c>, where
+    /// JavaScript's <c>%</c> yields <c>NaN</c> or <c>0</c> (#695). A constant
+    /// divisor (<c>i % 10</c>) keeps the native operator.
+    /// </summary>
+    private static bool IsThrowingIntegerRemainder(IrBinaryExpression bin) =>
+        bin
+            is {
+                Operator: IrBinaryOp.Modulo,
+                NumericKind: IrNumericKind.Int32 or IrNumericKind.UInt32
+            }
+        && !IsNonThrowingDivisor(bin.Right);
+
+    private static bool IsNonThrowingDivisor(IrExpression divisor) =>
+        divisor is IrLiteral { Value: int or uint } literal
+        && Convert.ToInt64(literal.Value, CultureInfo.InvariantCulture) is not (0 or -1);
+
+    private static TsExpression MapIntegerRemainder(
+        IrBinaryExpression bin,
+        IrToTsBridgeContext context
+    ) =>
+        new TsTemplate(
+            $"{IntegerRemainderHelper}($0, $1)",
+            Receiver: null,
+            [Map(bin.Left, context), Map(bin.Right, context)]
+        )
+        {
+            RuntimeImports = [IntegerRemainderHelper],
+        };
+
+    /// <summary>
     /// C#'s <c>&amp;</c>, <c>|</c> and <c>^</c> over <c>bool</c> operands.
     /// JS applies them to numbers, and TS rejects them on booleans (TS2447),
     /// while <c>&amp;&amp;</c> / <c>||</c> would skip the right operand. Each
@@ -487,6 +525,7 @@ public static partial class IrToTsExpressionBridge
         return new TsSpreadExpression(mapped);
     }
 
+    /// <summary>The UTF-16 code units of <paramref name="text"/>, each a one-unit string: <c>text.split("")</c>.</summary>
     private static TsCallExpression CodeUnitsOf(TsExpression text) =>
         new(new TsPropertyAccess(text, "split"), [new TsStringLiteral("")]);
 

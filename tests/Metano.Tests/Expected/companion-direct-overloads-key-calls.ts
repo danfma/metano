@@ -1,5 +1,5 @@
-import { Key } from "./key";
-import { UId } from "./u-id";
+import { Key } from "./key.js";
+import { UId } from "./u-id.js";
 
 export class KeyCalls {
   private _counter: number = 0;

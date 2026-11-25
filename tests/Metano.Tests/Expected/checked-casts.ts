@@ -1,7 +1,7 @@
 // casts/circle.ts
 import type { ClassType } from "metano-runtime";
-import { IHasArea$runtimeType, type IHasArea } from "./i-has-area";
-import { Shape } from "./shape";
+import { IHasArea$runtimeType, type IHasArea } from "./i-has-area.js";
+import { Shape } from "./shape.js";
 
 let Circle$rt: ClassType<Circle> | undefined;
 
@@ -59,12 +59,12 @@ export const Color$runtimeType: EnumType<Color> = {
 // casts/conversions.ts
 import { DecimalType, Int32Type, Int64Type, StringType, asType, castTo, type RuntimeType } from "metano-runtime";
 import type { Decimal } from "metano-runtime/system/decimal";
-import { Circle } from "./circle";
-import { Color$runtimeType, type Color } from "./color";
-import { IHasArea$runtimeType, type IHasArea } from "./i-has-area";
-import { Meter } from "./meter";
-import { Perms$runtimeType, type Perms } from "./perms";
-import type { Shape } from "./shape";
+import { Circle } from "./circle.js";
+import { Color$runtimeType, type Color } from "./color.js";
+import { IHasArea$runtimeType, type IHasArea } from "./i-has-area.js";
+import { Meter } from "./meter.js";
+import { Perms$runtimeType, type Perms } from "./perms.js";
+import type { Shape } from "./shape.js";
 
 export class Conversions {
   constructor() { }
@@ -148,14 +148,14 @@ export const IHasArea$runtimeType: InterfaceType<IHasArea> = {
 };
 
 // casts/index.ts
-export { Circle } from "./circle";
-export { Color, Color$runtimeType } from "./color";
-export { Conversions } from "./conversions";
-export { IHasArea$runtimeType } from "./i-has-area";
-export type { IHasArea } from "./i-has-area";
-export { Meter } from "./meter";
-export { Perms, Perms$runtimeType } from "./perms";
-export { Shape } from "./shape";
+export { Circle } from "./circle.js";
+export { Color, Color$runtimeType } from "./color.js";
+export { Conversions } from "./conversions.js";
+export { IHasArea$runtimeType } from "./i-has-area.js";
+export type { IHasArea } from "./i-has-area.js";
+export { Meter } from "./meter.js";
+export { Perms, Perms$runtimeType } from "./perms.js";
+export { Shape } from "./shape.js";
 
 // casts/meter.ts
 import { HashCode, valueEquals } from "metano-runtime";

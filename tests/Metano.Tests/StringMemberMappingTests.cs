@@ -111,7 +111,7 @@ public class StringMemberMappingTests
     {
         var diagnostics = TranspileDiagnostics(
             """
-            public static int Max() => int.MaxValue;
+            public static int Max() => System.Environment.ProcessorCount;
             public static string Empty() => string.Empty;
             public static System.StringComparison Ordinal() => System.StringComparison.Ordinal;
             """
@@ -120,7 +120,7 @@ public class StringMemberMappingTests
         var unmapped = diagnostics.Single();
 
         await Assert.That(unmapped.Code).IsEqualTo(DiagnosticCodes.UnsupportedFeature);
-        await Assert.That(unmapped.Message).Contains("'int.MaxValue'");
+        await Assert.That(unmapped.Message).Contains("'System.Environment.ProcessorCount'");
         await Assert.That(unmapped.Message).Contains("the read is emitted by name");
     }
 

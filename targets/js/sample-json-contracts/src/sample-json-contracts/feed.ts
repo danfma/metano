@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
-import type { EpisodeSummary } from "./episode-summary";
-import type { Page } from "./page";
+import type { EpisodeSummary } from "./episode-summary.js";
+import type { Page } from "./page.js";
 
 let Feed$rt: ClassType<Feed> | undefined;
 
@@ -40,5 +40,9 @@ export class Feed {
 
   with(overrides?: Partial<Feed>): Feed {
     return copyRecordWith<Feed>(this, overrides);
+  }
+
+  toString(): string {
+    return `Feed { Latest = ${this.latest} }`;
   }
 }

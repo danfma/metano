@@ -1,8 +1,8 @@
 import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { EpisodeSummary } from "./episode-summary";
-import { Feed } from "./feed";
-import { Page } from "./page";
+import { EpisodeSummary } from "./episode-summary.js";
+import { Feed } from "./feed.js";
+import { Page } from "./page.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

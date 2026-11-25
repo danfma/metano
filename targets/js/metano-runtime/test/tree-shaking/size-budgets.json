@@ -27,6 +27,36 @@
       "maxGzip": 512
     },
     {
+      "name": "LINQ contains (value equality, #664)",
+      "entry": "entries/linq-contains.js",
+      "maxGzip": 956,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 869 B after the round-1/2 === fast path for primitives (null/undefined/NaN excluded); first measured 774 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
+      "name": "LINQ groupBy (value equality, #664)",
+      "entry": "entries/linq-group-by.js",
+      "maxGzip": 2150,
+      "$comment": "W7-4 (#664), measured size + ~5%: bun 2053 B / esbuild 2020 B (the default-comparison loop lives once, in the generator, which V8 keeps as fast as main). The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
+      "name": "LINQ toLookup (value equality, #664)",
+      "entry": "entries/linq-to-lookup.js",
+      "maxGzip": 2156,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 1960 B / esbuild 1933 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
+      "name": "LINQ sequenceEqual (value equality, #664)",
+      "entry": "entries/linq-sequence-equal.js",
+      "maxGzip": 1633,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 1485 B / esbuild 1444 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
+      "name": "LINQ join (value equality, #664)",
+      "entry": "entries/linq-join.js",
+      "maxGzip": 2122,
+      "$comment": "W7-4 (#664), measured size + 10%: bun 1929 B / esbuild 1898 B. The operator reaches the runtime's value equality (elementEquals / defaultEquals, and HashCore for a keyed one) instead of ===; the where + select + toArray row above stays at its own size."
+    },
+    {
       "name": "isType + getRuntimeType + one class descriptor",
       "entry": "entries/runtime-type-of-class.js",
       "maxGzip": 2294,
@@ -175,13 +205,13 @@
     {
       "name": "ImmutableList alone",
       "entry": "entries/immutable-list-only.js",
-      "maxGzip": 3908,
+      "maxGzip": 4014,
       "mustNotContain": [
         "Queue empty.",
         "upperValue",
         "ImmutableArray`1"
       ],
-      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3553 B / esbuild 3509 B (proposed 2048 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used."
+      "$comment": "Stage 011h, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3553 B / esbuild 3509 B (proposed 2048 B). NFR-008 reason, as for 011c's classes: FR-016's exception classes, elementEquals / defaultCompare and the type-name / closeFor helpers, shared when several collections are used. #737 (Round 1): had 0 B headroom on origin/main (bun 3908 B); length + zero-copy asReadOnlyJsArray() with tip detachment measured bun 3976 B / esbuild 3910 B (+68 B, maxGzip 4014 B)."
     },
     {
       "name": "ImmutableHashSet alone",
@@ -206,13 +236,13 @@
     {
       "name": "ImmutableArray alone",
       "entry": "entries/immutable-array-only.js",
-      "maxGzip": 4355,
+      "maxGzip": 4433,
       "mustNotContain": [
         "Queue empty.",
         "upperValue",
         "ImmutableList`1"
       ],
-      "$comment": "Stage 011h compiler half, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3959 B / esbuild 3898 B. A sibling of ImmutableList over the internal ImmutableListCore (W4-66), so it carries no ImmutableList text; NFR-008 reason as the other 011h rows, plus IndexOutOfRangeException."
+      "$comment": "Stage 011h compiler half, maintainer decision W4-42 (the W4-25 (d) rule: measured size + 10%): bun 3959 B / esbuild 3898 B. A sibling of ImmutableList over the internal ImmutableListCore (W4-66), so it carries no ImmutableList text; NFR-008 reason as the other 011h rows, plus IndexOutOfRangeException. #737 (Round 1): had 34 B headroom on origin/main (bun 4321 B); length + zero-copy asReadOnlyJsArray() with tip detachment measured bun 4392 B / esbuild 4324 B (+71 B, maxGzip 4433 B)."
     },
     {
       "name": "ImmutableArrayBuilder alone",
@@ -230,6 +260,18 @@
       "entry": "entries/default-text.js",
       "maxGzip": 3072,
       "$comment": "#694: measured bun 2783 B / esbuild 2732 B; capped at 3 KiB."
+    },
+    {
+      "name": "record toString (int/string members)",
+      "entry": "entries/record-to-string.js",
+      "maxGzip": 185,
+      "$comment": "#664 (baseline FR-094.5): measured bun 165 B / esbuild 168 B + 10%. The class with its toString and $printMembers; no runtime module."
+    },
+    {
+      "name": "record toString (double member)",
+      "entry": "entries/record-to-string-double.js",
+      "maxGzip": 2637,
+      "$comment": "#664 (baseline FR-094.5): measured bun 2397 B / esbuild 2365 B + 10%. formatDouble (double-format.ts) is paid once per program by the first floating-point record member."
     },
     {
       "name": "TimeSpan constant text",
@@ -369,9 +411,11 @@
     "system/linq/decimal-terminals",
     "system/linq/expr-tree-visitor",
     "system/linq/expr-tree",
+    "system/linq/grouping",
     "system/linq/index",
     "system/linq/int64-terminals",
     "system/linq/linq",
+    "system/linq/lookup",
     "system/linq/operators",
     "system/linq/terminals",
     "system/linq/types",

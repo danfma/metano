@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { NMid } from "./n-mid";
+import { NMid } from "./n-mid.js";
 
 let NLeaf$rt: ClassType<NLeaf> | undefined;
 
@@ -43,5 +43,15 @@ export class NLeaf extends NMid {
 
   override with(overrides?: Partial<NLeaf>): NLeaf {
     return copyRecordWith<NLeaf>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}C = ${this.c}`;
+  }
+
+  override toString(): string {
+    return `NLeaf { ${this.$printMembers()} }`;
   }
 }

@@ -1,4 +1,4 @@
-import { fooS, fooX$ } from "./res";
+import { fooS, fooX$ } from "./res.js";
 import { fooX } from "ext-lib";
 
 export class Use {

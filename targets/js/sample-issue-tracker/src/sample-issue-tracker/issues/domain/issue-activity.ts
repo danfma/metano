@@ -2,8 +2,8 @@
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: the branded companions keep the C# member names, and a long-branded type synthesizes toString over a bigint */
 import type { Temporal } from "@js-temporal/polyfill";
 import { HashCode, copyRecordWith, durationFromTicks, type ClassType } from "metano-runtime";
-import type { SnowflakeId } from "#/sample-issue-tracker/shared-kernel/snowflake-id";
-import type { IssueActivityKind } from "./issue-activity-kind";
+import type { SnowflakeId } from "../../shared-kernel/snowflake-id.js";
+import type { IssueActivityKind } from "./issue-activity-kind.js";
 
 let IssueActivity$rt: ClassType<IssueActivity> | undefined;
 
@@ -68,5 +68,13 @@ export class IssueActivity {
 
   with(overrides?: Partial<IssueActivity>): IssueActivity {
     return copyRecordWith<IssueActivity>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Id = ${this.id}, IssueKey = ${this.issueKey ?? ""}, Kind = ${this.kind}, OccurredAtTicks = ${this.occurredAtTicks}, DurationTicks = ${this.durationTicks ?? ""}`;
+  }
+
+  toString(): string {
+    return `IssueActivity { ${this.$printMembers()} }`;
   }
 }

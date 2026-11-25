@@ -25,4 +25,8 @@ export class Amount {
   with(overrides?: Partial<Amount>): Amount {
     return copyRecordWith<Amount>(this, overrides);
   }
+
+  toString(): string {
+    return `Amount { Value = ${this.value} }`;
+  }
 }

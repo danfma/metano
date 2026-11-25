@@ -296,6 +296,16 @@ using Metano.Annotations;
     WhenParameterTypes = [typeof(ulong), typeof(ulong)]
 )]
 
+// `Math.Abs(int.MinValue)` throws OverflowException on .NET, where JS `Math.abs` returns
+// 2147483648 (#695).
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Abs),
+    JsTemplate = "absInt32($0)",
+    RuntimeImports = "absInt32",
+    WhenParameterTypes = [typeof(int)]
+)]
+
 [assembly: MapMethod(typeof(Math), nameof(Math.Floor), JsMethod = "floor")]
 [assembly: MapMethod(typeof(Math), nameof(Math.Ceiling), JsMethod = "ceil")]
 [assembly: MapMethod(typeof(Math), nameof(Math.Truncate), JsMethod = "trunc")]

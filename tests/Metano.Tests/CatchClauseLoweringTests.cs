@@ -605,7 +605,7 @@ public class CatchClauseLoweringTests
 
         await Assert.That(handler).Contains("} catch (e$$) {");
         await Assert.That(handler).Contains("return new e$().inst();");
-        await Assert.That(handler).Contains("import { e$ } from \"./e$\";");
+        await Assert.That(handler).Contains("import { e$ } from \"./e$.js\";");
     }
 
     [Test]

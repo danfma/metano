@@ -1,6 +1,6 @@
 import { List } from "metano-runtime/system/collections";
 import { box, castTo, defaultEquals, enumText, formatBoolean, getRuntimeType, isType, objectText, unbox, unboxFor } from "metano-runtime";
-import { Color, Color$runtimeType } from "./color";
+import { Color, Color$runtimeType } from "./color.js";
 
 export class Probe {
   constructor() { }
@@ -20,7 +20,9 @@ export class Probe {
       return "green";
     }
 
-    return (($s) => {
+    {
+      let $s = o;
+
       if (unboxFor($s, Color$runtimeType) === Color.Red) {
         return "red";
       }
@@ -32,7 +34,7 @@ export class Probe {
       }
 
       return `${t.name} ${s ?? ""} ${formatBoolean(eq)} ${enumText(c, Color$runtimeType)}`;
-    })(o);
+    }
   }
 
   static raw(): List<Color> {

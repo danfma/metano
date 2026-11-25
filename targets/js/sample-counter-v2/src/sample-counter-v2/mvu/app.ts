@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { IWidget } from "./i-widget";
-import { StateHolder } from "./state-holder";
-import type { ViewFn } from "./view-fn";
+import type { IWidget } from "./i-widget.js";
+import { StateHolder } from "./state-holder.js";
+import type { ViewFn } from "./view-fn.js";
 
 export class App {
   constructor() {}

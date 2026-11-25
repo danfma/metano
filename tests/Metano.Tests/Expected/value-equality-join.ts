@@ -1,4 +1,4 @@
-import { HashCode, copyRecordWith, isFloat64, isInt32, valueEquals, valueHashCode } from "metano-runtime";
+import { HashCode, absInt32, copyRecordWith, formatDouble, isFloat64, isInt32, valueEquals, valueHashCode } from "metano-runtime";
 
 export class RTol {
   constructor(readonly v: number) { }
@@ -38,6 +38,14 @@ export class RTol {
 
   with(overrides?: Partial<RTol>): RTol {
     return copyRecordWith<RTol>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `V = ${formatDouble(this.v)}`;
+  }
+
+  toString(): string {
+    return `RTol { ${this.$printMembers()} }`;
   }
 }
 
@@ -80,6 +88,14 @@ export class QWith {
     hc.add(this.b);
 
     return hc.toHashCode();
+  }
+
+  protected $printMembers(): string {
+    return `A = ${this.a}, B = ${this.b ?? ""}`;
+  }
+
+  toString(): string {
+    return `QWith { ${this.$printMembers()} }`;
   }
 }
 
@@ -175,6 +191,14 @@ export abstract class ABase {
   with(overrides?: Partial<ABase>): ABase {
     return copyRecordWith<ABase>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `V = ${formatDouble(this.v)}`;
+  }
+
+  toString(): string {
+    return `ABase { ${this.$printMembers()} }`;
+  }
 }
 
 export class ADer extends ABase {
@@ -205,6 +229,16 @@ export class ADer extends ABase {
   override with(overrides?: Partial<ADer>): ADer {
     return copyRecordWith<ADer>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}K = ${this.k}`;
+  }
+
+  override toString(): string {
+    return `ADer { ${this.$printMembers()} }`;
+  }
 }
 
 export class HTop {
@@ -224,6 +258,14 @@ export class HTop {
   with(overrides?: Partial<HTop>): HTop {
     return copyRecordWith<HTop>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `A = ${this.a}`;
+  }
+
+  toString(): string {
+    return `HTop { ${this.$printMembers()} }`;
+  }
 }
 
 export class HMid extends HTop {
@@ -232,7 +274,7 @@ export class HMid extends HTop {
   }
 
   equalsOSlack(o: HMid, slack: number): boolean {
-    return Math.abs((o.b - this.b) | 0) <= slack;
+    return absInt32((o.b - this.b) | 0) <= slack;
   }
 
   equalsByValue(other: any): boolean {
@@ -268,6 +310,16 @@ export class HMid extends HTop {
   override with(overrides?: Partial<HMid>): HMid {
     return copyRecordWith<HMid>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}B = ${this.b}`;
+  }
+
+  override toString(): string {
+    return `HMid { ${this.$printMembers()} }`;
+  }
 }
 
 export class HLow extends HMid {
@@ -290,6 +342,16 @@ export class HLow extends HMid {
   override with(overrides?: Partial<HLow>): HLow {
     return copyRecordWith<HLow>(this, overrides);
   }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}C = ${this.c}`;
+  }
+
+  override toString(): string {
+    return `HLow { ${this.$printMembers()} }`;
+  }
 }
 
 export class UObjEq {
@@ -304,7 +366,7 @@ export class UObjEq {
   }
 
   equalsOSlack(o: UObjEq, slack: number): boolean {
-    return Math.abs((o.x - this.x) | 0) <= slack;
+    return absInt32((o.x - this.x) | 0) <= slack;
   }
 
   equalsByValue(o: Object | null): boolean {
@@ -373,6 +435,14 @@ export class UBoth {
   with(overrides?: Partial<UBoth>): UBoth {
     return copyRecordWith<UBoth>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `V = ${formatDouble(this.v)}`;
+  }
+
+  toString(): string {
+    return `UBoth { ${this.$printMembers()} }`;
+  }
 }
 
 export class NEq {
@@ -414,6 +484,14 @@ export class NEq {
   with(overrides?: Partial<NEq>): NEq {
     return copyRecordWith<NEq>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `V = ${formatDouble(this.v)}`;
+  }
+
+  toString(): string {
+    return `NEq { ${this.$printMembers()} }`;
+  }
 }
 
 export class NHash {
@@ -450,6 +528,14 @@ export class NHash {
 
   with(overrides?: Partial<NHash>): NHash {
     return copyRecordWith<NHash>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `V = ${this.v}`;
+  }
+
+  toString(): string {
+    return `NHash { ${this.$printMembers()} }`;
   }
 }
 
@@ -493,6 +579,14 @@ export class NWith {
 
     return hc.toHashCode();
   }
+
+  protected $printMembers(): string {
+    return `A = ${this.a}, B = ${this.b}`;
+  }
+
+  toString(): string {
+    return `NWith { ${this.$printMembers()} }`;
+  }
 }
 
 export class SEqOnly {
@@ -519,7 +613,7 @@ export class SEqJoin {
   }
 
   equalsOSlack(o: SEqJoin, slack: number): boolean {
-    return Math.abs((o.x - this.x) | 0) <= slack;
+    return absInt32((o.x - this.x) | 0) <= slack;
   }
 
   equalsO(o: SEqJoin): boolean {
@@ -605,6 +699,14 @@ export class HZero {
 
   with(overrides?: Partial<HZero>): HZero {
     return copyRecordWith<HZero>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `V = ${this.v}`;
+  }
+
+  toString(): string {
+    return `HZero { ${this.$printMembers()} }`;
   }
 }
 

@@ -1,19 +1,19 @@
 import { stringSubstring } from "metano-runtime";
 import { ArgumentException } from "metano-runtime/system/exceptions/argument-exception";
-import { Chained } from "./chained";
-import { Derived } from "./derived";
-import { Engine } from "./engine";
-import { scale2 } from "./engine-block";
-import { scale } from "./engine-extensions";
-import type { Holder } from "./holder";
-import { blend } from "./mixer";
-import type { Op } from "./op";
-import { Pair } from "./pair";
-import { PrimaryDerived } from "./primary-derived";
-import { Rec } from "./rec";
-import { Tone } from "./tone";
-import { Trace } from "./trace";
-import type { Tuner } from "./tuner";
+import { Chained } from "./chained.js";
+import { Derived } from "./derived.js";
+import { scale2 } from "./engine-block.js";
+import { scale } from "./engine-extensions.js";
+import { Engine } from "./engine.js";
+import type { Holder } from "./holder.js";
+import { blend } from "./mixer.js";
+import type { Op } from "./op.js";
+import { Pair } from "./pair.js";
+import { PrimaryDerived } from "./primary-derived.js";
+import { Rec } from "./rec.js";
+import { Tone } from "./tone.js";
+import { Trace } from "./trace.js";
+import type { Tuner } from "./tuner.js";
 
 export class SourceOrderCalls {
   constructor() { }
@@ -191,9 +191,9 @@ export class SourceOrderCalls {
   }
 }
 
-import { Engine } from "./engine";
-import type { Op } from "./op";
-import { Trace } from "./trace";
+import { Engine } from "./engine.js";
+import type { Op } from "./op.js";
+import { Trace } from "./trace.js";
 
 export class Holder {
   auto: number = 3;
@@ -226,8 +226,8 @@ export class Holder {
   }
 }
 
-import { Root } from "./root";
-import { Trace } from "./trace";
+import { Root } from "./root.js";
+import { Trace } from "./trace.js";
 
 export class Derived extends Root {
   constructor() {
@@ -237,8 +237,8 @@ export class Derived extends Root {
   }
 }
 
-import { Root } from "./root";
-import { Trace } from "./trace";
+import { Root } from "./root.js";
+import { Trace } from "./trace.js";
 
 export class PrimaryDerived extends Root {
   constructor() {
@@ -249,7 +249,7 @@ export class PrimaryDerived extends Root {
 }
 
 import { isInt32 } from "metano-runtime";
-import { Trace } from "./trace";
+import { Trace } from "./trace.js";
 
 export class Chained {
   protected static readonly byChainedFD = /* @__PURE__ */ Symbol("Chained(int f, int d)");
@@ -316,8 +316,8 @@ export class Chained {
 }
 
 import { List } from "metano-runtime/system/collections";
-import type { Collector } from "./collector";
-import { Trace } from "./trace";
+import type { Collector } from "./collector.js";
+import { Trace } from "./trace.js";
 
 export class ParamsCalls {
   constructor() { }
@@ -360,7 +360,7 @@ export class ParamsCalls {
 }
 
 import { NativeBox } from "../native-box";
-import { Trace } from "./trace";
+import { Trace } from "./trace.js";
 
 export class AmbientCalls {
   constructor() { }

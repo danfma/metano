@@ -1,5 +1,5 @@
 import { isInt64 } from "metano-runtime";
-import type { UId } from "./u-id";
+import type { UId } from "./u-id.js";
 
 export type Ticks = bigint & { readonly __brand: "Ticks" };
 

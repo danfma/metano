@@ -1,4 +1,4 @@
-import { Counter } from "./counter";
+import { Counter } from "./counter.js";
 import { Route } from "solid-router";
 
 export type AppRouterProps = {};

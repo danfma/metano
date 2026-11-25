@@ -4,13 +4,13 @@ import { Temporal } from "@js-temporal/polyfill";
 import { List, type IReadOnlyList } from "metano-runtime/system/collections";
 import { isString, type ClassType } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
-import type { UserId } from "#/sample-issue-tracker/shared-kernel/user-id";
-import { Comment } from "./comment";
-import type { IssueId } from "./issue-id";
-import type { IssuePriority } from "./issue-priority";
-import { IssueStatus } from "./issue-status";
-import type { IssueType } from "./issue-type";
-import { IssueWorkflow } from "./issue-workflow";
+import type { UserId } from "../../shared-kernel/user-id.js";
+import { Comment } from "./comment.js";
+import type { IssueId } from "./issue-id.js";
+import type { IssuePriority } from "./issue-priority.js";
+import { IssueStatus } from "./issue-status.js";
+import type { IssueType } from "./issue-type.js";
+import { IssueWorkflow } from "./issue-workflow.js";
 
 let Issue$rt: ClassType<Issue> | undefined;
 

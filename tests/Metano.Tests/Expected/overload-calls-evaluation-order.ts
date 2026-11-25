@@ -1,5 +1,5 @@
-import { Base } from "./base";
-import { Calls } from "./calls";
+import { Base } from "./base.js";
+import { Calls } from "./calls.js";
 
 export class Derived extends Base {
   constructor() {
@@ -9,8 +9,8 @@ export class Derived extends Base {
   }
 }
 
-import { Base } from "./base";
-import { Calls } from "./calls";
+import { Base } from "./base.js";
+import { Calls } from "./calls.js";
 
 export class Shop {
   constructor() { }

@@ -22,7 +22,7 @@ export function pick(...args: unknown[]): any {
   throw new Error("No matching overload for pick");
 }
 
-import { pickV, pickVN } from "./greets";
+import { pickV, pickVN } from "./greets.js";
 
 export class Caller {
   constructor() { }
@@ -36,5 +36,5 @@ export class Caller {
   }
 }
 
-export { Caller } from "./caller";
-export { pick, pickV, pickVN } from "./greets";
+export { Caller } from "./caller.js";
+export { pick, pickV, pickVN } from "./greets.js";

@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { UBaseH } from "./u-base-h";
+import { UBaseH } from "./u-base-h.js";
 
 let UBaseA$rt: ClassType<UBaseA> | undefined;
 
@@ -38,5 +38,15 @@ export class UBaseA extends UBaseH {
 
   override with(overrides?: Partial<UBaseA>): UBaseA {
     return copyRecordWith<UBaseA>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    return super.$printMembers?.() ?? "";
+  }
+
+  override toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `UBaseA { ${members} }` : "UBaseA { }";
   }
 }

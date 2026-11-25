@@ -29,7 +29,7 @@ public class ModuleImportGapTests
 
         var output = result["app/use.ts"];
 
-        await Assert.That(output).Contains("import { shape } from \"./shape\";");
+        await Assert.That(output).Contains("import { shape } from \"./shape.js\";");
         await Assert.That(output).Contains("s instanceof shape.Circle");
     }
 
@@ -207,7 +207,11 @@ public class ModuleImportGapTests
 
         await Assert.That(files["p10/tag.ts"]).Contains("static from(x: number): Tag {");
         await Assert.That(files["p10/tag.ts"]).Contains("return new Tag();");
-        await Assert.That(files["use/u.ts"]).Contains("import { Tag as T2 } from \"#/p10/tag\";");
+
+        await Assert
+            .That(files["use/u.ts"])
+            .Contains("import { Tag as T2 } from \"../p10/tag.js\";");
+
         await Assert.That(files["use/u.ts"]).Contains("return T2.from(1).v;");
     }
 }

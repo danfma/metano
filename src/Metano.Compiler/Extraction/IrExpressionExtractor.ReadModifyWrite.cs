@@ -60,6 +60,7 @@ public sealed partial class IrExpressionExtractor
     private bool RequiresReadModifyWrite(IrBinaryOp op, AssignmentExpressionSyntax assign) =>
         HasNoTargetCompoundOperator(op)
         || NeedsOverflowReduction(assign)
+        || RoundsToSingle(_semantic.GetOperation(assign))
         || NeedsSixtyFourBitReadModifyWrite(op, assign)
         || NeedsLogicalShiftReadModifyWrite(op, assign)
         || IsDecimalCompound(op, assign);
@@ -127,7 +128,9 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The value an extension property's <c>++</c> / <c>--</c> stores: the
     /// stepped current value, lifted when the property's type is
-    /// <c>Nullable&lt;T&gt;</c> (#497), like <see cref="ExtensionCompoundValue"/>.
+    /// <c>Nullable&lt;T&gt;</c> (#497), like <see cref="ExtensionCompoundValue"/>,
+    /// and stepped through its method when it is a <c>decimal</c> the target
+    /// computes with by methods (#695).
     /// </summary>
     private IrExpression ExtensionIncrementValue(
         ExpressionSyntax node,
@@ -136,17 +139,19 @@ public sealed partial class IrExpressionExtractor
         IrBinaryOp stepOperator,
         IrExpression one
     ) =>
-        StoredUnderNullGuard(
-            property,
-            current,
-            ReduceOverflow(
-                _semantic.GetOperation(node),
-                WithEnumResultType(
-                    node,
-                    new IrBinaryExpression(GuardedRead(property, current), stepOperator, one)
+        IsDecimalComputedByMethods(property.Type)
+            ? BuildDecimalBinaryCall(current, DecimalOne, MapDecimalBinaryMethod(stepOperator)!)
+            : StoredUnderNullGuard(
+                property,
+                current,
+                ReduceOverflow(
+                    _semantic.GetOperation(node),
+                    WithEnumResultType(
+                        node,
+                        new IrBinaryExpression(GuardedRead(property, current), stepOperator, one)
+                    )
                 )
-            )
-        );
+            );
 
     /// <summary>
     /// The operand a lifted extension-property read-modify-write applies its

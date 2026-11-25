@@ -1,5 +1,5 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
-import { Clip } from "./clip";
+import { Clip } from "./clip.js";
 
 export class ImageClip extends Clip {
   constructor(readonly path: string, seconds: number) {
@@ -20,5 +20,15 @@ export class ImageClip extends Clip {
 
   override with(overrides?: Partial<ImageClip>): ImageClip {
     return copyRecordWith<ImageClip>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}Path = ${this.path ?? ""}`;
+  }
+
+  override toString(): string {
+    return `ImageClip { ${this.$printMembers()} }`;
   }
 }

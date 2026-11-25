@@ -1,6 +1,6 @@
 import { isBool, isInt32, isString } from "metano-runtime";
-import type { IQ } from "./iq";
-import { QB } from "./qb";
+import type { IQ } from "./iq.js";
+import { QB } from "./qb.js";
 
 export class QD extends QB implements IQ<number>, IQ<string> {
   constructor() {

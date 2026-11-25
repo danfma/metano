@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { PointDto } from "./point-dto";
+import type { PointDto } from "./point-dto.js";
 
 export class InlineCode {
   constructor() {}

@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { IBase } from "./i-base";
+import { IBase } from "./i-base.js";
 
 let IA$rt: ClassType<IA> | undefined;
 
@@ -39,5 +39,15 @@ export class IA extends IBase {
 
   override with(overrides?: Partial<IA>): IA {
     return copyRecordWith<IA>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    const base = super.$printMembers?.() ?? "";
+
+    return `${base ? `${base}, ` : ""}X = ${this.x}`;
+  }
+
+  override toString(): string {
+    return `IA { ${this.$printMembers()} }`;
   }
 }

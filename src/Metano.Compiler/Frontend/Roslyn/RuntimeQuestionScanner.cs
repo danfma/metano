@@ -111,6 +111,7 @@ internal sealed class RuntimeQuestionScanner
             ScanMember(member);
 
         RecordOverloadParameters(type);
+        RecordRecordMemberText(type);
 
         foreach (var nested in type.GetTypeMembers())
         {
@@ -581,6 +582,30 @@ internal sealed class RuntimeQuestionScanner
             && mappings.Any(mapping => mapping.DescribedTypeArguments.Contains(0))
         )
             Record(IrRuntimeQuestionKind.TypeOf, enumType, syntax);
+    }
+
+    /// <summary>
+    /// A record's synthesized text prints each member as its interpolation hole
+    /// does (baseline FR-093), so an enum member's text reads its descriptor.
+    /// </summary>
+    private void RecordRecordMemberText(INamedTypeSymbol type)
+    {
+        if (!ValueEqualityShapes.IsRecordEmittedAsClass(type))
+            return;
+
+        foreach (var member in IrRecordPrintingExtractor.PrintableMembers(type, _target))
+        {
+            var site = member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+
+            if (site is not null)
+            {
+                RecordEnumText(
+                    IrRecordPrintingExtractor.MemberType(member),
+                    DefaultTextSite.Implicit,
+                    site
+                );
+            }
+        }
     }
 
     private void InspectGetType(IInvocationOperation invocation)

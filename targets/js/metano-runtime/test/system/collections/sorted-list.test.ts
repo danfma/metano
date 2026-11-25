@@ -228,6 +228,28 @@ describe("SortedList", () => {
     expect(SortedList.$runtimeType.collection).toBe("SortedList");
     expect(SortedList.$runtimeType.test(sample())).toBe(true);
   });
+
+  test("views expose length, toArray and zero-copy live asReadOnlyJsArray", () => {
+    const list = sample();
+    const keysView = list.keys.asReadOnlyJsArray();
+    const valuesView = list.values.asReadOnlyJsArray();
+
+    expect(list.keys.length).toBe(2);
+    expect(list.values.length).toBe(2);
+    expect(keysView).toBe(list._keys);
+    expect(valuesView).toBe(list._values);
+
+    const copiedKeys = list.keys.toArray();
+    copiedKeys[0] = 99;
+    expect(list.keys.get(0)).toBe(1);
+
+    list.add(3, 30);
+
+    expect(list.keys.length).toBe(3);
+    expect(list.values.length).toBe(3);
+    expect(keysView).toEqual([1, 2, 3]);
+    expect(valuesView).toEqual([10, 20, 30]);
+  });
 });
 
 for (const seed of modelSeeds()) {

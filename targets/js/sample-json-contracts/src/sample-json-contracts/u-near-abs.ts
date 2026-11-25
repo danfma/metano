@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { UNear } from "./u-near";
+import { UNear } from "./u-near.js";
 
 let UNearAbs$rt: ClassType<UNearAbs> | undefined;
 
@@ -38,5 +38,15 @@ export abstract class UNearAbs extends UNear {
 
   override with(overrides?: Partial<UNearAbs>): UNearAbs {
     return copyRecordWith<UNearAbs>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    return super.$printMembers?.() ?? "";
+  }
+
+  override toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `UNearAbs { ${members} }` : "UNearAbs { }";
   }
 }

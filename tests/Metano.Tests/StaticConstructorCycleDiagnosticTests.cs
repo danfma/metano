@@ -46,7 +46,7 @@ public class StaticConstructorCycleDiagnosticTests
     }
 
     [Test]
-    public async Task StaticConstructorOnlyObjectCreation_ReportMs0005UnderCustomAlias()
+    public async Task StaticConstructorOnlyObjectCreation_ReportsFileKeys()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -63,13 +63,12 @@ public class StaticConstructorCycleDiagnosticTests
             {
                 static Second() { _ = new First(); }
             }
-            """,
-            importAlias: "contracts"
+            """
         );
 
         var cycles = diagnostics.Where(diagnostic => diagnostic.Code == "MS0005").ToList();
         await Assert.That(cycles.Count).IsEqualTo(1);
-        await Assert.That(cycles[0].Message).Contains("#contracts/");
+        await Assert.That(cycles[0].Message).DoesNotContain("#");
         await Assert.That(cycles[0].Message).Contains("first");
         await Assert.That(cycles[0].Message).Contains("second");
     }

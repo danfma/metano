@@ -131,7 +131,7 @@ public class NoContainerAttributeTranspileTests
         );
 
         var output = result["calculator.ts"];
-        await Assert.That(output).Contains("import { add } from \"./math-utils\"");
+        await Assert.That(output).Contains("import { add } from \"./math-utils.js\"");
     }
 
     // ─── Diagnostics (MS0015) ────────────────────────────────
@@ -184,7 +184,7 @@ public class NoContainerAttributeTranspileTests
 
         var output = result["app.ts"];
         await Assert.That(output).Contains("return increment;");
-        await Assert.That(output).Contains("import { increment } from \"./reducers\"");
+        await Assert.That(output).Contains("import { increment } from \"./reducers.js\"");
     }
 
     [Test]
@@ -256,6 +256,7 @@ public class NoContainerAttributeTranspileTests
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidNoContainer))
             .IsFalse();
+
         var output = files["bridge.ts"];
         await Assert.That(output).Contains("export function double(value: number): number");
         await Assert.That(output).DoesNotContain("class Bridge");

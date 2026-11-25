@@ -362,7 +362,7 @@ public class PrimaryConstructorCaptureTests
         await Assert.That(output).Contains("constructor(a: number)");
         await Assert.That(output).Contains("private _a: number;");
         await Assert.That(output).Contains("get a(): number {\n    return this._a;");
-        await Assert.That(output).Contains("((this._a = (this._a + 1) | 0) - 1) | 0;");
+        await Assert.That(output).Contains("this._a = (this._a + 1) | 0;");
     }
 
     [Test]

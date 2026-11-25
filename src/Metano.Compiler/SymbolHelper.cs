@@ -274,6 +274,13 @@ public static class SymbolHelper
 
     public static bool HasStringEnum(this ISymbol symbol) => HasAttribute(symbol, "StringEnum");
 
+    /// <summary>
+    /// The text a <c>[StringEnum]</c> member is emitted as: its <c>[Name]</c>
+    /// override, or its C# name.
+    /// </summary>
+    public static string StringEnumValueOf(IFieldSymbol member) =>
+        GetNameOverride(member) ?? member.Name;
+
     public static bool HasFlags(this ISymbol symbol) =>
         HasAttribute(symbol, "Flags") || HasAttribute(symbol, "FlagsAttribute");
 

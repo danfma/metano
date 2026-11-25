@@ -1,5 +1,5 @@
-import { HashCode, copyRecordWith, defaultEquals } from "metano-runtime";
-import type { IEntity } from "./i-entity";
+import { HashCode, copyRecordWith, defaultEquals, objectText } from "metano-runtime";
+import type { IEntity } from "./i-entity.js";
 
 export class Repo<T extends IEntity> {
   constructor(readonly item: T) { }
@@ -17,5 +17,13 @@ export class Repo<T extends IEntity> {
 
   with(overrides?: Partial<Repo<T>>): Repo<T> {
     return copyRecordWith<Repo<T>>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `Item = ${objectText(this.item ?? "")}`;
+  }
+
+  toString(): string {
+    return `Repo { ${this.$printMembers()} }`;
   }
 }

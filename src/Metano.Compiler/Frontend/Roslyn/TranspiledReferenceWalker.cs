@@ -13,7 +13,9 @@ namespace Metano.Compiler.Frontend.Roslyn;
 /// <see cref="IgnoredReferenceRule"/> (<c>MS0013</c>: the <c>[Ignore]</c> attribute
 /// means ".NET-only", so any reference to such a type from a transpilable type's
 /// signature OR body is an error) and <see cref="TargetSpecificReferenceRule"/>
-/// (<c>MS0051</c>: an interop API of another target language). Signatures (params,
+/// (<c>MS0051</c>: an interop API of another target language) and
+/// <see cref="UnsupportedUnionRule"/> (<c>MS0038</c>: a C# 15 union type, wherever it
+/// is declared). Signatures (params,
 /// return, fields, props, events, base, generic constraints) are checked from their
 /// symbols. The code each member contributes
 /// (bodies, field/property/event initializers, parameter defaults,
@@ -75,6 +77,7 @@ internal sealed class TranspiledReferenceWalker
         bool assemblyWideTranspile,
         TargetLanguage target,
         GeneratedSourceTrees generatedSources,
+        UnsupportedUnionRule unionRule,
         List<MetanoDiagnostic> diagnostics
     )
     {
@@ -85,6 +88,7 @@ internal sealed class TranspiledReferenceWalker
             [
                 new IgnoredReferenceRule(target, diagnostics),
                 new TargetSpecificReferenceRule(target, diagnostics),
+                unionRule,
             ]
         );
 

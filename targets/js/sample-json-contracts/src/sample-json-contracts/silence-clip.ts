@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
-import { Clip } from "./clip";
+import { Clip } from "./clip.js";
 
 let SilenceClip$rt: ClassType<SilenceClip> | undefined;
 
@@ -38,5 +38,15 @@ export class SilenceClip extends Clip {
 
   override with(overrides?: Partial<SilenceClip>): SilenceClip {
     return copyRecordWith<SilenceClip>(this, overrides);
+  }
+
+  protected override $printMembers(): string {
+    return super.$printMembers?.() ?? "";
+  }
+
+  override toString(): string {
+    const members = this.$printMembers();
+
+    return members ? `SilenceClip { ${members} }` : "SilenceClip { }";
   }
 }

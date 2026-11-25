@@ -1,7 +1,7 @@
 import { List } from "metano-runtime/system/collections";
 import { NotSupportedException, SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { Hub } from "./hub";
-import type { ISensor } from "./i-sensor";
+import { Hub } from "./hub.js";
+import type { ISensor } from "./i-sensor.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

@@ -1,5 +1,5 @@
 import { Dictionary, HashSet, List, type IEqualityComparer } from "metano-runtime/system/collections";
-import { aggregate, all, any, append, average, averageDecimal, averageNullable, averageNullableDecimal, concat, contains, count, defaultIfEmpty, distinct, distinctBy, elementAt, elementAtOrDefault, except, first, firstOrDefault, groupBy, intersect, last, lastOrDefault, linq, max, maxBy, maxNullable, min, minBy, minNullable, orderBy, orderByDescending, prepend, reverse, select, selectMany, single, singleOrDefault, skip, skipWhile, sum, sumDecimal, take, takeWhile, thenBy, thenByDescending, toArray, toDictionary, toHashSet, toList, union, where, zip } from "metano-runtime/system/linq";
+import { aggregate, all, any, append, average, averageDecimal, averageNullable, averageNullableDecimal, concat, contains, count, defaultIfEmpty, distinct, distinctBy, elementAt, elementAtOrDefault, except, first, firstOrDefault, groupBy, intersect, join, last, lastOrDefault, linq, max, maxBy, maxNullable, min, minBy, minNullable, orderBy, orderByDescending, prepend, reverse, select, selectMany, sequenceEqual, single, singleOrDefault, skip, skipWhile, sum, sumDecimal, take, takeWhile, thenBy, thenByDescending, toArray, toDictionary, toHashSet, toList, toLookup, union, where, zip } from "metano-runtime/system/linq";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Supported {
@@ -27,6 +27,14 @@ export class Supported {
 
   groupBy(xs: List<number>): Object {
     return linq(xs, groupBy((x: number) => x % 2));
+  }
+
+  groupByComparer(xs: List<number>, same: IEqualityComparer<number>): Object {
+    return linq(xs, groupBy((x: number) => x % 2, same));
+  }
+
+  join(xs: List<number>, ys: List<number>, same: IEqualityComparer<number>): Object {
+    return linq(xs, join(ys, (o: number) => o, (i: number) => i, (o: number, i: number) => (o + i) | 0), join(ys, (o: number) => o, (i: number) => i, (o: number, i: number) => Math.imul(o, i), same));
   }
 
   paging(xs: List<number>): Object {
@@ -123,6 +131,18 @@ export class Supported {
 
   contains(xs: Iterable<number>): boolean {
     return linq(xs, contains(3));
+  }
+
+  containsComparer(xs: Iterable<number>, same: IEqualityComparer<number>): boolean {
+    return linq(xs, contains(3, same));
+  }
+
+  sequenceEquals(xs: List<number>, ys: List<number>, same: IEqualityComparer<number>): boolean {
+    return linq(xs, sequenceEqual(ys)) && linq(xs, sequenceEqual(ys, same));
+  }
+
+  toLookups(xs: List<number>, same: IEqualityComparer<number>): Object {
+    return [linq(xs, toLookup((x: number) => x)), linq(xs, toLookup((x: number) => x, same)), linq(xs, toLookup((x: number) => x, (x: number) => Math.imul(x, 2))), linq(xs, toLookup((x: number) => x, (x: number) => Math.imul(x, 2), same))];
   }
 
   aggregate(xs: List<number>): number {
@@ -251,5 +271,9 @@ export class Supported {
         type: { name: "number" },
       },
     })) + (linq(q, contains(3)) ? 1 : 0)) | 0;
+  }
+
+  queryableSearches(q: Iterable<number>, ys: List<number>, same: IEqualityComparer<number>): boolean {
+    return linq(q, contains(3, same)) && linq(q, sequenceEqual(ys)) && linq(q, sequenceEqual(ys, same));
   }
 }

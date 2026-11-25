@@ -39,8 +39,10 @@ public sealed record GroupCacheFile(
     // the per-group CheckedCasts (#669, #685) so a reused group on an import
     // cycle is not transformed again only to read them. v7 dropped the
     // `Enum` export kind: a numeric enum is a const object since spec 011
-    // FR-044, and a v6 file naming it would not deserialize.
-    public const int CurrentFormatVersion = 7;
+    // FR-044, and a v6 file naming it would not deserialize. v8 records
+    // whether an import names a generated file (`fromLocalFile`, #573):
+    // a v7 import read without it would lose its local-graph edge.
+    public const int CurrentFormatVersion = 8;
     public const string FileName = ".metano-cache-groups-typescript.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()

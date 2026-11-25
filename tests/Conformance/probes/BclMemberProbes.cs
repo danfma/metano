@@ -91,6 +91,46 @@ public static class BclMemberProbes
         return text.ToString();
     }
 
+    public static string CharAsciiTests()
+    {
+        var chars = new[]
+        {
+            'a',
+            'c',
+            'F',
+            'g',
+            'Z',
+            '0',
+            '9',
+            '_',
+            'é',
+            '\u007F',
+            '\u0080',
+            '٣',
+            ' ',
+        };
+
+        var text = new StringBuilder();
+
+        foreach (var c in chars)
+        {
+            text.Append(char.IsAscii(c) ? 'a' : '-')
+                .Append(char.IsAsciiDigit(c) ? 'd' : '-')
+                .Append(char.IsAsciiLetter(c) ? 'l' : '-')
+                .Append(char.IsAsciiLetterLower(c) ? 'w' : '-')
+                .Append(char.IsAsciiLetterUpper(c) ? 'u' : '-')
+                .Append(char.IsAsciiLetterOrDigit(c) ? 'o' : '-')
+                .Append(char.IsAsciiHexDigit(c) ? 'h' : '-')
+                .Append(char.IsAsciiHexDigitLower(c) ? 'x' : '-')
+                .Append(char.IsAsciiHexDigitUpper(c) ? 'X' : '-')
+                .Append(char.IsBetween(c, 'a', 'f') ? 'b' : '-')
+                .Append(char.IsBetween(c, 'f', 'a') ? 'r' : '-')
+                .Append(' ');
+        }
+
+        return text.ToString();
+    }
+
     public static string ConvertToDouble()
     {
         int i = 7;

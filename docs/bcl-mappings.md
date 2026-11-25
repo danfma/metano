@@ -212,6 +212,21 @@ runtime classes only.
 | `char.Is*` (11 predicates), `Convert.ToDouble` (int-sized, `double`, `float`, `decimal`, `bool`, `string`), `decimal.ToDouble` | mapped |
 | `int.CompareTo` | `int`, `uint`, `double`, `float` give -1/0/1 (NaN first); `short`, `ushort`, `byte`, `sbyte`, `char` give the difference, as .NET |
 | LINQ `ElementAt`, `ElementAtOrDefault`, `DefaultIfEmpty`, `Distinct(comparer)` | `elementAt`, `elementAtOrDefault`, `defaultIfEmpty`, `distinct(comparer)` |
+| `ReadOnlyJsArray<T>`, `list.AsReadOnlyJsArray()` / `ro.AsReadOnlyJsArray()`, `ro.ToJsArray()` (#737) | `readonly T[]` (`IEnumerable<T>`-only in C#, not `IReadOnlyList<T>`; `[JsonConverter]` array support in STJ), `asReadOnlyJsArray(x)` (live zero-copy view for runtime array-backed lists; `Array.from(x)` shallow snapshot copy for receivers lacking `asReadOnlyJsArray()`, such as user `IReadOnlyList<T>` classes or `ReadOnlyCollection<T>` over a custom `IList<T>`), `ro.toArray()` (writable copy); TS-only (`MS0051` elsewhere). Do not add/remove via `list.AsJsArray()` while enumerating `list` (bypasses `_version`) |
+
+LINQ searches use .NET's `EqualityComparer<T>.Default` through the runtime (#664): a record, `NaN`
+and a decimal compare by value, and a class without `Equals` by reference.
+
+| C# | TypeScript |
+| --- | --- |
+| `xs.Contains(x[, comparer])` on a lazy sequence | `linq(xs, contains(x[, comparer]))` |
+| `xs.GroupBy(k[, comparer])` | `linq(xs, groupBy(k[, comparer]))`: groups and elements in first-seen order |
+| `xs.SequenceEqual(ys[, comparer])` | `linq(xs, sequenceEqual(ys[, comparer]))` |
+| `xs.ToLookup(k[, e][, comparer])` | `linq(xs, toLookup(k[, e][, comparer]))`: a runtime `Lookup` (`count`, `get`, `contains`, iteration) |
+| `xs.Join(ys, ok, ik, result[, comparer])` | `linq(xs, join(ys, ok, ik, result[, comparer]))`: a `null` key matches nothing |
+
+Not mapped, reported with `MS0001`: the `lookup[key]` indexer of an `ILookup`, `GroupJoin`, and the
+`GroupBy` overloads with an element or result selector.
 
 Not mapped, reported with `MS0001`: `ElementAt(Index)`, `Array.IndexOf(a, v, start, count)`,
 `Array.Sort(a, index, length)`. Known gaps: `(decimal)double` emits the raw double; a record has no
@@ -1326,6 +1341,7 @@ an expression or a `metano-runtime` helper; an overload that is not listed stays
 | C# | TypeScript |
 |----|----|
 | `char.IsLetter(c)`, `IsDigit`, `IsLetterOrDigit`, `IsNumber`, `IsUpper`, `IsLower`, `IsPunctuation`, `IsSymbol`, `IsSeparator`, `IsControl`, `IsWhiteSpace` | `charIsLetter(c)` ... `charIsWhiteSpace(c)`: Unicode general categories as .NET reads them (the engine's Unicode version). The `(string, int)` overloads stay unmapped. |
+| `char.IsAscii(c)`, `IsAsciiDigit`, `IsAsciiLetter`, `IsAsciiLetterLower`, `IsAsciiLetterUpper`, `IsAsciiLetterOrDigit`, `IsAsciiHexDigit`, `IsAsciiHexDigitLower`, `IsAsciiHexDigitUpper`, `IsBetween(c, min, max)` | `charIsAscii(c)` ... `charIsBetween(c, min, max)`: code-unit comparisons, as .NET does. |
 | `BigInteger.Zero`, `One`, `MinusOne` | `0n`, `1n`, `BigInt(-1)` |
 | `b.IsZero`, `IsOne`, `IsEven` | `(b === 0n)`, `(b === 1n)`, `(b % 2n === 0n)` |
 | `Convert.ToDouble(x)` for `int`-sized integers, `double`, `float` | `x` |
@@ -1337,3 +1353,26 @@ an expression or a `metano-runtime` helper; an overload that is not listed stays
 | `new StringBuilder(...)`, `Append` (text, `char`, integers, `bool`, `double`, `float`, `object`, `char` repeated), `AppendLine`, `Insert(int, string)`, `Remove`, `Replace`, `Clear`, `Length`, `ToString()`, `ToString(start, length)` | `StringBuilder` of `metano-runtime`; `AppendLine` adds `\n`. The `char[]`, span, `StringBuilder`, `AppendFormat` overloads, the indexer and `Capacity` stay unmapped. |
 | `new Lazy<T>(factory)`, `.Value`, `.IsValueCreated` | `Lazy<T>` of `metano-runtime`: the factory runs once, its exception is cached, a factory reading its own value throws `InvalidOperationException`. The `bool` argument is dropped. |
 | `new TaskCompletionSource<T>()`, `SetResult`, `SetException`, `SetCanceled`, `TrySet*`, `.Task` | `TaskCompletionSource<T>` of `metano-runtime` (a promise settled from outside) |
+
+### `char`, `int` and conversion fixes (#695)
+
+| C# | TypeScript |
+|----|----|
+| `int.MaxValue`, `char.MaxValue` and the other limits of `byte`, `sbyte`, `short`, `ushort`, `int`, `uint`, `char` | the folded literal (`2147483647`, `"￿"` read as `65535`); before, `Int32.maxValue` threw a `ReferenceError` |
+| `new string(chars)` / `new string(c, n)` | `chars.join("")` / `c.repeat(n)`; the range, span and pointer overloads stay unmapped (`MS0001`) |
+| `int[] a = { c, 'b' };` | the array literal `[c.charCodeAt(0), 98]` |
+| `foreach (var c in s)` and LINQ over a `string` | the UTF-16 code units, so a surrogate pair is two elements, as in .NET: `foreach` indexes the string (`for (let $i = 0; $i < $s.length; $i++) { const c = $s[$i]!; … }`, the string bound once), and `linq` reads a string source through a lazy code-unit iterator, so `First`/`Any`/`Take` stop early and no array is copied |
+| `c++`, `c += k` on a `char?` | lifted: `null` stays `null`, a value steps its code |
+| `(char)m` (`decimal`) | `String.fromCharCode(charCodeFromDecimal(m))`: truncates, throws `OverflowException` outside 0–65535 |
+| `(decimal)d` / `(decimal)f` | `new Decimal(decimalTextFromDouble(d, 15))` / `(f, 7)`: rounded to the significant digits .NET 10 keeps, half to even, at most 28 decimal places (`(decimal)(0.1 + 0.2)` is `0.3`, `(decimal)1000000000000005.0` is `1000000000000000`, `(decimal)1e-30` is `0`); NaN, the infinities and values beyond `decimal.MaxValue` throw `OverflowException` |
+| `(float)d`, `(float)i`, `float f = i` (`double`, `int`, `uint`) | `Math.fround(d)` |
+| `float` `a + b`, `-`, `*`, `/`, the same compound assignments, `++` / `--` (lifted forms included), and LINQ `Sum` / `Average` over `float` | rounded to single precision: `Math.fround(a * b)`, `f = Math.fround(f + 1)`, `Math.fround(linq(xs, sum$rt()))`, so a `float` computed by arithmetic equals the same value cast to `float`; `%`, `%=` and unary `-` are exact and stay native. A `float?` `Sum` / `Average` is not rounded yet |
+| `float.Parse(s)`, `float.TryParse(s, out f)`, a JSON number or string read into a `float` | `parseFloat32(s)` / `tryParseFloat32(s)` and the JSON `Single` reader return the value rounded to single precision, so `float.Parse("0.1") * 1f == float.Parse("0.1")` holds |
+| `a % b` on `int` / `uint` with a divisor that is not a constant | `intRem(a, b)`: throws `DivideByZeroException` for `0` and `OverflowException` for `int.MinValue % -1`; a constant divisor keeps `%` |
+| `a / b` on `int` | `intDiv(a, b)` now also throws `OverflowException` for `int.MinValue / -1` |
+| `Math.Abs(int)` | `absInt32(x)`: throws `OverflowException` for `int.MinValue` |
+| `(T)x` through a user conversion whose parameter needs an explicit numeric step (`(UZ)longValue` over `explicit operator UZ(uint)`, `(UZ)3.7`) | the step runs first, checked in a `checked` context, truncating a fraction |
+
+Still open: `M(char)` and `M(string)` overloads cannot be told apart by a runtime dispatcher
+(both are JS strings), generic math through a type parameter does not wrap, a `ref` argument
+is passed by value, and a compound `%=` keeps the native operator.

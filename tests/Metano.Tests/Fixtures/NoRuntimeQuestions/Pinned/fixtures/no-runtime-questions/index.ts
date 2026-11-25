@@ -1,5 +1,5 @@
-export { Counter } from "./counter";
-export { Geometry } from "./geometry";
-export { Point } from "./point";
-export { Priority } from "./priority";
-export { TodoItem } from "./todo-item";
+export { Counter } from "./counter.js";
+export { Geometry } from "./geometry.js";
+export { Point } from "./point.js";
+export { Priority } from "./priority.js";
+export { TodoItem } from "./todo-item.js";

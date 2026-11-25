@@ -25,7 +25,8 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 ///     <c>JSON.stringify</c>), <c>DefaultBufferSize</c> and
 ///     <c>GenerationMode</c>;</item>
 ///   <item>reported: every other option (<see cref="UnmirroredDefaults"/>),
-///     <c>Converters</c> when it lists a converter, and each other
+///     <c>Converters</c> when it lists a converter other than
+///     <c>ReadOnlyJsArrayJsonConverter&lt;T&gt;</c>, and each other
 ///     <c>NumberHandling</c> flag.</item>
 /// </list>
 /// </summary>
@@ -102,7 +103,7 @@ internal static class JsonUnmirroredContextOptions
         option switch
         {
             JsonOptionNames.NumberHandling => UnmirroredNumberHandlingFlagsOf(value),
-            ConvertersOption => value.Values.IsDefaultOrEmpty ? [] : [option],
+            ConvertersOption => value.Values.All(IsMirroredConverter) ? [] : [option],
             MaxDepthOption => value.Value is 0 or MirroredMaxDepth ? [] : [option],
             JsonOptionNames.DefaultIgnoreCondition => IsMirroredIgnoreCondition(value)
                 ? []
@@ -110,6 +111,15 @@ internal static class JsonUnmirroredContextOptions
             _ when IsNonDefaultUnmirrored(option, value) => [option],
             _ => [],
         };
+
+    /// <summary>
+    /// <c>Metano.Interop.ReadOnlyJsArrayJsonConverter&lt;T&gt;</c>, which NativeAOT
+    /// apps register per value-type element (spec 011 FR-056a), writes what the
+    /// TypeScript <c>array</c> descriptor writes, so listing it changes nothing.
+    /// </summary>
+    private static bool IsMirroredConverter(TypedConstant converter) =>
+        converter.Value is INamedTypeSymbol { Name: "ReadOnlyJsArrayJsonConverter", Arity: 1 } type
+        && type.ContainingNamespace?.ToDisplayString() == "Metano.Interop";
 
     /// <summary>
     /// <c>Never</c> (the default) and <c>WhenWritingNull</c> (the generated

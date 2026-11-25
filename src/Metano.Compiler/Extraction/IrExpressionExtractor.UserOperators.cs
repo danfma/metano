@@ -492,6 +492,7 @@ public sealed partial class IrExpressionExtractor
         var yieldsNull = unwraps && nullTarget;
         var throwsOnNull = unwraps && !yieldsNull;
         var sourceUnwraps = IsNullableUnwrapCast(cast, sourceType, targetType);
+        var operandType = CastOperandType(cast, sourceType);
 
         var unwrapped =
             throwsOnNull || sourceUnwraps ? ValueOrThrowWhenMissing(cast.Expression, inner) : inner;
@@ -502,10 +503,12 @@ public sealed partial class IrExpressionExtractor
             ReferenceConversion: ReferenceConversionOf(cast, targetType)
         );
 
+        var reachedType = unwraps ? operandType.UnwrapNullableValueType() : operandType;
+
         return UserConversion(
             method,
             throwsOnNull ? unwrapped : inner,
-            unwraps ? sourceType.UnwrapNullableValueType() : CastOperandType(cast, sourceType),
+            reachedType,
             targetType,
             sourceForm,
             isLifted: yieldsNull,
@@ -513,6 +516,11 @@ public sealed partial class IrExpressionExtractor
                 method.ReturnType,
                 targetType,
                 castConversion.IsChecked
+            ),
+            before: ExplicitNumericStepBetween(
+                reachedType,
+                method.Parameters[0].Type,
+                CheckedContexts.IsChecked(cast, _semantic.Compilation)
             )
         );
     }
@@ -661,19 +669,20 @@ public sealed partial class IrExpressionExtractor
         ITypeSymbol? targetType,
         IrExpression sourceForm,
         bool isLifted,
-        IrNumericStep? after = null
+        IrNumericStep? after = null,
+        IrNumericStep? before = null
     )
     {
         var parameterType = method.Parameters[0].Type;
         var operand = value;
 
-        if (NumericStepBetween(sourceType, parameterType) is { } before)
+        if ((before ?? NumericStepBetween(sourceType, parameterType)) is { } step)
         {
             operand = new IrNumericConversion(
                 value,
-                before.From,
-                before.To,
-                IsChecked: false,
+                step.From,
+                step.To,
+                step.IsChecked,
                 IsLifted: false
             );
         }

@@ -1,9 +1,9 @@
 import { HashCode, valueEquals } from "metano-runtime";
-import { Box } from "./box";
-import type { Celsius } from "./celsius";
-import type { Counter } from "./counter";
-import { Point } from "./point";
-import { Size } from "./size";
+import { Box } from "./box.js";
+import type { Celsius } from "./celsius.js";
+import type { Counter } from "./counter.js";
+import { Point } from "./point.js";
+import { Size } from "./size.js";
 
 export class Segment {
   start: Point = new Point();

@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, valueEquals, type ClassType } from "metano-runtime";
-import type { SPoint } from "./s-point";
+import type { SPoint } from "./s-point.js";
 
 let HolderSPoint$rt: ClassType<HolderSPoint> | undefined;
 
@@ -39,5 +39,13 @@ export class HolderSPoint {
 
   with(overrides?: Partial<HolderSPoint>): HolderSPoint {
     return copyRecordWith<HolderSPoint>(this, overrides);
+  }
+
+  protected $printMembers(): string {
+    return `S = ${this.s}`;
+  }
+
+  toString(): string {
+    return `HolderSPoint { ${this.$printMembers()} }`;
   }
 }

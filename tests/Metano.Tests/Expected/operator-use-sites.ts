@@ -1,6 +1,6 @@
 import type { Decimal } from "metano-runtime/system/decimal";
-import { Money } from "./money";
-import { Pt } from "./pt";
+import { Money } from "./money.js";
+import { Pt } from "./pt.js";
 
 export class Uses {
   constructor() { }

@@ -141,7 +141,7 @@ public class EmitInFileTests
         var output = result["issue.ts"];
         // Tag lives in tag.ts and should be imported (type-only since it's only used
         // as a property type, not a value).
-        await Assert.That(output).Contains("Tag } from \"./tag\"");
+        await Assert.That(output).Contains("Tag } from \"./tag.js\"");
         await Assert.That(result.ContainsKey("tag.ts")).IsTrue();
     }
 }

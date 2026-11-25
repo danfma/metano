@@ -48,6 +48,7 @@ import { OutOfOrderJsonContext } from "#/sample-json-contracts/out-of-order-json
 import { SBase } from "#/sample-json-contracts/s-base";
 import { SetClass } from "#/sample-json-contracts/set-class";
 import { SilenceClip } from "#/sample-json-contracts/silence-clip";
+import { SingleBox } from "#/sample-json-contracts/single-box";
 import { SnakeCaseJsonContext } from "#/sample-json-contracts/snake-case-json-context";
 import { Sq } from "#/sample-json-contracts/sq";
 import { SqB } from "#/sample-json-contracts/sq-b";
@@ -132,6 +133,7 @@ const expectedClasses: Record<string, new (...args: never[]) => object> = {
   SBase,
   SetClass,
   SilenceClip,
+  SingleBox,
   Sq,
   SqB,
   Stats,

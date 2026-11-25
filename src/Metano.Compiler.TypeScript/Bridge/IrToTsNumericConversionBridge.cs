@@ -52,11 +52,12 @@ internal static class IrToTsNumericConversionBridge
             return DecimalToBinaryFloatingPoint(to, value);
 
         if (IrNumericConversion.IsDecimalToNarrowInteger(from, to))
-            return RuntimeCall(
-                Int64RuntimeHelpers.NarrowFromDecimal,
-                value,
-                new TsLiteral(to.Kind.BitWidth().ToString(CultureInfo.InvariantCulture)),
-                new TsLiteral(to.Kind.IsSigned() ? "true" : "false")
+            return NarrowedDecimal(value, to.Kind.BitWidth(), to.Kind.IsSigned());
+
+        if (IrNumericConversion.IsDecimalToChar(from, to))
+            return Global(
+                "String.fromCharCode",
+                RuntimeCall(Int64RuntimeHelpers.CharCodeFromDecimal, value)
             );
 
         if (IrNumericConversion.IsCharRead(from, to))
@@ -67,6 +68,12 @@ internal static class IrToTsNumericConversionBridge
 
         if (IrNumericConversion.IsIntegerToDecimal(from, to))
             return DecimalOfInteger(value);
+
+        if (IrNumericConversion.IsRoundedToSingle(from, to))
+            return Global("Math.fround", value);
+
+        if (IrNumericConversion.IsBinaryFloatingPointToDecimal(from, to))
+            return DecimalOfBinaryFloatingPoint(from, value);
 
         if (from is { Kind: IrNumericKind.BigInteger, IsEnum: false })
             return FromBigInteger(to, value);
@@ -131,6 +138,14 @@ internal static class IrToTsNumericConversionBridge
             ),
             _ => NarrowedBigInteger(value, to.Kind.BitWidth(), to.Kind.IsSigned()),
         };
+
+    private static TsExpression NarrowedDecimal(TsExpression value, int bits, bool signed) =>
+        RuntimeCall(
+            Int64RuntimeHelpers.NarrowFromDecimal,
+            value,
+            new TsLiteral(bits.ToString(CultureInfo.InvariantCulture)),
+            new TsLiteral(signed ? "true" : "false")
+        );
 
     private static TsExpression NarrowedBigInteger(TsExpression value, int bits, bool signed) =>
         RuntimeCall(
@@ -282,6 +297,22 @@ internal static class IrToTsNumericConversionBridge
         DecimalOf(
             value is TsLiteral ? value : new TsBinaryExpression(value, "+", new TsLiteral("0"))
         );
+
+    /// <summary>
+    /// <c>(decimal)d</c> / <c>(decimal)f</c>: the value rounded to the 15 /
+    /// 7 significant digits .NET keeps, <c>new Decimal(decimalTextFromDouble(d, 15))</c>.
+    /// </summary>
+    private static TsExpression DecimalOfBinaryFloatingPoint(
+        IrNumericEndpoint from,
+        TsExpression value
+    )
+    {
+        var digits = from.Kind is IrNumericKind.Single ? "7" : "15";
+
+        return DecimalOf(
+            RuntimeCall(Int64RuntimeHelpers.DecimalTextFromDouble, value, new TsLiteral(digits))
+        );
+    }
 
     /// <summary>A <c>Decimal</c> of a <c>number</c>: <c>new Decimal(value)</c>.</summary>
     private static TsExpression DecimalOf(TsExpression value) =>

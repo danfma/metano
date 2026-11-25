@@ -1,5 +1,6 @@
 using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -91,9 +92,31 @@ public sealed partial class IrExpressionExtractor
             previous
         ));
 
-    private static bool IsValueUnused(ExpressionSyntax node) =>
+    private bool IsValueUnused(ExpressionSyntax node) =>
         node.Parent is ExpressionStatementSyntax
-        || (node.Parent is ForStatementSyntax loop && loop.Incrementors.Contains(node));
+        || (node.Parent is ForStatementSyntax loop && loop.Incrementors.Contains(node))
+        || IsVoidExpressionBody(node);
+
+    /// <summary>
+    /// Whether <paramref name="node"/> is the expression body of a member,
+    /// local function or lambda that returns <c>void</c>
+    /// (<c>void Bump() =&gt; n++;</c>): its value is discarded (#695).
+    /// </summary>
+    private bool IsVoidExpressionBody(ExpressionSyntax node)
+    {
+        var body = node.Parent switch
+        {
+            ArrowExpressionClauseSyntax { Parent: { } member } => _semantic.GetDeclaredSymbol(
+                member
+            ),
+            LambdaExpressionSyntax lambda when lambda.ExpressionBody == node => _semantic
+                .GetSymbolInfo(lambda)
+                .Symbol,
+            _ => null,
+        };
+
+        return body is IMethodSymbol { ReturnsVoid: true };
+    }
 
     private static IrLiteral SixtyFourBitOne(IrNumericKind kind) =>
         kind is IrNumericKind.UInt64

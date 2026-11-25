@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, copyRecordWith, defaultEquals, type ClassType } from "metano-runtime";
-import type { IGauge } from "./i-gauge";
+import type { IGauge } from "./i-gauge.js";
 
 let Dashboard$rt: ClassType<Dashboard> | undefined;
 
@@ -44,5 +44,9 @@ export class Dashboard {
 
   with(overrides?: Partial<Dashboard>): Dashboard {
     return copyRecordWith<Dashboard>(this, overrides);
+  }
+
+  toString(): string {
+    return `Dashboard { Title = ${this.title}, Main = ${this.main ?? ""} }`;
   }
 }

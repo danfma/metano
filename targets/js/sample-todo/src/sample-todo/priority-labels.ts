@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Dictionary } from "metano-runtime/system/collections";
 import { typeInitializer } from "metano-runtime";
-import { Priority } from "./priority";
+import { Priority } from "./priority.js";
 
 export class PriorityLabels {
   static readonly #$init = /* @__PURE__ */ typeInitializer("SampleTodo.PriorityLabels", () => {

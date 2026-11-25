@@ -1,9 +1,9 @@
 import { Decimal } from "metano-runtime/system/decimal";
-import { Bag } from "./bag";
-import { Box } from "./box";
-import { Money } from "./money";
-import { Pt } from "./pt";
-import { Single } from "./single";
+import { Bag } from "./bag.js";
+import { Box } from "./box.js";
+import { Money } from "./money.js";
+import { Pt } from "./pt.js";
+import { Single } from "./single.js";
 
 export class Shop {
   constructor() { }

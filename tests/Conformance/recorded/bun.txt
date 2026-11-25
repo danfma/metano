@@ -12,12 +12,12 @@ BoxingProbes.objectHashSetMixedCount = 1
 BoxingProbes.switchOnObject = red;color:2;perms:2;color:2;other;
 CastProbes.castOfT THROWS Error: Unsupported expression: UnloweredLinqCall
 CastProbes.thisCastFail THROWS TypeError: new Cat().asDog().bark is not a function. (In 'new Cat().asDog().bark()', 'new Cat().asDog().bark' is undefined)
+CharIntGapProbes.genericMath = 6|3|4294967294
+CharIntGapProbes.refDecimal = 1
 CollectionEqualityProbes.asListCast = cast1
 CollectionEqualityProbes.immutableListEmptyAddRange = False,2
 CollectionEqualityProbes.listEquals THROWS TypeError: a.equals is not a function. (In 'a.equals(a)', 'a.equals' is undefined)
 CollectionEqualityProbes.negativeZeroKeys = +0|+0|True
-CollectionEqualityProbes.recordStructToString = [object Object]
-CollectionEqualityProbes.recordToString = [object Object]|[object Object]|[object Object]
 CollectionTypeArgumentProbes.arrayAsInterfaceIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.dictionaryViewInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.enumerableArrayInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
@@ -30,7 +30,7 @@ DecimalProbes.divZero = no:Infinity
 DecimalProbes.negatives = 0|0|-1.5|0|0.00
 DecimalProbes.overflow THROWS TypeError: undefined is not an object (evaluating 'Decimal.maxValue.plus')
 DecimalProbes.precision = 0.3|T|1.358024679135802467913580237|0.14285714285714285714285714286
-DecimalProbes.records = T|1.10|2.2|[object Object]
+DecimalProbes.records = T|1.10|2.2|Price { Amount = 1.10, Cur = USD }
 DecimalProbes.rounding = 2|4|2.34|2.36|3|-2|2|-1|1
 DecimalProbes.thirds = 0.33333333333333333333333333333|0.66666666666666666666666666667|2.5|0.99999999999999999999999999999
 DecimalProbes.trailingZeros = 1.50|3|1|100|2.500
@@ -65,7 +65,7 @@ InteropProbes.inlineCodeStatement = 5
 InteropProbes.unsafeCastWrong = cast
 LazyDirectProbes.baseModuleFirst LOADFAIL 1 | import type { ClassType } from "metano-runtime";
 LinqProbes.decimalLambda = 3|5.5|3.5|1|7|1.5|2|6|0.875
-LinqProbes.intOverflowSum THROWS ReferenceError: Int32 is not defined
+LinqProbes.intOverflowSum = 2147483648|OverflowException:Arithmetic operation resulted in an overflow.|1073741824|1.5
 LinqProbes.minMaxDecimal = 0.5|2|1.5|10|13.75|4.5833333333333333333333333333|24.25|4|1.3333333333333333333333333333
 LinqSetProbes.comparers THROWS Error: Unsupported expression: UnsupportedLinqOverload
 LinqSetProbes.setOpsRecords = 3|1|1|2|1|1|2
@@ -79,6 +79,7 @@ RbAProbes.listSwitch = hue5,hue5,other,
 RbBProbes.arrayElem = TTTT
 RbBProbes.paramsArray = 3
 RbBProbes.typedToObject THROWS Error: Unsupported expression: UnloweredLinqCall
+RecordToStringProbes.cycle = Exception
 Round2Probes.decToDoubleThird = 0.3333333333333333|T
 Round2Probes.exCtorArgs = noparam;p;mnoparam;in;Specified method is not supported.;The given key was not present in the dictionary.;One of the identified items was in an invalid format.;Exception of type 'System.Exception' was thrown.;has;i;
 Round3Probes.mathCalls = v1E+21|1E-07|2||1.7976931348623157E+308|1|2|-1
@@ -107,9 +108,7 @@ StringProbes.equalsCalls THROWS TypeError: "Hello".equals is not a function. (In
 StringProbes.formatting THROWS TypeError: String.format is not a function. (In 'String.format("{0}-{1}", 1, "a")', 'String.format' is undefined)
 StringProbes.lengthAndIndex THROWS TypeError: undefined is not an object (evaluating '"abc"[5].toString')
 StringProbes.trimSpecial = [x][1]
-TextProbes.floatMath = 0.3|0.10000000149011612|F|0.3|0.1|0.3
 TextProbes.generic = <True>TrueTrue<1E-07>1E-071E-07<0.10000000149011612>0.100000001490116120.10000000149011612<1>11<>
-TextProbes.recordToString = [object Object]
 UnmodeledCollectionProbes.throwsBag = throws
 UnmodeledCollectionProbes.throwsFrozenSet = throws
 UnmodeledCollectionProbes.throwsHiddenAdd = throws

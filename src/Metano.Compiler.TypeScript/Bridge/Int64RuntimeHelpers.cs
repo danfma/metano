@@ -26,6 +26,7 @@ internal static class Int64RuntimeHelpers
     public const string Int64FromDecimal = "int64FromDecimal";
     public const string UInt64FromDecimal = "uint64FromDecimal";
     public const string NarrowFromDecimal = "narrowFromDecimal";
+    public const string CharCodeFromDecimal = "charCodeFromDecimal";
     public const string Int64FromBigInteger = "int64FromBigInteger";
     public const string UInt64FromBigInteger = "uint64FromBigInteger";
     public const string DivInt64 = "divInt64";
@@ -38,6 +39,7 @@ internal static class Int64RuntimeHelpers
     public const string NarrowFromBigInteger = "narrowFromBigInteger";
     public const string DoubleFromBigInteger = "doubleFromBigInteger";
     public const string DecimalTextFromBigInteger = "decimalTextFromBigInteger";
+    public const string DecimalTextFromDouble = "decimalTextFromDouble";
     public const string BigIntegerFromDouble = "bigIntegerFromDouble";
     public const string BigIntegerFromDecimal = "bigIntegerFromDecimal";
     public const string SumInt64 = "sumInt64";

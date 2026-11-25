@@ -1,4 +1,5 @@
 using Metano.Compiler.IR;
+using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
 
 namespace Metano.Tests.IR;
@@ -24,8 +25,11 @@ public class IrRuntimeRequirementToTsImportTests
         var imports = IrRuntimeRequirementToTsImport.Convert(set);
         await Assert.That(imports).Count().IsEqualTo(2);
 
-        var root = imports.Single(i => i.From == "metano-runtime");
-        var collections = imports.Single(i => i.From == "metano-runtime/system/collections");
+        var root = imports.Single(i => i.From == new TsPackageModule("metano-runtime"));
+
+        var collections = imports.Single(i =>
+            i.From == new TsPackageModule("metano-runtime/system/collections")
+        );
 
         await Assert.That(root.Names).Contains("HashCode");
         await Assert.That(collections.Names).Contains("HashSet");
@@ -37,7 +41,7 @@ public class IrRuntimeRequirementToTsImportTests
         var set = new HashSet<IrRuntimeRequirement> { new("Temporal", IrRuntimeCategory.Temporal) };
         var imports = IrRuntimeRequirementToTsImport.Convert(set);
         await Assert.That(imports).Count().IsEqualTo(1);
-        await Assert.That(imports[0].From).IsEqualTo("@js-temporal/polyfill");
+        await Assert.That(imports[0].From).IsEqualTo(new TsPackageModule("@js-temporal/polyfill"));
     }
 
     [Test]
@@ -78,7 +82,7 @@ public class IrRuntimeRequirementToTsImportTests
 
         await Assert
             .That(imports.Select(i => i.From))
-            .Contains("metano-runtime")
-            .And.Contains("@js-temporal/polyfill");
+            .Contains(new TsPackageModule("metano-runtime"))
+            .And.Contains(new TsPackageModule("@js-temporal/polyfill"));
     }
 }

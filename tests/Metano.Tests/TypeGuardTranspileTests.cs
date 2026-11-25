@@ -854,7 +854,7 @@ public class TypeGuardTranspileTests
         await Assert.That(shape).DoesNotContain("import { isSquare");
 
         var guard = result["shape.guard.ts"];
-        await Assert.That(guard).Contains("import { isCircle, type Circle } from \"./circle\";");
+        await Assert.That(guard).Contains("import { isCircle, type Circle } from \"./circle.js\";");
         await Assert.That(guard).Contains("export function isShape(value: unknown)");
     }
 

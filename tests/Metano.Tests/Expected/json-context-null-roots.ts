@@ -1,11 +1,11 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { SerializerContext, type TypeSpec, type ValueSpec } from "metano-runtime/system/json";
-import { Corner } from "./corner";
-import { Level } from "./level";
-import { Outer } from "./outer";
-import { Pair } from "./pair";
-import { SPoint } from "./s-point";
-import { Segment } from "./segment";
+import { Corner } from "./corner.js";
+import { Level } from "./level.js";
+import { Outer } from "./outer.js";
+import { Pair } from "./pair.js";
+import { SPoint } from "./s-point.js";
+import { Segment } from "./segment.js";
 
 export class JsonContext extends SerializerContext {
   private static readonly _default = /* @__PURE__ */ new JsonContext() as JsonContext;

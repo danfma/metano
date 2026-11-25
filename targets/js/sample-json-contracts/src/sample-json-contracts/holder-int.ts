@@ -39,4 +39,12 @@ export class HolderInt {
   with(overrides?: Partial<HolderInt>): HolderInt {
     return copyRecordWith<HolderInt>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `N = ${this.n}`;
+  }
+
+  toString(): string {
+    return `HolderInt { ${this.$printMembers()} }`;
+  }
 }

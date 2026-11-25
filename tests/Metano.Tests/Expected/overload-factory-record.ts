@@ -71,4 +71,12 @@ export class Rec {
   with(overrides?: Partial<Rec>): Rec {
     return copyRecordWith<Rec>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `X = ${this.x}`;
+  }
+
+  toString(): string {
+    return `Rec { ${this.$printMembers()} }`;
+  }
 }

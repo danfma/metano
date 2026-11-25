@@ -26,7 +26,7 @@ export class Base {
   }
 }
 
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Partial extends Base {
   constructor() {
@@ -42,7 +42,7 @@ export class Partial extends Base {
   }
 }
 
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Full extends Base {
   constructor() {
@@ -59,7 +59,7 @@ export class Full extends Base {
 }
 
 import { isInt32 } from "metano-runtime";
-import { Base } from "./base";
+import { Base } from "./base.js";
 
 export class Hider extends Base {
   constructor() {
@@ -115,7 +115,7 @@ export class Ledger {
 }
 
 import { isBool } from "metano-runtime";
-import { Ledger } from "./ledger";
+import { Ledger } from "./ledger.js";
 
 export class Flagged extends Ledger {
   constructor() {
@@ -140,7 +140,7 @@ export class Flagged extends Ledger {
 }
 
 import { isInt16 } from "metano-runtime";
-import { Ledger } from "./ledger";
+import { Ledger } from "./ledger.js";
 
 export class Shorty extends Ledger {
   constructor() {

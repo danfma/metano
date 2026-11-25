@@ -42,7 +42,7 @@ export abstract class Shape {
   }
 }
 
-import { Shape } from "./shape";
+import { Shape } from "./shape.js";
 
 export class Circle extends Shape {
   constructor(radius: number) {

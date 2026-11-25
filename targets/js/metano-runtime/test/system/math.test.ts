@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { ArgumentException, ArgumentOutOfRangeException } from "#/system/exceptions/index.ts";
+import {
+  ArgumentException,
+  ArgumentOutOfRangeException,
+  OverflowException,
+} from "#/system/exceptions/index.ts";
 
 import {
+  absInt32,
   type DecimalRoundable,
   MidpointRounding,
   roundDecimal,
@@ -188,5 +193,23 @@ describe("MidpointRounding modes", () => {
     }
 
     expect(() => roundNumber(1.5, 0, modes.length as MidpointRounding)).toThrow(ArgumentException);
+  });
+});
+
+describe("absInt32", () => {
+  test.each([
+    [-5, 5],
+    [5, 5],
+    [0, 0],
+    [2147483647, 2147483647],
+    [-2147483647, 2147483647],
+  ])("Math.Abs(%p) is %p", (value, expected) => {
+    expect(absInt32(value)).toBe(expected);
+  });
+
+  test("throws .NET's OverflowException for int.MinValue", () => {
+    expect(() => absInt32(-2147483648)).toThrow(
+      new OverflowException("Negating the minimum value of a twos complement number is invalid."),
+    );
   });
 });

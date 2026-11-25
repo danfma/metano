@@ -39,4 +39,12 @@ export class HolderChar {
   with(overrides?: Partial<HolderChar>): HolderChar {
     return copyRecordWith<HolderChar>(this, overrides);
   }
+
+  protected $printMembers(): string {
+    return `C = ${this.c}`;
+  }
+
+  toString(): string {
+    return `HolderChar { ${this.$printMembers()} }`;
+  }
 }

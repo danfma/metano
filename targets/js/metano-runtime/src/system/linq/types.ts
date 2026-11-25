@@ -3,6 +3,7 @@ import type { Dictionary } from "../collections/dictionary.ts";
 import type { HashSet } from "../collections/hash-set.ts";
 import type { List } from "../collections/list.ts";
 import type { QueryableMeta } from "./expr-tree.ts";
+import type { Lookup } from "./lookup.ts";
 
 /**
  * Descriptor-based LINQ runtime — prototype for #20.
@@ -47,6 +48,7 @@ export type OperatorKind =
   | "thenBy"
   | "thenByDescending"
   | "groupBy"
+  | "join"
   | "zip"
   | "defaultIfEmpty";
 
@@ -57,6 +59,8 @@ export type TerminalKind =
   | "toList"
   | "toDictionary"
   | "toHashSet"
+  | "toLookup"
+  | "sequenceEqual"
   | "first"
   | "firstOrDefault"
   | "last"
@@ -235,7 +239,18 @@ export interface Grouping<K, T> extends Iterable<T> {
 export interface GroupByOp<T, K> extends OperatorBase<T, Grouping<K, T>> {
   readonly kind: "groupBy";
   readonly keySelector: (item: T) => K;
+  readonly comparer?: IEqualityComparer<K> | null;
   readonly queryable?: QueryableMeta;
+}
+
+/** `Join(inner, outerKeySelector, innerKeySelector, resultSelector[, comparer])`. */
+export interface JoinOp<T, U, K, R> extends OperatorBase<T, R> {
+  readonly kind: "join";
+  readonly inner: Iterable<U>;
+  readonly outerKeySelector: (item: T) => K;
+  readonly innerKeySelector: (item: U) => K;
+  readonly resultSelector: (outer: T, inner: U) => R;
+  readonly comparer?: IEqualityComparer<K> | null;
 }
 
 /** Discriminated union of every composition operator. */
@@ -261,6 +276,7 @@ export type AnyOperator =
   | ThenByOp<unknown, unknown>
   | ThenByDescendingOp<unknown, unknown>
   | GroupByOp<unknown, unknown>
+  | JoinOp<unknown, unknown, unknown, unknown>
   | ZipOp<unknown, unknown, unknown>
   | DefaultIfEmptyOp<unknown>;
 
@@ -474,6 +490,20 @@ export interface MaxInt64Term<T, R extends bigint | null> extends TerminalBase<T
 export interface ContainsTerm<T> extends TerminalBase<T, boolean> {
   readonly kind: "contains";
   readonly value: T;
+  readonly comparer?: IEqualityComparer<T> | null;
+}
+
+export interface SequenceEqualTerm<T> extends TerminalBase<T, boolean> {
+  readonly kind: "sequenceEqual";
+  readonly second: Iterable<T>;
+  readonly comparer?: IEqualityComparer<T> | null;
+}
+
+export interface ToLookupTerm<T, K, V> extends TerminalBase<T, Lookup<K, V>> {
+  readonly kind: "toLookup";
+  readonly keySelector: (item: T) => K;
+  readonly elementSelector?: (item: T) => V;
+  readonly comparer?: IEqualityComparer<K> | null;
 }
 
 export interface AggregateTerm<T, A> extends TerminalBase<T, A> {
@@ -512,4 +542,6 @@ export type AnyTerminal =
   | MinInt64Term<unknown, bigint | null>
   | MaxInt64Term<unknown, bigint | null>
   | ContainsTerm<unknown>
+  | SequenceEqualTerm<unknown>
+  | ToLookupTerm<unknown, unknown, unknown>
   | AggregateTerm<unknown, unknown>;

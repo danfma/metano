@@ -1,7 +1,7 @@
 import { List } from "metano-runtime/system/collections";
 import { arrayLength } from "metano-runtime";
 import { averageInt64, averageNullableInt64, count, linq, maxInt64Of, maxNullableInt64Of, minInt64Of, minUInt64Of, sum, sumInt64 } from "metano-runtime/system/linq";
-import type { Item } from "./item";
+import type { Item } from "./item.js";
 
 export class Collections {
   private _cursor: number = 0;

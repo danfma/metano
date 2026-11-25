@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { implementsInterface, type InterfaceType } from "metano-runtime";
-import type { Product } from "#/sample-queryable-sqlite/product";
+import type { Product } from "../product.js";
 
 export interface IProductRepository {
   readonly products: Iterable<Product>;

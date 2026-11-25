@@ -176,3 +176,6 @@ public class LNest
         High,
     }
 }
+
+/// <summary>A record base a consumer derives from; its text chains across packages (baseline FR-094).</summary>
+public record LPrintBase(string Name);

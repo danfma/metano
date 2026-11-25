@@ -1,4 +1,4 @@
-# Feature Specification: C# 15 union declarations
+# Feature Specification: C# 15 unions and closed hierarchies
 
 **Feature Branch**: `spec/009-csharp-unions` (spec directory `010-csharp-unions`)
 
@@ -37,6 +37,32 @@ Metano cannot handle this today:
 
 This feature makes unions a first-class, target-agnostic IR concept. The TypeScript target **erases** them to a plain type union, and the JSON wire format mirrors .NET 11 STJ exactly.
 
+## Wave 7 amendment (W7-2): GA toolchain, `closed` hierarchies, interim `union` policy
+
+*Added in wave 7 for #304 (supervisor decision W7-2, design `plans/wave-7/design/304-unions-closed.md`). This block is normative and overrides the older text it names.*
+
+- **Scope.** This spec now also covers C# 15 **closed hierarchies** (`closed class` / `closed record`), specified by FR-C1–FR-C3 below. `closed` ships before unions, in the next minor release (3.1.0, `feat:`); unions follow later. There is no separate spec for `closed`.
+- **Toolchain (replaces D7, D8, FR-001, FR-003, FR-004 as originally written).** C# 15 is GA: Roslyn **5.12.0** maps `LanguageVersion.Default` / `Latest` to `CSharp15`, and `union` / `closed` bind with no preview flag on a `net11.0` project. `ITypeSymbol.IsUnion`, `IsClosed`, `GetClosedDerivedTypeInfo()` and the new public `ITypeSymbol.UnionCaseTypes` carry no `[Experimental]` attribute in 5.12.0. Consequences:
+  - FR-001, FR-003 and FR-004 below are rewritten for Roslyn 5.12.0 and SDK **11.0.100 GA** (`allowPrerelease: false`, `rollForward: latestMinor`).
+  - NFR-002's pragma clause is retired (there is no experimental API left to contain); the single-adapter-file rule stays for design reasons.
+  - FR-006 changes when unions land: cases are read from `ITypeSymbol.UnionCaseTypes`, not from constructors. D8's constructor-scraping reader is withdrawn.
+  - The "SDK 11 RC" / "STJ RC drift" wording elsewhere in this spec reads as "SDK 11 GA" / "STJ drift on an SDK bump". The fixture-drift job stays for SDK bumps.
+  - A `net11.0` consumer needs no `LangVersion preview` (US4-3 and the Assumptions are amended accordingly). A `net10.0` consumer that writes `closed` or `union` gets Roslyn's error (CS8652, or a missing `IUnion`) through `MS0009`, unchanged.
+- **Interim union policy (FR-012a).** Until the union slices land, every union type is rejected with `MS0038` (error), at its transpiled declaration and wherever transpiled code uses it; see FR-012a.
+- **Diagnostic folding (decision W7-2 item 7, one rule per concept).** The union diagnostics fold into the spec 011 codes: every reference to **`MS0040 UntestableUnionCase`** in this spec reads as **`MS0045 UnanswerableRuntimeTypeTest`** (new reason: *untestable union case*), and every reference to **`MS0039 IndistinguishableUnionCases`** reads as **`MS0047`** (new reason: *overlapping union cases*; the warning severity, the "output is emitted" rule and the first-wins semantics of FR-013 / FR-040 are unchanged). `MS0039` and `MS0040` are **no longer reserved**. `MS0038`, `MS0041`, `MS0042` and `MS0043` stay reserved for this spec.
+- **Switch tail.** The non-exhaustive switch throw on `main` is `SwitchExpressionException` (not `new Error("Non-exhaustive switch expression")`); the goldens in [contracts/ts-emission.md](./contracts/ts-emission.md) are re-derived when the union pattern slice lands.
+- **Statement switches (OQ-3).** Decided **(a)**: `main` already lowers pattern switch statements (#239); FR-021's labeled-block design is withdrawn and only the union-specific label rule of FR-032 remains.
+- **Slice order.**
+
+  | Slice | Scope | Requirements |
+  | --- | --- | --- |
+  | 0 (`chore:`) | Roslyn 5.12.0, `global.json` → SDK 11.0.100 GA, CI and release on SDK 11 GA | FR-001, FR-003, FR-004 |
+  | 1 (`feat:`) | Accept `closed`; Dart throw tail on closed switches; interim `MS0038` for any `union` | FR-C1–FR-C3, FR-012a |
+  | 2a | Union shape on `UnionCaseTypes` (stage 010b) | FR-005–FR-018 minus patterns, FR-031, FR-034, FR-036, FR-039, FR-027 typedef |
+  | 2b | Union patterns (stage 010c, without FR-021) | FR-019, FR-020, FR-022, FR-032, FR-033, FR-035, FR-040, FR-041 |
+  | 2c / 2d | Union JSON / union members (stages 010d, 010e) | FR-023–FR-030, FR-037, FR-038, FR-042 |
+  | 3 (optional) | `never` tail for switches over a closed type | FR-C4 (not yet specified; deferred by W7-2 item 4) |
+
 ## Maintainer decisions (resolved)
 
 - **D1 — Erase the wrapper.** `union Clip(ImageClip, SilenceClip)` emits `export type Clip = ImageClip | SilenceClip;`. No class and no wrapper object: a union value is always the bare case value. The union itself has a runtime value only when its body declares members, and that value is the companion namespace of D13, never a wrapper.
@@ -53,8 +79,8 @@ This feature makes unions a first-class, target-agnostic IR concept. The TypeScr
   - Deserialization picks the case by JSON token kind only.
   - When two or more cases share a token kind (for example two object-shaped records), the build reports a diagnostic, the analogue of STJ's SYSLIB1227, and reading such a value fails at runtime with STJ's message.
 - **D6 — Host stays net10.** The CLI tools keep `net10.0` and gain `<RollForward>Major</RollForward>`, so they also run on machines that have only .NET 11 installed. There is no multi-targeting and no `dotnet run --framework` change.
-- **D7 — Repo SDK moves to 11 RC.** The repo `global.json` pins the SDK 11 RC with `allowPrerelease`. Union tests and the union sample compile against the net11 reference assemblies (`IUnion` / `UnionAttribute` live in `System.Runtime` 11). CI installs the exact SDK from `global.json` plus the 10.0.x runtime (FR-004).
-- **D8 — Roslyn 5.9.0.** `Microsoft.CodeAnalysis.*` moves from 5.3.0 to 5.9.0.
+- **D7 — Repo SDK moves to 11 RC.** *(Superseded by the wave 7 amendment: SDK 11.0.100 GA, no prerelease.)* The repo `global.json` pins the SDK 11 RC with `allowPrerelease`. Union tests and the union sample compile against the net11 reference assemblies (`IUnion` / `UnionAttribute` live in `System.Runtime` 11). CI installs the exact SDK from `global.json` plus the 10.0.x runtime (FR-004).
+- **D8 — Roslyn 5.9.0.** *(Superseded by the wave 7 amendment: Roslyn 5.12.0, cases from `UnionCaseTypes`, no experimental API.)* `Microsoft.CodeAnalysis.*` moves from 5.3.0 to 5.9.0.
   - `ITypeSymbol.IsUnion` and `Conversion.IsUnion` are experimental (`RSEXPERIMENTAL006`).
   - The public API exposes no case list, so cases are read from the union's public one-parameter instance constructors. A source union rejects user-declared ones with CS9374, which makes this reliable.
 - **D9 — Diagnostic codes.** MS0029 and MS0030 are taken by spec 008, MS0031 by #278 (`ExplicitImplementationConflict`), and `MS0032`–`MS0037` by spec [009-polymorphic-json](../009-polymorphic-json/contracts/diagnostics.md). This feature takes the next block, **`MS0038`–`MS0043`**; the next free code after it is `MS0044`.
@@ -138,7 +164,7 @@ A union declared in an `[EmitPackage]` library is used by a consumer project. Th
 
 1. **Given** a library union read from metadata (constructors marked `[CompilerGenerated]`, `IsImplicitlyDeclared = false`), **When** the consumer is transpiled, **Then** the union semantics and cases are identical to the in-source case.
 2. **Given** a library `[PlainObject]` case whose guard the library exports (declared with `[GenerateGuard]`, or synthesized because a library union uses the type as a case, FR-041), **When** the consumer tests it, **Then** `isX` is imported from the library package (this closes today's local-only guard-import gap). A consumer union over a library structural case whose package exports no guard gets `MS0040` (OQ-2).
-3. **Given** a consumer that uses a library union without `LangVersion preview`, **When** transpiled, **Then** Roslyn's CS8652 surfaces through MS0009 with the C# message unchanged.
+3. **Given** a consumer that uses a library union without `LangVersion preview`, **When** transpiled, **Then** Roslyn's CS8652 surfaces through MS0009 with the C# message unchanged. *(Amended W7-2: on Roslyn 5.12.0 a `net11.0` consumer needs no preview flag; this scenario applies to a consumer whose language version is below C# 15, e.g. a `net10.0` project.)*
 4. **Given** `TranspileWithLibrary` where the library declares `Id(int, string)` and `Clip(ImageClip, SilenceClip)` with their case records, and the **consumer** declares a `JsonSerializerContext` rooted at `Holder(Clip, Id)`, **When** the consumer is transpiled, **Then** `Id` (primitive cases only) gets a working inline union descriptor, and the `Clip` property gets MS0038 naming the cross-assembly case `ImageClip`. The consumer context never references a `this.imageClip` getter it does not declare (FR-038, OD-13).
 5. **Given** a library union with body members (D13), **When** the consumer calls `c.Seconds`, **Then** the call is emitted as `Clip.seconds(c)` and `Clip` is imported as a value from the library package. The consumer emits no companion of its own (FR-042).
 
@@ -217,13 +243,24 @@ A library author adds behaviour to a union: `public union Clip(ImageClip, Silenc
 
 Toolchain:
 
-- **FR-001**: `Microsoft.CodeAnalysis.CSharp`, `.CSharp.Workspaces` and `.Workspaces.MSBuild` MUST be upgraded to 5.9.0. Outside the union work, the existing suite and every `targets/` output MUST be unchanged by the upgrade.
+- **FR-001** *(amended W7-2)*: `Microsoft.CodeAnalysis.CSharp`, `.CSharp.Workspaces` and `.Workspaces.MSBuild` MUST be upgraded to 5.12.0 through Central Package Management (`Directory.Packages.props`). Outside the union work, the existing suite and every `targets/` output MUST be unchanged by the upgrade.
 - **FR-002**: The CLI tool projects (`Metano.Compiler.TypeScript`, `Metano.Compiler.Dart`) MUST keep `net10.0` as their only target framework and MUST set `<RollForward>Major</RollForward>`, so the installed tool starts on a machine where only a newer runtime (.NET 11) is installed.
-- **FR-003**: The repo `global.json` MUST pin the SDK 11 RC with `allowPrerelease: true`. Every existing net10.0 sample, test and package MUST build and produce byte-identical `targets/` output under it.
-- **FR-004**: CI (`ci.yml`) and release (`release.yml`) MUST install the **exact** SDK pinned in `global.json` (`actions/setup-dotnet` with `global-json-file: global.json`) plus `10.0.x`. They MUST NOT float to `11.0.x`, so a newer RC or GA cannot change the build or the fixtures without a reviewed `global.json` bump. The 10 runtime stays because the tests and the CSharpier local tool run on it.
+- **FR-003** *(amended W7-2)*: The repo `global.json` MUST pin SDK `11.0.100` (GA) with `rollForward: latestMinor` and `allowPrerelease: false`. Every existing net10.0 sample, test and package MUST build and produce byte-identical `targets/` output under it.
+- **FR-004** *(amended W7-2)*: CI (`ci.yml`), release (`release.yml`) and the fixture job (`int64-reference.yml`) MUST install the SDK pinned in `global.json` (`actions/setup-dotnet` with `global-json-file: global.json`, no `dotnet-quality: preview`) plus the `10.0.x` runtime. Resolution then follows `global.json` (FR-003, `rollForward: latestMinor`): the installed `11.0.100` is the floor, and a newer 11.x SDK already on the runner image MAY win, as it did on `main` before W7-2. The version CI and the smoke script validated is `latestMinor`; tightening it to `latestPatch` is a separate, reviewed `global.json` change. The 10 runtime stays because the tests and the CSharpier local tool run on it.
   - The STJ fixture-drift check (OD-2a) MUST run as a separate job that runs only when `global.json`, the fixture generator or the fixtures change, so STJ drift never fails an unrelated PR.
   - The `sample-unions` negative type-check script (expects TS1360, plan.md) MUST be an explicit CI step.
-  - Release builds pack the `net10.0` tools with the pinned RC SDK; OD-14 records this choice.
+  - Release builds pack the `net10.0` tools with the pinned SDK 11 GA; OD-14 records this choice.
+
+Closed hierarchies (W7-2, slice 1):
+
+- **FR-C1**: A `closed class` or `closed record` (C# 15) MUST be accepted, with no `MS0009`, and MUST lower exactly as the same declaration written `abstract`: a closed type is implicitly abstract (`IsAbstract = true`), so every target emits it through the existing abstract-class / abstract-record path. No new IR declaration kind is introduced. This covers generic closed bases (`closed record Tree<T>`), closed intermediate levels, nested case types declared inside the closed base (the #726 shape, including the owner value import and the nested static-getter pattern), `[GenerateGuard]` / `[StrictUnionGuard]` on a closed base, and a closed base from a referenced `[EmitPackage]` library. For sources that do not use `closed`, output MUST be byte-identical (NFR-001).
+- **FR-C2**: A `switch` expression over a closed type that C# accepts as exhaustive without a catch-all arm MUST keep a runtime throw tail on every target:
+  - **TypeScript:** the existing tail (`throw new SwitchExpressionException(...)`) is kept; no `satisfies never` check in v1 (W7-2 item 4; FR-C4 is deferred).
+  - **Dart:** the switch expression MUST end with `_ => throw StateError('Non-exhaustive switch expression')` when its scrutinee's type is a closed class (or a type parameter constrained to one) and no arm is a catch-all (`_`, or an unguarded `var x`). A Dart `abstract class` has no exhaustiveness, so without the tail the output is a Dart compile error. The core records the closedness of the scrutinee as a neutral fact on the IR switch expression; the Dart printer decides the tail. Mapping a closed base to Dart `sealed` (with `part` / `part of` co-location) is a follow-up.
+  - `is` patterns and switch statements over a closed type lower as for an abstract type.
+- **FR-C3**: JSON MUST stay unchanged. System.Text.Json 11 does not infer polymorphism from `closed`: a closed base without `[JsonPolymorphic]` / `[JsonDerivedType]` is not polymorphic (STJ writes `{}` for it and refuses to read the abstract base), and a closed base with them behaves exactly like an abstract polymorphic base (spec 009). Metano MUST NOT infer a discriminator from `closed`.
+
+  Tests: TUnit goldens for a closed record family and a closed class family, a generic closed base, nested case types (#726), an exhaustive switch expression with no `_` arm (top-level and nested cases), `is` patterns, and a Dart switch over a closed type with the throw tail. The test compilations keep the polyfilled `System.Runtime.CompilerServices.IsClosedTypeAttribute` on the net10 reference set (W7-2 item 5); FR-036's net11 reference set lands with unions.
 
 Detection and IR (core, target-agnostic):
 
@@ -268,6 +305,7 @@ Validation (core; at the declaration once per type, and at use sites once per co
   - a JSON-reachable position uses the union as a dictionary key, or a JSON-reachable union has a case whose STJ wire form Metano does not reproduce (FR-037) or that the context cannot describe (FR-030, FR-038).
 
   `[Name]`, `[EmitInFile]`, `[NoEmit]`, `[Ignore]`, `[Transpile]` and `[GenerateGuard]` MUST be supported.
+- **FR-012a** *(interim, W7-2 item 3; removed when slice 2a lands)*: Every union type (`ITypeSymbol.IsUnion`: a `union` declaration, or a hand-written `[Union]` type, from source or metadata) MUST get `MS0038 UnsupportedUnionShape` (Error), with the reason "union declarations are not supported by this Metano version", and the run MUST fail before writing output. It is reported (1) at the declaration of every union type the run would transpile, and (2) at the first use, per file, of every union type that transpiled code uses, wherever it is declared: the same assembly without `[Transpile]`, nested in a `[Transpile]` owner, a referenced `[EmitPackage]` library or a plain referenced assembly. A use is a member signature, local, expression, pattern or type argument whose type is a union, including a referenced member whose signature carries one (`lib.Make().Value`). Each distinct union type is reported once per file; both sites read the same predicate. This replaces both the silent miscompile that a `LangVersion preview` project gets on Roslyn 5.9.0 (an empty wrapper class whose `equals` / `hashCode` read a non-existent `value`) and the opaque Roslyn error that a C# 14 parse would give. It is reported for every target (TypeScript and Dart). The check runs in the core frontend and needs only the public `IsUnion` API.
 - **FR-013**: `MS0039 IndistinguishableUnionCases` (**Warning**, D11) MUST be reported for every pair of cases whose **erased JS value domains overlap**, regardless of whether their test expressions differ. The output MUST still be emitted, with the first-wins semantics of FR-040. Each case maps to one domain category:
   - `number` (every numeric primitive, numeric enums, and `[Branded]` over a number), `string` (`string`, `char`, `Guid`, `[StringEnum]`, `[Branded]` over a string), `boolean`, `bigint`;
   - `function` (delegates; a delegate case is already MS0040, because the classification has no test for it);
@@ -532,8 +570,8 @@ These are new. OQ-1 and OQ-2 come from the maintainer decisions above; each has 
 
 ## Assumptions
 
-- The SDK 11 RC behaviour measured on `11.0.100-rc.1.26425.128` (Roslyn 5.9.0, STJ 11.0.0-rc.1) holds until GA. Any later change is contained by NFR-002.
-- Consumers that write unions already use `LangVersion preview` and SDK 11. Metano does not polyfill `IUnion` for net10 projects.
+- *(Amended W7-2.)* The toolchain is SDK 11.0.100 GA with Roslyn 5.12.0 and STJ 11.0.0. The RC measurements in [research.md](./research.md) (`11.0.100-rc.1.26425.128`, Roslyn 5.9.0) are historical; R2 facts are re-verified on 5.12.0 when the union slices start.
+- *(Amended W7-2.)* Consumers that write unions or `closed` target `net11.0` with SDK 11, where C# 15 is the default language version; no `LangVersion preview` is needed. Metano does not polyfill `IUnion` or `IsClosedTypeAttribute` for net10 projects.
 - The released tool's host framework does not limit parsing (Roslyn does). Project evaluation runs in Roslyn's BuildHost child process, which rolls forward to the newest runtime (research R3).
 
 ## Dependencies

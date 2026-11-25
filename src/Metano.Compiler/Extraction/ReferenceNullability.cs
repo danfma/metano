@@ -34,6 +34,22 @@ internal static class ReferenceNullability
         return DeclaredAnnotation(model, expression) != NullableAnnotation.NotAnnotated;
     }
 
+    /// <summary>
+    /// Whether a value read from a symbol of <paramref name="type"/> may hold
+    /// <c>null</c>: the declared-annotation rule of the expression form, for a
+    /// read the compiler synthesizes (a record member in its text, baseline FR-093).
+    /// </summary>
+    public static bool MayBeNull(ITypeSymbol type)
+    {
+        if (type.IsNullableValueType())
+            return true;
+
+        if (type is { IsValueType: true } && type is not ITypeParameterSymbol)
+            return false;
+
+        return type.NullableAnnotation != NullableAnnotation.NotAnnotated;
+    }
+
     private static NullableAnnotation DeclaredAnnotation(
         SemanticModel model,
         ExpressionSyntax expression
