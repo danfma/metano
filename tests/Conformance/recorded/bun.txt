@@ -100,11 +100,10 @@ StageHInterfaceTestProbes.immutableAsIListAs THROWS Error: Unsupported expressio
 StageHInterfaceTestProbes.immutableAsIListBinding THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
 StageHInterfaceTestProbes.immutableAsIListSwitch THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
 StageHRoundTwoProbes.crossTypeEmptyFactories = True,True,True
+StringComparisonProbes.cultureCompareSigns = -1,-1,-1,-1,-1|-1,-1,-1,-1,-1|-1,-1,-1,-1,-1|1,1,1,1,1|1,1,1,1,1|-1,-1,-1,-1,-1|1,1,1,1,1|1,1,1,1,1|-1,0,-1,0,-1|
 StringProbes.cases = ABC|abc|ABC|abc|SS|2
 StringProbes.chars THROWS TypeError: String.concat is not a function. (In 'String.concat(linq("h\xE9llo", reverse()))', 'String.concat' is undefined)
-StringProbes.compare THROWS TypeError: String.compare is not a function. (In 'String.compare("a", "b")', 'String.compare' is undefined)
 StringProbes.emptyAndNullArgs = False
-StringProbes.equalsCalls THROWS TypeError: "Hello".equals is not a function. (In '"Hello".equals("Hello")', '"Hello".equals' is undefined)
 StringProbes.formatting THROWS TypeError: String.format is not a function. (In 'String.format("{0}-{1}", 1, "a")', 'String.format' is undefined)
 StringProbes.lengthAndIndex THROWS TypeError: undefined is not an object (evaluating '"abc"[5].toString')
 StringProbes.trimSpecial = [x][1]

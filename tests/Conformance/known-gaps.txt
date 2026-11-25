@@ -93,8 +93,6 @@ Round2Probes.exCtorArgs               #651  BCL exception identity and messages
 Round3Probes.mathCalls                #686  Math.PI is unmapped
 Round3Probes.timeProps                #686  TimeSpan members are unmapped
 StringProbes.chars                    #686  string.Concat over chars is unmapped
-StringProbes.compare                  #686  string.Compare is unmapped
-StringProbes.equalsCalls              #686  string.Equals is unmapped
 StringProbes.formatting               #686  string.Format is unmapped (composite formatting: #662)
 StringProbes.cases                    none  ToUpperInvariant("ß") gives SS in JavaScript
 StringProbes.emptyAndNullArgs         none  "abc".Contains(null) does not throw ArgumentNullException
@@ -124,3 +122,4 @@ UnmodeledCollectionProbes.throwsUserAdd none  W6-K #581: a user collection type'
 UnmodeledCollectionProbes.throwsHiddenAdd none  W6-K #581: a user subclass that hides List<T>.Add with its own is not lowered; MS0001 and a loud throw instead of skipping Add (.NET: 101,102)
 CharIntGapProbes.genericMath           none  W7-A #695 (needs design): generic math through a type parameter (`x + x` on T : INumber<T>) cannot wrap an int it does not know is an int (.NET: -2)
 CharIntGapProbes.refDecimal            none  W7-A #695 (needs design): a ref parameter is passed by value, as IndexProbes.refArgs (.NET: 2)
+StringComparisonProbes.cultureCompareSigns  none  the .NET recording runs with InvariantGlobalization (culture comparisons are ordinal); the runtime uses ICU collation, as .NET with ICU does (a < A < B)

@@ -461,6 +461,7 @@
     "system/reflection/with-implementers",
     "system/standard-numeric-format",
     "system/string-builder",
+    "system/string-comparison",
     "system/string-members",
     "system/strings",
     "system/task-completion-source",

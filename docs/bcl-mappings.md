@@ -668,7 +668,7 @@ enum as a position. Each helper reads its arguments once and throws what .NET th
 (`ArgumentOutOfRangeException` and `ArgumentNullException`, with .NET's messages and parameter
 names), checked against real .NET by `tests/BclReference` (bun and Node). Comparisons are
 ordinal: the culture-sensitive `StringComparison` members behave as their ordinal
-counterparts, and the ignore-case ones fold each UTF-16 code unit to upper case, as
+counterparts, and the ignore-case ones fold each code point to its ordinal uppercase, as
 `OrdinalIgnoreCase` does. `StringComparison` and `StringSplitOptions` lower to runtime
 mirrors of the enums. `Trim()`, `Split(char)`, `IndexOf(t)` and the other forms of the same
 names that agree with JavaScript keep the plain method (`Trim()` trims U+0085, which .NET
@@ -690,8 +690,35 @@ removal. `isNullOrWhiteSpace` tests .NET's white-space set, which differs from J
 on U+0085 and U+FEFF. Both null checks are type predicates, so a `false` result narrows
 the argument to `string`.
 
-A static member of a BCL type with no mapping (`string.CompareOrdinal(a, b)`) reports an
+A static member of a BCL type with no mapping (`string.Compare(a, i, b, j, n)`) reports an
 `MS0001` warning: the call is emitted by name and nothing declares it on the JS side.
+
+### String equality and ordering
+
+`string.Equals` and `string.Compare` lower to `metano-runtime` helpers (#769):
+
+| C# | TypeScript |
+|----|----|
+| `string.Equals(a, b, comparison)` / `a.Equals(b, comparison)` | `stringEquals(a, b, comparison)` |
+| `string.Equals(a, b)` / `a.Equals(b)` | `(a === b)` |
+| `string.Compare(a, b, comparison)` | `stringCompare(a, b, comparison)` |
+| `string.Compare(a, b)` / `a.CompareTo(b)` | `stringCompare(a, b, StringComparison.CurrentCulture)` |
+| `string.Compare(a, b, ignoreCase)` | `stringCompare(a, b, ignoreCase ? StringComparison.CurrentCultureIgnoreCase : StringComparison.CurrentCulture)` |
+| `string.CompareOrdinal(a, b)` | `stringCompare(a, b, StringComparison.Ordinal)` |
+
+`Ordinal` compares UTF-16 code units. `OrdinalIgnoreCase` compares the ordinal uppercase of
+each code point, .NET's invariant simple case mapping (the rule `StringComparer.OrdinalIgnoreCase`
+and the case-insensitive searches above share): `ß` never equals `SS`, `ı` and `ſ` never equal
+`I` and `S`, a surrogate pair folds as one code point, and Greek letters with iota subscript
+map to their prosgegrammeni form. The culture members compare with `Intl.Collator`:
+`CurrentCulture` with the engine's default locale, `InvariantCulture` with the root locale, at
+`sensitivity: "variant"`, or `"accent"` when ignoring case. This matches .NET running on ICU
+(the default on Linux and macOS); a .NET process with `InvariantGlobalization` compares the
+culture members ordinally instead. `null` equals only `null` and sorts first; an undefined
+`StringComparison` value throws `ArgumentException`. A `Compare` result has .NET's sign; the
+ordinal forms return the difference of the first differing code units (or of the lengths),
+since .NET does not specify the magnitude. The substring overload
+`Compare(a, i, b, j, n, comparison)` and `GetHashCode(comparison)` are not mapped.
 
 ## Math
 

@@ -95,7 +95,7 @@ public class StringMemberMappingTests
     {
         var diagnostics = TranspileDiagnostics(
             """
-            public static int Ordinal(string a, string b) => string.CompareOrdinal(a, b);
+            public static int Ordinal(string a, string b) => string.CompareOrdinal(a, 0, b, 0, 1);
             """
         );
 
