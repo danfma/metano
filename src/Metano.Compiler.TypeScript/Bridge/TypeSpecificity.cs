@@ -52,9 +52,9 @@ internal static class TypeSpecificity
 
     /// <summary>
     /// A delegate of more parameters ranks as the more derived one, so the
-    /// dispatcher tries it first: its test is a minimum <c>Function.length</c>,
-    /// and the delegate of fewest parameters takes any function
-    /// (<see cref="IrTypeCheckBuilder"/>, #778).
+    /// dispatcher tries it first, as C# prefers it for a callback that names
+    /// every parameter; the arity tests themselves do not overlap
+    /// (<see cref="DelegateArityRange"/>, #778).
     /// </summary>
     private static Relation CompareArities(IrFunctionTypeRef left, IrFunctionTypeRef right) =>
         left.Parameters.Count.CompareTo(right.Parameters.Count) switch

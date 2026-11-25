@@ -1594,9 +1594,15 @@ Product requirements added after the migration (normative; each one is traced by
   ignored, defaulted and rest parameters: `Probes.run(() => 42)` must not throw "No matching
   overload"): at a parameter position where the overloads' delegates have one arity, the test is
   `typeof === "function"` alone, so they share it and the dispatcher keeps the overload whose
-  delegate returns a value (`Func<Action, T>` over `Action<Action>`); where the arities differ,
-  the larger ones are tried first with `length >= n` and the smallest takes any function. A pair
-  that differs only by a branded 64-bit type keeps its existing once-per-group `MS0063`.
+  delegate returns a value (`Func<Action, T>` over `Action<Action>`). Where the arities of the
+  overloads whose argument counts overlap differ, each takes a non-overlapping `length` range
+  (arities {0, 2, 3} test `< 2`, `>= 2 && < 3`, `>= 3`), so the dispatch order does not matter
+  and the smallest, with no lower bound, takes a callback that ignores its arguments; overloads
+  of disjoint argument counts test no arity. Limits of `Function.length`: a defaulted or rest
+  parameter shortens it, so `(a, b = 0) => {}` reaches the one-parameter overload; a same-arity
+  value/`void` pair exposes only the value-returning signature to TypeScript, and `MS0063` names
+  the other's fast path (a constructor's factory). A pair that differs only by a branded 64-bit
+  type keeps its existing once-per-group `MS0063`.
   Dispatchers that also dispatch to a synthesized member and the static groups of a branded
   companion object apply the delegate test but drop nothing.
 

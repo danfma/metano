@@ -276,13 +276,12 @@ public class MethodOverloadTests
     }
 
     /// <summary>
-    /// Delegate overloads of different arities stay apart (#778): the larger
-    /// arity is tried first with a minimum <c>Function.length</c>, and the
-    /// smallest takes any function, so a callback that ignores its
-    /// arguments still lands.
+    /// Delegate overloads of different arities stay apart (#778) by
+    /// non-overlapping <c>Function.length</c> ranges; the smallest has no
+    /// lower bound, so a callback that ignores its arguments still lands.
     /// </summary>
     [Test]
-    public async Task DelegateOverload_DifferentArity_DispatchesByMinimumLength()
+    public async Task DelegateOverload_DifferentArity_DispatchesByLengthRange()
     {
         var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -306,7 +305,7 @@ public class MethodOverloadTests
         );
 
         var narrower = output.IndexOf(
-            "if (args.length === 1 && typeof args[0] === \"function\") {",
+            "if (args.length === 1 && typeof args[0] === \"function\" && args[0].length < 1) {",
             StringComparison.Ordinal
         );
 

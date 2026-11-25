@@ -66,6 +66,9 @@ internal sealed class OverloadArgumentShape
     /// <summary>Whether a call may omit some argument.</summary>
     public bool HasOptionalArguments => RequiredCount < FixedCount;
 
+    /// <summary>The most arguments the overload accepts.</summary>
+    private int MaximumCount => Rest is null ? FixedCount : int.MaxValue;
+
     /// <summary>
     /// The overload's arguments as its selector form passes them, after the
     /// selector symbol at <c>args[0]</c>.
@@ -89,7 +92,7 @@ internal sealed class OverloadArgumentShape
                     FixedArgumentCheck(
                         parameter,
                         ArgumentFor(index),
-                        scope.ForParameter(index, parameter.Type)
+                        ScopeForArgument(index, parameter.Type, scope)
                     )
             );
 
@@ -102,6 +105,39 @@ internal sealed class OverloadArgumentShape
 
         return IrTypeCheckBuilder.AllOf(clauses) ?? new TsLiteral("true");
     }
+
+    /// <summary>
+    /// The scope that checks the argument at <paramref name="index"/>: a
+    /// delegate takes the length range that tells it from the delegates the
+    /// overloads whose argument counts overlap this one's take there.
+    /// </summary>
+    private TypeCheckScope ScopeForArgument(int index, IrTypeRef type, TypeCheckScope scope)
+    {
+        if (
+            DelegateArityRange.ArityOf(type) is not { } arity
+            || scope.DispatchedParameterLists is not { } peers
+        )
+            return scope;
+
+        var arities = peers
+            .Where(parameters => OverlapsCounts(new OverloadArgumentShape(parameters)))
+            .Select(parameters => parameters.ElementAtOrDefault(index))
+            .OfType<IrParameter>()
+            .Select(parameter => DelegateArityRange.ArityOf(parameter.Type))
+            .OfType<int>();
+
+        return scope with
+        {
+            DelegateArity = DelegateArityRange.Of(arity, arities),
+        };
+    }
+
+    /// <summary>
+    /// Whether some argument count both this overload and
+    /// <paramref name="other"/> accept.
+    /// </summary>
+    public bool OverlapsCounts(OverloadArgumentShape other) =>
+        Math.Max(RequiredCount, other.RequiredCount) <= Math.Min(MaximumCount, other.MaximumCount);
 
     /// <summary>
     /// The argument bound to the parameter at <paramref name="index"/>:

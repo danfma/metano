@@ -241,7 +241,7 @@ public class ShadowedDispatchOverloadTests
 
     /// <summary>
     /// The constructor dispatcher follows the same delegate rules: different
-    /// arities stay apart by minimum length, one arity keeps the overload
+    /// arities stay apart by length ranges, one arity keeps the overload
     /// whose delegate returns a value and reports the other's factory.
     /// </summary>
     [Test]
@@ -277,7 +277,9 @@ public class ShadowedDispatchOverloadTests
 
         await Assert
             .That(files["wide.ts"])
-            .Contains("if (args.length === 1 && typeof args[0] === \"function\") {");
+            .Contains(
+                "if (args.length === 1 && typeof args[0] === \"function\" && args[0].length < 2) {"
+            );
 
         var same = files["same.ts"];
 
@@ -290,5 +292,102 @@ public class ShadowedDispatchOverloadTests
 
         await Assert.That(message).StartsWith("Overload 'Same.Same(Action<int>)'");
         await Assert.That(message).EndsWith("must call 'Same.fromActionOfInt32'.");
+    }
+
+    private const string ArityRangeSource = """
+        using System;
+
+        [Transpile, EmitInFile("probes")]
+        public static class Mixed
+        {
+            public static string M(Action<int> a, string s) => "M1";
+            public static string M(Action<int, int> a, object o) => "M2";
+            public static string N(Action<int> a) => "N1";
+            public static string N(Action<int, int> a, int x) => "N2";
+            public static string R3(Action a) => "R0";
+            public static string R3(Action<int, int> a) => "R2";
+            public static string R3(Action<int, int, int> a) => "R3";
+        }
+
+        [Transpile, EmitInFile("probes")]
+        public class Ctor
+        {
+            public string W;
+            public Ctor(Action<int> a, string s) { W = "C1"; }
+            public Ctor(Action<int, int> a, object o) { W = "C2"; }
+        }
+        """;
+
+    /// <summary>
+    /// Delegate arities that differ among overloads whose argument counts
+    /// overlap get non-overlapping <c>length</c> ranges, so the dispatch
+    /// order does not matter; overloads of different argument counts test
+    /// no arity at all (#778, round 2).
+    /// </summary>
+    [Test]
+    public async Task DelegateArities_GetNonOverlappingLengthRanges()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ArityRangeSource);
+
+        var output = files["probes.ts"];
+
+        await Assert
+            .That(output)
+            .Contains(
+                "args.length === 2 && typeof args[0] === \"function\" && args[0].length < 2 && isString(args[1])"
+            );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "args.length === 2 && typeof args[0] === \"function\" && args[0].length >= 2)"
+            );
+
+        await Assert
+            .That(output)
+            .Contains("if (args.length === 1 && typeof args[0] === \"function\") {");
+
+        await Assert
+            .That(output)
+            .Contains("typeof args[0] === \"function\" && args[0].length < 2) {");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "typeof args[0] === \"function\" && args[0].length >= 2 && args[0].length < 3) {"
+            );
+
+        await Assert
+            .That(output)
+            .Contains("typeof args[0] === \"function\" && args[0].length >= 3) {");
+
+        await Assert.That(output).DoesNotContain("args[0].length >= 1");
+    }
+
+    [Test]
+    public async Task DelegateArities_DispatchAsCSharpBinds()
+    {
+        var (files, _) = TranspileHelper.TranspileWithDiagnostics(ArityRangeSource);
+
+        var driver = """
+            import { Ctor, Mixed } from "./probes.ts";
+
+            const m: any = Mixed;
+            const c: any = Ctor;
+            console.log([
+              m.m((a: number, b: number) => {}, "x"),
+              m.m((a: number) => {}, "x"),
+              m.n(() => {}, 5),
+              m.n((a: number) => {}),
+              new c((a: number, b: number) => {}, "x").w,
+              m.r3(() => {}),
+              m.r3((a: number, b: number) => {}),
+              m.r3((a: number, b: number, c: number) => {}),
+            ].join(","));
+            """;
+
+        await Assert
+            .That(await RunWithBun(files["probes.ts"], driver))
+            .IsEqualTo("M2,M1,N2,N1,C2,R0,R2,R3");
     }
 }
