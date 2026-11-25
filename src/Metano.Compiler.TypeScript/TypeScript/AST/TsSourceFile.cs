@@ -15,11 +15,18 @@ namespace Metano.Compiler.TypeScript.AST;
 /// imported (see <see cref="TsTopLevelStatement.RunsOnImport"/>). It is set explicitly because
 /// a per-group cache hit rebuilds the file without its statements.
 /// </para>
+/// <para>
+/// <see cref="IsPackageInternal"/> is <c>true</c> when the module declares only types that
+/// are transpiled because emitted code reaches them (#770,
+/// <see cref="SymbolHelper.IsReachedInternalType"/>): other modules import it, but no
+/// barrel re-exports it, so it stays off the package's public surface.
+/// </para>
 /// </summary>
 public sealed record TsSourceFile(
     string FileName,
     IReadOnlyList<TsTopLevel> Statements,
     string Namespace = "",
     IReadOnlyDictionary<string, string>? RuntimeHelperAliases = null,
-    bool HasModuleSideEffects = false
+    bool HasModuleSideEffects = false,
+    bool IsPackageInternal = false
 );

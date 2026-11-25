@@ -55,22 +55,45 @@ internal sealed class TranspiledReferenceWalker
     };
 
     private readonly Compilation _compilation;
-    private readonly TargetLanguage _target;
+    private readonly TargetLanguage? _target;
     private readonly GeneratedSourceTrees _generatedSources;
     private readonly IReadOnlyList<ITranspiledReferenceRule> _rules;
+    private readonly bool _scansEveryNestedType;
 
     private TranspiledReferenceWalker(
         Compilation compilation,
-        TargetLanguage target,
+        TargetLanguage? target,
         GeneratedSourceTrees generatedSources,
-        IReadOnlyList<ITranspiledReferenceRule> rules
+        IReadOnlyList<ITranspiledReferenceRule> rules,
+        bool scansEveryNestedType = false
     )
     {
         _compilation = compilation;
         _target = target;
         _generatedSources = generatedSources;
         _rules = rules;
+        _scansEveryNestedType = scansEveryNestedType;
     }
+
+    /// <summary>
+    /// A walker for <see cref="InternalTypeReachability"/>: it skips only what no target
+    /// emits (an untargeted <c>[Ignore]</c>), descends into every nested type, and hands
+    /// each reference to <paramref name="rule"/>.
+    /// </summary>
+    public static TranspiledReferenceWalker ForReachability(
+        Compilation compilation,
+        ITranspiledReferenceRule rule
+    ) =>
+        new(
+            compilation,
+            target: null,
+            GeneratedSourceTrees.ByConvention(),
+            [rule],
+            scansEveryNestedType: true
+        );
+
+    /// <summary>Walks the references <paramref name="type"/>'s emitted code makes.</summary>
+    public void Walk(INamedTypeSymbol type) => ScanType(type);
 
     public static void Validate(
         Compilation compilation,
@@ -89,6 +112,12 @@ internal sealed class TranspiledReferenceWalker
                 new IgnoredReferenceRule(target, diagnostics),
                 new TargetSpecificReferenceRule(target, diagnostics),
                 unionRule,
+                .. UnemittedTypeReferenceRule.For(
+                    compilation,
+                    assemblyWideTranspile,
+                    target,
+                    diagnostics
+                ),
             ]
         );
 
@@ -106,6 +135,11 @@ internal sealed class TranspiledReferenceWalker
         SymbolHelper.IsTranspilable(type, assemblyWideTranspile, _compilation.Assembly)
         && !SymbolHelper.HasIgnore(type, _target)
         && !_generatedSources.DeclaresOnlyGeneratedCode(type);
+
+    private bool IsScannedNestedType(INamedTypeSymbol nested) =>
+        _scansEveryNestedType
+            ? !SymbolHelper.HasIgnore(nested, _target)
+            : IsPolicedType(nested, assemblyWideTranspile: false);
 
     /// <summary>
     /// Members marked <c>[Ignore]</c> are not emitted, so references from their
@@ -146,7 +180,7 @@ internal sealed class TranspiledReferenceWalker
 
         foreach (var nested in type.GetTypeMembers())
         {
-            if (IsPolicedType(nested, assemblyWideTranspile: false))
+            if (IsScannedNestedType(nested))
                 ScanType(nested);
         }
     }

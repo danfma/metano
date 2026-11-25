@@ -62,7 +62,8 @@ public static class FileMetadataExtractor
             Sha256(content),
             imports,
             exports,
-            file.HasModuleSideEffects
+            file.HasModuleSideEffects,
+            file.IsPackageInternal
         );
     }
 
@@ -202,6 +203,7 @@ public static class FileMetadataExtractor
         return new TsSourceFile(metadata.Path, statements)
         {
             HasModuleSideEffects = metadata.HasModuleSideEffects,
+            IsPackageInternal = metadata.IsPackageInternal,
         };
     }
 

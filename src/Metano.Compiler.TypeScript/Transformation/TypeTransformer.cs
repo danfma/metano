@@ -1598,6 +1598,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 HasModuleSideEffects = statements.Any(statement =>
                     statement is TsTopLevelStatement { RunsOnImport: true }
                 ),
+                IsPackageInternal = group.Types.All(SymbolHelper.IsReachedInternalType),
             };
         }
         finally

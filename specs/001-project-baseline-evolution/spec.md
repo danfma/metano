@@ -1550,6 +1550,22 @@ Product requirements added after the migration (normative; each one is traced by
   derived arguments with the same type and requiredness. A type-level attribute on a type with
   no constructor (a static class) reports that there is no constructor to lower.
 
+- **FR-097** (internal types reached from emitted code, #770, decision W9-9, amends the
+  `[assembly: TranspileAssembly]` selection rule): under `[assembly: TranspileAssembly]`, a
+  non-public type of the assembly that emitted code reaches MUST be transpiled, so the output
+  never names a symbol it does not declare. A type is reached when the signature or body of a
+  transpiled type references it (base list, members, initializers, parameter defaults, bodies,
+  extension-method calls), directly or through another reached type; a reached nested type
+  brings its outermost container, which carries it. A reached type is emitted as its own
+  module and imported where used, but it stays off the package's public surface: no namespace
+  barrel re-exports it, so `package.json#exports` (built from the barrels) does not expose it,
+  and a referencing package never imports it. `[Ignore]` keeps winning (a reference stays
+  `MS0013`), and `[External]` / `[JsCallable]` types stay ambient. A reference from emitted code
+  to a type of the assembly that is still not emitted (a `file`-local type) MUST report
+  `MS0002` (warning) at the reference site instead of producing a silent `ReferenceError`. The
+  explicit `[Transpile]` mode is unchanged: an internal type with `[Transpile]` keeps its barrel
+  entry, and only `[TranspileAssembly]` assemblies reach types automatically.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
