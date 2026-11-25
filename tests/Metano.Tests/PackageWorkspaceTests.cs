@@ -187,6 +187,7 @@ public class PackageWorkspaceTests
             """;
 
         var libCompilation = TranspileHelper.CompileLibrary(library);
+
         var transformer = TranspileHelper.NewTransformer(
             TranspileHelper.CompileConsumer(consumer, libCompilation)
         );
@@ -194,6 +195,7 @@ public class PackageWorkspaceTests
         transformer.TransformAll();
 
         var range = transformer.CrossPackageDependencies["pkg-a"];
+
         var explicitVersion =
             emitPackageArguments.Length > 0 ? emitPackageArguments.Split('"')[1] : null;
 
@@ -224,6 +226,7 @@ public class PackageWorkspaceTests
         await Assert
             .That(RoslynTypeQueries.TryParseExplicitVersion(explicitVersion, out _))
             .IsFalse();
+
         await Assert
             .That(RoslynTypeQueries.ResolveOwnPackageVersion(compilation.Assembly, explicitVersion))
             .IsEqualTo("1.5.2");
@@ -244,6 +247,7 @@ public class PackageWorkspaceTests
         await Assert
             .That(RoslynTypeQueries.TryParseExplicitVersion(explicitVersion, out var version))
             .IsTrue();
+
         await Assert.That(version).IsEqualTo(expected);
     }
 
