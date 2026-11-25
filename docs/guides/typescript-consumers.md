@@ -769,10 +769,20 @@ the generated output directory** instead of editing generated files:
 
 ### Closed hierarchies and unions
 
-C# 15 `closed` hierarchies emit an `abstract class` and concrete subclasses.
-True C# 15 `union` declarations are **not** supported yet and fail compilation
-with `MS0038` — use a `closed` class/record hierarchy or discriminated interface
-instead.
+C# 15 `closed` hierarchies emit a TypeScript **union** (spec 010 FR-C5, #738):
+the family name is the union of its cases, so a value typed `PaymentMethod` narrows
+with `switch (method.kind)` and no cast. The shape has three parts:
+
+- a non-exported runtime class `PaymentMethod$Base` that carries the shared members;
+- `export type PaymentMethod = CardPayment | BankTransfer`, the union of the cases;
+- `export const PaymentMethod: typeof PaymentMethod$Base = PaymentMethod$Base`, so
+  `instanceof PaymentMethod` and static members keep working.
+
+Each case carries a read-only `kind` literal (its TypeScript name, or its `[Name]`)
+as a prototype getter: it costs nothing per instance and never appears in `equals`,
+`hashCode`, `toString`, `with`, `Object.keys` or JSON. A closed intermediate gets its
+own union alias. True C# 15 `union` declarations are **not** supported yet and fail
+compilation with `MS0038`; use a `closed` class/record hierarchy instead.
 
 **C# source:**
 
@@ -794,24 +804,28 @@ public sealed record BankTransfer(string Iban) : PaymentMethod;
 ```typescript
 // payment-method.ts
 import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
+import type { BankTransfer } from "./bank-transfer.js";
+import type { CardPayment } from "./card-payment.js";
 
-let PaymentMethod$rt: ClassType<PaymentMethod> | undefined;
+let PaymentMethod$rt: ClassType<PaymentMethod$Base> | undefined;
 
-export abstract class PaymentMethod {
+abstract class PaymentMethod$Base {
+  abstract readonly kind: "CardPayment" | "BankTransfer";
+
   constructor() { }
 
-  static get $runtimeType(): ClassType<PaymentMethod> {
+  static get $runtimeType(): ClassType<PaymentMethod$Base> {
     return (PaymentMethod$rt ??= {
       kind: "class",
       name: "PaymentMethod",
       fullName: "Acme.Billing.PaymentMethod",
       namespace: "Acme.Billing",
-      ctor: PaymentMethod,
+      ctor: PaymentMethod$Base,
       interfaces: [],
       typeParameters: [],
       isAbstract: true,
       isValueType: false,
-      test: (v: unknown): v is PaymentMethod => v instanceof PaymentMethod,
+      test: (v: unknown): v is PaymentMethod$Base => v instanceof PaymentMethod$Base,
     });
   }
 
@@ -826,7 +840,7 @@ export abstract class PaymentMethod {
   }
 
   with(overrides?: Partial<PaymentMethod>): PaymentMethod {
-    return copyRecordWith<PaymentMethod>(this, overrides);
+    return copyRecordWith<PaymentMethod>(this as unknown as PaymentMethod, overrides);
   }
 
   protected $printMembers(): string {
@@ -839,6 +853,10 @@ export abstract class PaymentMethod {
     return members ? `PaymentMethod { ${members} }` : "PaymentMethod { }";
   }
 }
+
+export type PaymentMethod = CardPayment | BankTransfer;
+
+export const PaymentMethod: typeof PaymentMethod$Base = PaymentMethod$Base;
 ```
 
 ```typescript
@@ -869,6 +887,10 @@ export class CardPayment extends PaymentMethod {
     });
   }
 
+  override get kind(): "CardPayment" {
+    return "CardPayment";
+  }
+
   override equals(other: any): boolean {
     return super.equals(other) && this.last4 === other.last4;
   }
@@ -897,24 +919,40 @@ export class CardPayment extends PaymentMethod {
 }
 ```
 
-### Narrowing today (`instanceof` and generated guards)
+### Narrowing closed families and generated guards
 
-- **Closed hierarchies today:** Concrete subclasses of a `closed` hierarchy do
-  **not** currently emit an automatic `readonly kind` literal tag (tracked in
-  [#738](https://github.com/danfma/metano/issues/738)). Narrow them in
-  TypeScript with `instanceof`:
+- **Closed families:** switch on `kind`. The compiler checks exhaustiveness, so a
+  new case breaks the build until it is handled:
 
   ```typescript
+  import type { PaymentMethod } from "acme-billing";
+
   function describePayment(method: PaymentMethod): string {
-    if (method instanceof CardPayment) {
-      return `Card ending in ${method.last4}`;
+    switch (method.kind) {
+      case "CardPayment":
+        return `Card ending in ${method.last4}`;
+      case "BankTransfer":
+        return `IBAN ${method.iban}`;
+      default:
+        return method satisfies never;
     }
-    if (method instanceof BankTransfer) {
-      return `IBAN ${method.iban}`;
-    }
-    throw new Error("Unexpected payment method");
   }
   ```
+
+  - `x instanceof PaymentMethod` still works at run time, but today it narrows to
+    `PaymentMethod$Base`, not to the union (#758). Prefer `kind`.
+  - A generic family narrows too. For `Tree<T>` with a fixed case
+    `IntLeaf : Tree<int>`, `IntLeaf` is part of `Tree<number>` and absent from
+    `Tree<string>`, as in C#.
+  - Code that reads `constructor.name` sees `PaymentMethod$Base` for the root class;
+    the runtime descriptor (`$runtimeType.name`) keeps `PaymentMethod`.
+  - A family keeps the old abstract-class shape, with warning `MS0073`, when it
+    cannot take the union shape: for example a family type already has a member
+    emitted as `kind` (an explicit `IKinded.Kind` counts), two cases share a tag, or
+    a family type is `[NoEmit]` or `[PlainObject]`. Spec 010 FR-C5 lists every
+    reason. A `[Discriminator]` on a family type keeps the old shape silently.
+    Narrow those families with `instanceof` or a generated guard.
+  - A family with a single case cannot reach `never`; that is a TypeScript limit.
 
 - **Generated guards (`[GenerateGuard]` + `[Discriminator]`):** When a hierarchy
   uses `[PlainObject]` or needs runtime validation from `unknown` (such as
@@ -1035,6 +1073,11 @@ the literal `"OrderCreated"`, so in TypeScript you narrow `IDomainEvent` using
 `if (isOrderCreated(ev)) { ... } else if (isOrderCancelled(ev)) { ... }`
 (or add `[StrictUnionGuard]` on an abstract base class to validate the variant
 shape in `isT`).
+
+A `[GenerateGuard]` on the root of a closed family still accepts a plain object
+through its structural fallback, and a plain object has no `kind` getter. Do not
+switch on `kind` for a value a guard admitted from `unknown`; construct the case
+first (tracked in [#757](https://github.com/danfma/metano/issues/757)).
 
 ### JSON serialization
 
