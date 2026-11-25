@@ -71,13 +71,6 @@ internal sealed record IrToTsBridgeContext(
     /// </summary>
     public ClosedSelfLowering? ClosedSelf { get; init; }
 
-    /// <summary>
-    /// Whether a closed type's family lowers to the union (spec 010 FR-C5), read
-    /// from the transform's family plans; outside a group's transform every closed
-    /// type counts as lowered.
-    /// </summary>
-    public Func<IrNamedTypeRef, bool> IsUnionFamily { get; init; } = _ => true;
-
     public IrToTsBridgeContext WithTypeParameters(TsTypeParameterScope scope) =>
         this with
         {

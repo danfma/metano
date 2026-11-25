@@ -57,7 +57,12 @@ abstract class JobFinished$Base extends JobStatus {
 
 export type JobFinished = JobCompleted | JobError;
 
-export const JobFinished: typeof JobFinished$Base = JobFinished$Base;
+export const JobFinished = JobFinished$Base as {
+  [Symbol.hasInstance]: <$P>(
+    this: { prototype: $P },
+    value: unknown,
+  ) => value is JobFinished$Base extends $P ? JobFinished : $P;
+} & typeof JobFinished$Base;
 
 export function isJobFinished(value: unknown): value is JobFinished {
   return value instanceof JobFinished$Base;

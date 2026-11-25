@@ -143,7 +143,11 @@ public class ClosedFamilyUnionTests
 
         await Assert
             .That(command)
-            .Contains("export const Command: typeof Command$Base = Command$Base;");
+            .Contains(
+                "export const Command = Command$Base as { [Symbol.hasInstance]: <$P>(this: "
+                    + "{ prototype: $P }, value: unknown) => value is Command$Base extends $P ? "
+                    + "Command : $P } & typeof Command$Base;"
+            );
 
         await Assert
             .That(command)
@@ -198,13 +202,12 @@ public class ClosedFamilyUnionTests
             .That(command)
             .Contains("copyRecordWith<Command>(this as unknown as Command, overrides)");
 
-        await Assert.That(reader).Contains("(seek = value as unknown as Seek, true)");
-
-        await Assert
-            .That(reader)
-            .Contains("value instanceof Seek ? value as unknown as Seek : null");
-
-        await Assert.That(reader).Contains("const seek = value as unknown as Seek;");
+        // The binding's Symbol.hasInstance narrows `instanceof Seek` to the union (#758),
+        // so a value tested against a closed type binds without an assertion.
+        await Assert.That(reader).Contains("(seek = value, true)");
+        await Assert.That(reader).Contains("value instanceof Seek ? value : null");
+        await Assert.That(reader).Contains("const seek = value;");
+        await Assert.That(reader).DoesNotContain("value as unknown");
         await Assert.That(reader).Contains("$s instanceof SeekTo");
         await Assert.That(reader).DoesNotContain("$s as unknown");
     }
@@ -286,9 +289,7 @@ public class ClosedFamilyUnionTests
 
         await Assert.That(output).Contains("import { Go, Halt, Signal } from \"closed-lib/lib\";");
 
-        await Assert
-            .That(output)
-            .Contains("value instanceof Signal ? value as unknown as Signal : null");
+        await Assert.That(output).Contains("value instanceof Signal ? value : null");
     }
 
     [Test]

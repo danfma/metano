@@ -98,6 +98,27 @@ describe("closed family union (FR-C5)", () => {
     expect(new JobQueued().self()).toBeInstanceOf(JobQueued);
   });
 
+  test("instanceof the family narrows to the union (#758)", () => {
+    const read = (value: unknown): string => {
+      if (value instanceof JobFinished) {
+        return finishedLabel(value);
+      }
+
+      if (value instanceof JobStatus) {
+        return label(value);
+      }
+
+      return "none";
+    };
+
+    const running = (status: JobStatus): number =>
+      status instanceof JobRunning ? status.percent : -1;
+
+    expect(statuses.map(read)).toEqual(["queued", "40%", "3s", "disk"]);
+    expect(read({ percent: 40 })).toBe("none");
+    expect(statuses.map(running)).toEqual([-1, 40, -1, -1]);
+  });
+
   test("guards admit instances only (#757)", () => {
     const plain: unknown = { percent: 40 };
 

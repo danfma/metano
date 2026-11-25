@@ -1482,14 +1482,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var produced = TransformGroup(
             group,
-            IrToTsBridgeContext.ForGroup(
-                Context.DeclarativeMappings,
-                casts,
-                Context.RuntimeTypes
-            ) with
-            {
-                IsUnionFamily = Context.IsLoweredClosedType,
-            }
+            IrToTsBridgeContext.ForGroup(Context.DeclarativeMappings, casts, Context.RuntimeTypes)
         );
 
         outcomes.Files[index] = produced;

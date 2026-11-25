@@ -775,8 +775,9 @@ with `switch (method.kind)` and no cast. The shape has three parts:
 
 - a non-exported runtime class `PaymentMethod$Base` that carries the shared members;
 - `export type PaymentMethod = CardPayment | BankTransfer`, the union of the cases;
-- `export const PaymentMethod: typeof PaymentMethod$Base = PaymentMethod$Base`, so
-  `instanceof PaymentMethod` and static members keep working.
+- `export const PaymentMethod = PaymentMethod$Base as …`, a value binding to the
+  runtime class, so static members keep working and `x instanceof PaymentMethod`
+  narrows `x` to the union (#758).
 
 Each case carries a read-only `kind` literal (its TypeScript name, or its `[Name]`)
 as a prototype getter: it costs nothing per instance and never appears in `equals`,
@@ -856,7 +857,7 @@ abstract class PaymentMethod$Base {
 
 export type PaymentMethod = CardPayment | BankTransfer;
 
-export const PaymentMethod: typeof PaymentMethod$Base = PaymentMethod$Base;
+export const PaymentMethod = PaymentMethod$Base as { [Symbol.hasInstance]: <$P>(this: { prototype: $P }, value: unknown) => value is PaymentMethod$Base extends $P ? PaymentMethod : $P } & typeof PaymentMethod$Base;
 ```
 
 ```typescript
@@ -939,8 +940,10 @@ export class CardPayment extends PaymentMethod {
   }
   ```
 
-  - `x instanceof PaymentMethod` still works at run time, but today it narrows to
-    `PaymentMethod$Base`, not to the union (#758). Prefer `kind`.
+  - `x instanceof PaymentMethod` narrows `x` to the union `PaymentMethod`, so a
+    `switch (x.kind)` after it is exhaustive (#758), also for a consumer that sees
+    only the package's `.d.ts` files. `x instanceof CardPayment` (a case, or any
+    class below one, your own subclasses included) still narrows to that class.
   - A generic family narrows too. For `Tree<T>` with a fixed case
     `IntLeaf : Tree<int>`, `IntLeaf` is part of `Tree<number>` and absent from
     `Tree<string>`, as in C#.

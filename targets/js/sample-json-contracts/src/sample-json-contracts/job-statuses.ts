@@ -12,7 +12,7 @@ export class JobStatuses {
   constructor() {}
 
   static asFinished(value: Object): JobFinished | null {
-    return value instanceof JobFinished ? (value as unknown as JobFinished) : null;
+    return value instanceof JobFinished ? value : null;
   }
 
   static describe(status: JobStatus): string {

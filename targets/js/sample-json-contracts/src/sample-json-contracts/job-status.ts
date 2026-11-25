@@ -61,7 +61,12 @@ abstract class JobStatus$Base {
 
 export type JobStatus = JobQueued | JobRunning | JobFinished;
 
-export const JobStatus: typeof JobStatus$Base = JobStatus$Base;
+export const JobStatus = JobStatus$Base as {
+  [Symbol.hasInstance]: <$P>(
+    this: { prototype: $P },
+    value: unknown,
+  ) => value is JobStatus$Base extends $P ? JobStatus : $P;
+} & typeof JobStatus$Base;
 
 export function isJobStatus(value: unknown): value is JobStatus {
   return value instanceof JobStatus$Base;
