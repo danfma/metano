@@ -415,6 +415,39 @@ public class ClosedFamilyUnionTests
         await Assert.That(conflict.Message).Contains("\"Add\" of closed family case 'Add'");
     }
 
+    [Test]
+    public async Task IgnoredKindMemberBelowAForeignOpenCase_IsNotAConflict()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("closed-lib")]
+
+            namespace Lib
+            {
+                public closed record Op;
+
+                public record Add : Op;
+
+                public sealed record Sub : Op;
+            }
+            """ + ClosedPolyfill,
+            """
+            [assembly: TranspileAssembly]
+
+            public sealed record AddMore : Lib.Add
+            {
+                [Ignore]
+                public string Kind => "more";
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ClosedFamilyTagSuppressed))
+            .IsEmpty();
+    }
+
     /// <summary>
     /// The family's output, and a cross-package consumer, type-check under
     /// <c>tsgo --strict</c>; a generic family with a fixed-instantiation case keeps a

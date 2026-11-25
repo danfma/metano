@@ -265,11 +265,13 @@ internal sealed class ClosedFamilyLowering(Func<INamedTypeSymbol, string> tagNam
     /// <summary>
     /// <paramref name="type"/> declares an instance member TypeScript emits as
     /// <c>kind</c>, an explicit interface implementation (<c>string IKinded.Kind</c>)
-    /// included: it lowers to a public member named after the interface's.
+    /// included: it lowers to a public member named after the interface's. A member
+    /// <c>[Ignore]</c>d for TypeScript emits nothing, so it never collides.
     /// </summary>
     private static bool DeclaresKindMember(INamedTypeSymbol type) =>
         type.GetMembers()
             .Where(member => !member.IsStatic && !member.IsImplicitlyDeclared)
+            .Where(member => !SymbolHelper.HasIgnore(member, TargetLanguage.TypeScript))
             .SelectMany(EmittedNamesOf)
             .Contains(KindMemberName);
 
