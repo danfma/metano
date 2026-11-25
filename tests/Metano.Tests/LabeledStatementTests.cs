@@ -246,9 +246,45 @@ public class LabeledStatementTests
         var (exitCode, log) = await StrictTypeCheck.Run(new Dictionary<string, string>(), output);
         var words = output["words.ts"];
 
-        await Assert.That(words).DoesNotContain("function:");
-        await Assert.That(words).DoesNotContain("class:");
-        await Assert.That(words).DoesNotContain("export:");
+        await Assert.That(words).Contains("$function: for (const x of a) {");
+        await Assert.That(words).Contains("continue $function;");
+        await Assert.That(words).Contains("$class: for (let i = 0;");
+        await Assert.That(words).Contains("$export: switch (n) {");
+        await Assert.That(log).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task LabelsCSharpTellsApart_StayApart()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Nest
+            {
+                public static int Run(int[] a)
+                {
+                    var n = 0;
+                    Outer: foreach (var x in a)
+                    {
+                        outer: foreach (var y in a)
+                        {
+                            if (y == 1) continue Outer;
+                            if (y == 2) continue outer;
+                            n += x * y;
+                        }
+                    }
+                    return n;
+                }
+            }
+            """
+        );
+
+        var (exitCode, log) = await StrictTypeCheck.Run(new Dictionary<string, string>(), output);
+        var nest = output["nest.ts"];
+
+        await Assert.That(nest).Contains("Outer: for (const x of a) {");
+        await Assert.That(nest).Contains("outer: for (const y of a) {");
         await Assert.That(log).IsEmpty();
         await Assert.That(exitCode).IsEqualTo(0);
     }

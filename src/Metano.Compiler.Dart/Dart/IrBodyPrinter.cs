@@ -250,27 +250,25 @@ public static class IrBodyPrinter
 
     /// <summary>
     /// The Dart label a loop or <c>switch</c> starts with (<c>outer: </c>), the
-    /// target of a labeled <c>break</c> / <c>continue</c> (#772); empty when
-    /// it has none.
+    /// target of a labeled <c>break</c> / <c>continue</c> (#772), spelled as C#
+    /// names it so two labels C# tells apart stay apart; empty when it has none.
     /// </summary>
     private static string LabelOf(IrBreakableStatement target) =>
-        target.Label is { } label
-            ? $"{IrToDartNamingPolicy.ToParameterName(label)}: "
-            : string.Empty;
+        target.Label is { } label ? $"{label}: " : string.Empty;
 
     /// <summary><c>break;</c> / <c>continue;</c>, naming the label it targets, if any.</summary>
     private static string Jump(string keyword, string? label) =>
-        label is null ? $"{keyword};" : $"{keyword} {IrToDartNamingPolicy.ToParameterName(label)};";
+        label is null ? $"{keyword};" : $"{keyword} {label};";
 
     /// <summary>
     /// A non-null assertion the IR inserted from C# flow analysis (#775) that
-    /// Dart leaves out: Dart promotes a local after <c>x!</c> itself, and its
-    /// <c>!</c> throws at run time on a field whose state a call changed, which
-    /// C# does not track. Only the assertions Dart's flow analysis cannot see
-    /// are printed.
+    /// Dart leaves out: a local or parameter read after <c>x!</c>, which Dart
+    /// promotes itself. A member read keeps it: Dart never promotes a
+    /// non-final field (its <c>!</c> may then throw where a call changed the
+    /// field, which C# does not track; FR-101).
     /// </summary>
     private static bool IsLeftOutOnDart(IrUnaryExpression unary) =>
-        unary.FlowProof is IrFlowNonNullProof.ForgivenLocalRead or IrFlowNonNullProof.MemberRead;
+        unary.FlowProof is IrFlowNonNullProof.ForgivenLocalRead;
 
     /// <summary>
     /// Appends a placeholder that drops code, reporting it (W9-13 / W9-13a).

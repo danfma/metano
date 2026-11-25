@@ -321,13 +321,13 @@ public static class IrToTsStatementBridge
     /// label on the inner loop, which the jumps target.
     /// </summary>
     private static string LabelOf(IrBreakableStatement loop) =>
-        loop.Label is { } label ? $"{IrToTsNamingPolicy.ToLocalName(label)}: " : string.Empty;
+        loop.Label is { } label ? $"{TypeScriptNaming.ToLabel(label)}: " : string.Empty;
 
     /// <summary><c>break</c> / <c>continue</c>, naming the label it targets, if any.</summary>
     private static TsExpressionStatement Jump(string keyword, string? label) =>
         new(
             new TsIdentifier(
-                label is null ? keyword : $"{keyword} {IrToTsNamingPolicy.ToLocalName(label)}"
+                label is null ? keyword : $"{keyword} {TypeScriptNaming.ToLabel(label)}"
             )
         );
 

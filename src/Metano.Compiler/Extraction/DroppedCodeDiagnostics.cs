@@ -118,8 +118,8 @@ public static partial class DroppedCodeDiagnostics
         };
 
     private static string GotoSectionMessage(string jump) =>
-        $"'{jump}' is not supported by the transpiler: {Policy.Language} cannot jump between "
-        + "the sections of a switch. Move the shared code into a method both sections call.";
+        $"'{jump}' is not supported by the transpiler yet: a jump between the sections of a "
+        + "switch is not lowered. Move the shared code into a method both sections call.";
 
     private static Location? CurrentLocation() =>
         CurrentStatement.Value is { } span ? IrSourceSpanLocations.ToLocation(span) : null;

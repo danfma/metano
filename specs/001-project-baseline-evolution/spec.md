@@ -1570,9 +1570,11 @@ Product requirements added after the migration (normative; each one is traced by
   template, an `is` pattern, a list or positional pattern outside a `switch`, a `not` pattern in
   a `switch`, an unsupported pattern); the Dart static-constructor drop and the Dart overloads
   that keep only the primary signature stay warnings at their declaration. Not placeholders: an
-  empty statement (`;`) emits nothing, and a local function declaration emits nothing — no target
-  lowers local functions yet, and each reference reports at its use (its placeholder throws), so
-  an unused one drops nothing that runs. Tests: `tests/Metano.Tests/DiagnosticsTests.cs`.
+  empty statement (`;`) emits nothing, and so does a local function declaration, which no target
+  lowers yet: an unused one (or one only its own body or a `nameof` names) drops nothing that
+  runs and reports nothing, while one referenced from elsewhere (matched by symbol: a call, a
+  method group, an event handler, a call before the declaration) reports the dropped declaration
+  at its name, besides the warning each reference reports (its placeholder throws). Tests: `tests/Metano.Tests/DiagnosticsTests.cs`.
 
 - **FR-100** (labeled statements, #772, decision W9-12): A C# label on a loop (`while`, `do`,
   `for`, `foreach`) or a `switch` statement MUST be kept, and the labeled `break label;` /
@@ -1584,7 +1586,9 @@ Product requirements added after the migration (normative; each one is traced by
   `continue` of the loop it names, so a lowering that moves a `for` increment into the body does
   not skip it. A label on any other statement can only be a `goto` target; it is emitted without
   the label, and the `goto` (also `goto case` / `goto default`), which has no JavaScript
-  equivalent, reports `MS0001` as an error (FR-099). Tests:
+  equivalent, reports `MS0001` (FR-099). A label keeps its C# spelling, so two labels C# tells
+  apart stay apart (`Outer` and `outer`); a JavaScript reserved word is prefixed with `$`
+  (`$function:`), which no C# identifier holds. Tests:
   `tests/Metano.Tests/LabeledStatementTests.cs`; conformance `LabeledJumpProbes`.
 
 - **FR-101** (null state proved by a forgiving construct, #775): Where C# flow analysis
@@ -1599,10 +1603,12 @@ Product requirements added after the migration (normative; each one is traced by
   an assignment, a local's initializer or a null test of the same variable is left unasserted,
   since checkers narrow on those; the origin is the last such event before the read in the
   member's source. Nullable-disabled code has no flow state and is unchanged. The IR records why
-  the read is proven (`IrFlowNonNullProof`): the Dart target keeps only the assertion of a local
-  or parameter proven by a call's nullable attributes, since Dart promotes a local after `x!`
-  itself and its `!` throws at run time on a field whose state a call changed (C# does not reset a
-  field's state across calls); TypeScript keeps every one (erased, type-only). Tests:
+  the read is proven (`IrFlowNonNullProof`): the Dart target leaves out the assertion of a local
+  or parameter read after `x!`, which Dart promotes itself, and keeps the others; TypeScript
+  keeps every one (erased, type-only). Known Dart divergence: a field or property keeps its `!`
+  (Dart never promotes a non-final field), and since C# does not reset a field's state across a
+  call that may change it, Dart's run-time `!` throws where .NET lets such a `null` through (a
+  `null` stored in a slot C# proves non-null). Tests:
   `tests/Metano.Tests/ForgivenNullStateTests.cs` (output type-checked with `tsgo --strict`).
 
 ### Key Entities

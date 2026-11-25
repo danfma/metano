@@ -122,15 +122,16 @@ public class ForgivenNullStateTests
     }
 
     [Test]
-    public async Task Dart_KeepsOnlyTheAssertionsItsFlowAnalysisCannotSee()
+    public async Task Dart_LeavesOutOnlyTheAssertionsItPromotesItself()
     {
-        // Dart promotes a local after `x!`, and its `!` throws at run time on a
-        // field whose state a call changed (C# keeps the field's state across
-        // the call): only a local proven by a call's nullable attributes keeps
-        // the assertion.
+        // Dart promotes a local after `x!`, so that assertion is left out; a
+        // member read keeps it (Dart never promotes a non-final field), and so
+        // does a local proven by a call's nullable attributes.
         var (files, _) = DartTranspileHelper.Transpile(
             """
             #nullable enable
+
+            using System.Diagnostics.CodeAnalysis;
 
             [Transpile]
             public sealed class Node
@@ -155,8 +156,8 @@ public class ForgivenNullStateTests
 
                 public int Again()
                 {
-                    var first = Peek(_head!);
-                    return first + _head.Id;
+                    var first = _head!.Id;
+                    return first + Peek(_head);
                 }
 
                 public static int Local(Node? node)
@@ -165,9 +166,15 @@ public class ForgivenNullStateTests
                     return id + node.Id;
                 }
 
+                public static void Ensure([NotNull] Node? node)
+                {
+                    if (node == null)
+                        throw new Exception("node");
+                }
+
                 public static int Thrown(Node? node)
                 {
-                    ArgumentNullException.ThrowIfNull(node);
+                    Ensure(node);
                     return node.Id;
                 }
             }
@@ -176,8 +183,10 @@ public class ForgivenNullStateTests
 
         var queue = files["queue.dart"];
 
-        await Assert.That(queue).Contains("return first + this._head.id;");
+        await Assert.That(queue).Contains("return first + Queue.peek(this._head!);");
         await Assert.That(queue).Contains("return id + node.id;");
         await Assert.That(queue).Contains("return node!.id;");
+
+        await DartToolchain.AssertAnalyzesAsync(files);
     }
 }

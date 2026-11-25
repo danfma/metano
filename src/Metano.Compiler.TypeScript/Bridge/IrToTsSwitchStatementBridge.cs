@@ -2,6 +2,7 @@ using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -254,7 +255,7 @@ internal static class IrToTsSwitchStatementBridge
         );
     }
 
-    /// <summary>The JavaScript label of a labeled <c>switch</c> (#772), spelled as a local.</summary>
+    /// <summary>The JavaScript label of a labeled <c>switch</c> (#772), spelled as C# names it.</summary>
     private static string? LabelOf(IrSwitchStatement sw) =>
-        sw.Label is { } label ? IrToTsNamingPolicy.ToLocalName(label) : null;
+        sw.Label is { } label ? TypeScriptNaming.ToLabel(label) : null;
 }
