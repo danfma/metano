@@ -350,7 +350,12 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         var typeInfo = _semantic.GetTypeInfo(cast);
-        var folded = ConstantLiteral(constant.Value!, typeInfo.Type, typeInfo.ConvertedType);
+
+        var folded = ConstantLiteral(
+            DecimalOfFloatingConstant(cast) ?? constant.Value!,
+            typeInfo.Type,
+            typeInfo.ConvertedType
+        );
 
         return
             _context.NumericLowering.RepresentationOf(NumericEndpoints.Of(typeInfo.Type))
@@ -358,6 +363,17 @@ public sealed partial class IrExpressionExtractor
             ? AsEnumConstant(folded, typeInfo.Type)
             : folded;
     }
+
+    /// <summary>
+    /// The decimal a constant <c>(decimal)</c> cast of a <c>double</c> or <c>float</c> constant
+    /// converts to under the .NET 10 rule (<see cref="DecimalFromFloatingPoint"/>), not the one
+    /// of the runtime hosting the compiler (#748); <c>null</c> for any other cast.
+    /// </summary>
+    private object? DecimalOfFloatingConstant(CastExpressionSyntax cast) =>
+        _semantic.GetTypeInfo(cast).Type is { SpecialType: SpecialType.System_Decimal }
+        && _semantic.GetConstantValue(cast.Expression) is { HasValue: true, Value: var operand }
+            ? DecimalFromFloatingPoint.Convert(operand)
+            : null;
 
     /// <summary>
     /// A folded constant of an enum type, cast to the enum around its
