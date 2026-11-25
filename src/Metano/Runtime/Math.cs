@@ -306,6 +306,24 @@ using Metano.Annotations;
     WhenParameterTypes = [typeof(int)]
 )]
 
+// `Math.Clamp` (#750): JavaScript has no `Math.clamp`. The `long` / `ulong` / `nint` / `nuint`
+// overloads are mapped above; `decimal` keeps its `Decimal`, and every other overload is a
+// `number`. Both throw .NET's `ArgumentException` when `min > max`. Keep the unfiltered
+// fallback last: the first declaration whose filter matches wins.
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Clamp),
+    JsTemplate = "clampDecimal($0, $1, $2)",
+    RuntimeImports = "clampDecimal",
+    WhenParameterTypes = [typeof(decimal), typeof(decimal), typeof(decimal)]
+)]
+[assembly: MapMethod(
+    typeof(Math),
+    nameof(Math.Clamp),
+    JsTemplate = "clampNumber($0, $1, $2)",
+    RuntimeImports = "clampNumber"
+)]
+
 [assembly: MapMethod(typeof(Math), nameof(Math.Floor), JsMethod = "floor")]
 [assembly: MapMethod(typeof(Math), nameof(Math.Ceiling), JsMethod = "ceil")]
 [assembly: MapMethod(typeof(Math), nameof(Math.Truncate), JsMethod = "trunc")]
