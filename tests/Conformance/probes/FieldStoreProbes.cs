@@ -121,6 +121,20 @@ public class FsRequired
     public int Count { get; set; } = 2;
 }
 
+public class FsComputed
+{
+    private readonly string _name;
+    private readonly Func<int>? _f;
+
+    public FsComputed(string n, Func<int> f)
+    {
+        _f = f;
+        _name = n;
+    }
+
+    public string N => _name + _f!();
+}
+
 public static class FieldStoreProbes
 {
     public static string InitializersRunInDeclarationOrderBeforeTheBody()
@@ -188,4 +202,6 @@ public static class FieldStoreProbes
 
         return $"{r.Name}{r.Count}";
     }
+
+    public static string ComputedPropertyNamedLikeAParameter() => new FsComputed("a", () => 1).N;
 }

@@ -1651,7 +1651,7 @@ Product requirements added after the migration (normative; each one is traced by
   `es2024`) avoids. This is a documented limitation of the pair of versions, not of the
   runtime; removing it needs the polyfill, or a design that changes the Temporal-typed
   public API (see the issue).
-- **FR-108** (instance field shape, #795, #787 N4/N11, decisions W10-1 / W10-1a): An
+- **FR-108** (instance field shape, #795, #787 N4/N11, #801, decisions W10-1 / W10-1a): An
   instance field of an emitted TypeScript class, including an auto-property's storage, an
   event's backing field and a promoted record or primary-constructor parameter, MUST be a
   type-only declaration (`declare readonly x: number;`), and every constructor path MUST store
@@ -1666,7 +1666,9 @@ Product requirements added after the migration (normative; each one is traced by
   `override` fields (`declare override` is TS1243), and `#private` fields. A static class MUST
   emit `private constructor() { }`; a class that declares no constructor and has nothing to run
   in one emits none. A constructor parameter or local named like a function an inlined
-  initializer calls is renamed (`compute$`, `compute$1`). Consumers compiling the output with
+  initializer calls is renamed (`compute$`, `compute$1`). A parameter of an explicit
+  constructor is promoted only to an auto-property its body initializes from it
+  (`Name = name;`, #801); a computed property keeps its getter. Consumers compiling the output with
   Babel's `preset-typescript` need `allowDeclareFields`. Tests:
   `tests/Metano.Tests/InstanceFieldStoreTests.cs`, conformance `FieldStoreProbes`.
 - **FR-099** (placeholder severity, wave 9 decisions W9-13 / W9-13a): An unsupported construct
