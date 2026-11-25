@@ -53,8 +53,7 @@ public sealed partial class IrExpressionExtractor
     private bool IsAppliedExtensionOperator(IMethodSymbol method) =>
         !_context.KeepsUserOperatorSourceForms
         && ExtensionOperators.ContainerOf(method) is { } container
-        && container.IsEmittedExtensionContainer(_target)
-        && ExtensionOperators.UnsupportedReasonOf(method, container) is null;
+        && ExtensionOperators.UnsupportedReasonOf(method, container, _target) is null;
 
     /// <summary>
     /// A <c>[JsxComponentBuilder]</c> family: its conversion to its element
@@ -113,8 +112,8 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The <c>MS0001</c> placeholder of an application of an extension
-    /// operator of an emitted class that <see cref="ExtensionOperators"/>
-    /// does not lower (#761); <c>null</c> for any other operator.
+    /// operator that <see cref="ExtensionOperators"/> does not lower (#761),
+    /// its class not emitted included; <c>null</c> for any other operator.
     /// </summary>
     private IrUnsupportedExpression? UnsupportedExtensionOperator(
         IMethodSymbol method,
@@ -123,8 +122,7 @@ public sealed partial class IrExpressionExtractor
     {
         if (
             ExtensionOperators.ContainerOf(method) is not { } container
-            || !container.IsEmittedExtensionContainer(_target)
-            || ExtensionOperators.UnsupportedReasonOf(method, container) is not { } reason
+            || ExtensionOperators.UnsupportedReasonOf(method, container, _target) is not { } reason
         )
             return null;
 
@@ -210,7 +208,13 @@ public sealed partial class IrExpressionExtractor
             overload,
             pin,
             ConversionNaming.Of(definition, _target),
-            IsExtension: extensionContainer is not null
+            ExtensionReceiver: extensionContainer is null
+                ? null
+                : IrTypeRefMapper.Map(
+                    ExtensionOperators.ReceiverOf(definition),
+                    _context.OriginResolver,
+                    _target
+                )
         );
     }
 

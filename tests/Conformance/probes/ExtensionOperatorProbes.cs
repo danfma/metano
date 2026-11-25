@@ -53,6 +53,18 @@ public static class EoMoneyOps
     }
 }
 
+public static class EoScaleOps
+{
+    extension(EoSig)
+    {
+        [Metano.Annotations.Name("scaleBy")]
+        public static EoSig operator /(EoSig a, int k) => new(a.Value / k);
+
+        [Metano.Annotations.Name("ratio")]
+        public static EoSig operator /(EoSig a, EoSig b) => new(a.Value / b.Value);
+    }
+}
+
 public static class EoBoxOps
 {
     extension<T>(EoBox<T>)
@@ -115,6 +127,13 @@ public static class ExtensionOperatorProbes
         var total = new EoMoney(3) + new EoMoney(4);
 
         return $"{total.Cents},{total == new EoMoney(7)},{some == none},{some != none},{some == total}";
+    }
+
+    public static string NamedOverloads()
+    {
+        var a = new EoSig(12);
+
+        return $"{(a / 4).Value},{(a / new EoSig(3)).Value}";
     }
 
     public static string GenericBlock() => (new EoBox<int>(2) + new EoBox<int>(3)).Value.ToString();

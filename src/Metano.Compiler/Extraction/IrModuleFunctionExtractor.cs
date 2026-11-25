@@ -675,12 +675,13 @@ public static class IrModuleFunctionExtractor
 
     /// <summary>
     /// The module function of an operator declared inside a C# 14
-    /// <c>extension</c> block (#761): a static function named, by the
-    /// target, like the class-level helper of its operator kind, whose
+    /// <c>extension</c> block (#761): a static function the target names
+    /// after its operator kind and its block's receiver, whose
     /// parameters are the operator's (the block's receiver is one of them
     /// already) and whose type parameters are the block's and the
     /// operator's. An operator <see cref="ExtensionOperators"/> does not lower
-    /// reports <c>MS0001</c> here and at each application, and a target that
+    /// reports <c>MS0001</c> here and at each application; an <c>[Ignore]</c>d
+    /// one only at each application. A target that
     /// keeps user operators as the source wrote them
     /// (<see cref="IrExtractionContext.KeepsUserOperatorSourceForms"/>) gets
     /// no function.
@@ -695,10 +696,11 @@ public static class IrModuleFunctionExtractor
             context.KeepsUserOperatorSourceForms
             || model.GetDeclaredSymbol(syntax) is not IMethodSymbol method
             || ExtensionOperators.ContainerOf(method) is not { } container
+            || SymbolHelper.HasIgnore(method, context.Target)
         )
             return null;
 
-        if (ExtensionOperators.UnsupportedReasonOf(method, container) is { } reason)
+        if (ExtensionOperators.UnsupportedReasonOf(method, container, context.Target) is { } reason)
         {
             ExtractionDiagnostics.Report(
                 new MetanoDiagnostic(
@@ -725,6 +727,11 @@ public static class IrModuleFunctionExtractor
             TypeParameters = IrTypeParameterExtractor.ExtractAll(
                 [.. method.ContainingType.TypeParameters, .. method.TypeParameters],
                 context.OriginResolver
+            ),
+            OperatorReceiver = IrTypeRefMapper.Map(
+                ExtensionOperators.ReceiverOf(method),
+                context.OriginResolver,
+                context.Target
             ),
         };
     }

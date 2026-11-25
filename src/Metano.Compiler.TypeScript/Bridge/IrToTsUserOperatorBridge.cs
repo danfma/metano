@@ -12,8 +12,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// group (<c>Vec.__multiplyDoubleVec(2, v)</c>) or, for a type this
 /// compilation reads only from metadata, its dispatcher, and
 /// <c>Money.__implicitFromInt32(7)</c>. A C# 14 extension operator calls the
-/// function its class's module exports under the same name
-/// (<c>__add(a, b)</c>, #761). A lifted <c>==</c> / <c>!=</c> and a
+/// function its class's module exports, qualified by the block's receiver
+/// (<c>__add$Sig(a, b)</c>, #761). A lifted <c>==</c> / <c>!=</c> and a
 /// lifted conversion handle <c>null</c> here, evaluating each operand once.
 /// </summary>
 internal static class IrToTsUserOperatorBridge
@@ -74,7 +74,9 @@ internal static class IrToTsUserOperatorBridge
                 $"The operator '{user.MetadataName}' has no TypeScript helper."
             );
 
-        return TsOperatorNaming.StaticHelperName(name);
+        return user.ExtensionReceiver is { } receiver
+            ? TsOperatorNaming.ExtensionOperatorName(name, receiver)
+            : TsOperatorNaming.StaticHelperName(name);
     }
 
     private static TsExpression Converted(
@@ -106,7 +108,7 @@ internal static class IrToTsUserOperatorBridge
     /// </summary>
     private static TsExpression HelperReference(IrUserOperator user, IrToTsBridgeContext context)
     {
-        if (user.IsExtension)
+        if (user.ExtensionReceiver is not null)
             return IrToTsExpressionBridge.ModuleExportReference(
                 HelperNameOf(user),
                 user.DeclaringType

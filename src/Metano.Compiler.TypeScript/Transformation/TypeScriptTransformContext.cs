@@ -279,6 +279,14 @@ public sealed class TypeScriptTransformContext(
                 );
                 break;
 
+            // An extension operator's module function (#761, decision W9-8):
+            // registered like the block's methods, so two classes exporting
+            // one name report MS0021 at the declaration.
+            case IMethodSymbol { MethodKind: MethodKind.UserDefinedOperator } op
+                when ExtensionOperatorFunctionNameOf(op) is { } operatorName:
+                Register(operatorName, op, ownerRef, map, firstClaim, reportDiagnostic);
+                break;
+
             case IPropertySymbol prop
                 when prop.DeclaredAccessibility == Accessibility.Public && !prop.IsIndexer:
                 Register(
@@ -334,6 +342,26 @@ public sealed class TypeScriptTransformContext(
         }
     }
 
+    /// <summary>
+    /// The module function name of an extension operator the TypeScript
+    /// target lowers; <c>null</c> for one it reports as unsupported.
+    /// </summary>
+    /// <summary>
+    /// The static class a registered member belongs to, named for a
+    /// diagnostic: an extension-block member's block is unnamed, so it is
+    /// named by the class that holds the block.
+    /// </summary>
+    private static string OwnerNameOf(ISymbol member) =>
+        member.IsExtensionBlockMember()
+            ? member.ContainingType.ContainingType.Name
+            : member.ContainingType?.Name ?? "<global>";
+
+    private static string? ExtensionOperatorFunctionNameOf(IMethodSymbol op) =>
+        ExtensionOperators.ContainerOf(op) is { } container
+        && ExtensionOperators.UnsupportedReasonOf(op, container, TargetLanguage.TypeScript) is null
+            ? Bridge.TsOperatorNaming.ExtensionOperatorFunctionName(op)
+            : null;
+
     private static string ResolvePropertyHelperName(IPropertySymbol property) =>
         (
             SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
@@ -372,8 +400,8 @@ public sealed class TypeScriptTransformContext(
             // the static class. Same source — collapse to one registration.
             if (AreSameLogicalExtensionMember(prior, member))
                 return;
-            var priorOwner = prior.ContainingType?.Name ?? "<global>";
-            var newOwner = member.ContainingType?.Name ?? "<global>";
+            var priorOwner = OwnerNameOf(prior);
+            var newOwner = OwnerNameOf(member);
             reportDiagnostic(
                 new MetanoDiagnostic(
                     MetanoDiagnosticSeverity.Error,

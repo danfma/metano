@@ -1,5 +1,9 @@
+using Metano.Annotations;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
+using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Transformation;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -17,6 +21,7 @@ internal static class TsOperatorNaming
     private const string StaticPrefix = "__";
     private const string InstancePrefix = "$";
     private const string CheckedNamePrefix = "checked";
+    private const string ReceiverSeparator = "$";
 
     /// <summary>
     /// The name an operator lowers to (<c>add</c>, <c>negate</c>): a single
@@ -38,20 +43,74 @@ internal static class TsOperatorNaming
 
     /// <summary>
     /// The function a C# 14 extension operator declares in its class's
-    /// module (#761): the static helper name its kind takes on a class
-    /// (<c>__add</c>), renamed whole by a <c>[Name]</c>; <c>null</c> for any
-    /// other module function. An extension operator is never overloaded, so
-    /// no group extends the name.
+    /// module (#761, decision W9-8): the static helper name of FR-078
+    /// qualified by the block's receiver, <c>__</c> + the operator's name +
+    /// <c>$</c> + the receiver's emitted type name (<c>__add$Sig</c>; a
+    /// generic receiver <c>Box&lt;T&gt;</c> gives <c>__add$Box</c>). A
+    /// <c>[Name]</c> on the operator replaces its operator name
+    /// (<c>[Name("plus")]</c> → <c>__plus$Sig</c>). <c>null</c> for any other
+    /// module function.
     /// </summary>
     public static string? ExtensionOperatorFunctionName(IrModuleFunction function)
     {
-        if (function.Semantics.OperatorKind is not { } kind || KindNameOf(kind) is not { } kindName)
+        if (
+            function.OperatorReceiver is not { } receiver
+            || function.Semantics.OperatorKind is not { } kind
+            || KindNameOf(kind) is not { } kindName
+        )
             return null;
 
-        return StaticHelperName(
-            IrToTsNamingPolicy.FindMemberNameOverride(function.Attributes, overloadName: null)
-                ?? kindName
+        var operatorName = IrToTsNamingPolicy.FindMemberNameOverride(
+            function.Attributes,
+            overloadName: null
+        ) ?? kindName;
+
+        return ExtensionOperatorName(operatorName, receiver);
+    }
+
+    /// <summary>
+    /// <see cref="ExtensionOperatorFunctionName(IrModuleFunction)"/> read from
+    /// the operator's symbol, for the project-wide name registry; <c>null</c>
+    /// for an operator kind with no helper.
+    /// </summary>
+    public static string? ExtensionOperatorFunctionName(IMethodSymbol method)
+    {
+        var operatorName = method.GetNameOverride(TargetLanguage.TypeScript)
+            ?? KindNameOf(IrOperatorKind.FromMetadataName(method.Name));
+
+        if (operatorName is null)
+            return null;
+
+        var receiver = IrTypeRefMapper.Map(
+            ExtensionOperators.ReceiverOf(method),
+            target: TargetLanguage.TypeScript
         );
+
+        return ExtensionOperatorName(operatorName, receiver);
+    }
+
+    /// <summary>
+    /// The extension operator function for <paramref name="operatorName"/>
+    /// (a kind name or a <c>[Name]</c> pin) on <paramref name="receiver"/>.
+    /// </summary>
+    public static string ExtensionOperatorName(string operatorName, IrTypeRef receiver) =>
+        StaticHelperName(operatorName) + ReceiverSeparator + ReceiverNameOf(receiver);
+
+    /// <summary>
+    /// The receiver's emitted type name without type arguments or qualifier:
+    /// a named type's last segment, else the leading identifier of the
+    /// printed type (<c>number</c>, <c>string</c>).
+    /// </summary>
+    private static string ReceiverNameOf(IrTypeRef receiver)
+    {
+        var mapped = IrToTsTypeMapper.Map(receiver);
+
+        if (mapped is TsNamedType named)
+            return named.Name[(named.Name.LastIndexOf('.') + 1)..];
+
+        var printed = Printer.RenderType(mapped);
+
+        return new string([.. printed.TakeWhile(c => char.IsLetterOrDigit(c) || c is '_' or '$')]);
     }
 
     /// <summary>The static helper of an operator: <c>__</c> + its name.</summary>
