@@ -788,7 +788,12 @@ public sealed class IrStatementExtractor(
             DeclaredLocalType(declaration, variable),
             initializer,
             IsConst: isConst,
-            InferredType: InferredLocalType(declaration, variable)
+            InferredType: InferredLocalType(declaration, variable),
+            AssignedMaybeNull: MaybeNullLocalAssignments.AnyAfterDeclaration(
+                _semantic,
+                declaration,
+                variable
+            )
         );
     }
 
