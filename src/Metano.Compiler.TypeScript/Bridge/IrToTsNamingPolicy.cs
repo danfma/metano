@@ -171,9 +171,12 @@ public static class IrToTsNamingPolicy
     /// <see cref="ToFunctionName(string, IReadOnlyList{IrAttribute})"/>.
     /// </summary>
     public static string ToFunctionName(IrModuleFunction function) =>
-        FindMemberNameOverride(function.Attributes, function.OverloadName) is { } overrideName
-            ? overrideName + AccessorSuffixOf(function.Name)
-            : TypeScriptNaming.ToCamelCase(function.Name);
+        TsOperatorNaming.ExtensionOperatorFunctionName(function)
+        ?? (
+            FindMemberNameOverride(function.Attributes, function.OverloadName) is { } overrideName
+                ? overrideName + AccessorSuffixOf(function.Name)
+                : TypeScriptNaming.ToCamelCase(function.Name)
+        );
 
     /// <summary>
     /// The <c>$get</c> / <c>$set</c> an extension property's accessor function

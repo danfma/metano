@@ -1498,7 +1498,7 @@ public static partial class IrToTsExpressionBridge
     /// imported like any type reference. A <c>private</c> nested owner is declared
     /// module-local, and its exports with it (#412), so they are reached bare.
     /// </summary>
-    private static TsExpression ModuleExportReference(string exportName, IrTypeReference? owner)
+    internal static TsExpression ModuleExportReference(string exportName, IrTypeReference? owner)
     {
         if (owner is null)
             return new TsIdentifier(exportName);

@@ -356,6 +356,18 @@ public static class IrToTsStatementBridge
     private static string? LocalElementName(IrDeconstructionElement element) =>
         element.Name is { } name ? IrToTsNamingPolicy.ToLocalName(name) : null;
 
+    /// <summary>One slot of a deconstruction that stores into declared locals.</summary>
+    private static TsExpression AssignedElement(IrDeconstructionElement element) =>
+        LocalElementName(element) is { } name ? new TsIdentifier(name) : new TsArrayHole();
+
+    private static TsExpression DeconstructedValue(
+        IrTupleDeconstruction td,
+        IrToTsBridgeContext context
+    ) =>
+        td.Initializer is IrOutArgumentCall outCall
+            ? IrToTsExpressionBridge.MapOutArgumentCallValue(outCall, context)
+            : IrToTsExpressionBridge.Map(td.Initializer, context);
+
     private static string WrapLoop(string header, IReadOnlyList<TsStatement> body) =>
         header + "\n" + RenderIndentedBody(body) + "}";
 
@@ -514,11 +526,16 @@ public static class IrToTsStatementBridge
                     : new TsIdentifier("undefined"),
                 Const: vd.IsConst
             ),
+            IrTupleDeconstruction { IsAssignment: true } td => new TsExpressionStatement(
+                new TsBinaryExpression(
+                    new TsArrayLiteral([.. td.Elements.Select(AssignedElement)]),
+                    "=",
+                    DeconstructedValue(td, context)
+                )
+            ),
             IrTupleDeconstruction td => new TsDestructuringDeclaration(
                 td.Elements.Select(LocalElementName).ToList(),
-                td.Initializer is IrOutArgumentCall outCall
-                    ? IrToTsExpressionBridge.MapOutArgumentCallValue(outCall, context)
-                    : IrToTsExpressionBridge.Map(td.Initializer, context),
+                DeconstructedValue(td, context),
                 Const: td.IsConst
             ),
             IrIfStatement ifs => new TsIfStatement(

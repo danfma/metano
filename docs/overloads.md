@@ -276,6 +276,23 @@ would take a generated name it does not own — overriding an inherited fast
 path, or redeclaring an inherited factory — is `MS0068` (error): rename the
 member, or pin the overload with `[Name]`.
 
+### Extension operators
+
+A C# 14 extension operator (`static class SigOps { extension(Sig) { public static Sig
+operator +(Sig a, Sig b) … } }`) is not a member of a group. It becomes an exported function
+of its class's module, named `__` + the operator name + `$` + the receiver's emitted type
+name: `__add$Sig`, and `__add$Box` for `extension<T>(Box<T>)`. `a + b` calls `__add$Sig(a,
+b)`, which the consumer imports from that module, or from its package. Because of the receiver
+in the name, two extension classes of one namespace can each declare `*` for their own type
+without a clash in the barrel. `[Name("plus")]` replaces the operator name (`__plus$Sig`).
+Overloads of one operator for one receiver (`+(Sig, Sig)` and `+(Sig, int)`) are accepted only
+when each overload has its own `[Name]` (`__plusSig$Sig`, `__plusInt$Sig`). Otherwise they
+report `MS0001` at the declaration and at each use. Two classes that declare the same operator
+for the same receiver report `MS0021` at the declaration. An extension operator that is
+`[Ignore]`d, or whose class is not emitted (`[Ignore]`, or a library that is not transpiled),
+reports `MS0001` at each use instead of becoming the native JavaScript operator (spec 001
+FR-097).
+
 ## Using the generated API from hand-written TypeScript
 
 ```ts

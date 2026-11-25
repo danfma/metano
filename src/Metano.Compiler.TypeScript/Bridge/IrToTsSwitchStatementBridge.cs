@@ -40,27 +40,39 @@ internal static class IrToTsSwitchStatementBridge
     internal static TsStatement Map(IrSwitchStatement sw, IrToTsBridgeContext context)
     {
         var subject = IrToTsExpressionBridge.Map(sw.Expression, context);
-
-        if (!NeedsBooleanCaseTests(sw))
-        {
-            return new TsSwitchStatement(
-                subject,
-                [.. sw.Cases.SelectMany(section => MapConstantSection(section, context))]
-            );
-        }
-
         var (sharedLocals, hoistedSwitch) = SwitchSharedLocals.Hoist(sw);
-
-        var subjectAndTests = SubjectAndCaseTests(hoistedSwitch, subject, context);
-        var needsEnclosingBlock = sharedLocals.Count > 0 || subjectAndTests.Count > 1;
+        var switchStatements = SwitchStatements(hoistedSwitch, subject, context);
+        var needsEnclosingBlock = sharedLocals.Count > 0 || switchStatements.Count > 1;
 
         if (!needsEnclosingBlock)
-            return subjectAndTests[0];
+            return switchStatements[0];
 
         return new TsBlockStatement([
             .. sharedLocals.Select(local => IrToTsStatementBridge.Map(local, context)),
-            .. subjectAndTests,
+            .. switchStatements,
         ]);
+    }
+
+    /// <summary>
+    /// A JS <c>switch</c> on the subject when every label is a plain
+    /// constant; otherwise the boolean case tests.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> SwitchStatements(
+        IrSwitchStatement sw,
+        TsExpression subject,
+        IrToTsBridgeContext context
+    )
+    {
+        if (NeedsBooleanCaseTests(sw))
+            return SubjectAndCaseTests(sw, subject, context);
+
+        return
+        [
+            new TsSwitchStatement(
+                subject,
+                [.. sw.Cases.SelectMany(section => MapConstantSection(section, context))]
+            ),
+        ];
     }
 
     /// <summary>

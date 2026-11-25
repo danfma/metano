@@ -1497,7 +1497,7 @@ Product requirements added after the migration (normative; each one is traced by
      compound assignments). A `switch` statement's sections are not statement lists of their
      own: every `case` clause of a JS `switch` shares one scope, so the temporaries of a
      section go to the head of the list that encloses the `switch` statement, and sections
-     are not wrapped in blocks. (A user local declared in one section and assigned in a later one is not yet hoisted, so it hits the `let` temporal dead zone when only the later section runs; tracked in #755.)
+     are not wrapped in blocks. A user local declared in one section and used in another is declared ahead of the switch statement (an uninitialized typed `let`, or the `const` with its initializer), in a block that encloses the declaration and the `switch`, and its declaration in the section becomes an assignment, so a later section that runs alone never meets it in the temporal dead zone (#755). This is the one rule for user locals shared by sections, for a `switch` on constants and a `switch (true)` alike.
      Each arm designator the arm reads becomes its own typed `let` named after it with a `$`
      prefix (`Circle c` → `let $c: Circle;`), assigned by the arm's test right after the check
      that narrows the subject (`$s instanceof Circle && ($c = $s, guard)`), and every read or
@@ -1549,6 +1549,34 @@ Product requirements added after the migration (normative; each one is traced by
   `static override create` only when the base is not generic and every base key appears in the
   derived arguments with the same type and requiredness. A type-level attribute on a type with
   no constructor (a static class) reports that there is no constructor to lower.
+
+- **FR-097** (C# 14 extension operators, #761, decisions W9-3 and W9-8, extends FR-077 / FR-078
+  to the extension-member model of #156): An operator declared in a C# 14 `extension` block
+  (`static class SigOps { extension(Sig) { public static Sig operator +(Sig a, Sig b) … } }`)
+  MUST run at every application C# binds to it, never as the native JS operator. The TypeScript
+  target emits it as an exported function of the extension class's module (the file of
+  `SigOps`, beside its extension methods and properties), named `__` + FR-078's operator name +
+  `$` + the block receiver's emitted type name without type arguments (`__add$Sig`,
+  `__negate$Sig`, `__checkedMultiply$Sig`; `extension<T>(Box<T>)` → `__add$Box<T>(a: Box<T>, b:
+  Box<T>): Box<T>`, a primitive receiver its TypeScript keyword, `__add$number`). A `[Name]` on
+  the operator replaces the operator name (`[Name("plus")]` → `__plus$Sig`). The function takes
+  the operator's parameters and the block's and the operator's type parameters. Each application
+  is FR-077's `IrUserOperatorApplication`, whose `BoundOperator` names the extension class as
+  its declaring type and carries the block's receiver type (`ExtensionReceiver`), so binary,
+  unary, relational, equality (lifted included), `++` / `--`, compound assignment and `checked`
+  applications keep FR-077's evaluation rules and call the module function (`__add$Sig(a, b)`,
+  `c = __increment$Sig(c)`). The consumer imports it from the class's module, or from its package
+  for a referenced one. Each function name is registered in the project-wide extension-helper
+  registry, so two classes exporting the same name (the same operator for the same receiver)
+  report `MS0021` (error) at the declaration, and no barrel exports a name twice. Not lowered,
+  reporting `MS0001` (warning) at each application with the throwing placeholder, and at the
+  declaration where one is emitted: an instance (compound-assignment or increment) extension
+  operator; a `true` / `false` extension operator; two or more extension operators of one class
+  with the same metadata name and the same receiver type (same or another block), unless each one
+  carries its own `[Name]`; an `[Ignore]`d extension operator (no function, `MS0001` only at the
+  applications); and an extension operator whose class is not emitted (an `[Ignore]`d class, or a
+  class of a library that is not transpiled). Dart output is unchanged: Dart keeps user operators
+  as the source wrote them.
 
 ### Key Entities
 

@@ -5,3 +5,4 @@ conformance/lazy-barrel/lazy-barrel-probes conformance/lazy-barrel/index
 conformance/lazy-three-level-cycle/lazy-three-level-cycle-probes conformance/lazy-three-level-cycle/index
 conformance/lazy-eager-singleton-cycle/lazy-eager-singleton-cycle-probes conformance/lazy-eager-singleton-cycle/index
 conformance/lazy-eager-singleton-derived-first/lazy-eager-singleton-derived-first-probes conformance/lazy-eager-singleton-derived-first/index
+conformance/ext-ops-barrel/extension-operator-barrel-probes conformance/ext-ops-barrel/index
