@@ -36,6 +36,12 @@ public sealed class DartTarget : ITranspilerTarget
                     + "Dart per-type extractor also reads its inputs from IrCompilation."
             );
 
+        // The Dart target is a prototype that does not render every body yet:
+        // a placeholder that drops code is a warning (W9-13a).
+        using var policy = DroppedCodeDiagnostics.Use(
+            new DroppedCodePolicy(MetanoDiagnosticSeverity.Warning, "Dart")
+        );
+
         var transformer = new DartTransformer(ir, compilation);
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;

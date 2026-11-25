@@ -1491,12 +1491,7 @@ public class DartOverloadNamingTests
         );
 
         await Assert
-            .That(
-                DartTranspileHelper.ExceptPrinterGap(
-                    diagnostics,
-                    "Statement 'IrTupleDeconstruction'"
-                )
-            )
+            .That(DartTranspileHelper.ExceptPrinterGap(diagnostics, "The C# tuple deconstruction"))
             .IsEmpty();
     }
 

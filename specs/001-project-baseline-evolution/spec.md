@@ -1550,19 +1550,29 @@ Product requirements added after the migration (normative; each one is traced by
   derived arguments with the same type and requiredness. A type-level attribute on a type with
   no constructor (a static class) reports that there is no constructor to lower.
 
-- **FR-099** (placeholder severity, wave 9 decision W9-13): An unsupported construct whose
-  emission replaces executable code with a placeholder — a `/* TODO … */` marker, a dropped
+- **FR-099** (placeholder severity, wave 9 decisions W9-13 / W9-13a): An unsupported construct
+  whose emission replaces executable code with a placeholder — a `/* TODO … */` marker, a dropped
   statement or expression, a read that yields nothing instead of the value — MUST report `MS0001`
-  as an **error**: the output is known to be wrong. `MS0001` stays a **warning** where the emitted
-  code still preserves the .NET behaviour or fails loudly at run time (the expression placeholder
-  that throws when reached). The rule lives at the placeholder emission points, in one place
-  (`Extraction/DroppedCodeDiagnostics.cs`): a statement no target models (core, reported at the
-  statement: `lock`, `goto`, a local function declaration, …), a positional pattern element no
-  member answers (core), a node the TypeScript bridge has no lowering for (statement and
-  expression fallbacks), and each Dart body-printer placeholder (a statement or expression it has
-  no Dart form for, an `[Emit]` template, an `is` pattern, a list or positional pattern outside a
-  `switch`, a `not` pattern in a `switch`, an unsupported pattern). An empty statement (`;`) is
-  not a placeholder: it emits nothing. Tests: `tests/Metano.Tests/DiagnosticsTests.cs`.
+  with the severity of the target: an **error** on TypeScript (the output is known to be wrong),
+  a **warning** on the Dart prototype, which does not render every body yet (revisit when it
+  leaves prototype status). `MS0001` stays a **warning** on every target where the emitted code
+  still preserves the .NET behaviour or fails loudly at run time (the expression placeholder that
+  throws when reached). Each report names the C# construct (`The C# for statement is not
+  supported by the Dart target.`) and carries the C# source location: the core records each
+  statement's span on the IR (`IrStatement.Span`, not part of its equality) and a target that
+  renders the IR later reports at the statement it is rendering. The rule lives at the
+  placeholder emission points, in one place (`Extraction/DroppedCodeDiagnostics.cs`, with the
+  target's `DroppedCodePolicy`): a statement no target models (core, at the statement: `lock`,
+  `goto` / `goto case` / `goto default`, …), a `using` declaration (`using var x = r;`, whose
+  `Dispose` would never run), a positional pattern element no member answers (core), a node the
+  TypeScript bridge has no lowering for (statement and expression fallbacks), and each Dart
+  body-printer placeholder (a statement or expression it has no Dart form for, an `[Emit]`
+  template, an `is` pattern, a list or positional pattern outside a `switch`, a `not` pattern in
+  a `switch`, an unsupported pattern); the Dart static-constructor drop and the Dart overloads
+  that keep only the primary signature stay warnings at their declaration. Not placeholders: an
+  empty statement (`;`) emits nothing, and a local function declaration emits nothing — no target
+  lowers local functions yet, and each reference reports at its use (its placeholder throws), so
+  an unused one drops nothing that runs. Tests: `tests/Metano.Tests/DiagnosticsTests.cs`.
 
 - **FR-100** (labeled statements, #772, decision W9-12): A C# label on a loop (`while`, `do`,
   `for`, `foreach`) or a `switch` statement MUST be kept, and the labeled `break label;` /

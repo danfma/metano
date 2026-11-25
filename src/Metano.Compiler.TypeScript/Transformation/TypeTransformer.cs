@@ -569,6 +569,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // mean two distinct monitors over one non-thread-safe list.
         using var extractionDiagnosticSink = ExtractionDiagnostics.Open(ReportDiagnostic);
 
+        // A placeholder that drops code is an error on this target (W9-13).
+        using var droppedCodePolicy = DroppedCodeDiagnostics.Use(
+            new DroppedCodePolicy(MetanoDiagnosticSeverity.Error, "JavaScript")
+        );
+
         _currentAssembly = compilation.Assembly;
 
         // The frontend already detects [assembly: TranspileAssembly] (semantic model

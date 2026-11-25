@@ -107,8 +107,11 @@ public sealed class IrStatementExtractor(
 
         if (arrow is not null)
         {
-            var statement = _expressions.InlineCodeStatementOf(arrow.Expression)
-                ?? ArrowStatement(_expressions.Extract(arrow.Expression), isVoid);
+            var statement = IrStatementSpans.WithSpanOf(
+                arrow.Expression,
+                _expressions.InlineCodeStatementOf(arrow.Expression)
+                    ?? ArrowStatement(_expressions.Extract(arrow.Expression), isVoid)
+            );
 
             return new ExtractedBody(_expressions.LowerExpressionVariables(statement), localNames);
         }
@@ -170,7 +173,10 @@ public sealed class IrStatementExtractor(
         return extracted
             .SelectMany(
                 (stmt, index) =>
-                    _expressions.ExpressionVariables.Lower(stmt, extracted[(index + 1)..])
+                    IrStatementSpans.Inherit(
+                        stmt,
+                        _expressions.ExpressionVariables.Lower(stmt, extracted[(index + 1)..])
+                    )
             )
             .ToList();
     }
@@ -295,17 +301,40 @@ public sealed class IrStatementExtractor(
     private IEnumerable<IrStatement> ExtractStatementInScope(StatementSyntax statement) =>
         statement switch
         {
-            LocalDeclarationStatementSyntax local => ExtractDeclarators(
-                local.Declaration,
-                local.IsConst
-            ),
+            LocalDeclarationStatementSyntax local => ExtractLocalDeclaration(local),
             EmptyStatementSyntax => [],
+            // A local function declaration emits nothing: no target lowers it
+            // yet, and each reference to it reports where it is used (its
+            // placeholder throws), so an unused one drops nothing that runs.
+            LocalFunctionStatementSyntax => [],
             _ => [ExtractStatement(statement)],
         };
 
+    /// <summary>
+    /// The declarators of a local declaration. A <c>using</c> declaration
+    /// (<c>using var x = r;</c>) disposes its value at the end of the scope,
+    /// which no target emits yet, so it reports the dropped call.
+    /// </summary>
+    private List<IrStatement> ExtractLocalDeclaration(LocalDeclarationStatementSyntax local)
+    {
+        if (local.UsingKeyword.IsKind(SyntaxKind.UsingKeyword))
+        {
+            DroppedCodeDiagnostics.Report(
+                "The C# using declaration is not supported by the transpiler: its value would "
+                    + "never be disposed at the end of the scope.",
+                local.GetLocation()
+            );
+        }
+
+        return ExtractDeclarators(local.Declaration, local.IsConst);
+    }
+
     private IrStatement ExtractStatement(StatementSyntax statement) =>
-        InlineCodeStatementOf(statement)
-        ?? ReportedIfAsyncIterator(statement, ExtractOrdinaryStatement(statement));
+        IrStatementSpans.WithSpanOf(
+            statement,
+            InlineCodeStatementOf(statement)
+                ?? ReportedIfAsyncIterator(statement, ExtractOrdinaryStatement(statement))
+        );
 
     /// <summary>A <c>Js.Code</c> call as an expression statement keeps its statement form (spec 011 FR-031).</summary>
     private IrStatement? InlineCodeStatementOf(StatementSyntax statement) =>
@@ -356,12 +385,6 @@ public sealed class IrStatementExtractor(
                 jump.Name?.Identifier.ValueText
             ),
             LabeledStatementSyntax labeled => ExtractLabeled(labeled),
-            GotoStatementSyntax jump => DroppedCodeDiagnostics.UnsupportedStatement(
-                jump,
-                "'goto' is not supported by the transpiler: JavaScript has no 'goto', so a "
-                    + "label used as its target has no equivalent. Use a labeled 'break' or "
-                    + "'continue' instead."
-            ),
             YieldStatementSyntax ys
                 when ys.IsKind(SyntaxKind.YieldReturnStatement) && ys.Expression is not null =>
                 new IrExpressionStatement(
@@ -702,7 +725,10 @@ public sealed class IrStatementExtractor(
     ) =>
         declaration
             .Variables.Select(variable =>
-                (IrStatement)ExtractDeclarator(declaration, variable, isConst)
+                IrStatementSpans.WithSpanOf(
+                    variable,
+                    ExtractDeclarator(declaration, variable, isConst)
+                )
             )
             .ToList();
 

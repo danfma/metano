@@ -166,11 +166,8 @@ public class CheckedContextTests
 
         var messages = UnsupportedFeatures(diagnostics).Select(d => d.Message).ToList();
 
-        await Assert.That(messages).Count().IsEqualTo(2);
-
-        await Assert
-            .That(messages.Count(message => message.Contains("LocalFunctionStatement")))
-            .IsEqualTo(1);
+        // The declaration emits nothing; the reference reports (FR-099).
+        await Assert.That(messages).Count().IsEqualTo(1);
 
         await Assert
             .That(messages.Count(message => message.Contains("Local function 'G'")))

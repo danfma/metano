@@ -69,7 +69,9 @@ public sealed partial class IrExpressionExtractor
     /// promoted to <c>const</c> when nothing reassigns them.
     /// </summary>
     internal IReadOnlyList<IrStatement> LowerExpressionVariables(IrStatement statement) =>
-        IrStatementExtractor.PromoteEffectiveConsts(ExpressionVariables.Lower(statement));
+        IrStatementExtractor.PromoteEffectiveConsts([
+            .. IrStatementSpans.Inherit(statement, ExpressionVariables.Lower(statement)),
+        ]);
 
     private IrExpression ExtractInvocation(InvocationExpressionSyntax inv)
     {

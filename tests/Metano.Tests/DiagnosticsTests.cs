@@ -33,7 +33,7 @@ public class DiagnosticsTests
         var reported = error.Location!.SourceTree!.GetText().ToString(error.Location.SourceSpan);
 
         await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
-        await Assert.That(error.Message).Contains("LockStatement");
+        await Assert.That(error.Message).Contains("The C# lock statement");
         await Assert.That(reported).StartsWith("lock (_gate)");
     }
 
@@ -88,10 +88,11 @@ public class DiagnosticsTests
     }
 
     [Test]
-    public async Task DartPlaceholder_ReportsAnError()
+    public async Task DartPlaceholder_ReportsAWarningAtTheCSharpConstruct()
     {
         // The Dart body printer has no `for` loop yet: its placeholder drops
-        // the loop, so it reports an error (W9-13).
+        // the loop. The Dart target is a prototype, so it is a warning
+        // (W9-13a) that names the C# construct and points at it.
         var (files, diagnostics) = DartTranspileHelper.Transpile(
             """
             [Transpile]
@@ -107,11 +108,64 @@ public class DiagnosticsTests
             """
         );
 
+        var warning = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+        var position = warning.Location!.GetLineSpan().StartLinePosition;
+
+        var expected = "The C# for statement is not supported by the Dart target.";
+
+        await Assert.That(warning.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
+        await Assert.That(warning.Message).IsEqualTo(expected);
+        await Assert.That(position.Character).IsEqualTo(8);
+        await Assert.That(string.Concat(files.Values)).Contains("TODO");
+    }
+
+    [Test]
+    public async Task UsingDeclaration_ReportsTheDroppedDispose()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public sealed class Resource : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public static class Uses
+            {
+                public static int Run()
+                {
+                    using var resource = new Resource();
+                    return 1;
+                }
+            }
+            """
+        );
+
         var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
 
         await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
-        await Assert.That(error.Message).Contains("IrForStatement");
-        await Assert.That(string.Concat(files.Values)).Contains("TODO");
+        await Assert.That(error.Message).Contains("using declaration");
+    }
+
+    [Test]
+    public async Task UnusedLocalFunction_ReportsNothing()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public static class Uses
+            {
+                public static int Run(int a)
+                {
+                    int Unused(int x) => x * 2;
+                    return a;
+                }
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]

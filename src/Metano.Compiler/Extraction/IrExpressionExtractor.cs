@@ -4390,7 +4390,10 @@ public sealed partial class IrExpressionExtractor
                 .ExtractBody(block, arrow: null, isVoid: false)
                 .Statements,
             ExpressionSyntax expr => LowerExpressionVariables(
-                InlineCodeStatementOf(expr) ?? LambdaExpressionBodyStatement(expr)
+                IrStatementSpans.WithSpanOf(
+                    expr,
+                    InlineCodeStatementOf(expr) ?? LambdaExpressionBodyStatement(expr)
+                )
             ),
             _ => [DroppedCodeDiagnostics.UnsupportedStatement(body)],
         };

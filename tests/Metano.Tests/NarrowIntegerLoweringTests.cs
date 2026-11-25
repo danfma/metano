@@ -498,10 +498,7 @@ public class NarrowIntegerLoweringTests
         await Assert.That(small).Contains("s = (s * 3).toSigned(16);");
         await Assert.That(small).Contains("this.field = (this.field - 1).toUnsigned(8);");
 
-        var unexpected = DartTranspileHelper.ExceptPrinterGap(
-            diagnostics,
-            "Statement 'IrForStatement'"
-        );
+        var unexpected = DartTranspileHelper.ExceptPrinterGap(diagnostics, "The C# for statement");
 
         await Assert.That(UnsupportedFeatures(unexpected)).IsEmpty();
     }

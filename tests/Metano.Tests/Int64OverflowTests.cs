@@ -297,10 +297,7 @@ public class Int64OverflowTests
         await Assert.That(counter).Contains("l = l + 1;");
         await Assert.That(counter).Contains("this.total = this.total + i;");
 
-        var unexpected = DartTranspileHelper.ExceptPrinterGap(
-            diagnostics,
-            "Statement 'IrForStatement'"
-        );
+        var unexpected = DartTranspileHelper.ExceptPrinterGap(diagnostics, "The C# for statement");
 
         await Assert.That(UnsupportedFeatures(unexpected)).IsEmpty();
     }

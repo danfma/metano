@@ -29,7 +29,11 @@ public static class IrBodyPrinter
         bool allowArrow = true
     )
     {
+        // An expression body prints its one statement without visiting it.
+        using var location = body is [var only] ? DroppedCodeDiagnostics.At(only) : null;
+
         var indent = new string(' ', indentLevel * 2);
+
         // Expression-bodied optimization: single return of an expression → `=> expr;`
         if (allowArrow && body.Count == 1 && body[0] is IrReturnStatement { Value: { } returned })
         {
@@ -56,6 +60,8 @@ public static class IrBodyPrinter
 
     private static void PrintStatement(StringBuilder sb, IrStatement stmt, int indentLevel)
     {
+        using var location = DroppedCodeDiagnostics.At(stmt);
+
         var indent = new string(' ', indentLevel * 2);
 
         switch (stmt)
@@ -235,7 +241,7 @@ public static class IrBodyPrinter
                 AppendDropped(
                     sb,
                     $"// TODO: unsupported IR statement {stmt.GetType().Name}\n",
-                    $"Statement '{stmt.GetType().Name}'"
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(stmt)}"
                 );
 
                 break;
@@ -518,7 +524,7 @@ public static class IrBodyPrinter
                 AppendDropped(
                     sb,
                     $"/* TODO: [Emit] template ‘{tpl.Template}’ has no Dart mapping */ null",
-                    $"[Emit] template '{tpl.Template}'"
+                    $"The [Emit] template '{tpl.Template}'"
                 );
 
                 break;
@@ -544,7 +550,7 @@ public static class IrBodyPrinter
                 AppendDropped(
                     sb,
                     $"/* TODO: {expr.GetType().Name} */",
-                    $"Expression '{expr.GetType().Name}'"
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(expr)}"
                 );
 
                 break;
@@ -648,7 +654,7 @@ public static class IrBodyPrinter
                 AppendDropped(
                     sb,
                     $"/* TODO: unsupported is-pattern {node.Pattern.GetType().Name} */",
-                    $"Pattern '{node.Pattern.GetType().Name}' in an 'is' expression"
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(node.Pattern)} in an 'is' expression"
                 );
 
                 break;
@@ -744,7 +750,7 @@ public static class IrBodyPrinter
                 AppendDropped(
                     sb,
                     "/* TODO: Dart list/positional pattern outside switch */ false",
-                    "A list or positional pattern outside a switch"
+                    "The C# list or positional pattern outside a switch"
                 );
 
                 break;
@@ -752,7 +758,7 @@ public static class IrBodyPrinter
                 AppendDropped(
                     sb,
                     $"/* TODO: unsupported pattern {pattern.GetType().Name} */",
-                    $"Pattern '{pattern.GetType().Name}'"
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(pattern)}"
                 );
 
                 break;
@@ -940,7 +946,7 @@ public static class IrBodyPrinter
                 AppendDropped(
                     sb,
                     "/* TODO: Dart lacks `not` patterns — rewrite as when-guard */ _",
-                    "A 'not' pattern in a switch"
+                    "The C# 'not' pattern in a switch"
                 );
 
                 break;
@@ -1008,7 +1014,7 @@ public static class IrBodyPrinter
                 AppendDropped(
                     sb,
                     $"/* TODO: unsupported pattern {pattern.GetType().Name} */",
-                    $"Pattern '{pattern.GetType().Name}'"
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(pattern)}"
                 );
 
                 break;

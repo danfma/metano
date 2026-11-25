@@ -420,7 +420,14 @@ public static class IrToTsStatementBridge
         return inner.TrimEnd(';');
     }
 
-    internal static TsStatement Map(IrStatement statement, IrToTsBridgeContext context) =>
+    internal static TsStatement Map(IrStatement statement, IrToTsBridgeContext context)
+    {
+        using var location = DroppedCodeDiagnostics.At(statement);
+
+        return MapAtLocation(statement, context);
+    }
+
+    private static TsStatement MapAtLocation(IrStatement statement, IrToTsBridgeContext context) =>
         statement switch
         {
             // Yield return surfaces as IrExpressionStatement(IrYieldExpression) —
@@ -596,7 +603,8 @@ public static class IrToTsStatementBridge
         var kind = statement.GetType().Name;
 
         DroppedCodeDiagnostics.Report(
-            $"Statement '{kind}' is not supported by the TypeScript target."
+            $"The C# {DroppedCodeDiagnostics.ConstructName(statement)} is not supported by "
+                + "the TypeScript target."
         );
 
         return new TsExpressionStatement(new TsIdentifier($"/* TODO: {kind} */"));

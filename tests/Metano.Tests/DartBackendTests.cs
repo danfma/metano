@@ -1494,10 +1494,7 @@ public class DartBackendTests
 
         var dart = files["money.dart"];
 
-        var unexpected = DartTranspileHelper.ExceptPrinterGap(
-            diagnostics,
-            "Pattern 'IrTypePattern'"
-        );
+        var unexpected = DartTranspileHelper.ExceptPrinterGap(diagnostics, "The C# type pattern");
 
         await Assert.That(unexpected).IsEmpty();
         await Assert.That(dart).Contains("@override\n  int get hashCode => this.cents;");

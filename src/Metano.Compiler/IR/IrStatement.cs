@@ -3,7 +3,20 @@ namespace Metano.Compiler.IR;
 /// <summary>
 /// A semantic statement in the IR.
 /// </summary>
-public abstract record IrStatement;
+public abstract record IrStatement
+{
+    /// <summary>
+    /// Where the statement came from in the C# source, for a target that
+    /// reports a diagnostic while it renders the statement; <c>null</c> for a
+    /// statement the core synthesized. Not part of the statement's equality.
+    /// </summary>
+    public IrSourceSpan? Span { get; init; }
+
+    public virtual bool Equals(IrStatement? other) =>
+        other is not null && EqualityContract == other.EqualityContract;
+
+    public override int GetHashCode() => EqualityContract.GetHashCode();
+}
 
 /// <summary>
 /// An expression used as a statement.

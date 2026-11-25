@@ -352,7 +352,7 @@ public class OperatorUseSiteTests
         );
 
         await Assert
-            .That(DartTranspileHelper.ExceptPrinterGap(diagnostics, "Statement 'IrForStatement'"))
+            .That(DartTranspileHelper.ExceptPrinterGap(diagnostics, "The C# for statement"))
             .IsEmpty();
     }
 }

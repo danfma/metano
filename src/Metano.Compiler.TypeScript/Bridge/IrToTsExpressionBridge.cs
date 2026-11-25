@@ -250,7 +250,8 @@ public static partial class IrToTsExpressionBridge
         var kind = expression.GetType().Name;
 
         DroppedCodeDiagnostics.Report(
-            $"Expression '{kind}' is not supported by the TypeScript target."
+            $"The C# {DroppedCodeDiagnostics.ConstructName(expression)} is not supported by "
+                + "the TypeScript target."
         );
 
         return new TsIdentifier($"/* TODO: {kind} */");
