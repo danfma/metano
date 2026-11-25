@@ -288,6 +288,7 @@ public sealed partial class IrExpressionExtractor
     /// indexer, named by <see cref="IrExtensionConventions"/>.
     /// </summary>
     private sealed record ExtensionIndexerAccessors(
+        IrExpressionExtractor Extractor,
         ExtensionPropertyLowering Lowering,
         string SetterName,
         string? EmittedSetterName
@@ -299,6 +300,7 @@ public sealed partial class IrExpressionExtractor
             IrExpressionExtractor extractor
         ) =>
             new(
+                extractor,
                 lowering,
                 IrExtensionConventions.SetterName(indexer),
                 extractor.ResolvePropertySetterEmittedName(indexer)
@@ -318,7 +320,7 @@ public sealed partial class IrExpressionExtractor
             string? emittedName,
             IReadOnlyList<IrExpression> arguments
         ) =>
-            BuildExtensionHelperCall(
+            Extractor.BuildExtensionHelperCall(
                 Lowering.HelperContainer,
                 name,
                 emittedName,

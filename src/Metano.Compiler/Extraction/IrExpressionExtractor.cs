@@ -4571,9 +4571,12 @@ public sealed partial class IrExpressionExtractor
     /// the bridge drops the type qualifier and the import collector
     /// imports the helper directly. Shared by the method-call and
     /// property-read rewrites so the contract has a single source of
-    /// truth.
+    /// truth. The container reference carries its cross-assembly origin and
+    /// the origin flags an emitted extension container
+    /// (<see cref="IrMemberOrigin.IsDeclaringTypeExtensionContainer"/>), so a
+    /// helper declared in a referenced package is imported from it (#766).
     /// </summary>
-    private static IrCallExpression BuildExtensionHelperCall(
+    private IrCallExpression BuildExtensionHelperCall(
         INamedTypeSymbol helperContainer,
         string helperName,
         string? emittedName,
@@ -4587,10 +4590,17 @@ public sealed partial class IrExpressionExtractor
             IsStatic: true,
             EmittedName: emittedName,
             IsDeclaringTypeExternal: SymbolHelper.HasExternal(helperContainer),
-            IsDeclaringTypeNoContainer: true
+            IsDeclaringTypeNoContainer: true,
+            IsDeclaringTypeExtensionContainer: helperContainer.IsEmittedExtensionContainer(_target)
         );
+
+        var container = new IrTypeReference(
+            helperContainer.Name,
+            CrossAssemblyOriginOf(helperContainer)
+        );
+
         return new IrCallExpression(
-            new IrMemberAccess(new IrTypeReference(helperContainer.Name), helperName, origin),
+            new IrMemberAccess(container, helperName, origin),
             arguments,
             typeArguments,
             origin

@@ -1775,7 +1775,9 @@ Product requirements added after the migration (normative; each one is traced by
   `item$set(receiver, ...indices, value)`, its base name being the indexer's metadata name (an
   `[IndexerName("Slot")]` gives `slot$get` / `slot$set`; a `[Name]` replaces it). Each name is
   registered in the project-wide extension-helper registry, so a consumer imports it from the
-  class's module and two classes exporting one name report `MS0021`. A read calls the getter, a
+  class's module and two classes exporting one name report `MS0021`; a consumer of a referenced
+  package imports it, like the package's extension methods, from that package (#766: every
+  extension-helper call names its container with the container's cross-assembly origin). A read calls the getter, a
   plain assignment the setter. A compound assignment, `++` / `--` and `??=` read the current
   value through the getter and store through the setter, evaluating the receiver and then each
   index once, in source order (an impure one is bound first); a `Nullable<T>` accessor stores the
@@ -1784,8 +1786,9 @@ Product requirements added after the migration (normative; each one is traced by
   `null` (`item$get(b, i) ?? item$set(b, i, v)`). Where the value of the assignment or increment
   is used, it is the stored value (the previous one for a postfix increment), as in C#. The
   getter may be called again inside a lifted store (getters are assumed side-effect free).
-  Tests: `tests/Metano.Tests/ExtensionIndexerTests.cs`, `ExtensionPropertySetterTests.cs`;
-  conformance rows `ExtensionIndexerProbes.*`.
+  Tests: `tests/Metano.Tests/ExtensionIndexerTests.cs`, `ExtensionPropertySetterTests.cs`,
+  `CrossPackageExtensionAccessorTests.cs`; conformance rows `ExtensionIndexerProbes.*`,
+  `CrossPackageExtensionProbes.*`.
 
 ### Key Entities
 
