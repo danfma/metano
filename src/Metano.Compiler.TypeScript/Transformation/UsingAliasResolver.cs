@@ -197,13 +197,37 @@ public static class UsingAliasResolver
     {
         var byName = new Dictionary<string, UsingAlias>(StringComparer.Ordinal);
 
-        foreach (var alias in aliases)
+        foreach (var alias in aliases.Where(alias => !IsGlobalAlias(alias)))
         {
-            if (
-                !byName.TryAdd(alias.Alias, alias)
-                && !SymbolEqualityComparer.Default.Equals(byName[alias.Alias].Symbol, alias.Symbol)
-            )
-                yield return (byName[alias.Alias], alias);
+            if (byName.TryAdd(alias.Alias, alias))
+                continue;
+
+            var first = byName[alias.Alias];
+
+            if (InSameTree(first, alias))
+            {
+                // C# scoping: an inner namespace block shadows an outer alias of the same
+                // name in one file, so only the innermost alias applies there.
+                byName[alias.Alias] = alias;
+
+                continue;
+            }
+
+            if (!SymbolEqualityComparer.Default.Equals(first.Symbol, alias.Symbol))
+                yield return (first, alias);
         }
     }
+
+    /// <summary>
+    /// A <c>global using</c> alias is shadowed by any local alias of the same name, so
+    /// it never conflicts with one; only local aliases of different files of one emitted
+    /// module can bind one name to two types.
+    /// </summary>
+    private static bool IsGlobalAlias(UsingAlias alias) =>
+        alias.Location?.SourceTree?.GetRoot().FindNode(alias.Location.SourceSpan)
+            is UsingDirectiveSyntax directive
+        && IsGlobal(directive);
+
+    private static bool InSameTree(UsingAlias first, UsingAlias second) =>
+        first.Location?.SourceTree is { } tree && tree == second.Location?.SourceTree;
 }

@@ -325,6 +325,53 @@ public class UsingAliasScopeFileTests
         }
     }
 
+    /// <summary>
+    /// A local alias legally shadows a <c>global using</c> alias or an outer namespace's
+    /// alias of the same name (C# scoping), so neither reports MS0070, and the file
+    /// imports the innermost target (#754 round 2 review, shapes x2, x3 and x5).
+    /// </summary>
+    [Test]
+    [Arguments(
+        "global using N = App.A.Node;",
+        "namespace App.U { using N = App.B.Node; [Metano.Annotations.Transpile] public static class Use { public static bool IsB(object o) => o is N; } }"
+    )]
+    [Arguments(
+        "global using N = App.A.Node;",
+        "namespace App.U; using N = App.B.Node; [Metano.Annotations.Transpile] public static class Use { public static bool IsB(object o) => o is N; }"
+    )]
+    [Arguments(
+        "",
+        "namespace App { using N = App.A.Node; namespace U { using N = App.B.Node; [Metano.Annotations.Transpile] public static class Use { public static bool IsB(object o) => o is N; } } }"
+    )]
+    public async Task ShadowingAlias_DoesNotReportAndImportsTheInnermostTarget(
+        string globals,
+        string use
+    )
+    {
+        var directory = Directory.CreateTempSubdirectory("metano-alias-shadow-");
+
+        try
+        {
+            File.WriteAllText(Path.Combine(directory.FullName, "Nodes.cs"), Nodes);
+            File.WriteAllText(Path.Combine(directory.FullName, "Globals.cs"), globals);
+            File.WriteAllText(Path.Combine(directory.FullName, "Use.cs"), use);
+
+            var (files, diagnostics) = TranspileHelper.TranspileSourceDirectory(directory.FullName);
+
+            await Assert
+                .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
+                .IsEmpty();
+
+            var useFile = files.Single(f => f.Key.EndsWith("use.ts", StringComparison.Ordinal));
+
+            await Assert.That(useFile.Value).Contains("../b/node.js");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     private static async Task AssertTypeChecks(Dictionary<string, string> files)
     {
         var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(
