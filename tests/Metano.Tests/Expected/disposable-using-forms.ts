@@ -41,7 +41,7 @@ export class Uses {
       try {
         Uses.touch(null);
       } finally {
-        $using0.dispose();
+        $using0?.dispose();
       }
     }
   }
@@ -99,7 +99,7 @@ export class Uses {
       const $using0 = t;
       try {
       } finally {
-        $using0.dispose();
+        $using0?.dispose();
       }
     }
   }

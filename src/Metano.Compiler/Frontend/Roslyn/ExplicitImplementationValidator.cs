@@ -134,9 +134,18 @@ internal sealed class ExplicitImplementationValidator
                 + $"'{member.ContainingType.Name}' cannot be declared as '{interfaceMember.Name}': "
                 + $"'{conflictingMember.ContainingType.Name}.{conflictingMember.Name}' already "
                 + "claims the name and the explicit body does not just forward to it (or that "
-                + "member is not public or internal). Rename one of them, or make the explicit "
-                + $"one forward to it ('void IDisposable.{interfaceMember.Name}() => "
-                + $"{conflictingMember.Name}();').",
+                + "member is not public or internal). "
+                + ForwardingHint(interfaceMember, conflictingMember),
             member.Locations.FirstOrDefault()
         );
+
+    /// <summary>
+    /// The fix to suggest: a forwarder only to a parameterless claimer, the one call a pure
+    /// forwarder can make; a renaming otherwise.
+    /// </summary>
+    private static string ForwardingHint(ISymbol interfaceMember, ISymbol conflictingMember) =>
+        conflictingMember is IMethodSymbol { Parameters.Length: 0 }
+            ? "Rename one of them, or make the explicit one forward to it ('void IDisposable."
+                + $"{interfaceMember.Name}() => {conflictingMember.Name}();')."
+            : "Rename one of them.";
 }

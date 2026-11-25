@@ -478,6 +478,65 @@ public class DisposableTests
     }
 
     [Test]
+    public async Task UserMappedBclInterface_KeepsThe320Shape()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [assembly: ExportFromBcl(typeof(IComparable), ExportedName = "IComparable", FromPackage = "my-cmp")]
+
+            [Transpile]
+            public class Ordered : IComparable
+            {
+                public int CompareTo(object? other) => 0;
+            }
+
+            [Transpile]
+            public static class Probe
+            {
+                public static bool Is(object o) => o is IComparable;
+            }
+            """
+        );
+
+        var all = string.Concat(files.Values);
+
+        await Assert.That(all).DoesNotContain("IComparable$runtimeType");
+        await Assert.That(files["ordered.ts"]).DoesNotContain("implements IComparable");
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task DisposeGuard_IsDroppedOnlyForACreatedValue()
+    {
+        var result = TranspileHelper.Transpile(
+            Resources
+                + """
+                [Transpile]
+                public static class Uses
+                {
+                    public static Res Open() => new Res();
+
+                    public static void Run(Res[] items)
+                    {
+                        using var created = new Res();
+                        using var element = items[0];
+                        using var forgiven = Open()!;
+                    }
+                }
+                """
+        );
+
+        var output = result["uses.ts"];
+
+        await Assert.That(output).Contains("created.dispose();");
+        await Assert.That(output).Contains("element?.dispose();");
+        await Assert.That(output).Contains("forgiven?.dispose();");
+    }
+
+    [Test]
     public async Task CrossPackageImplementer_IsTestedAndDisposed()
     {
         var files = TranspileHelper.TranspileWithLibrary(
@@ -507,8 +566,8 @@ public class DisposableTests
         var output = files["uses.ts"];
 
         await Assert.That(output).Contains("return isType(o, IDisposable$runtimeType);");
-        // Annotations are disabled in this consumer, so the null guard stays.
-        await Assert.That(output).Contains("r?.dispose();");
+        // A created value is never null, so it needs no guard.
+        await Assert.That(output).Contains("r.dispose();");
     }
 
     [Test]

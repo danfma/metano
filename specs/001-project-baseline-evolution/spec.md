@@ -1778,12 +1778,14 @@ Product requirements added after the migration (normative; each one is traced by
      `baseInterfaces`. `is`, `as`, type patterns, overload dispatch, `typeof` and reified type
      arguments test it nominally, like a transpiled interface: a value with a `dispose` method
      whose class does not implement the interface is not `IDisposable`. The general rule: an
-     interface bound by `[ExportFromBcl]` to a package is declared by that package, which exports
-     `<ExportedName>$runtimeType` beside it (`IrNamedTypeSemantics.IsRuntimeDeclared`).
+     interface bound by `[ExportFromBcl]` to `metano-runtime` is declared by the runtime, which
+     exports `<ExportedName>$runtimeType` beside it (`IrNamedTypeSemantics.IsRuntimeDeclared`);
+     an interface a user maps to another package keeps its 3.2.0 behaviour (decision W10-9a).
   3. `using (decl) body`, `using (expr) body` and `using` declarations lower to `try`/`finally`
      that calls `dispose()` on each resource in reverse acquisition order, skips a `null`
-     resource (`r?.dispose()`, omitted for a non-nullable value type or, with nullable
-     annotations enabled, a not-null flow state), runs on every exit (normal, `return`,
+     resource (`r?.dispose()`, omitted only for a non-nullable value type or an initializer
+     that is an object or collection creation, never from flow state, decision W10-9a), runs
+     on every exit (normal, `return`,
      `break`/`continue`, exception, an iterator abandoned early), and lets an exception thrown
      by `dispose()` replace the pending one. An expression resource is held by a temporary
      (`$using0`). A `using` declaration wraps the rest of its scope; several declarators nest

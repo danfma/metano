@@ -165,20 +165,25 @@ public sealed partial class IrStatementExtractor
     }
 
     /// <summary>
-    /// Whether the resource may be <c>null</c> when disposed: never for a non-nullable
-    /// value type; otherwise unless nullable annotations are enabled at the value and its
-    /// flow state is not-null.
+    /// Whether the resource may be <c>null</c> when disposed. Only a value that is non-null
+    /// by construction skips the guard: a non-nullable value type, or an object or
+    /// collection creation (<c>new …</c>, <c>[…]</c>). Roslyn's flow state is not used: it
+    /// is unsound for array elements, captured locals and <c>!</c> (decision W10-9a), and
+    /// a dereferenced <c>null</c> in the <c>finally</c> would replace the body's exception.
     /// </summary>
-    private bool MayBeNull(ITypeSymbol? type, ExpressionSyntax? value)
+    private static bool MayBeNull(ITypeSymbol? type, ExpressionSyntax? value)
     {
         if (type is { IsValueType: true } && !type.IsNullableValueType())
             return false;
 
-        if (value is null || !_semantic.GetNullableContext(value.SpanStart).AnnotationsEnabled())
-            return true;
-
-        return _semantic.GetTypeInfo(value).Nullability.FlowState is not NullableFlowState.NotNull;
+        return Unparenthesized(value)
+            is not (BaseObjectCreationExpressionSyntax or CollectionExpressionSyntax);
     }
+
+    private static ExpressionSyntax? Unparenthesized(ExpressionSyntax? value) =>
+        value is ParenthesizedExpressionSyntax parenthesized
+            ? Unparenthesized(parenthesized.Expression)
+            : value;
 
     /// <summary>
     /// Reports a <c>using</c> declaration that is extracted as a plain declaration: its

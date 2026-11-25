@@ -257,3 +257,97 @@ public static class DisposableProbes
         yield return 2;
     }
 }
+
+/// <summary>
+/// Resources whose flow state is not-null although the value is null at run time (review of
+/// #800, decision W10-9a): the dispose call must still skip them.
+/// </summary>
+public static class DisposableNullGuardProbes
+{
+    public static string ArrayElementResource()
+    {
+        var log = new List<string>();
+        var items = new DispLog[1];
+
+        try
+        {
+            using (var r = items[0])
+            {
+                log.Add("body");
+            }
+
+            log.Add("after");
+        }
+        catch (Exception e)
+        {
+            log.Add("threw " + e.GetType().Name);
+        }
+
+        return string.Join(",", log);
+    }
+
+    public static string ArrayElementKeepsTheBodyException()
+    {
+        var items = new DispLog[1];
+
+        try
+        {
+            using var r = items[0];
+
+            throw new InvalidOperationException("body");
+        }
+        catch (InvalidOperationException e)
+        {
+            return "caught " + e.Message;
+        }
+        catch (Exception e)
+        {
+            return "escaped " + e.GetType().Name;
+        }
+    }
+
+    public static string CapturedLocalSetToNullLater()
+    {
+        var log = new List<string>();
+        DispLog? held = new DispLog(log, "held");
+
+        Action run = () =>
+        {
+            using var r = held;
+            log.Add("in");
+        };
+
+        held = null;
+
+        try
+        {
+            run();
+        }
+        catch (Exception e)
+        {
+            log.Add("threw " + e.GetType().Name);
+        }
+
+        return string.Join(",", log);
+    }
+
+    public static string NullForgivenResource()
+    {
+        var log = new List<string>();
+
+        try
+        {
+            using var r = Lookup(log, false)!;
+            log.Add("body");
+        }
+        catch (Exception e)
+        {
+            log.Add("threw " + e.GetType().Name);
+        }
+
+        return string.Join(",", log);
+    }
+
+    private static DispLog? Lookup(List<string> log, bool found) =>
+        found ? new DispLog(log, "found") : null;
+}

@@ -598,16 +598,18 @@ public static class IrTypeRefMapper
 
     /// <summary>
     /// Marks an interface the compilation does not transpile as declared by the target
-    /// runtime when it carries a package origin anyway: the origin resolver gives such an
-    /// interface one only for its <c>[ExportFromBcl]</c> export, whose package declares it
-    /// with its runtime descriptor (FR-111). A target that binds no export passes no such
-    /// origin, so the fact stays off there.
+    /// runtime when it carries the origin of <see cref="BclExportReader.RuntimeDeclaringPackage"/>:
+    /// the origin resolver gives such an interface one only for its <c>[ExportFromBcl]</c>
+    /// export, and that package declares it with its runtime descriptor (FR-111, W10-9a).
+    /// A user's mapping to another package keeps its 3.2.0 shape. A target that binds no
+    /// export passes no such origin, so the fact stays off there.
     /// </summary>
     private static IrNamedTypeSemantics? WithRuntimeDeclaration(
         IrNamedTypeSemantics? semantics,
         IrTypeOrigin? origin
     ) =>
         origin is not null
+        && BclExportReader.IsRuntimeDeclaringPackage(origin.PackageId)
         && semantics
             is {
                 Kind: IrNamedTypeKind.Interface,
