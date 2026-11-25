@@ -312,6 +312,9 @@ public sealed partial class IrExpressionExtractor
                 assign,
                 ExtractAssignment(assign)
             ),
+            AssignmentExpressionSyntax assign when IsDiscardAssignment(assign) => Extract(
+                assign.Right
+            ),
             AssignmentExpressionSyntax assign => ExtractAssignment(assign),
             MemberAccessExpressionSyntax member => ExtractMemberAccess(
                 QualifiedMemberSyntax.Of(member)
@@ -4369,10 +4372,31 @@ public sealed partial class IrExpressionExtractor
                 .ExtractBody(block, arrow: null, isVoid: false)
                 .Statements,
             ExpressionSyntax expr => LowerExpressionVariables(
-                InlineCodeStatementOf(expr) ?? new IrReturnStatement(Extract(expr))
+                InlineCodeStatementOf(expr) ?? LambdaExpressionBodyStatement(expr)
             ),
             _ => [DroppedCodeDiagnostics.UnsupportedStatement(body)],
         };
+
+    /// <summary>
+    /// The statement an expression-bodied lambda runs: it returns the value,
+    /// except a discard assignment in a lambda that returns nothing
+    /// (<c>() =&gt; _ = writer.Value</c>), which only evaluates it (#773).
+    /// </summary>
+    private IrStatement LambdaExpressionBodyStatement(ExpressionSyntax body) =>
+        body is AssignmentExpressionSyntax assign
+        && IsDiscardAssignment(assign)
+        && _semantic.GetSymbolInfo(body.Parent!).Symbol is IMethodSymbol { ReturnsVoid: true }
+            ? new IrExpressionStatement(Extract(assign.Right))
+            : new IrReturnStatement(Extract(body));
+
+    /// <summary>
+    /// <c>_ = expr</c> where <c>_</c> is a discard, not a local named
+    /// <c>_</c>: C# evaluates <c>expr</c> and drops the value, so it lowers to
+    /// <c>expr</c> alone (#773). Its value, where used, is <c>expr</c>'s.
+    /// </summary>
+    private bool IsDiscardAssignment(AssignmentExpressionSyntax assign) =>
+        assign.IsKind(SyntaxKind.SimpleAssignmentExpression)
+        && _semantic.GetSymbolInfo(assign.Left).Symbol is IDiscardSymbol;
 
     // ── String interpolation ─────────────────────────────────────────────
 
