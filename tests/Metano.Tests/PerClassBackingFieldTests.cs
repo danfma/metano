@@ -44,7 +44,11 @@ public class PerClassBackingFieldTests
         await Assert.That(baseOutput).Contains("  get p(): number {");
         await Assert.That(baseOutput).Contains($"    return this.{field};");
         await Assert.That(baseOutput).DoesNotContain("  readonly p: number");
-        await Assert.That(result["app/v-der.ts"]).Contains("  get p(): number {\n    return 2;");
+
+        await Assert
+            .That(result["app/v-der.ts"])
+            .Contains("  override get p(): number {\n    return 2;");
+
         await Assert.That(result["app/v-der.ts"]).DoesNotMatch(BackingField);
     }
 
@@ -157,7 +161,9 @@ public class PerClassBackingFieldTests
 
         await Assert
             .That(derived)
-            .Contains($"  set q(value: number) {{\n    this.{derivedField} = value;\n  }}");
+            .Contains(
+                $"  override set q(value: number) {{\n    this.{derivedField} = value;\n  }}"
+            );
 
         await Assert.That(derived).Contains("    return (this.q + super.q) | 0;");
         await Assert.That(derived).Contains("return copyRecordWith<IDer>(this, overrides);");
@@ -240,7 +246,7 @@ public class PerClassBackingFieldTests
             .That(result["app/s-mid.ts"])
             .Contains($"  private readonly {field}: number = 2;");
 
-        await Assert.That(result["app/s-mid.ts"]).Contains("  get s(): number {");
+        await Assert.That(result["app/s-mid.ts"]).Contains("  override get s(): number {");
     }
 
     [Test]
@@ -555,7 +561,10 @@ public class PerClassBackingFieldTests
         );
 
         await Assert.That(result["app/pr-base.ts"]).Contains("  protected get pr(): number {");
-        await Assert.That(result["app/pr-der.ts"]).Contains("  protected get pr(): number {");
+
+        await Assert
+            .That(result["app/pr-der.ts"])
+            .Contains("  protected override get pr(): number {");
     }
 
     [Test]
@@ -608,11 +617,13 @@ public class PerClassBackingFieldTests
             """
         );
 
-        await Assert.That(result["app/f-der.ts"]).Contains("  get p(): number {\n    return 5;");
+        await Assert
+            .That(result["app/f-der.ts"])
+            .Contains("  override get p(): number {\n    return 5;");
 
         await Assert
             .That(result["app/f-der.ts"])
-            .Contains("  set p(value: number) {\n    super.p = value;\n  }");
+            .Contains("  override set p(value: number) {\n    super.p = value;\n  }");
     }
 
     [Test]
@@ -641,7 +652,7 @@ public class PerClassBackingFieldTests
 
         await Assert
             .That(result["app/g-der.ts"])
-            .Contains("  get p(): number {\n    return super.p;\n  }");
+            .Contains("  override get p(): number {\n    return super.p;\n  }");
     }
 
     [Test]
@@ -740,7 +751,7 @@ public class PerClassBackingFieldTests
 
         await Assert
             .That(result["app/l-leaf.ts"])
-            .Contains("  set z(value: number) {\n    super.z = value;\n  }");
+            .Contains("  override set z(value: number) {\n    super.z = value;\n  }");
     }
 
     [Test]
@@ -871,7 +882,7 @@ public class PerClassBackingFieldTests
         var field = FieldOf(result["app/consumer.ts"], "p", "Consumer");
 
         await Assert.That(result["app/consumer.ts"]).Contains($"  private {field}: number = 2;");
-        await Assert.That(result["app/consumer.ts"]).Contains("  get p(): number {");
+        await Assert.That(result["app/consumer.ts"]).Contains("  override get p(): number {");
         await Assert.That(result["app/consumer.ts"]).Contains("  override toJSON(): unknown {");
         // No storage of its own: it inherits the library's toJSON.
         await Assert.That(result["app/plain-consumer.ts"]).DoesNotContain("toJSON");
@@ -959,7 +970,7 @@ public class PerClassBackingFieldTests
         );
 
         await Assert.That(result["app/consumer.ts"]).Contains("  override toJSON(): unknown {");
-        await Assert.That(result["app/consumer.ts"]).Contains("  get p(): number {");
+        await Assert.That(result["app/consumer.ts"]).Contains("  override get p(): number {");
         // A computed virtual property is not auto, so no storage and no toJSON of its own.
         await Assert.That(result["app/computed-consumer.ts"]).DoesNotContain("toJSON");
     }
@@ -995,7 +1006,7 @@ public class PerClassBackingFieldTests
         var virtualHider = FieldOf(result["app/virtual-hider.ts"], "x", "VirtualHider");
 
         await Assert.That(result["app/hider.ts"]).Contains($"  private {hider}: number = 2;");
-        await Assert.That(result["app/hider.ts"]).Contains("  get x(): number {");
+        await Assert.That(result["app/hider.ts"]).Contains("  override get x(): number {");
 
         await Assert
             .That(result["app/virtual-hider.ts"])

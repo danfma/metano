@@ -288,7 +288,7 @@ public class OutArgumentTranspileTests
             .That(result["empty-store.ts"])
             .Contains(
                 """
-                  measure(text: string): readonly [length: number] {
+                  override measure(text: string): readonly [length: number] {
                     let length: number;
                     const [$out0] = super.measure(text.trim());
                     length = $out0;

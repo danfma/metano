@@ -10,7 +10,7 @@ namespace Metano.Tests;
 /// </summary>
 public class ClosedFamilyUnionTests
 {
-    private const string ClosedPolyfill = """
+    internal const string ClosedPolyfill = """
 
         namespace System.Runtime.CompilerServices
         {

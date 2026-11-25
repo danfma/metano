@@ -237,6 +237,7 @@ internal sealed class IrToTsClassEmitter(
             constructor = constructor with { Body = updatedBody };
         }
 
+        MarkInheritedOverrides(classMembers, dataMembersStart, claims);
         userMembers.UnionWith(classMembers.Skip(dataMembersStart));
 
         if (emitsSelectorsAndFactories)
@@ -312,6 +313,53 @@ internal sealed class IrToTsClassEmitter(
             );
         }
     }
+
+    /// <summary>
+    /// Marks <c>override</c> on the user accessors and methods from
+    /// <paramref name="start"/> whose name an emitted base already declares on
+    /// the same side (<see cref="WithInheritedOverride"/>). Runs before the
+    /// members join the user-member set, which compares references.
+    /// </summary>
+    private static void MarkInheritedOverrides(
+        List<TsClassMember> classMembers,
+        int start,
+        TsOverloadClaims claims
+    )
+    {
+        for (var i = start; i < classMembers.Count; i++)
+            classMembers[i] = WithInheritedOverride(classMembers[i], claims);
+    }
+
+    /// <summary>
+    /// <paramref name="member"/> marked <c>override</c> when an emitted base
+    /// already declares its name on the same side, so a package compiled with
+    /// <c>noImplicitOverride</c> accepts it (TS4114/TS4116) whatever its
+    /// accessibility (#759). The members of an overload group are not passed
+    /// here: the claim pass decides which of them override.
+    /// </summary>
+    private static TsClassMember WithInheritedOverride(
+        TsClassMember member,
+        TsOverloadClaims claims
+    ) =>
+        member switch
+        {
+            TsMethodMember { Override: false } method
+                when claims.InheritsMember(method.Name, method.Static) => method with
+            {
+                Override = true,
+            },
+            TsGetterMember { Override: false } getter
+                when claims.InheritsMember(getter.Name, getter.Static) => getter with
+            {
+                Override = true,
+            },
+            TsSetterMember { Override: false } setter
+                when claims.InheritsMember(setter.Name, setter.Static) => setter with
+            {
+                Override = true,
+            },
+            _ => member,
+        };
 
     /// <summary>
     /// The class's claim results (spec 013 FR-004), reporting their
@@ -956,32 +1004,24 @@ internal sealed class IrToTsClassEmitter(
 
         var (parameters, returnType, typeParameters) = LowerMethodSignature(irMethod, ir, lowering);
 
-        if (
+        var method =
             !irMethod.Semantics.IsAbstract
             && IrToTsObjectArgsBridge.HasObjectArgs(irMethod.Attributes)
-        )
-        {
-            return
-            [
-                IrToTsClassBridge.BuildObjectArgsMethod(
+                ? IrToTsClassBridge.BuildObjectArgsMethod(
                     irMethod,
                     returnType,
                     typeParameters,
                     lowering
-                ),
-            ];
-        }
+                )
+                : IrToTsClassBridge.BuildMethod(
+                    irMethod,
+                    parameters,
+                    returnType,
+                    typeParameters,
+                    lowering
+                );
 
-        return
-        [
-            IrToTsClassBridge.BuildMethod(
-                irMethod,
-                parameters,
-                returnType,
-                typeParameters,
-                lowering
-            ),
-        ];
+        return [WithInheritedOverride(method, claims)];
     }
 
     /// <summary>

@@ -12,7 +12,7 @@ export class Heading extends Widget {
     this._level = level;
   }
 
-  render(): HTMLElement {
+  override render(): HTMLElement {
     const headingType =
       this._level === 1
         ? { tagName: "h1" }
