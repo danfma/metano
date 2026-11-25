@@ -742,8 +742,7 @@ internal sealed class IrToTsClassEmitter(
     /// builds the static <c>create({...})</c> factory so call sites collapse
     /// to the object-literal shape while the runtime constructor stays
     /// positional. Surfaces a diagnostic and returns <c>null</c> when the
-    /// attribute mixes with constructor overloading, which Stage 3 does not
-    /// yet model.
+    /// attribute cannot be honoured (<see cref="IrConstructorExtractor.ObjectArgsProblem"/>).
     /// </summary>
     private TsMethodMember? TryBuildObjectArgsCreateFactory(
         INamedTypeSymbol type,
@@ -752,26 +751,22 @@ internal sealed class IrToTsClassEmitter(
         IrToTsBridgeContext lowering
     )
     {
-        var ctorsWithObjectArgs = explicitCtors.Where(SymbolHelper.HasObjectArgs).ToList();
-        if (ctorsWithObjectArgs.Count == 0)
-            return null;
-
-        if (IrConstructorExtractor.IsDispatchedSet(type))
+        if (IrConstructorExtractor.ObjectArgsProblem(type) is { } problem)
         {
-            _context.ReportUnsupportedBody(
-                type,
-                $"Constructor on '{type.Name}' combines [ObjectArgs] with overloading, "
-                    + "which the transpiler does not yet support; the create({...}) "
-                    + "factory was not emitted."
-            );
+            _context.ReportUnsupportedBody(type, problem);
+
             return null;
         }
+
+        if (!explicitCtors.Any(IrConstructorExtractor.HasObjectArgsSurface))
+            return null;
 
         return IrToTsClassBridge.BuildObjectArgsCreateFactory(
             ir.Constructor,
             _context.ResolveTsName(type),
             IrToTsClassBridge.BuildTypeParameters(ir),
-            lowering
+            lowering,
+            overridesBaseFactory: IrConstructorExtractor.NearestObjectArgsAncestor(type) is not null
         );
     }
 

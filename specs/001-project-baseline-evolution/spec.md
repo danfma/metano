@@ -1497,7 +1497,7 @@ Product requirements added after the migration (normative; each one is traced by
      compound assignments). A `switch` statement's sections are not statement lists of their
      own: every `case` clause of a JS `switch` shares one scope, so the temporaries of a
      section go to the head of the list that encloses the `switch` statement, and sections
-     are not wrapped in blocks (a local of one section stays visible to the next, as in C#).
+     are not wrapped in blocks. (A user local declared in one section and assigned in a later one is not yet hoisted, so it hits the `let` temporal dead zone when only the later section runs; tracked in #755.)
      Each arm designator the arm reads becomes its own typed `let` named after it with a `$`
      prefix (`Circle c` → `let $c: Circle;`), assigned by the arm's test right after the check
      that narrows the subject (`$s instanceof Circle && ($c = $s, guard)`), and every read or
@@ -1517,6 +1517,38 @@ Product requirements added after the migration (normative; each one is traced by
      created from a loop header (`while`/`do` condition, `for` increment), which evaluates the
      switch many times per execution of the list, and such an arm allocates a closure anyway.
   5. *Scope.* Dart output does not change.
+- **FR-096** (`[ObjectArgs]` on primary constructors and positional records, #739, decision W8-1,
+  amends the `[ObjectArgs]` constructor behaviour): `[ObjectArgs]` on a constructor already emits
+  a positional runtime constructor plus `static create(args: {...})` and lowers `new T(...)` to
+  `T.create({...})`. This requirement extends the same lowering, with no new emission strategy,
+  to the constructors that have no declaration to put the attribute on: (a) a primary
+  constructor (a positional record or a C# 12 class), marked with `[method: ObjectArgs]` on the
+  type declaration; (b) a type-level `[ObjectArgs]` on a type that declares exactly one
+  constructor (the primary one, or a sole explicit one), which applies to that constructor. A
+  defaulted parameter becomes an optional property whose C# default the factory applies, so a
+  call site omits it (`new Point(1)` lowers to `Point.create({ x: 1 })`); a parameter is keyed
+  by its camel-cased name (a positional record's `X` is keyed `x`), at the declaration and at
+  every call site, positional or named, in the type's own package and in a referencing one. The
+  runtime constructor stays positional, so record equality, `hashCode`, `with`, `toString`,
+  deconstruction, `super(...)` of a derived record, `[JsonSerializable]` factories and the
+  MS0061 construction paths are unchanged. An `[ObjectArgs]` the lowering cannot honour MUST NOT
+  be ignored: a type-level attribute on a type with several constructors (or none) reports
+  `MS0001` (the existing "not supported" code) and no `create` is emitted, and a constructor
+  `[ObjectArgs]` combined with constructor overloading keeps reporting `MS0001`. The Dart target
+  is unchanged: it never lowers a construction to `create` (no object-literal expression), so a
+  Dart construction stays positional. The call site builds its object from the arguments Roslyn
+  bound, in the order the source evaluates them (`new P(Y: F(), X: G())` lists `y` then `x`,
+  with no temporary), folds a `params` expansion into one array literal and omits an argument
+  equal to its default. A `params T[]` parameter is the optional property `items?: T[]`
+  defaulting to `[]`, and the factory spreads it into the positional constructor
+  (`new T(name, ...items)`). Limitations, each reported as `MS0001` with no factory emitted and
+  constructions kept positional: an abstract type; a `[PlainObject]` type (it already
+  constructs as an object literal, so `[PlainObject]` wins); a type declaring a static member
+  named `create`; and a derived type whose factory could not override its nearest base factory
+  without breaking TypeScript's static-side rule (TS2417): the derived factory is emitted as
+  `static override create` only when the base is not generic and every base key appears in the
+  derived arguments with the same type and requiredness. A type-level attribute on a type with
+  no constructor (a static class) reports that there is no constructor to lower.
 
 ### Key Entities
 

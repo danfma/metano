@@ -776,6 +776,15 @@ NumericTupleProbes.tupleArrayElementHashIsStable = True
 NumericTupleProbes.tupleCastReadsAGetterOnce = 1|2|3
 NumericTupleProbes.tupleDefaults = True|True|False
 NumericTupleProbes.uncheckedConstantElements = -1,1|18446744073709551615,2|-1294967296,3|2,4
+ObjectArgsRecordProbes.defaultsOmitted = 1 2
+ObjectArgsRecordProbes.derivedRecord = OaPoint3 { X = 1, Y = 2, Z = 3 } 0 False
+ObjectArgsRecordProbes.equalityAndHash = True True True
+ObjectArgsRecordProbes.namedEvaluationOrder = y,x 1 2
+ObjectArgsRecordProbes.namedOutOfOrder = 1 y
+ObjectArgsRecordProbes.nullParamsArray = 0
+ObjectArgsRecordProbes.paramsExpanded = 201 x+y
+ObjectArgsRecordProbes.toStringText = OaEntry { A = 3, B = x }
+ObjectArgsRecordProbes.withKeepsRecordSemantics = 5 2 1 False
 ObliviousProbes.arrayElem = ab
 ObliviousProbes.compound = av|
 ObliviousProbes.compoundOnNull = x

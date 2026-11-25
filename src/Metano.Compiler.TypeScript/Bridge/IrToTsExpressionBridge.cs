@@ -2385,6 +2385,20 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
+    /// The object literal of an <c>[ObjectArgs]</c> construction keyed by the
+    /// wire names the <c>create</c> factory declares (the camel-cased C#
+    /// parameter names: a positional record's <c>X</c> is keyed <c>x</c>).
+    /// </summary>
+    private static TsExpression ObjectArgsWireKeys(TsExpression argument) =>
+        argument is TsObjectLiteral literal
+            ? new TsObjectLiteral(
+                literal
+                    .Properties.Select(p => p with { Key = TypeScriptNaming.ToCamelCase(p.Key) })
+                    .ToList()
+            )
+            : argument;
+
+    /// <summary>
     /// The construction of <paramref name="ne"/> over its lowered arguments:
     /// an object literal, an array literal, a factory or <c>create</c> call,
     /// a mapped template or <c>new T(…)</c>.
@@ -2401,6 +2415,7 @@ public static partial class IrToTsExpressionBridge
                 is { Count: > 0 } tArgs
                 ? tArgs.Select(t => IrToTsTypeMapper.Map(t)).ToList()
                 : null;
+
             return new TsCallExpression(
                 new TsPropertyAccess(
                     TypeValueReference(
@@ -2409,10 +2424,11 @@ public static partial class IrToTsExpressionBridge
                     ),
                     "create"
                 ),
-                args,
+                args.Select(ObjectArgsWireKeys).ToList(),
                 TypeArguments: typeArguments
             );
         }
+
         if (ne.IsPlainObject)
         {
             var properties = new List<TsObjectProperty>(args.Count);

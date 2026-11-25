@@ -6,14 +6,14 @@ import { Heading as HeadingWidget } from "./widgets/heading.js";
 import { Row as RowWidget } from "./widgets/row.js";
 import { Text as TextWidget } from "./widgets/text.js";
 
-export function Column(args: { gap: number; children: Widget[] }): ColumnWidget {
-  const { gap, children } = args;
+export function Column(args: { gap: number; children?: Widget[] }): ColumnWidget {
+  const { gap, children = [] } = args;
 
   return new ColumnWidget(gap, children);
 }
 
-export function Row(args: { gap: number; children: Widget[] }): RowWidget {
-  const { gap, children } = args;
+export function Row(args: { gap: number; children?: Widget[] }): RowWidget {
+  const { gap, children = [] } = args;
 
   return new RowWidget(gap, children);
 }
