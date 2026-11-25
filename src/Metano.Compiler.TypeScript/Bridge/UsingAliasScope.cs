@@ -76,6 +76,14 @@ public sealed class UsingAliasScope
     }
 
     /// <summary>
+    /// Whether the type <paramref name="name"/> of <paramref name="namespace"/> prints
+    /// under a <c>using</c> alias, whose import binds by symbol
+    /// (<see cref="UsingTargetOf"/>): a pin of the name displaces it.
+    /// </summary>
+    public bool PrintsUsingAliasOf(string name, string? @namespace) =>
+        !_pinned.ContainsKey(name) && _usings.ContainsKey(new UsingAliasTarget(@namespace, name));
+
+    /// <summary>
     /// The type a <c>using</c> alias names, which binds its import by symbol rather
     /// than by its canonical name (two aliases may name two same-named types);
     /// <c>null</c> for any other name.

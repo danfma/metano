@@ -1762,11 +1762,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IReadOnlyList<INamedTypeSymbol> groupTypes
     )
     {
-        var layerA = UsingAliasResolver.ResolveForTree(
-            primarySyntaxTree,
-            Context.Compilation,
-            type => DeclaresType(groupTypes, type),
-            groupTypes
+        var layerA = UsingAliasResolver.ResolveForGroup(Context.Compilation, groupTypes, type =>
+            DeclaresType(groupTypes, type)
         );
 
         var filePath = primarySyntaxTree?.FilePath ?? string.Empty;
@@ -2074,7 +2071,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 continue;
             }
 
-            var groupReferences = references.In(group.Types);
+            var primaryTree = group.Types[0].DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
+
+            var groupReferences = references.In(
+                group.Types,
+                MergeAliasesForGroup(primaryTree, group.Types)
+            );
 
             foreach (
                 var finding in validator.Validate(group.FileName, group.Types, groupReferences)

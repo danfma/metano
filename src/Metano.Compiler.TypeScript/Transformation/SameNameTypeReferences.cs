@@ -1,5 +1,6 @@
 using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -53,33 +54,41 @@ internal sealed class SameNameTypeReferences(
     /// The references <paramref name="fileTypes"/> (the types one file declares) hold to
     /// a type whose emitted name is ambiguous, in source order.
     /// </summary>
-    public IReadOnlyList<SameNameReference> In(IEnumerable<INamedTypeSymbol> fileTypes) =>
+    /// <param name="aliases">The file's alias scope: a reference to a type it prints
+    /// under a <c>using</c> alias is an alias reference, however it is spelled.</param>
+    public IReadOnlyList<SameNameReference> In(
+        IEnumerable<INamedTypeSymbol> fileTypes,
+        UsingAliasScope? aliases
+    ) =>
         IsEmpty
             ? []
             :
             [
                 .. fileTypes
                     .SelectMany(type => type.DeclaringSyntaxReferences)
-                    .SelectMany(reference => ReferencesIn(reference.GetSyntax())),
+                    .SelectMany(reference => ReferencesIn(reference.GetSyntax(), aliases)),
             ];
 
     /// <summary>
     /// The references one declaration holds, in source order: the names it spells and
     /// the types its inferred lambda parameter annotations print.
     /// </summary>
-    private IEnumerable<SameNameReference> ReferencesIn(SyntaxNode declaration)
+    private IEnumerable<SameNameReference> ReferencesIn(
+        SyntaxNode declaration,
+        UsingAliasScope? aliases
+    )
     {
         var spelled = declaration
             .DescendantNodesAndSelf()
             .OfType<SimpleNameSyntax>()
             .Where(name => ReferenceSpellings.Contains(name.Identifier.ValueText))
-            .Select(ReferencedType)
+            .Select(name => ReferencedType(name, aliases))
             .OfType<SameNameReference>();
 
         var inferred = declaration
             .DescendantNodes()
             .OfType<ParameterSyntax>()
-            .SelectMany(InferredLambdaReferences);
+            .SelectMany(parameter => InferredLambdaReferences(parameter, aliases));
 
         return spelled.Concat(inferred).OrderBy(reference => reference.Location.SourceSpan.Start);
     }
@@ -90,7 +99,10 @@ internal sealed class SameNameTypeReferences(
     /// (<c>(n: Node&lt;number&gt;) =&gt; …</c>), so they bind the import like a spelled
     /// reference (#751).
     /// </summary>
-    private IEnumerable<SameNameReference> InferredLambdaReferences(ParameterSyntax parameter)
+    private IEnumerable<SameNameReference> InferredLambdaReferences(
+        ParameterSyntax parameter,
+        UsingAliasScope? aliases
+    )
     {
         if (parameter.Type is not null)
             return [];
@@ -103,7 +115,11 @@ internal sealed class SameNameTypeReferences(
 
         return TypesNamedBy(symbol.Type)
             .Where(IsAmbiguous)
-            .Select(type => new SameNameReference(type, parameter.GetLocation(), IsAlias: false));
+            .Select(type => new SameNameReference(
+                type,
+                parameter.GetLocation(),
+                IsPrintedAsAlias(type, aliases)
+            ));
     }
 
     /// <summary>
@@ -160,7 +176,7 @@ internal sealed class SameNameTypeReferences(
 
     private string Emitted(INamedTypeSymbol type) => context.ResolveTsName(type);
 
-    private SameNameReference? ReferencedType(SimpleNameSyntax node)
+    private SameNameReference? ReferencedType(SimpleNameSyntax node, UsingAliasScope? aliases)
     {
         var symbol = ModelFor(node.SyntaxTree).GetSymbolInfo(node).Symbol;
 
@@ -178,9 +194,22 @@ internal sealed class SameNameTypeReferences(
         return new SameNameReference(
             definition,
             node.GetLocation(),
-            IsAlias: definition.Name != node.Identifier.ValueText
+            IsPrintedAsAlias(definition, aliases)
         );
     }
+
+    /// <summary>
+    /// The one rule for an alias reference (#754): the file prints the type under a
+    /// <c>using</c> alias, which binds its import by symbol, whether the reference
+    /// spells the alias, the type's own name or nothing (an inferred annotation).
+    /// </summary>
+    private static bool IsPrintedAsAlias(INamedTypeSymbol type, UsingAliasScope? aliases) =>
+        aliases?.PrintsUsingAliasOf(
+            type.Name,
+            type.ContainingNamespace is { IsGlobalNamespace: false } ns
+                ? ns.ToDisplayString()
+                : null
+        ) == true;
 
     /// <summary>
     /// The top-level project types whose emitted name another one prints under too: the

@@ -45,6 +45,55 @@ public static class UsingAliasResolver
         return aliases;
     }
 
+    /// <summary>
+    /// The aliases in scope of one emitted file: the <c>global using</c> aliases of
+    /// every tree of the compilation, then, for every tree that declares one of
+    /// <paramref name="fileTypes"/> (a partial type, an <c>[EmitInFile]</c> group),
+    /// its compilation unit's aliases and those of the namespace blocks enclosing the
+    /// types. A later alias of the same type wins.
+    /// </summary>
+    public static IReadOnlyList<UsingAlias> ResolveForGroup(
+        Compilation compilation,
+        IReadOnlyList<INamedTypeSymbol> fileTypes,
+        Func<INamedTypeSymbol, bool> declaresHere
+    )
+    {
+        var aliases = new List<UsingAlias>();
+
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            var globals = tree.GetCompilationUnitRoot().Usings.Where(IsGlobal);
+
+            Collect(globals, compilation.GetSemanticModel(tree), declaresHere, aliases);
+        }
+
+        var declaringTrees = fileTypes
+            .SelectMany(type => type.DeclaringSyntaxReferences)
+            .Select(reference => reference.SyntaxTree)
+            .Distinct();
+
+        foreach (var tree in declaringTrees)
+        {
+            var root = tree.GetCompilationUnitRoot();
+            var semanticModel = compilation.GetSemanticModel(tree);
+
+            Collect(
+                root.Usings.Where(directive => !IsGlobal(directive)),
+                semanticModel,
+                declaresHere,
+                aliases
+            );
+
+            foreach (var ns in NamespaceBlocksInScope(root, tree, fileTypes))
+                Collect(ns.Usings, semanticModel, declaresHere, aliases);
+        }
+
+        return aliases;
+    }
+
+    private static bool IsGlobal(UsingDirectiveSyntax directive) =>
+        directive.GlobalKeyword.IsKind(SyntaxKind.GlobalKeyword);
+
     private static IEnumerable<BaseNamespaceDeclarationSyntax> NamespaceBlocksInScope(
         CompilationUnitSyntax root,
         SyntaxTree tree,
@@ -68,7 +117,7 @@ public static class UsingAliasResolver
     }
 
     private static void Collect(
-        SyntaxList<UsingDirectiveSyntax> usings,
+        IEnumerable<UsingDirectiveSyntax> usings,
         SemanticModel semanticModel,
         Func<INamedTypeSymbol, bool> excluded,
         List<UsingAlias> aliases
