@@ -170,6 +170,7 @@ public class InstanceFieldStoreTests
         await Assert
             .That(output)
             .Contains("  override readonly name: string = \"QuotaException\";\n");
+
         await Assert.That(output).Contains("    this.code = 3;\n  }");
     }
 
