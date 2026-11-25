@@ -105,6 +105,10 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 
 Reported as warnings, with no new diagnostic code: a `[This]` delegate converted through a `d.Invoke` method group to a plain delegate (#375); an `async` iterator method, at its first `yield` (#625); a `[PlainObject]` implementing `IEnumerable` / `IEnumerator`, a user-defined indexer on a `[PlainObject]` (left out of the interface; a regular class emits no `readonly this[]`, and `SymbolHelper.IsInstanceDataMember` keeps indexers out of every data-member walk, type guards included), and a class inheriting `IEnumerator` from a base class that declares its own `Next` (#350, #474); an overload of a C# 14 extension-block member (#551, not dispatched yet, #156); `ElementAt(Index)` and a tuple element with no default expression (#617, #403); `Array.IndexOf(a, v, start, count)` and `Array.Sort(a, index, length)` (#664). `MS0020` also covers an exported module variable whose name another containerless class of the namespace exports (#401).
 
+### Wave 10 `IDisposable` / `using` (FR-111, #800, no new code)
+
+On TypeScript a `using` statement or declaration no longer reports `MS0001`: it lowers to `try`/`finally` (Dart still reports it). New `MS0001` sources (error, dropped-code policy): an `await using` statement or declaration (`IAsyncDisposable` is not mapped); a `using` over a resource whose `Dispose` the target does not emit (a BCL type such as `IEnumerator<T>`); a `using` declaration directly in a module entry point body (`Extraction/IrStatementExtractor.Usings.cs`). New `MS0031` source (error): an explicit `IDisposable.Dispose()` beside a member that already claims `dispose`, when the explicit body does not just forward to it or that member is not `public` / `internal` (`Frontend/Roslyn/ExplicitImplementationValidator.cs`). Tests: `tests/Metano.Tests/DisposableTests.cs`.
+
 ## Build integration (`Metano.Build.<Target>` packages)
 
 Raised by the MSBuild target, not by the compiler, so it lives outside the `MS` code space.

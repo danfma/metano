@@ -26,6 +26,17 @@ public static class BclExportReader
     public static bool IsExported(INamedTypeSymbol type, Compilation compilation) =>
         Read(compilation).ContainsKey(ExportKey(type));
 
+    /// <summary>
+    /// Whether <paramref name="type"/> is an interface an <c>[ExportFromBcl]</c> binds to a
+    /// package export: by convention the package declares it with its runtime descriptor
+    /// (<c>&lt;ExportedName&gt;$runtimeType</c>) beside it, as <c>metano-runtime</c> does for
+    /// <c>System.IDisposable</c> (FR-111). A target that binds no export ignores the fact.
+    /// </summary>
+    public static bool IsRuntimeDeclaredInterface(INamedTypeSymbol type, Compilation compilation) =>
+        type.TypeKind is TypeKind.Interface
+        && Read(compilation).TryGetValue(ExportKey(type), out var export)
+        && export.FromPackage.Length > 0;
+
     private static IReadOnlyDictionary<string, IrBclExport> Build(Compilation compilation)
     {
         var map = new Dictionary<string, IrBclExport>(StringComparer.Ordinal);

@@ -657,6 +657,24 @@ native array methods directly:
 | `async Task<T> Foo()` | `async foo(): Promise<T>` |
 | `await expr` | `await expr` |
 
+## `IDisposable` and `using` (spec 001 FR-111, #800)
+
+| C# | TypeScript |
+|----|----|
+| `IDisposable` | `IDisposable` from `metano-runtime` (`interface IDisposable { dispose(): void }`) |
+| `x.Dispose()` | `x.dispose()` |
+| `o is IDisposable` | `isType(o, IDisposable$runtimeType)` (nominal: the class must implement it) |
+| `using var r = e; rest` | `const r = e; try { rest } finally { r.dispose(); }` |
+| `using (var r = e) body` | `{ const r = e; try { body } finally { r.dispose(); } }` |
+| `using (e) body` | `{ const $using0 = e; try { body } finally { $using0.dispose(); } }` |
+
+A resource that may be `null` is disposed with `r?.dispose()`. Several resources are disposed
+in reverse order, and an exception thrown by `dispose()` replaces the pending one, as in .NET.
+No `Symbol.dispose` or JavaScript `using` is emitted, so the output runs on every browser.
+Hand-written TypeScript calls `.dispose()`; a JavaScript `using` can wrap a handle with
+`stack.defer(() => h.dispose())`. `await using` / `IAsyncDisposable` are not supported
+(`MS0001`).
+
 ## String methods
 
 | C# | TypeScript |

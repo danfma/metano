@@ -440,15 +440,18 @@ internal sealed partial class RuntimeTypeReachability
     /// <summary>
     /// A type outside this compilation has a descriptor when it emits a
     /// declaration that carries one: a public type of an <c>[EmitPackage]</c>
-    /// library (D29: libraries are complete) or an exception with a runtime
-    /// class; never an <c>[Import]</c>, <c>[External]</c> or ignored type, nor
-    /// one shaped without a class (a plain object, a branded wrapper).
+    /// library (D29: libraries are complete), an exception with a runtime
+    /// class, or an interface the runtime declares (FR-111); never an
+    /// <c>[Import]</c>, <c>[External]</c> or ignored type, nor one shaped
+    /// without a class (a plain object, a branded wrapper).
     /// </summary>
     private bool HasRuntimeDescriptor(INamedTypeSymbol type) =>
         !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly)
         && DescribableType.Of(type) is not null
         && (
-            IsException(type) || (type.ContainingAssembly.HasTranspileAssembly() && IsPublic(type))
+            IsException(type)
+            || (type.ContainingAssembly.HasTranspileAssembly() && IsPublic(type))
+            || BclExportReader.IsRuntimeDeclaredInterface(type, _compilation)
         );
 
     private void ReportUndescribableTypeOf(INamedTypeSymbol type, Location? location)

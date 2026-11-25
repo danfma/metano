@@ -208,6 +208,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 diagnostics
             );
 
+            DisposableImplementationValidator.Validate(
+                compilation,
+                assemblyWideTranspile,
+                target,
+                generatedSources,
+                diagnostics
+            );
+
             ValidateJsxRenderablePositions(compilation, assemblyWideTranspile, target, diagnostics);
         }
 

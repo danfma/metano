@@ -308,7 +308,7 @@ public static class IrTypeRefMapper
             // User-defined named types: may carry a cross-package origin. A nested
             // type resolves through its top-level container, which the package exports.
             var origin = originResolver.ResolveThroughOutermost(named);
-            var semantics = BuildNamedTypeSemantics(named, target);
+            var semantics = WithRuntimeDeclaration(BuildNamedTypeSemantics(named, target), origin);
 
             var containerArguments = ContainerTypeArgumentsOf(named, originResolver, target);
 
@@ -595,6 +595,31 @@ public static class IrTypeRefMapper
 
         return null;
     }
+
+    /// <summary>
+    /// Marks an interface the compilation does not transpile as declared by the target
+    /// runtime when it carries a package origin anyway: the origin resolver gives such an
+    /// interface one only for its <c>[ExportFromBcl]</c> export, whose package declares it
+    /// with its runtime descriptor (FR-111). A target that binds no export passes no such
+    /// origin, so the fact stays off there.
+    /// </summary>
+    private static IrNamedTypeSemantics? WithRuntimeDeclaration(
+        IrNamedTypeSemantics? semantics,
+        IrTypeOrigin? origin
+    ) =>
+        origin is not null
+        && semantics
+            is {
+                Kind: IrNamedTypeKind.Interface,
+                IsTranspilable: false,
+                IsIgnored: false,
+                IsExternal: false,
+            }
+            ? semantics with
+            {
+                IsRuntimeDeclared = true,
+            }
+            : semantics;
 
     /// <summary>
     /// The keys (<see cref="IrNamedTypeRef.SupertypeKey"/>) of the base classes

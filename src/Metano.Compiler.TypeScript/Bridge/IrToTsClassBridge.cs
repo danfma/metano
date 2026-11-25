@@ -56,7 +56,8 @@ internal static partial class IrToTsClassBridge
     /// <summary>
     /// Lowers a list of IR base / interface references into TS heritage
     /// entries. Drops named refs flagged <c>IsTranspilable: false</c>
-    /// (e.g. <c>[Ignore]</c> or unmapped BCL interfaces) and rewrites
+    /// (e.g. <c>[Ignore]</c> or unmapped BCL interfaces), except an interface
+    /// the runtime declares (<c>IDisposable</c>, FR-111), and rewrites
     /// the array shorthand <c>T[]</c> (produced when a base maps
     /// through <see cref="IrArrayTypeRef"/> for collection-like BCL
     /// types) into <c>Array&lt;T&gt;</c>: TypeScript rejects
@@ -72,7 +73,12 @@ internal static partial class IrToTsClassBridge
 
         foreach (var reference in refs)
         {
-            if (reference is IrNamedTypeRef { Semantics.IsTranspilable: false })
+            if (
+                reference is IrNamedTypeRef
+                {
+                    Semantics: { IsTranspilable: false, IsRuntimeDeclared: false }
+                }
+            )
                 continue;
 
             var mapped = IrToTsTypeMapper.Map(reference);

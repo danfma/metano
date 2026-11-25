@@ -120,22 +120,18 @@ public class DiagnosticsTests
     }
 
     [Test]
-    public async Task UsingDeclaration_ReportsTheDroppedDispose()
+    public async Task UsingDeclaration_OverAnUnemittedDispose_ReportsTheDroppedDispose()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
-            [Transpile]
-            public sealed class Resource : IDisposable
-            {
-                public void Dispose() { }
-            }
+            using System.Collections.Generic;
 
             [Transpile]
             public static class Uses
             {
-                public static int Run()
+                public static int Run(IEnumerator<int> resource)
                 {
-                    using var resource = new Resource();
+                    using var current = resource;
                     return 1;
                 }
             }
@@ -145,7 +141,7 @@ public class DiagnosticsTests
         var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
 
         await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
-        await Assert.That(error.Message).Contains("using declaration");
+        await Assert.That(error.Message).Contains("does not emit its Dispose method");
     }
 
     [Test]

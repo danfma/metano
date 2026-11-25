@@ -1767,6 +1767,39 @@ Product requirements added after the migration (normative; each one is traced by
   Dispatchers that also dispatch to a synthesized member and the static groups of a branded
   companion object apply the delegate test but drop nothing.
 
+- **FR-111** (`IDisposable` and `using`, #800, decision W10-9, TypeScript; amends FR-099's
+  `using` declaration source for TypeScript):
+  1. `System.IDisposable` maps to the `metano-runtime` interface `IDisposable` with the single
+     member `dispose(): void`; `Dispose()` calls lower to `dispose()`. The runtime exports
+     `IDisposable$runtimeType`. No `Symbol.dispose` alias is emitted (stable Safari has none, and
+     JS `using` wraps a dispose-time error in `SuppressedError`, unlike .NET).
+  2. A transpiled class, struct or interface that implements or extends `IDisposable` keeps it
+     in its `implements` / `extends` clause and in its descriptor's `interfaces` /
+     `baseInterfaces`. `is`, `as`, type patterns, overload dispatch, `typeof` and reified type
+     arguments test it nominally, like a transpiled interface: a value with a `dispose` method
+     whose class does not implement the interface is not `IDisposable`. The general rule: an
+     interface bound by `[ExportFromBcl]` to a package is declared by that package, which exports
+     `<ExportedName>$runtimeType` beside it (`IrNamedTypeSemantics.IsRuntimeDeclared`).
+  3. `using (decl) body`, `using (expr) body` and `using` declarations lower to `try`/`finally`
+     that calls `dispose()` on each resource in reverse acquisition order, skips a `null`
+     resource (`r?.dispose()`, omitted for a non-nullable value type or, with nullable
+     annotations enabled, a not-null flow state), runs on every exit (normal, `return`,
+     `break`/`continue`, exception, an iterator abandoned early), and lets an exception thrown
+     by `dispose()` replace the pending one. An expression resource is held by a temporary
+     (`$using0`). A `using` declaration wraps the rest of its scope; several declarators nest
+     left to right, so a later initializer that throws still disposes the earlier resources. No
+     `Symbol.dispose`, `using` syntax or runtime helper is emitted.
+  4. An explicit `IDisposable.Dispose()` is emitted as `dispose()`. When another member of the
+     type or a base class already claims that name, it is dropped only if it forwards to that
+     member unchanged (one call on `this` passing its parameters in order, to a `public` or
+     `internal` member); otherwise `MS0031` is reported.
+  5. Not supported (`MS0001`, error): `await using` and `IAsyncDisposable`; a `using` over a
+     type whose `Dispose` the target does not emit (a BCL resource such as
+     `IEnumerator<T>`); a `using` declaration directly in a module entry point body.
+  6. Dart: `using` reports `MS0001`; `IDisposable` is not emitted in heritage clauses.
+  Tests: `tests/Metano.Tests/DisposableTests.cs`,
+  `targets/js/metano-runtime/test/system/disposable.test.ts`; conformance `DisposableProbes`.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
