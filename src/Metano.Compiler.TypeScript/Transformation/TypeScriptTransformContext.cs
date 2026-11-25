@@ -267,8 +267,15 @@ public sealed class TypeScriptTransformContext(
                 Register(operatorName, op, ownerRef, map, firstClaim, reportDiagnostic);
                 break;
 
-            case IPropertySymbol prop
-                when prop.DeclaredAccessibility == Accessibility.Public && !prop.IsIndexer:
+            // An extension property, or an extension indexer
+            // (`extension(R r) { public T this[int i] { … } }`), whose reads
+            // lower to `count$get(self)` / `item$get(self, index)` and writes
+            // to `count$set(self, value)` / `item$set(self, index, value)`. An
+            // indexer's helper base name is its metadata name
+            // (`IrExtensionConventions.AccessorBaseName`: the `[IndexerName]`
+            // override when present, default `Item`), so the registry keys
+            // agree with the helper names emitted by `IrModuleFunctionExtractor`.
+            case IPropertySymbol prop when prop.DeclaredAccessibility == Accessibility.Public:
                 Register(
                     ResolvePropertyHelperName(prop),
                     prop,
@@ -277,6 +284,7 @@ public sealed class TypeScriptTransformContext(
                     firstClaim,
                     reportDiagnostic
                 );
+
                 if (prop.SetMethod is not null)
                 {
                     Register(
@@ -288,36 +296,7 @@ public sealed class TypeScriptTransformContext(
                         reportDiagnostic
                     );
                 }
-                break;
 
-            // Extension indexer (`extension(R r) { public T this[int i] { … } }`).
-            // Reads lower to `item$get(self, index)` and writes to
-            // `item$set(self, index, value)` — the helper base name comes
-            // from the indexer symbol's <c>Name</c> (Roslyn already rewrites
-            // it to the <c>[IndexerName]</c> override when present, default
-            // <c>"Item"</c>), so the registry keys agree with the helper
-            // names emitted by `IrModuleFunctionExtractor`.
-            case IPropertySymbol indexer
-                when indexer.DeclaredAccessibility == Accessibility.Public && indexer.IsIndexer:
-                Register(
-                    ResolvePropertyHelperName(indexer),
-                    indexer,
-                    ownerRef,
-                    map,
-                    firstClaim,
-                    reportDiagnostic
-                );
-                if (indexer.SetMethod is not null)
-                {
-                    Register(
-                        ResolvePropertySetterHelperName(indexer),
-                        indexer,
-                        ownerRef,
-                        map,
-                        firstClaim,
-                        reportDiagnostic
-                    );
-                }
                 break;
         }
     }
@@ -345,13 +324,13 @@ public sealed class TypeScriptTransformContext(
     private static string ResolvePropertyHelperName(IPropertySymbol property) =>
         (
             SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
-            ?? TypeScriptNaming.ToCamelCase(property.Name)
+            ?? TypeScriptNaming.ToCamelCase(IrExtensionConventions.AccessorBaseName(property))
         ) + IrExtensionConventions.PropertyGetterSuffix;
 
     private static string ResolvePropertySetterHelperName(IPropertySymbol property) =>
         (
             SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
-            ?? TypeScriptNaming.ToCamelCase(property.Name)
+            ?? TypeScriptNaming.ToCamelCase(IrExtensionConventions.AccessorBaseName(property))
         ) + IrExtensionConventions.PropertySetterSuffix;
 
     /// <summary>

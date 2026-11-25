@@ -150,7 +150,7 @@ public sealed partial class IrExpressionExtractor
     ) =>
         BuildExtensionHelperCall(
             extension.HelperContainer,
-            property.Name + IrExtensionConventions.PropertySetterSuffix,
+            IrExtensionConventions.SetterName(property),
             ResolvePropertySetterEmittedName(property),
             [new IrArgument(receiver), new IrArgument(Extract(value))],
             typeArguments: null

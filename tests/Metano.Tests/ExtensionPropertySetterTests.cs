@@ -250,4 +250,91 @@ public class ExtensionPropertySetterTests
         await Assert.That(output).Contains("export function value$set");
         await Assert.That(output).Contains("value: number");
     }
+
+    [Test]
+    public async Task ExtensionProperty_CoalesceAssignment_StoresOnlyWhenNull()
+    {
+        var output = TranspileLabeledCell("public void Run(Cell c) { c.Label ??= \"x\"; }");
+
+        await Assert.That(output).Contains("label$get(c) ?? label$set(c, \"x\");");
+    }
+
+    [Test]
+    public async Task ExtensionProperty_NullConditionalCoalesceAssignment_StoresOnlyWhenNull()
+    {
+        var output = TranspileLabeledCell("public void Run(Cell? c) { c?.Label ??= \"x\"; }");
+
+        await Assert.That(output).Contains("c != null && (label$get(c) ?? label$set(c, \"x\"));");
+    }
+
+    [Test]
+    public async Task ExtensionProperty_NullableBooleanCompound_UsesThreeValuedLogic()
+    {
+        var output = TranspileLabeledCell("public void Run(Cell c) { c.Flag &= false; }");
+
+        await Assert.That(output).DoesNotContain("& false");
+        await Assert.That(output).DoesNotContain("== null ? null : flag$get");
+        await Assert.That(output).Contains("=== false");
+    }
+
+    [Test]
+    public async Task ExtensionProperty_UsedCompoundAssignment_YieldsStoredValue()
+    {
+        var output = TranspileLabeledCell(
+            "public int Run(Cell c) { var v = c.Count += 2; return v; }"
+        );
+
+        await Assert.That(output).DoesNotContain("const v = count$set(");
+        await Assert.That(output).Contains("count$set(c, receiver$temp$0);");
+        await Assert.That(output).Contains("return receiver$temp$0;");
+    }
+
+    private static string TranspileLabeledCell(string callerMembers)
+    {
+        var result = TranspileHelper.Transpile(
+            $$"""
+            namespace App;
+
+            public class Cell
+            {
+                public int Backing { get; set; }
+                public string? Text { get; set; }
+                public bool? Toggle { get; set; }
+            }
+
+            [Transpile]
+            public static class CellExtensions
+            {
+                extension(Cell cell)
+                {
+                    public int Count
+                    {
+                        get => cell.Backing;
+                        set => cell.Backing = value;
+                    }
+
+                    public string? Label
+                    {
+                        get => cell.Text;
+                        set => cell.Text = value;
+                    }
+
+                    public bool? Flag
+                    {
+                        get => cell.Toggle;
+                        set => cell.Toggle = value;
+                    }
+                }
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                {{callerMembers}}
+            }
+            """
+        );
+
+        return result["app/caller.ts"];
+    }
 }

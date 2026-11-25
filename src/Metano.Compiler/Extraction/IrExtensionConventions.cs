@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis;
+
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
@@ -25,13 +27,35 @@ public static class IrExtensionConventions
 
     /// <summary>
     /// Default base name for an extension indexer's helpers when the source
-    /// declares no <c>[IndexerName]</c> override. Roslyn already reports
-    /// <c>"Item"</c> as the default <see cref="Microsoft.CodeAnalysis.IPropertySymbol.Name"/>;
-    /// the helper-name resolver lower-cases that to <c>item</c> so reads emit
-    /// <c>item$get(self, index)</c> and writes emit <c>item$set(self, index, value)</c>.
-    /// A custom name (<c>[IndexerName("Slot")]</c>) flows through the same
-    /// pipeline because Roslyn rewrites <c>prop.Name</c> to the overridden
-    /// value — the convention here only documents the fallback.
+    /// declares no <c>[IndexerName]</c> override. Roslyn reports it as the
+    /// indexer's <see cref="ISymbol.MetadataName"/> (its
+    /// <see cref="ISymbol.Name"/> is <c>this[]</c>); the target's naming
+    /// policy lower-cases it, so reads emit <c>item$get(self, index)</c> and
+    /// writes emit <c>item$set(self, index, value)</c>. A custom name
+    /// (<c>[IndexerName("Slot")]</c>) replaces the metadata name, giving
+    /// <c>slot$get</c> / <c>slot$set</c>.
     /// </summary>
     public const string DefaultIndexerName = "Item";
+
+    /// <summary>
+    /// The name of the read-accessor helper of an extension property or
+    /// indexer (<c>Count$get</c>, <c>Item$get</c>).
+    /// </summary>
+    public static string GetterName(IPropertySymbol property) =>
+        AccessorBaseName(property) + PropertyGetterSuffix;
+
+    /// <summary>
+    /// The name of the write-accessor helper of an extension property or
+    /// indexer (<c>Count$set</c>, <c>Item$set</c>).
+    /// </summary>
+    public static string SetterName(IPropertySymbol property) =>
+        AccessorBaseName(property) + PropertySetterSuffix;
+
+    /// <summary>
+    /// The source name an accessor helper is built from: a property's name,
+    /// or an indexer's metadata name (<see cref="DefaultIndexerName"/> unless
+    /// <c>[IndexerName]</c> overrides it).
+    /// </summary>
+    public static string AccessorBaseName(IPropertySymbol property) =>
+        property.IsIndexer ? property.MetadataName : property.Name;
 }
