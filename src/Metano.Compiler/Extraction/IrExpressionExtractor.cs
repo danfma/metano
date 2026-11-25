@@ -4090,12 +4090,16 @@ public sealed partial class IrExpressionExtractor
     /// A field or property, other than an enum member or an indexer, whose
     /// declaring type the toolchain declares (see
     /// <see cref="IrMemberOrigin.IsTranspiledDataMember"/> and
-    /// <see cref="SymbolHelper.IsToolchainDeclared"/>).
+    /// <see cref="SymbolHelper.IsToolchainDeclared"/>). A serializer context's
+    /// members (its <c>Default</c> instance, its <c>JsonTypeInfo</c> properties)
+    /// are the generated JSON surface, not data members the class emitter
+    /// declares: they keep their unescaped names (#741).
     /// </summary>
     private bool IsTranspiledDataMember(ISymbol? symbol) =>
         symbol is not null
         && IsDataMember(symbol)
-        && SymbolHelper.IsToolchainDeclared(symbol.ContainingType, _semantic.Compilation.Assembly);
+        && SymbolHelper.IsToolchainDeclared(symbol.ContainingType, _semantic.Compilation.Assembly)
+        && !SymbolHelper.IsJsonSerializerContext(symbol.ContainingType);
 
     private static bool IsDataMember(ISymbol symbol) =>
         symbol

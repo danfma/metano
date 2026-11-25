@@ -28,6 +28,63 @@ public class YieldTranspileTests
     }
 
     [Test]
+    public async Task RuntimeHelperUsedOnlyInsideYield_IsImported()
+    {
+        // #745: the import walker skipped `yield` statements, so a helper
+        // referenced only there was emitted without an import (ReferenceError).
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Classifier
+            {
+                public System.Collections.Generic.IEnumerable<int> Classify(object o, decimal d)
+                {
+                    yield return o is int ? 1 : 0;
+                    yield return (int)(d * 2m);
+                }
+            }
+            """
+        );
+
+        var output = result["classifier.ts"];
+        await Assert.That(output).Contains("yield isInt32(o) ? 1 : 0;");
+
+        await Assert
+            .That(output)
+            .Contains("import { isInt32, narrowFromDecimal } from \"metano-runtime\";");
+
+        await Assert
+            .That(output)
+            .Contains("import { Decimal } from \"metano-runtime/system/decimal\";");
+    }
+
+    [Test]
+    public async Task JsxYieldedFromIterator_EmitsTsxFile()
+    {
+        // #745: JSX detection walks `yield` statements like the import walker,
+        // so a module whose only JSX is yielded is still emitted as `.tsx`.
+        var result = TranspileHelper.TranspileJsx(
+            """
+            using System.Collections.Generic;
+            using Metano.Annotations;
+            using Metano.TypeScript.SolidJs;
+            using Metano.TypeScript.SolidJs.Web;
+
+            [Transpile]
+            public class Rows
+            {
+                public IEnumerable<JsxElement> Items()
+                {
+                    yield return new Html.Div { };
+                }
+            }
+            """
+        );
+
+        await Assert.That(result.ContainsKey("rows.tsx")).IsTrue();
+    }
+
+    [Test]
     public async Task NoContainer_WithYield_EmitsGeneratorFunction()
     {
         var result = TranspileHelper.Transpile(

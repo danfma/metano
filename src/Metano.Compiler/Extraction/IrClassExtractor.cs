@@ -455,7 +455,7 @@ public static class IrClassExtractor
         // System.Text.Json.SourceGeneration emits partial files whose syntax-tree order
         // can vary between compilations; sort members by kind and ordinal name so every
         // target receives a deterministic declaration list (#576, #689).
-        if (IsJsonSerializerContext(type))
+        if (SymbolHelper.IsJsonSerializerContext(type))
         {
             result.Sort(
                 static (left, right) =>
@@ -470,17 +470,6 @@ public static class IrClassExtractor
         }
 
         return result;
-    }
-
-    private static bool IsJsonSerializerContext(INamedTypeSymbol type)
-    {
-        for (var current = type.BaseType; current is not null; current = current.BaseType)
-        {
-            if (current.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializerContext")
-                return true;
-        }
-
-        return false;
     }
 
     private static int MemberSortRank(IrMemberDeclaration member) =>

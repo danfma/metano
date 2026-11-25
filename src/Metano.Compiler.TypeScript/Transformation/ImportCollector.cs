@@ -24,7 +24,8 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// </summary>
 public sealed class ImportCollector(
     TypeScriptTransformContext context,
-    IReadOnlySet<IrRuntimeRequirement>? irRuntimeRequirements = null
+    IReadOnlySet<IrRuntimeRequirement>? irRuntimeRequirements = null,
+    IReadOnlyDictionary<string, IrTranspilableTypeRef>? sameNameBindings = null
 )
 {
     /// <summary>
@@ -69,6 +70,14 @@ public sealed class ImportCollector(
         );
     private readonly IReadOnlySet<IrRuntimeRequirement>? _irRuntimeRequirements =
         irRuntimeRequirements;
+
+    /// <summary>
+    /// The project type the file names under each name two top-level project types
+    /// share (<see cref="SameNameTypeReferences"/>, #743); every other name resolves
+    /// through <see cref="TypeScriptTransformContext.TranspilableTypes"/>.
+    /// </summary>
+    private readonly IReadOnlyDictionary<string, IrTranspilableTypeRef> _sameNameBindings =
+        sameNameBindings ?? new Dictionary<string, IrTranspilableTypeRef>();
 
     /// <summary>
     /// The emitted file being collected for, set at the start of
@@ -600,7 +609,7 @@ public sealed class ImportCollector(
             // and `isCurrency` ends up with a single `import { Currency, isCurrency }`
             // line instead of two.
             if (
-                _context.TryResolveGuardImport(typeName, out var guarded)
+                _context.TryResolveGuardImport(typeName, ProjectTypeNamed, out var guarded)
                 && importedNames.Add(typeName)
             )
             {
@@ -677,7 +686,7 @@ public sealed class ImportCollector(
             }
 
             // Transpilable type within the project
-            if (!_context.TranspilableTypes.TryGetValue(typeName, out var referencedRef))
+            if (ProjectTypeNamed(typeName) is not { } referencedRef)
                 continue;
 
             // An origin-carrying import (a BCL export or a cross-package
@@ -1702,6 +1711,9 @@ public sealed class ImportCollector(
             case TsThrowStatement thr:
                 CollectFromExpression(thr.Expression, sink);
                 break;
+            case TsYieldStatement yield:
+                CollectFromExpression(yield.Expression, sink);
+                break;
             case TsExpressionStatement expr:
                 CollectFromExpression(expr.Expression, sink);
                 break;
@@ -1779,6 +1791,14 @@ public sealed class ImportCollector(
                 break;
         }
     }
+
+    /// <summary>
+    /// The project type a bare type name in this file refers to: the symbol-resolved
+    /// binding when another project type prints under the same name (#743).
+    /// </summary>
+    private IrTranspilableTypeRef? ProjectTypeNamed(string name) =>
+        _sameNameBindings.GetValueOrDefault(name)
+        ?? _context.TranspilableTypes.GetValueOrDefault(name);
 
     /// <summary>
     /// Whether a bare identifier read for a member (<c>Name.member</c>) names a type used

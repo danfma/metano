@@ -623,6 +623,15 @@ InteropProbes.inlineCodeHoles = threw
 InteropProbes.inlineCodeStatement = threw
 InteropProbes.unsafeCastOk = rex
 InteropProbes.unsafeCastWrong = InvalidCastException
+IteratorHelperProbes.helpersInsideYield = 1,0,0,1,7
+JsonSerializerCallProbes.defaultIsOneInstance = True|True
+JsonSerializerCallProbes.floatsWriteTheirShortestText = {"Single":0.1,"Maybe":3.4028235E+38,"Items":[1E-10,-0,16777216]}
+JsonSerializerCallProbes.invalidJsonThrowsJsonException = JsonException
+JsonSerializerCallProbes.nonFiniteNumberThrowsArgumentException = ArgumentException
+JsonSerializerCallProbes.nullRoot = null|True
+JsonSerializerCallProbes.roundTripKeepsExactDigits = xé|0.5|79228162514264337593543950335|-9223372036854775808
+JsonSerializerCallProbes.serializeEscapesAndNumbers = {"Text":"\u003Ca\u0026b\u003E\u0027\u002B\u0060\u0022\\\n\u00E9\u20AC/","Number":1E+20,"Money":12345678901234567890.123,"Count":9007199254740993}
+JsonSerializerCallProbes.smallNumbersAndNegativeZero = {"Text":"","Number":1E-07,"Money":0.1,"Count":-1}|{"Text":"","Number":-0,"Money":0,"Count":0}
 LazyAliasShadowProbes.callThroughAlias = cctor-aliased-owner,v=1
 LazyBarrelProbes.viaBarrel = square
 LazyCallGapProbes.emitFailureCached = arg,init-fail,arg,cached=True,end
@@ -1005,6 +1014,10 @@ RuntimeTypeShapeProbes.plainObjectGetType = RtDto|RtDto
 RuntimeTypeShapeProbes.plainObjectGetTypeKeepsEffects = RtDto|1
 RuntimeTypeShapeProbes.plainObjectGetTypeOfNull = NullReferenceException
 RuntimeTypeShapeProbes.plainObjectIsStructural = True|False|False
+SameNameAliasProbes.aliasTarget = Bud.Shoot
+SameNameImportProbes.genericTwigImportsItsOwnModule = 4|True
+SameNameImportProbes.nonGenericTwigImportsItsOwnModule = size:3
+SameNameRenamedProbes.renamedTypeByCSharpName = Renamed.Sprout
 SearchEqualityProbes.containsComparer = True,False,False
 SearchEqualityProbes.containsLazy = True,True,False,True,False
 SearchEqualityProbes.containsNullFromMissingField = True,False

@@ -1,6 +1,5 @@
 using Metano.Compiler.Diagnostics;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.TypeScript.Transformation;
 
@@ -10,30 +9,22 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// so the one import line the file can hold binds a single module and the other
 /// reference silently constructs or tests the wrong class. The second reference reports
 /// MS0070 at its C# location; rename one of the two with <c>[Name]</c>. A <c>using</c>
-/// alias prints under its own name and is not a reference to the bare name.
+/// alias prints under its own name, so a reference through one never clashes.
 /// </summary>
-internal sealed class SameNameTypeClashValidator(
-    Compilation compilation,
-    TypeScriptTransformContext context,
-    IReadOnlyList<INamedTypeSymbol> transpilableTypes
-)
+internal sealed class SameNameTypeClashValidator(TypeScriptTransformContext context)
 {
-    private readonly Dictionary<SyntaxTree, SemanticModel> _models = [];
-
-    private readonly Lazy<IReadOnlySet<string>> _ambiguousNames = new(() =>
-        AmbiguousNames(transpilableTypes, context)
-    );
-
     /// <summary>
     /// The MS0070 findings of one emitted file: <paramref name="fileTypes"/> are the
-    /// types it declares, whose bodies and signatures are the references it holds.
+    /// types it declares, and <paramref name="references"/> the references their bodies
+    /// and signatures hold (<see cref="SameNameTypeReferences.In"/>).
     /// </summary>
     public IEnumerable<MetanoDiagnostic> Validate(
         string fileName,
-        IReadOnlyList<INamedTypeSymbol> fileTypes
+        IReadOnlyList<INamedTypeSymbol> fileTypes,
+        IReadOnlyList<SameNameReference> references
     )
     {
-        if (_ambiguousNames.Value.Count == 0)
+        if (references.Count == 0)
             yield break;
 
         var bound = new Dictionary<string, INamedTypeSymbol>(StringComparer.Ordinal);
@@ -41,45 +32,13 @@ internal sealed class SameNameTypeClashValidator(
         foreach (var type in fileTypes)
             bound[context.ResolveTsName(type)] = type;
 
-        foreach (var reference in ReferencesIn(fileTypes))
+        foreach (var reference in references.Where(reference => !reference.IsAlias))
         {
             var name = context.ResolveTsName(reference.Type);
 
             if (!bound.TryAdd(name, reference.Type) && !Same(bound[name], reference.Type))
                 yield return Clash(name, fileName, bound[name], reference);
         }
-    }
-
-    private IEnumerable<(INamedTypeSymbol Type, Location Location)> ReferencesIn(
-        IEnumerable<INamedTypeSymbol> fileTypes
-    ) =>
-        fileTypes
-            .SelectMany(type => type.DeclaringSyntaxReferences)
-            .Select(reference => reference.GetSyntax())
-            .SelectMany(syntax => syntax.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
-            .Where(identifier => _ambiguousNames.Value.Contains(identifier.Identifier.ValueText))
-            .Select(ReferencedType)
-            .OfType<(INamedTypeSymbol, Location)>();
-
-    private (INamedTypeSymbol Type, Location Location)? ReferencedType(IdentifierNameSyntax node)
-    {
-        var symbol = ModelFor(node.SyntaxTree).GetSymbolInfo(node).Symbol;
-
-        var type = symbol switch
-        {
-            INamedTypeSymbol named => named,
-            IMethodSymbol { MethodKind: MethodKind.Constructor } constructor =>
-                constructor.ContainingType,
-            _ => null,
-        };
-
-        // Only a type spelled by its own name: a `using` alias prints under the alias.
-        return
-            type is { ContainingType: null } own
-            && own.Name == node.Identifier.ValueText
-            && context.TranspilableTypes.ContainsKey(context.ResolveTsName(own))
-            ? (own.OriginalDefinition, node.GetLocation())
-            : null;
     }
 
     private static bool Same(INamedTypeSymbol first, INamedTypeSymbol second) =>
@@ -89,7 +48,7 @@ internal sealed class SameNameTypeClashValidator(
         string name,
         string fileName,
         INamedTypeSymbol first,
-        (INamedTypeSymbol Type, Location Location) second
+        SameNameReference second
     ) =>
         new(
             MetanoDiagnosticSeverity.Error,
@@ -99,30 +58,4 @@ internal sealed class SameNameTypeClashValidator(
                 + "ambiguous and binds one module. Rename one of the two with [Name(\"...\")].",
             second.Location
         );
-
-    /// <summary>
-    /// The emitted names more than one top-level project type prints under: the only
-    /// names that can clash, so a project without any skips the whole check.
-    /// </summary>
-    private static IReadOnlySet<string> AmbiguousNames(
-        IEnumerable<INamedTypeSymbol> types,
-        TypeScriptTransformContext context
-    ) =>
-        types
-            .Where(type => type.ContainingType is null)
-            .GroupBy(type => context.ResolveTsName(type), StringComparer.Ordinal)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .ToHashSet(StringComparer.Ordinal);
-
-    private SemanticModel ModelFor(SyntaxTree tree)
-    {
-        if (!_models.TryGetValue(tree, out var model))
-        {
-            model = compilation.GetSemanticModel(tree);
-            _models[tree] = model;
-        }
-
-        return model;
-    }
 }
