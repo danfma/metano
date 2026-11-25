@@ -32,6 +32,7 @@ targets/js/sample-counter-v5/lib/
 .metano-cache.json
 .metano-cache-groups-*.json
 .metano-stamp
+.metano-diagnostics
 
 # Local working plans (per CLAUDE.md workflow — private per-session notes,
 # not committed — the authoritative backlog lives in GitHub issues)

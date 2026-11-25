@@ -12,8 +12,11 @@ namespace Metano.Compiler;
 /// of the run that produced <paramref name="Files"/>.</param>
 /// <param name="ModuleSideEffectFiles">The <see cref="TargetOutput.ModuleSideEffectFiles"/>
 /// of the run that produced <paramref name="Files"/>.</param>
+/// <param name="Diagnostics">The non-error diagnostics the target and emit stage reported when
+/// they produced <paramref name="Files"/>; the host replays them (#785).</param>
 public sealed record CachedTargetOutput(
     IReadOnlyList<GeneratedFile> Files,
     IReadOnlyDictionary<string, string> PackageDependencies,
-    IReadOnlyList<string> ModuleSideEffectFiles
+    IReadOnlyList<string> ModuleSideEffectFiles,
+    IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
 );

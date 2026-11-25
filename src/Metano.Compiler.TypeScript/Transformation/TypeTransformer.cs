@@ -40,6 +40,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private readonly object _diagnosticsLock = new();
 
+    /// <summary>
+    /// How many diagnostics the group being transformed on this thread reported, deduplicated
+    /// ones included. A group transforms on one thread, so the count tells whether its output
+    /// must not be reused: a reused group does not run, and its diagnostics would vanish (#785).
+    /// The count is attributed to the group whose transform runs on the reporting thread, not
+    /// to the type the diagnostic names, so a diagnostic about another type counts for the
+    /// group that triggered it.
+    /// </summary>
+    [ThreadStatic]
+    private static int t_groupDiagnosticCount;
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<
         string,
         string
@@ -188,6 +199,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
     {
+        t_groupDiagnosticCount++;
+
         lock (_diagnosticsLock)
         {
             if (!_diagnostics.Contains(diagnostic))
@@ -1490,10 +1503,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         using var dependencies = Context.TypeMapping!.CrossPackageDependencies.BeginGroup();
         var casts = new GroupCasts(assertedCasts);
 
+        t_groupDiagnosticCount = 0;
+
         var produced = TransformGroup(
             group,
             IrToTsBridgeContext.ForGroup(Context.DeclarativeMappings, casts, Context.RuntimeTypes)
         );
+
+        var reportedDiagnostics = t_groupDiagnosticCount > 0;
 
         outcomes.Files[index] = produced;
         outcomes.CheckedCasts[index] = casts.Checked;
@@ -1514,10 +1531,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         // A group whose casts were asserted for the import graph of this run
         // is not cached: the next run recomputes the decision from its graph.
+        // Neither is a group that reported a diagnostic, so the next run reports it again.
         outcomes.Emissions[index] = new GroupEmission(
             [FileMetadataExtractor.Extract(produced, printedContent)],
             dependencies.SnapshotDependencies(),
-            IsCacheable: assertedCasts.Count == 0
+            IsCacheable: assertedCasts.Count == 0 && !reportedDiagnostics
         );
     }
 

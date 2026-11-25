@@ -1615,6 +1615,42 @@ Product requirements added after the migration (normative; each one is traced by
   Metano package (reached through `[InternalsVisibleTo]`), which it cannot import. The
   explicit `[Transpile]` mode is unchanged: an internal type with `[Transpile]` keeps its barrel
   entry, and only `[TranspileAssembly]` assemblies reach types automatically.
+- **FR-106** (Metano warnings honour the project's warning settings, #785, **behaviour change**):
+  The build target MUST pass the project's `TreatWarningsAsErrors`, `WarningsAsErrors`,
+  `WarningsNotAsErrors` and `NoWarn` (and MSBuild's `MSBuildTreatWarningsAsErrors`,
+  `MSBuildWarningsAsErrors`, `MSBuildWarningsNotAsErrors`, `MSBuildWarningsAsMessages`) to the
+  compiler CLI as `--warn-as-error`, `--warnings-as-errors`, `--warnings-not-as-errors` and
+  `--no-warn` (comma-separated lists; entries other than a Metano code, `MS` and four digits,
+  are ignored). The CLI applies them to every Metano diagnostic of the run: a warning in
+  `NoWarn` is dropped; otherwise a warning becomes an error when it is not in
+  `WarningsNotAsErrors` and either `TreatWarningsAsErrors` is set or it is in
+  `WarningsAsErrors` (`NoWarn` wins over escalation, `WarningsNotAsErrors` over both
+  escalating settings). A run that reports an error, escalated warnings included, MUST write
+  neither the `.metano-stamp` nor the incremental cache, and MUST remove an existing stamp, so
+  the next build runs the transpile and fails again. The incremental cache (format 6) MUST
+  store the non-error diagnostics of the target and emit stage, and a run served from it MUST
+  report them again, together with the frontend's, through the same policy; a group of the
+  per-group cache that reported a diagnostic MUST NOT be reused, so its diagnostic is
+  reported again. The CLI keeps the warnings of a successful run in
+  `<output>/.metano-diagnostics` (one canonical line each) and the build target prints it
+  when it skips the transpile as up to date, so a warning is reported by every build. A
+  project that sets `TreatWarningsAsErrors` and already reports Metano warnings starts
+  failing; the warning is fixed, or its code is listed in `WarningsNotAsErrors` or `NoWarn`.
+  Changing a warning setting changes the CLI arguments, which reruns the transpile.
+  Codes in `MSBuildWarningsAsMessages` are suppressed (as `NoWarn`), not demoted to messages.
+  Only Metano codes are passed, so editing a compiler-only `NoWarn` does not rerun the
+  transpile. Warnings of the package.json stage are appended to `.metano-diagnostics` and a
+  failed load removes the stamp. `.metano-*` files are build state: they are not committed and
+  not published.
+
+- **FR-107** (TypeScript 7 and the Temporal polyfill types, #786): `metano-runtime`'s
+  declarations of the Temporal-typed API reference `@js-temporal/polyfill`, and so do the
+  generated files that use a mapped BCL date/time type. The polyfill 0.5.1 declarations clash
+  with the built-in `Temporal` and `Intl` types of TypeScript 7 under `lib: esnext`
+  (TS2430), which `skipLibCheck: true` or a `lib` without `esnext.temporal` (for example
+  `es2024`) avoids. This is a documented limitation of the pair of versions, not of the
+  runtime; removing it needs the polyfill, or a design that changes the Temporal-typed
+  public API (see the issue).
 
 ### Key Entities
 
