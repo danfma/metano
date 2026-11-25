@@ -12,4 +12,13 @@ namespace Metano.Compiler.IR;
 /// <c>NumericsDecimal</c>), <c>Default</c> for a parameterless overload, or a
 /// spelling with a positional marker (<c>GlobalNDecimal$1</c>) when the climb
 /// reached a dead end (FR-024).</param>
-public sealed record IrOverloadName(string Suffix);
+public sealed record IrOverloadName(string Suffix)
+{
+    /// <summary>
+    /// Whether a <c>[Name]</c> pins <see cref="Suffix"/> (FR-005): the overload's
+    /// own, or the root's for an override or interface implementation (FR-025).
+    /// A pinned overload's names are a function of the pin, so every consumer —
+    /// a metadata-only one included — can name it (FR-019).
+    /// </summary>
+    public bool IsPinned { get; init; }
+}

@@ -266,11 +266,14 @@ public class OverloadNamePinTests
     }
 
     /// <summary>
-    /// DECIDED-24: a producer read from metadata only keeps the dispatcher
-    /// calls, and the dispatcher keeps the C# name whatever its overloads pin.
+    /// DECIDED-24 as FR-019 amends it (#799): a producer read from metadata
+    /// only keeps the dispatcher calls, by its C# name, except for a class
+    /// overload a <c>[Name]</c> pins, whose factory and fast path the consumer
+    /// names from metadata (<c>Money.fromCents</c>, <c>addCents</c>). A module
+    /// function keeps its dispatcher even when pinned.
     /// </summary>
     [Test]
-    public async Task MetadataOnlyReference_CallsTheDispatcherByItsCSharpName()
+    public async Task MetadataOnlyReference_BindsPinnedClassOverloadsOnly()
     {
         var files = TranspileHelper.TranspileWithLibraryImage(PinLibrary, PinConsumer);
 

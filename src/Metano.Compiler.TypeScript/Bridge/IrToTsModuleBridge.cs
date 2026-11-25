@@ -181,6 +181,12 @@ public static class IrToTsModuleBridge
             .Where(pair => !shadowed.Contains(pair.First))
             .ToList();
 
+        if (dispatched is [var (lone, loneFastPath)])
+        {
+            statements.Add(BuildTypedForwarder(lone, dispatcherName, loneFastPath));
+            return;
+        }
+
         statements.Add(
             new TsFunction(
                 dispatcherName,
@@ -194,6 +200,36 @@ public static class IrToTsModuleBridge
                 Async: plan.IsAsync,
                 Overloads: plan.Signatures
             )
+        );
+    }
+
+    /// <summary>
+    /// The dispatcher name of a group whose dispatcher reaches one overload, the
+    /// others shadowed (#778, #799): an exported function with that overload's
+    /// signature that forwards to its fast path (spec 013 FR-016), as a class
+    /// group's does.
+    /// </summary>
+    private static TsFunction BuildTypedForwarder(
+        IrModuleFunction lone,
+        string dispatcherName,
+        string fastPathName
+    )
+    {
+        var parameters = SignatureParametersOf(lone);
+        var typeParameters = IrToTsTypeParameterMapper.Convert(lone.TypeParameters);
+
+        var call = IrToTsOverloadDispatcherBridge.ForwardingCall(
+            new TsIdentifier(fastPathName),
+            parameters,
+            typeParameters
+        );
+
+        return new TsFunction(
+            dispatcherName,
+            parameters,
+            IrToTsTypeMapper.Map(lone.ReturnType),
+            [new TsReturnStatement(call)],
+            TypeParameters: typeParameters
         );
     }
 

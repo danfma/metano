@@ -609,13 +609,42 @@ public static class IrClassExtractor
         return group.Members.ToDictionary(
             member => member,
             member =>
-                DeclarationOf(type, group, member, named, suffixes[member], context) with
+                WithPin(
+                    DeclarationOf(type, group, member, named, suffixes[member], context),
+                    group,
+                    member,
+                    policy
+                ) with
                 {
                     DeclarationOrdinal = member.Ordinal,
                     Anchor = AnchorOf(member, context),
                     IsShadowedBySynthesized = IsShadowed(member, shadowed),
                 }
         );
+    }
+
+    /// <summary>
+    /// Records on the declaration's overload name whether a <c>[Name]</c> pins
+    /// its suffix (spec 013 FR-005); a synthesized member is never pinned.
+    /// </summary>
+    private static IrMethodDeclaration WithPin(
+        IrMethodDeclaration declaration,
+        MethodOverloadGroup group,
+        GroupMember member,
+        OverloadGroupingPolicy policy
+    )
+    {
+        var isPinned =
+            member is DeclaredMember declared
+            && MethodOverloadGroups.IsPinned(group, declared, policy);
+
+        if (!isPinned || declaration.OverloadName is not { } name)
+            return declaration;
+
+        return declaration with
+        {
+            OverloadName = name with { IsPinned = true },
+        };
     }
 
     private static bool IsShadowed(GroupMember member, IReadOnlySet<DeclaredMember> shadowed) =>

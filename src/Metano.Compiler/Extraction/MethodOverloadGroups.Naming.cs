@@ -86,6 +86,30 @@ internal static partial class MethodOverloadGroups
         return suffixes;
     }
 
+    /// <summary>
+    /// Whether a <c>[Name]</c> pins the suffix of <paramref name="method"/> in
+    /// its group (FR-005): its own, or its root's when it is anchored (FR-025).
+    /// The member whose <c>[Name]</c> named the group pins nothing.
+    /// </summary>
+    public static bool IsPinned(IMethodSymbol method, OverloadGroupingPolicy policy)
+    {
+        var definition = method.OriginalDefinition;
+
+        return GroupOf(definition, policy) is { } group
+            && group.MemberOf(definition) is DeclaredMember member
+            && IsPinned(group, member, policy);
+    }
+
+    /// <summary>
+    /// Whether a <c>[Name]</c> pins the suffix of <paramref name="member"/> in
+    /// <paramref name="group"/> (<see cref="IsPinned(IMethodSymbol, OverloadGroupingPolicy)"/>).
+    /// </summary>
+    public static bool IsPinned(
+        MethodOverloadGroup group,
+        DeclaredMember member,
+        OverloadGroupingPolicy policy
+    ) => PinnedOverloadOf(group, member, policy.Target).Pin?.Suffix is not null;
+
     private static string SynthesizedSuffixOf(OverloadGroupingPolicy policy) =>
         policy.ValueEqualityNames?.FastPathSuffix
         ?? throw new InvalidOperationException(

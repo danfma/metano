@@ -8,12 +8,24 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// Reports <c>MS0063</c> at each overload a class or module-function dispatcher drops
 /// because an earlier overload has the same runtime test (#778, see
 /// <see cref="ShadowedDispatchOverloads"/>), naming the fast path a
-/// hand-written TypeScript caller must call to reach it. A pair that
+/// hand-written TypeScript caller must call to reach it. A class or
+/// constructor overload whose suffix a <c>[Name]</c> pins is not reported:
+/// its names are stable and every consumer binds to it (spec 013 FR-019). A
+/// module function is reported even when pinned, since a consumer in another
+/// package keeps calling its dispatcher. A pair that
 /// differs only by a branded 64-bit type is already reported, once per group,
 /// by <see cref="BrandedSixtyFourBitReporter"/>.
 /// </summary>
 internal static class ShadowedOverloadReporter
 {
+    /// <summary>
+    /// The fix a class or constructor overload's report names: a pin, which
+    /// every consumer binds to by name and which silences the report.
+    /// </summary>
+    private const string PinRemedy =
+        " Pin it with [Name(\"…\")] to give it a stable name that every consumer, a "
+        + "metadata-only one included, binds to; a pinned overload is not reported.";
+
     public static void ReportMethods(
         INamedTypeSymbol type,
         IrMethodDeclaration primary,
@@ -31,6 +43,7 @@ internal static class ShadowedOverloadReporter
                 !brandedOrdinals.Contains(shadowed.Overload.DeclarationOrdinal)
                 || !brandedOrdinals.Contains(shadowed.TakenBy.DeclarationOrdinal)
             )
+            .Where(shadowed => !IsPinned(shadowed.Overload.OverloadName))
             .ToList();
 
         if (found.Count == 0)
@@ -68,6 +81,7 @@ internal static class ShadowedOverloadReporter
                 !branded.Contains(shadowed.Overload.DeclarationOrdinal)
                 || !branded.Contains(shadowed.TakenBy.DeclarationOrdinal)
             )
+            .Where(shadowed => !IsPinned(shadowed.Overload.OverloadName))
             .ToList();
 
         if (found.Count == 0)
@@ -85,7 +99,8 @@ internal static class ShadowedOverloadReporter
                     OverloadSymbols.Of(symbols, shadowed.Overload.PlainParameters),
                     OverloadSymbols.Of(symbols, shadowed.TakenBy.PlainParameters),
                     "constructor",
-                    factory is null ? type.Name : $"{type.Name}.{factory}"
+                    factory is null ? type.Name : $"{type.Name}.{factory}",
+                    PinRemedy
                 )
             );
         }
@@ -159,7 +174,8 @@ internal static class ShadowedOverloadReporter
             SymbolOf(symbols, shadowed.Overload.Parameters, shadowed.Overload.SignatureText),
             SymbolOf(symbols, shadowed.TakenBy.Parameters, shadowed.TakenBy.SignatureText),
             TsClassMemberTable.MethodNameOf(shadowed.Overload),
-            CalleeOf(type, shadowed.Overload, claims)
+            CalleeOf(type, shadowed.Overload, claims),
+            PinRemedy
         );
 
     private static MetanoDiagnostic DiagnosticOf(
@@ -167,7 +183,8 @@ internal static class ShadowedOverloadReporter
         IMethodSymbol? overload,
         IMethodSymbol? takenBy,
         string dispatcher,
-        string callee
+        string callee,
+        string remedy = ""
     ) =>
         new(
             MetanoDiagnosticSeverity.Warning,
@@ -175,9 +192,16 @@ internal static class ShadowedOverloadReporter
             $"Overload '{OverloadSymbols.Describe(overload)}' has the same runtime test as "
                 + $"'{OverloadSymbols.Describe(takenBy)}' in the TypeScript dispatcher "
                 + $"'{dispatcher}', which therefore leaves it out. C# call sites bind to it "
-                + $"directly; hand-written TypeScript must call '{callee}'.",
+                + $"directly; hand-written TypeScript must call '{callee}'.{remedy}",
             overload?.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault()
         );
+
+    /// <summary>
+    /// A shadowed class overload whose suffix a <c>[Name]</c> pins is an
+    /// acknowledged choice (spec 013 FR-005, FR-019): hand-written TypeScript
+    /// has a stable name to call, and a metadata-only consumer binds to it.
+    /// </summary>
+    private static bool IsPinned(IrOverloadName? name) => name is { IsPinned: true };
 
     private static IMethodSymbol? SymbolOf(
         IReadOnlyList<IMethodSymbol> symbols,

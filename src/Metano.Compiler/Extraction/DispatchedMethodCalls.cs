@@ -15,7 +15,9 @@ namespace Metano.Compiler.Extraction;
 /// anchored one) whose IR is available, declared in this compilation or in a
 /// project reference, which loads as source; a type read from metadata only
 /// (a DLL or a package) keeps the dispatcher call, since its claimed names
-/// are unknown and the dispatcher is correct, only slower. A <c>base.M</c>
+/// are unknown and the dispatcher is correct, only slower — except for an
+/// overload a <c>[Name]</c> pins, whose names its metadata determines (FR-019,
+/// the dispatcher may drop it, MS0063). A <c>base.M</c>
 /// call keeps its own gate (<see
 /// cref="IrExpressionExtractor.TryExtractBaseOverloadCall"/>), which binds
 /// metadata-only bases too, since their root names come from metadata
@@ -45,10 +47,16 @@ internal static class DispatchedMethodCalls
         if (containingType is not { SpecialType: SpecialType.None })
             return null;
 
-        if (IsExcludedMember(definition) || !HasSourceIr(containingType))
+        if (IsExcludedMember(definition))
             return null;
 
+        // The emitted-type gate runs first: naming a metadata-only method
+        // groups its type's methods, which a type the target never emits
+        // (the BCL, a package without Metano) must not pay for.
         if (!EmittedTypes.IsEmittedContainingType(containingType, target))
+            return null;
+
+        if (!IsNameable(definition, context.GroupingPolicy))
             return null;
 
         if (KeepsBrandedDispatcher(definition, context))
@@ -162,9 +170,19 @@ internal static class DispatchedMethodCalls
     private static bool IsExcludedMember(IMethodSymbol method) => method.IsInlinedAtCallSite();
 
     /// <summary>
+    /// Whether this compilation can name <paramref name="method"/>'s fast path:
+    /// its declaring type has syntax — declared here or in a project reference,
+    /// which loads as source (DECIDED-24) — or a <c>[Name]</c> pins its suffix,
+    /// whose names the declaring type's metadata determines, as an override's
+    /// root names do (FR-019, DECIDED-28). Any other metadata-only method keeps
+    /// the dispatcher.
+    /// </summary>
+    private static bool IsNameable(IMethodSymbol method, OverloadGroupingPolicy policy) =>
+        HasSourceIr(method.ContainingType) || MethodOverloadGroups.IsPinned(method, policy);
+
+    /// <summary>
     /// A declaring type with syntax: declared in this compilation or in a
-    /// project reference, which loads as source (DECIDED-24). A metadata-only
-    /// type keeps the dispatcher.
+    /// project reference, which loads as source (DECIDED-24).
     /// </summary>
     private static bool HasSourceIr(INamedTypeSymbol type) =>
         !type.OriginalDefinition.DeclaringSyntaxReferences.IsEmpty;
