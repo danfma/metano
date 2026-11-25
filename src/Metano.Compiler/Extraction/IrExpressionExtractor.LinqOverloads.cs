@@ -23,8 +23,6 @@ public sealed partial class IrExpressionExtractor
 
     private const string UnloweredLinqCallKind = "UnloweredLinqCall";
 
-    private const string UnsupportedLookupIndexerKind = "UnsupportedLookupIndexer";
-
     /// <summary>
     /// The last invocation rewriter
     /// (<see cref="Invocation.UnsupportedLinqCallRewriter"/>): a LINQ call no
@@ -52,21 +50,23 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// The read <c>lookup[key]</c> of an <c>ILookup&lt;K, T&gt;</c>, which the pipe form lowers
-    /// to a runtime <c>Lookup</c> that has no bracket access: it reports MS0001 and becomes
-    /// the throwing placeholder rather than reading a property of the object; <c>null</c> for
-    /// any other receiver or a target that does not lower LINQ chains.
+    /// to a runtime <c>Lookup</c> that has no bracket access: it becomes the call
+    /// <c>lookup.get(key)</c>, an empty sequence for a missing key as in .NET (#747); any
+    /// other receiver or a target that does not lower LINQ chains yields <c>null</c> and keeps
+    /// the generic element read.
     /// </summary>
-    private IrExpression? RewriteLookupIndexer(ExpressionSyntax node, ExpressionSyntax receiver)
+    private IrExpression? RewriteLookupIndexer(
+        ExpressionSyntax receiver,
+        BracketedArgumentListSyntax arguments
+    )
     {
         if (!LowersLinqChains || !IsLookup(_semantic.GetTypeInfo(receiver).Type))
             return null;
 
-        ReportUnsupportedFeature(
-            node.GetLocation(),
-            "The indexer of 'ILookup<TKey, TElement>' is not supported; the call throws at run time."
+        return new IrCallExpression(
+            new IrMemberAccess(Extract(receiver), "get"),
+            [new IrArgument(Extract(arguments.Arguments[0].Expression))]
         );
-
-        return new IrUnsupportedExpression(UnsupportedLookupIndexerKind);
     }
 
     private static bool IsLookup(ITypeSymbol? type) =>

@@ -3,7 +3,10 @@
  * System.Text.Json's `JsonSerializer.Serialize(value, JsonTypeInfo<T>)`
  * writes with its default options (#741, measured on .NET 10):
  *
- * - no whitespace;
+ * - no whitespace, unless the context writes indented text (#752): `writeIndented` puts each
+ *   array element and each property on its own line, indented by `indentSize` copies of
+ *   `indentCharacter` per level (a space and 2 by default), with `newLine` (`"\n"` by default)
+ *   between lines, `": "` after a property name, and `[]` / `{}` for an empty container;
  * - strings escaped by `JavaScriptEncoder.Default`: `\\`, `\b`, `\f`, `\n`,
  *   `\r` and `\t` keep their short escapes; every other control character,
  *   `"`, `&`, `'`, `+`, `<`, `>`, `` ` `` and every character outside
@@ -17,6 +20,7 @@
 import { formatDouble } from "../double-format.ts";
 import { ArgumentException } from "../exceptions/argument-exception.ts";
 import { rawJsonTextOf } from "./exact-json-number.ts";
+import type { JsonWriteOptions } from "./types.ts";
 
 /** The message STJ throws for a NaN or infinite number written as JSON. */
 const NON_FINITE_NUMBER_MESSAGE =
@@ -25,16 +29,47 @@ const NON_FINITE_NUMBER_MESSAGE =
   "'JsonNumberHandling.AllowNamedFloatingPointLiterals' " +
   "(see https://learn.microsoft.com/dotnet/api/system.text.json.serialization.jsonnumberhandling).";
 
-/** The JSON text of `tree`, as System.Text.Json writes it. */
-export function writeJsonText(tree: unknown): string {
-  const parts: string[] = [];
+/** How the writer lays out containers: the compact text, or one line per element. */
+interface Layout {
+  /** The text before each element of a container at `depth`, or `""` when compact. */
+  lineStart(depth: number): string;
+  /** The text between the last element of a container and its closing bracket. */
+  lineEnd(depth: number): string;
+  /** The text after a property name's colon. */
+  readonly afterColon: string;
+}
 
-  writeValue(tree, parts);
+const COMPACT: Layout = {
+  lineStart: () => "",
+  lineEnd: () => "",
+  afterColon: "",
+};
+
+function indentedLayout(options: JsonWriteOptions): Layout {
+  const unit = (options.indentCharacter ?? " ").repeat(options.indentSize ?? 2);
+  const newLine = options.newLine ?? "\n";
+
+  return {
+    lineStart: (depth) => newLine + unit.repeat(depth),
+    lineEnd: (depth) => newLine + unit.repeat(depth - 1),
+    afterColon: " ",
+  };
+}
+
+/**
+ * The JSON text of `tree`, as System.Text.Json writes it: compact, or laid out as
+ * `options` say (the context's `WriteIndented` family, #752).
+ */
+export function writeJsonText(tree: unknown, options?: JsonWriteOptions): string {
+  const parts: string[] = [];
+  const layout = options?.writeIndented ? indentedLayout(options) : COMPACT;
+
+  writeValue(tree, parts, layout, 0);
 
   return parts.join("");
 }
 
-function writeValue(value: unknown, parts: string[]): void {
+function writeValue(value: unknown, parts: string[], layout: Layout, depth: number): void {
   if (value == null) {
     parts.push("null");
 
@@ -57,10 +92,10 @@ function writeValue(value: unknown, parts: string[]): void {
       return;
   }
 
-  writeObject(value as object, parts);
+  writeObject(value as object, parts, layout, depth);
 }
 
-function writeObject(value: object, parts: string[]): void {
+function writeObject(value: object, parts: string[], layout: Layout, depth: number): void {
   const rawText = rawJsonTextOf(value);
 
   if (rawText !== undefined) {
@@ -72,21 +107,27 @@ function writeObject(value: object, parts: string[]): void {
   const toJson = (value as { toJSON?: unknown }).toJSON;
 
   if (typeof toJson === "function") {
-    writeValue(toJson.call(value), parts);
+    writeValue(toJson.call(value), parts, layout, depth);
 
     return;
   }
 
   if (Array.isArray(value)) {
-    writeArray(value, parts);
+    writeArray(value, parts, layout, depth + 1);
 
     return;
   }
 
-  writeProperties(value as Record<string, unknown>, parts);
+  writeProperties(value as Record<string, unknown>, parts, layout, depth + 1);
 }
 
-function writeArray(items: readonly unknown[], parts: string[]): void {
+/** `depth` is the nesting level of the array's elements. */
+function writeArray(
+  items: readonly unknown[],
+  parts: string[],
+  layout: Layout,
+  depth: number,
+): void {
   parts.push("[");
 
   items.forEach((item, index) => {
@@ -94,14 +135,27 @@ function writeArray(items: readonly unknown[], parts: string[]): void {
       parts.push(",");
     }
 
-    writeValue(item, parts);
+    parts.push(layout.lineStart(depth));
+    writeValue(item, parts, layout, depth);
   });
+
+  if (items.length > 0) {
+    parts.push(layout.lineEnd(depth));
+  }
 
   parts.push("]");
 }
 
-/** An object's own enumerable properties; an `undefined` one is skipped, as `JSON.stringify` skips it. */
-function writeProperties(object: Record<string, unknown>, parts: string[]): void {
+/**
+ * An object's own enumerable properties; an `undefined` one is skipped, as `JSON.stringify`
+ * skips it. `depth` is the nesting level of the properties.
+ */
+function writeProperties(
+  object: Record<string, unknown>,
+  parts: string[],
+  layout: Layout,
+  depth: number,
+): void {
   let first = true;
 
   parts.push("{");
@@ -118,8 +172,12 @@ function writeProperties(object: Record<string, unknown>, parts: string[]): void
     }
 
     first = false;
-    parts.push(quoted(key), ":");
-    writeValue(member, parts);
+    parts.push(layout.lineStart(depth), quoted(key), ":", layout.afterColon);
+    writeValue(member, parts, layout, depth);
+  }
+
+  if (!first) {
+    parts.push(layout.lineEnd(depth));
   }
 
   parts.push("}");

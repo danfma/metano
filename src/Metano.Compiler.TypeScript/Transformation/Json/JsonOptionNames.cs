@@ -9,4 +9,12 @@ internal static class JsonOptionNames
     public const string NumberHandling = "NumberHandling";
 
     public const string DefaultIgnoreCondition = "DefaultIgnoreCondition";
+
+    public const string WriteIndented = "WriteIndented";
+
+    public const string IndentCharacter = "IndentCharacter";
+
+    public const string IndentSize = "IndentSize";
+
+    public const string NewLine = "NewLine";
 }
