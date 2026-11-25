@@ -207,6 +207,21 @@ public static class IrToTsTypeMapper
                 arguments.Select(argument => Map(argument, overrides)).ToList()
             );
 
+        // `ILookup<K, T>` is the runtime `Lookup` class `ToLookup` returns (#747).
+        if (
+            named is
+            {
+                Namespace: "System.Linq",
+                Name: "ILookup",
+                Origin: null,
+                TypeArguments: { Count: 2 } lookupArguments,
+            }
+        )
+            return RuntimeClassType(
+                "Lookup",
+                lookupArguments.Select(argument => Map(argument, overrides)).ToList()
+            );
+
         var name = ModuleLocalNaming.Flatten(named.Name, named.PrivateNestedSegments);
 
         if (NamedTypeRenames is { } renames && renames.TryGetValue(name, out var renamed))

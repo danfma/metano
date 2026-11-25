@@ -4163,7 +4163,7 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractIndexOrRangeAccess(node, receiverSyntax, arguments) is { } indexOrRangeAccess)
             return indexOrRangeAccess;
 
-        if (RewriteLookupIndexer(node, receiverSyntax) is { } lookupIndexer)
+        if (RewriteLookupIndexer(receiverSyntax, arguments) is { } lookupIndexer)
             return lookupIndexer;
 
         var target = Extract(receiverSyntax);

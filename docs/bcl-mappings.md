@@ -223,9 +223,10 @@ and a decimal compare by value, and a class without `Equals` by reference.
 | `xs.GroupBy(k[, comparer])` | `linq(xs, groupBy(k[, comparer]))`: groups and elements in first-seen order |
 | `xs.SequenceEqual(ys[, comparer])` | `linq(xs, sequenceEqual(ys[, comparer]))` |
 | `xs.ToLookup(k[, e][, comparer])` | `linq(xs, toLookup(k[, e][, comparer]))`: a runtime `Lookup` (`count`, `get`, `contains`, iteration) |
+| `ILookup<K, T>`, `lookup[key]`, `lookup.Count`, `lookup.Contains(key)` | `Lookup<K, T>`, `lookup.get(key)` (an empty sequence for a missing key, as .NET), `lookup.count`, `lookup.contains(key)` |
 | `xs.Join(ys, ok, ik, result[, comparer])` | `linq(xs, join(ys, ok, ik, result[, comparer]))`: a `null` key matches nothing |
 
-Not mapped, reported with `MS0001`: the `lookup[key]` indexer of an `ILookup`, `GroupJoin`, and the
+Not mapped, reported with `MS0001`: `GroupJoin`, and the
 `GroupBy` overloads with an element or result selector.
 
 Not mapped, reported with `MS0001`: `ElementAt(Index)`, `Array.IndexOf(a, v, start, count)`,

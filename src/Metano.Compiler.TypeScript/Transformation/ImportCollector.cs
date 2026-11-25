@@ -258,20 +258,30 @@ public sealed class ImportCollector(
         foreach (var name in imp.Names)
             runtimeImported.Add(name);
 
-        // `Grouping<K,T>` is shipped from `metano-runtime/system/linq` (the pipe
-        // runtime) and re-exported from the root `metano-runtime` barrel.
-        // Pull it in as a type-only import when the consumer file references
+        // `Grouping<K,T>` and `Lookup<K,T>` are shipped from `metano-runtime/system/linq`
+        // (the pipe runtime) and re-exported from the root `metano-runtime` barrel.
+        // Pull each in as a type-only import when the consumer file references
         // it — from a signature's plain name or a helper-bound type — but
         // didn't go through the LINQ-pipe import path.
-        if (
-            (
-                referencedTypes.Contains("Grouping")
-                || sink.RuntimeHelperTypeReferences.Contains("Grouping")
-            ) && !runtimeImported.Contains("Grouping")
+        // A user type may be named `Lookup`, so only a helper-bound reference counts for it.
+        var needsGrouping =
+            referencedTypes.Contains("Grouping")
+            || sink.RuntimeHelperTypeReferences.Contains("Grouping");
+
+        var needsLookup = sink.RuntimeHelperTypeReferences.Contains("Lookup");
+
+        foreach (
+            var linqType in new[]
+            {
+                needsGrouping ? "Grouping" : null,
+                needsLookup ? "Lookup" : null,
+            }
         )
         {
-            imports.Add(new TsImport(["Grouping"], RuntimeModule, TypeOnly: true));
-            runtimeImported.Add("Grouping");
+            if (linqType is null || !runtimeImported.Add(linqType))
+                continue;
+
+            imports.Add(new TsImport([linqType], RuntimeModule, TypeOnly: true));
         }
 
         // The runtime type descriptor types (spec 011 FR-017) are types only:
