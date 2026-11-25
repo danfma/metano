@@ -278,49 +278,72 @@ public class InternalTypeReachabilityTests
             .Contains("import { Store } from \"@scope/lib/my-lib\";");
     }
 
+    private const string FriendLibrary = """
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("@scope/lib")]
+        [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TestConsumer")]
+
+        namespace MyLib;
+
+        internal sealed class Secret
+        {
+            public int V => 1;
+
+            public static Secret Make() => new();
+        }
+
+        public sealed class Api
+        {
+            internal Secret Internal() => new();
+        }
+        """;
+
     [Test]
-    public async Task FriendConsumerReferencingAPackageInternal_ReportsMS0002()
+    public async Task FriendConsumerNamingAPackageInternal_ReportsMS0002Once()
     {
-        // The producer emits Codec but exports it nowhere, so a consumer granted
-        // [InternalsVisibleTo] cannot import it: the reference is reported, never left bare.
-        var library = """
-            [assembly: TranspileAssembly]
-            [assembly: EmitPackage("@scope/lib")]
-            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TestConsumer")]
-
-            namespace MyLib;
-
-            internal static class Codec
-            {
-                internal static string Encode(int value) => "#" + value;
-            }
-
-            public sealed class Store
-            {
-                public string Put(int value) => Codec.Encode(value);
-            }
-            """;
-
-        var consumer = """
+        // The producer emits Secret but exports it nowhere, so a consumer granted
+        // [InternalsVisibleTo] cannot import it: the name is reported, once.
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            FriendLibrary,
+            """
             [assembly: TranspileAssembly]
 
             namespace App;
 
-            public sealed class Client
+            public static class Client
             {
-                public string Save() => MyLib.Codec.Encode(1);
+                public static int Save() => MyLib.Secret.Make().V;
             }
-            """;
-
-        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
-            library,
-            consumer
+            """
         );
 
         var unresolved = diagnostics.Single(diagnostic =>
             diagnostic.Code == DiagnosticCodes.UnresolvedType
         );
 
-        await Assert.That(unresolved.Message).Contains("'Codec'");
+        await Assert.That(unresolved.Message).Contains("'Secret'");
+    }
+
+    [Test]
+    public async Task FriendConsumerNeverNamingAPackageInternal_ReportsNothing()
+    {
+        // A value of the internal type flows through, but the output never prints its name.
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            FriendLibrary,
+            """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public static class Client
+            {
+                public static int Read() => new MyLib.Api().Internal().V;
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Select(diagnostic => diagnostic.Code))
+            .DoesNotContain(DiagnosticCodes.UnresolvedType);
     }
 }

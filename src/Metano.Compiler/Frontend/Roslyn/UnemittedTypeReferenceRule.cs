@@ -1,6 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Frontend.Roslyn;
 
@@ -47,12 +48,37 @@ internal sealed class UnemittedTypeReferenceRule(
     {
         if (
             IsUnemitted(type.OriginalDefinition)
+            && SpellsTheType(location)
             && _reportedReferences.Add((location.SourceTree, location.SourceSpan.End))
         )
             Report(type, location);
     }
 
     public void CheckMember(ISymbol member, Location location) { }
+
+    /// <summary>
+    /// Whether the output prints the type at <paramref name="location"/>: a name that spells
+    /// it, a target-typed <c>new()</c>, or a declaration whose signature carries it. The
+    /// receiver of an instance access (<c>Make().V</c>, <c>api.Internal().V</c>) and a
+    /// <c>var</c> keyword print no type, so a value of the type flowing through them is
+    /// not a missing symbol.
+    /// </summary>
+    private static bool SpellsTheType(Location location)
+    {
+        if (location.SourceTree is not { } tree)
+            return true;
+
+        var node = tree.GetRoot().FindNode(location.SourceSpan, getInnermostNodeForTie: true);
+
+        return node switch
+        {
+            IdentifierNameSyntax { IsVar: true } => false,
+            NameSyntax => true,
+            ImplicitObjectCreationExpressionSyntax => true,
+            ExpressionSyntax => false,
+            _ => true,
+        };
+    }
 
     private bool IsUnemitted(INamedTypeSymbol type)
     {
