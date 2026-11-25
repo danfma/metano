@@ -174,11 +174,22 @@ internal static class DispatchedMethodCalls
     /// its declaring type has syntax — declared here or in a project reference,
     /// which loads as source (DECIDED-24) — or a <c>[Name]</c> pins its suffix,
     /// whose names the declaring type's metadata determines, as an override's
-    /// root names do (FR-019, DECIDED-28). Any other metadata-only method keeps
-    /// the dispatcher.
+    /// root names do (FR-019, DECIDED-28). A pinned name never takes the claim
+    /// pass's <c>$</c> rename, so it is a function of the pin alone. A module
+    /// function's (a static class that is containerless or declares extension
+    /// members) is claimed across the functions a target imports together, not
+    /// per type, so its metadata does not determine it. Any other
+    /// metadata-only method keeps the dispatcher.
     /// </summary>
     private static bool IsNameable(IMethodSymbol method, OverloadGroupingPolicy policy) =>
-        HasSourceIr(method.ContainingType) || MethodOverloadGroups.IsPinned(method, policy);
+        HasSourceIr(method.ContainingType)
+        || (
+            !DeclaresModuleFunctions(method.ContainingType)
+            && MethodOverloadGroups.IsPinned(method, policy)
+        );
+
+    private static bool DeclaresModuleFunctions(INamedTypeSymbol type) =>
+        type.IsStatic && (type.IsContainerless() || type.HasExtensionMembers());
 
     /// <summary>
     /// A declaring type with syntax: declared in this compilation or in a

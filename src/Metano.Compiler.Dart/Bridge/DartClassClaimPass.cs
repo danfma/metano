@@ -17,7 +17,8 @@ namespace Metano.Compiler.Dart.Bridge;
 /// (<c>&lt;group&gt;&lt;Suffix&gt;</c>) — anchored overloads first, which take
 /// their root's name (FR-025) and claim nothing, then the type's own, which
 /// also claim against the inherited members of every visibility (step 7). A
-/// taken name takes <c>$</c> until free and reports <c>MS0067</c>; a user
+/// taken name takes <c>$</c> until free and reports <c>MS0067</c>, except a
+/// name a <c>[Name]</c> pins, which never moves and reports <c>MS0068</c>; a user
 /// member that meets an inherited fast path, or holds an anchored overload's
 /// name, reports <c>MS0068</c> (FR-034). Overloaded operator groups name
 /// nothing: Dart declares one <c>operator +</c> per class.
@@ -121,8 +122,23 @@ internal sealed class DartClassClaimPass
     private void ClaimConstructor(IrConstructorDeclaration overload, IrOverloadName overloadName)
     {
         var candidate = IrToDartNamingPolicy.ToNamedConstructorName(overloadName.Suffix);
-        var claimed = DartFreeName.FirstFree(candidate, IsTakenForConstructor);
         var signature = overload.SignatureText ?? candidate;
+
+        var site = new OverloadDeclarationSite(
+            IrOverloadRef.ConstructorName,
+            overload.DeclarationOrdinal
+        );
+
+        if (overloadName.IsPinned && IsTakenForConstructor(candidate))
+            ReportPinnedCollision(
+                $"Named constructor '{TypeName}.{candidate}' of '{signature}'",
+                candidate,
+                site
+            );
+
+        var claimed = overloadName.IsPinned
+            ? candidate
+            : DartFreeName.FirstFree(candidate, IsTakenForConstructor);
 
         _constructors[overload.DeclarationOrdinal] = claimed;
 
@@ -140,7 +156,7 @@ internal sealed class DartClassClaimPass
             $"Named constructor '{TypeName}.{candidate}' of '{signature}'",
             candidate,
             claimed,
-            new OverloadDeclarationSite(IrOverloadRef.ConstructorName, overload.DeclarationOrdinal)
+            site
         );
     }
 
@@ -199,6 +215,18 @@ internal sealed class DartClassClaimPass
     {
         var candidate = CandidateOf(overload);
 
+        if (overload.OverloadName is { IsPinned: true })
+        {
+            if (IsTakenForFastPath(candidate, overload.IsStatic))
+                ReportPinnedCollision(
+                    $"Fast path '{TypeName}.{candidate}' of '{overload.SignatureText}'",
+                    candidate,
+                    new OverloadDeclarationSite(overload.Name, Signature: overload.SignatureText)
+                );
+
+            return candidate;
+        }
+
         var claimed = DartFreeName.FirstFree(candidate, name =>
             IsTakenForFastPath(name, overload.IsStatic)
         );
@@ -255,6 +283,38 @@ internal sealed class DartClassClaimPass
                 $"Dart target: {subject} collides with {DescriptionOf(holder)}; it is emitted as "
                     + $"'{claimed}' (spec 013 FR-004).",
                 site
+            )
+        );
+    }
+
+    /// <summary>
+    /// <c>MS0068</c> for a pinned name another member holds (spec 013 FR-005,
+    /// FR-019): a pinned name never takes <c>$</c>, since a consumer reading the
+    /// type from metadata calls it without seeing non-public members. Reported
+    /// at the holder when the class declares it, else at the pinned overload.
+    /// </summary>
+    private void ReportPinnedCollision(
+        string subject,
+        string candidate,
+        OverloadDeclarationSite pinnedSite
+    )
+    {
+        var holder = _table.GetValueOrDefault(candidate) ?? Inherited[candidate];
+
+        var declaredBy =
+            holder is { Kind: DartClaimedMemberKind.User } && holder.DeclaredBy == TypeName
+                ? _userMembers.FirstOrDefault(member => member.DartName == candidate)
+                : null;
+
+        _findings.Add(
+            new DartClaimFinding(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.OverloadFastPathHijacked,
+                $"Dart target: {subject}, which [Name] pins, collides with "
+                    + $"{DescriptionOf(holder)}; a pinned name never takes '$', because consumers "
+                    + "that read the type from metadata call it without seeing non-public "
+                    + "members: rename that member or change the pin (spec 013 FR-005, FR-019).",
+                declaredBy is null ? pinnedSite : new OverloadDeclarationSite(declaredBy.CSharpName)
             )
         );
     }

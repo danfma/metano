@@ -315,4 +315,87 @@ public class PinnedShadowedOverloadTests
         await Assert.That(output).IsEmpty();
         await Assert.That(exitCode).IsEqualTo(0);
     }
+
+    private const string ClashSource = """
+        using Metano.Annotations;
+
+        [Transpile]
+        public class Clash5
+        {
+            public string Seen = "";
+
+            public Clash5(int n) { Seen = "int"; }
+
+            [Name("label")]
+            public Clash5(string s) { Seen = "label"; }
+
+            internal static Clash5 FromLabel(string s) => new Clash5(99);
+
+            internal string PickText(string g) => "internal:" + g;
+
+            public string Pick(int n) => "c5t:" + n;
+
+            [Name("text")]
+            public string Pick(string s) => "c5t:" + s;
+        }
+
+        [Transpile]
+        public class Clash2
+        {
+            private string PickText(string g) => "private:" + g;
+
+            public string Pick(int n) => "c2:" + n;
+
+            [Name("text")]
+            public string Pick(string s) => "c2t:" + s;
+        }
+        """;
+
+    /// <summary>
+    /// W10-8c (#799 review): a pinned fast path or factory never takes the
+    /// <c>$</c> rename, since a metadata-only consumer calls it without seeing an
+    /// <c>internal</c> or <c>private</c> claimant. The collision is an
+    /// <c>MS0068</c> error at the member holding the name.
+    /// </summary>
+    [Test]
+    public async Task PinnedNameCollision_ReportsMS0068AtTheHolder()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(ClashSource);
+
+        var errors = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.OverloadFastPathHijacked)
+            .OrderBy(d => d.Location?.GetLineSpan().StartLinePosition.Line)
+            .Select(d =>
+                $"// {d.Code} {d.Severity} line {d.Location?.GetLineSpan().StartLinePosition.Line + 1}: "
+                + d.Message
+            );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.OverloadNameShadowed))
+            .IsEmpty();
+
+        await TranspileHelper.AssertGolden(
+            "overload-pinned-name-collision.ts",
+            string.Join("\n", errors) + "\n\n" + files["clash5.ts"] + files["clash2.ts"]
+        );
+    }
+
+    /// <summary>The Dart claim pass keeps pinned names the same way (W10-8c).</summary>
+    [Test]
+    public async Task DartPinnedNameCollision_ReportsMS0068AtTheHolder()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(ClashSource);
+
+        var errors = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.OverloadFastPathHijacked)
+            .Select(d => d.Location?.GetLineSpan().StartLinePosition.Line + 1)
+            .Order()
+            .ToList();
+
+        // The Dart helper compiles the source without the TypeScript helper's
+        // leading using line, so each holder is one line earlier here.
+        await Assert.That(errors).IsEquivalentTo(new int?[] { 15, 17, 28 });
+        await Assert.That(string.Join("\n", files.Values)).DoesNotContain("pickText$");
+        await Assert.That(string.Join("\n", files.Values)).DoesNotContain("fromLabel$");
+    }
 }

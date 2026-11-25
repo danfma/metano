@@ -197,7 +197,10 @@ to the right fast path either way. Put `[Name("…")]` on the dropped overload o
 a class method or constructor to acknowledge it: its fast path or factory gets a
 stable name (`Root` + `[Name("rootVoid")]` → `rootRootVoid`), a consumer that
 reads the library from a DLL or a package calls that name instead of the
-dispatcher, and `MS0063` is not reported. An overloaded module function or
+dispatcher, and `MS0063` is not reported. A pinned name never takes `$`: when
+another member, even an `internal` or `private` one, already has it, the build
+fails with `MS0068` at that member, because a consumer reading the DLL cannot
+see that member and would call it instead. An overloaded module function or
 extension method is still reported when pinned, because a consumer in another
 package keeps calling its dispatcher.
 
@@ -348,6 +351,7 @@ run in `targets/js/sample-issue-tracker`.
 | `MS0063` | warning | an overload a dispatcher drops because an earlier overload has the same runtime test, unless a `[Name]` pins a class method or constructor overload (see [Overloads the dispatcher cannot reach](#overloads-the-dispatcher-cannot-reach)) |
 | `MS0067` | warning | a generated name was taken and took `$` |
 | `MS0068` | error | a user member takes a generated fast path or factory name it does not own (including `equalsByValue` / `hashCodeByValue` / `withByValue`) |
+| `MS0068` | error | a member holds a name a `[Name]` pin gives a fast path, factory or selector, which never takes `$` |
 | `MS0069` | warning | a type implements one generic interface with overload groups more than once (`C : IConv<int>, IConv<string>`); calls to those members keep runtime dispatch |
 
 The [diagnostic catalog](../specs/001-project-baseline-evolution/baseline/diagnostic-catalog.md)
