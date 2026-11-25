@@ -213,8 +213,17 @@ public static class IrToTsModuleBridge
     ) =>
         ShadowedDispatchOverloads.Find(
             OverloadDispatchOrder.Sort(overloads, fn => fn.Parameters),
-            fn => BranchTestOf(fn, context),
-            fn => fn.ReturnType is not IrPrimitiveTypeRef { Primitive: IrPrimitive.Void }
+            fn => BranchTestOf(fn, ArityScopeOf(overloads, context)),
+            fn => ShadowedDispatchOverloads.TakesValueReturningDelegate(fn.Parameters)
+        );
+
+    /// <summary>The delegate arities the group's dispatcher tells apart (#778).</summary>
+    private static TypeCheckScope ArityScopeOf(
+        IReadOnlyList<IrModuleFunction> overloads,
+        IrToTsBridgeContext context
+    ) =>
+        (TypeCheckScope.Empty with { RuntimeTypes = context.RuntimeTypes }).WithDelegateAritiesOf(
+            overloads.Select(fn => fn.Parameters)
         );
 
     /// <summary>
@@ -285,8 +294,10 @@ public static class IrToTsModuleBridge
     {
         var body = new List<TsStatement>();
 
+        var groupScope = ArityScopeOf(sorted, context);
+
         for (var i = 0; i < sorted.Count; i++)
-            body.Add(BranchFor(sorted[i], fastPathNames[i], context));
+            body.Add(BranchFor(sorted[i], fastPathNames[i], groupScope));
 
         body.Add(
             IrToTsOverloadDispatcherBridge.NoMatchingOverload(
@@ -301,7 +312,7 @@ public static class IrToTsModuleBridge
     private static TsIfStatement BranchFor(
         IrModuleFunction fn,
         string fastPathName,
-        IrToTsBridgeContext context
+        TypeCheckScope groupScope
     )
     {
         var argumentShape = new OverloadArgumentShape(fn.Parameters, fn.ReifiedTypeParameters);
@@ -320,15 +331,18 @@ public static class IrToTsModuleBridge
             ? [new TsExpressionStatement(delegateCall), new TsReturnStatement()]
             : new List<TsStatement> { new TsReturnStatement(delegateCall) };
 
-        return new TsIfStatement(BranchTestOf(fn, context), branchStatements);
+        return new TsIfStatement(BranchTestOf(fn, groupScope), branchStatements);
     }
 
-    /// <summary>The runtime test of <paramref name="fn"/>'s dispatcher branch.</summary>
-    private static TsExpression BranchTestOf(IrModuleFunction fn, IrToTsBridgeContext context) =>
+    /// <summary>
+    /// The runtime test of <paramref name="fn"/>'s dispatcher branch, in its
+    /// group's <paramref name="groupScope"/> (<see cref="ArityScopeOf"/>).
+    /// </summary>
+    private static TsExpression BranchTestOf(IrModuleFunction fn, TypeCheckScope groupScope) =>
         new OverloadArgumentShape(fn.Parameters, fn.ReifiedTypeParameters).Guard(
-            new TypeCheckScope(fn.TypeParameters ?? [], null)
+            groupScope with
             {
-                RuntimeTypes = context.RuntimeTypes,
+                TypeParameters = fn.TypeParameters ?? [],
             }
         );
 

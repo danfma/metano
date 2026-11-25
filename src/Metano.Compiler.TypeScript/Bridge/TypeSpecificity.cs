@@ -36,6 +36,9 @@ internal static class TypeSpecificity
         if (right.IsObject)
             return left.IsObject ? Relation.Same : Relation.MoreDerived;
 
+        if (left is IrFunctionTypeRef leftFunction && right is IrFunctionTypeRef rightFunction)
+            return CompareArities(leftFunction, rightFunction);
+
         if (left is not IrNamedTypeRef leftNamed || right is not IrNamedTypeRef rightNamed)
             return Relation.Unrelated;
 
@@ -46,6 +49,20 @@ internal static class TypeSpecificity
             ? Relation.MoreDerived
             : Relation.Unrelated;
     }
+
+    /// <summary>
+    /// A delegate of more parameters ranks as the more derived one, so the
+    /// dispatcher tries it first: its test is a minimum <c>Function.length</c>,
+    /// and the delegate of fewest parameters takes any function
+    /// (<see cref="IrTypeCheckBuilder"/>, #778).
+    /// </summary>
+    private static Relation CompareArities(IrFunctionTypeRef left, IrFunctionTypeRef right) =>
+        left.Parameters.Count.CompareTo(right.Parameters.Count) switch
+        {
+            0 => Relation.Same,
+            > 0 => Relation.MoreDerived,
+            _ => Relation.Unrelated,
+        };
 
     private static IrTypeRef WithoutNullability(IrTypeRef type) =>
         type is IrNullableTypeRef nullable ? WithoutNullability(nullable.Inner) : type;

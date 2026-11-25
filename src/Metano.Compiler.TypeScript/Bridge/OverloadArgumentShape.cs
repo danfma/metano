@@ -84,7 +84,14 @@ internal sealed class OverloadArgumentShape
     {
         var fixedChecks = _parameters
             .Take(_declaredFixedCount)
-            .Select((parameter, index) => FixedArgumentCheck(parameter, ArgumentFor(index), scope));
+            .Select(
+                (parameter, index) =>
+                    FixedArgumentCheck(
+                        parameter,
+                        ArgumentFor(index),
+                        scope.ForParameter(index, parameter.Type)
+                    )
+            );
 
         IReadOnlyList<TsExpression?> clauses =
         [

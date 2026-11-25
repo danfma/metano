@@ -43,6 +43,55 @@ internal static class ShadowedOverloadReporter
     }
 
     /// <summary>
+    /// The constructor overloads the constructor dispatcher drops; each is
+    /// reached through its factory (spec 013 FR-009).
+    /// </summary>
+    public static void ReportConstructors(
+        INamedTypeSymbol type,
+        IrConstructorDeclaration primary,
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        string? typeArgumentSlot,
+        TsOverloadClaims claims,
+        IrToTsBridgeContext context,
+        Action<MetanoDiagnostic> report
+    )
+    {
+        var branded = BrandedSixtyFourBitOverloads
+            .Find([primary, .. primary.Overloads ?? []], ctor => ctor.PlainParameters)
+            .SelectMany(group => group)
+            .Select(ctor => ctor.DeclarationOrdinal)
+            .ToHashSet();
+
+        var found = IrToTsConstructorDispatcherBridge
+            .ShadowedConstructorsOf(primary, typeParameters, typeArgumentSlot, context)
+            .Where(shadowed =>
+                !branded.Contains(shadowed.Overload.DeclarationOrdinal)
+                || !branded.Contains(shadowed.TakenBy.DeclarationOrdinal)
+            )
+            .ToList();
+
+        if (found.Count == 0)
+            return;
+
+        var symbols = type.InstanceConstructors.Where(c => !c.IsImplicitlyDeclared).ToList();
+
+        foreach (var shadowed in found)
+        {
+            var factory = claims.ConstructorNamesOf(shadowed.Overload.DeclarationOrdinal)?.Factory;
+
+            report(
+                DiagnosticOf(
+                    type,
+                    OverloadSymbols.Of(symbols, shadowed.Overload.PlainParameters),
+                    OverloadSymbols.Of(symbols, shadowed.TakenBy.PlainParameters),
+                    "constructor",
+                    factory is null ? type.Name : $"{type.Name}.{factory}"
+                )
+            );
+        }
+    }
+
+    /// <summary>
     /// The overloads a module-function group's dispatcher (an
     /// <c>[ExportedAsModule]</c> / <c>[NoContainer]</c> class or an
     /// extension container) drops; each is reached through its exported fast

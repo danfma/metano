@@ -1,3 +1,4 @@
+using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Compiler.TypeScript.Bridge;
@@ -17,15 +18,13 @@ internal static class ShadowedDispatchOverloads
     /// <summary>
     /// Each overload of <paramref name="sorted"/> (in dispatch order) whose
     /// test repeats another one's, with the overload that takes its calls: the
-    /// earlier one, unless only the later one returns a value — overloads that
-    /// differ only by delegate return type (<c>Func&lt;Action, T&gt;</c> and
-    /// <c>Action&lt;Action&gt;</c>) forward to the value-returning one, whose
-    /// result a <c>void</c> caller ignores.
+    /// earlier one, unless only the later one is <paramref name="preferred"/>
+    /// (see <see cref="TakesValueReturningDelegate"/>).
     /// </summary>
     public static IReadOnlyList<ShadowedOverload<TOverload>> Find<TOverload>(
         IEnumerable<TOverload> sorted,
         Func<TOverload, TsExpression> testOf,
-        Func<TOverload, bool> returnsValue
+        Func<TOverload, bool> preferred
     )
         where TOverload : notnull
     {
@@ -39,7 +38,7 @@ internal static class ShadowedDispatchOverloads
 
             if (!firstByTest.TryGetValue(test, out var kept))
                 firstByTest[test] = overload;
-            else if (!returnsValue(kept) && returnsValue(overload))
+            else if (!preferred(kept) && preferred(overload))
                 shadowed.Add(Replace(firstByTest, test, kept, overload, shadowed));
             else
                 shadowed.Add(new ShadowedOverload<TOverload>(overload, kept));
@@ -47,6 +46,24 @@ internal static class ShadowedDispatchOverloads
 
         return shadowed;
     }
+
+    /// <summary>
+    /// Whether an overload takes a delegate that returns a value: of two
+    /// overloads that differ only by delegate return type
+    /// (<c>Func&lt;Action, T&gt;</c> and <c>Action&lt;Action&gt;</c>), the
+    /// dispatcher keeps the one whose callback's result is not dropped.
+    /// </summary>
+    public static bool TakesValueReturningDelegate(IReadOnlyList<IrParameter> parameters) =>
+        parameters.Any(parameter => ReturnsValue(parameter.Type));
+
+    private static bool ReturnsValue(IrTypeRef type) =>
+        type switch
+        {
+            IrNullableTypeRef nullable => ReturnsValue(nullable.Inner),
+            IrFunctionTypeRef function => function.ReturnType
+                is not IrPrimitiveTypeRef { Primitive: IrPrimitive.Void },
+            _ => false,
+        };
 
     /// <summary>
     /// Makes <paramref name="preferred"/> the overload kept for

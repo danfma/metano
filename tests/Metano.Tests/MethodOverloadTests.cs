@@ -276,12 +276,13 @@ public class MethodOverloadTests
     }
 
     /// <summary>
-    /// <c>Function.length</c> is no reliable discriminator (#778): delegate
-    /// overloads of different arities share the <c>typeof</c> test, so the
-    /// dispatcher keeps the first and reports the other's fast path.
+    /// Delegate overloads of different arities stay apart (#778): the larger
+    /// arity is tried first with a minimum <c>Function.length</c>, and the
+    /// smallest takes any function, so a callback that ignores its
+    /// arguments still lands.
     /// </summary>
     [Test]
-    public async Task DelegateOverload_DifferentArity_KeepsOneBranchAndWarns()
+    public async Task DelegateOverload_DifferentArity_DispatchesByMinimumLength()
     {
         var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -299,12 +300,23 @@ public class MethodOverloadTests
 
         var output = result["app/bus.ts"];
 
-        await Assert.That(output).DoesNotContain("args[0].length");
+        var wider = output.IndexOf(
+            "if (args.length === 1 && typeof args[0] === \"function\" && args[0].length >= 1) {",
+            StringComparison.Ordinal
+        );
 
-        await Assert.That(output.Split("typeof args[0] === \"function\"").Length - 1).IsEqualTo(1);
+        var narrower = output.IndexOf(
+            "if (args.length === 1 && typeof args[0] === \"function\") {",
+            StringComparison.Ordinal
+        );
+
+        await Assert.That(wider).IsGreaterThan(-1);
+        await Assert.That(narrower).IsGreaterThan(wider);
+        await Assert.That(output).Contains("this.subscribeActionOfInt32(");
+        await Assert.That(output).Contains("this.subscribeAction(");
 
         await Assert
             .That(diagnostics.Count(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch))
-            .IsEqualTo(1);
+            .IsEqualTo(0);
     }
 }

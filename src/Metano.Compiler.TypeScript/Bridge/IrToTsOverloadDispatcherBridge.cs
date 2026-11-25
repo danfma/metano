@@ -390,7 +390,7 @@ public static class IrToTsOverloadDispatcherBridge
         var classScope = new TypeCheckScope(classTypeParameters, typeOverrides)
         {
             RuntimeTypes = context.RuntimeTypes,
-        };
+        }.WithDelegateAritiesOf(group.Branches.Select(branch => branch.Parameters));
 
         var shadowed = new HashSet<IrMethodDeclaration>(
             ShadowedIn(group, classScope).Select(found => found.Overload),
@@ -492,12 +492,13 @@ public static class IrToTsOverloadDispatcherBridge
             ? []
             : ShadowedDispatchOverloads.Find(
                 OverloadDispatchOrder.Sort(group.Branches, m => m.Parameters),
-                method => BranchTestOf(method, classScope),
-                method => !IsVoid(method.ReturnType)
+                method =>
+                    BranchTestOf(
+                        method,
+                        classScope.WithDelegateAritiesOf(group.Branches.Select(b => b.Parameters))
+                    ),
+                method => ShadowedDispatchOverloads.TakesValueReturningDelegate(method.Parameters)
             );
-
-    private static bool IsVoid(IrTypeRef type) =>
-        type is IrPrimitiveTypeRef { Primitive: IrPrimitive.Void };
 
     /// <summary>
     /// The members whose signatures the dispatcher declares besides the
@@ -622,10 +623,12 @@ public static class IrToTsOverloadDispatcherBridge
                     methods,
                     group.FastPaths.Select(fastPath => fastPath.Name).ToList(),
                     receiver: companion,
-                    TypeCheckScope.Empty with
-                    {
-                        RuntimeTypes = context.RuntimeTypes,
-                    },
+                    (
+                        TypeCheckScope.Empty with
+                        {
+                            RuntimeTypes = context.RuntimeTypes,
+                        }
+                    ).WithDelegateAritiesOf(methods.Select(method => method.Parameters)),
                     NoMatchingOverload(ErrorNameOf(group, methods[0]))
                 ),
                 Exported: true,

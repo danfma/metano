@@ -36,7 +36,7 @@ internal static class IrToTsConstructedRootDispatcherBridge
         var classScope = new TypeCheckScope(classTypeParameters, typeOverrides)
         {
             RuntimeTypes = context.RuntimeTypes,
-        };
+        }.WithDelegateAritiesOf(implementations.Select(method => method.Parameters));
 
         var branches = implementations
             .Select(method => new RootBranch(method, () =>

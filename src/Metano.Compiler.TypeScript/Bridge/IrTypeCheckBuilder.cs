@@ -57,7 +57,7 @@ internal static class IrTypeCheckBuilder
                         ? new TsTypeReference(exported.Name, origin)
                         : new TsIdentifier(exported.Name)
                 ),
-            IrFunctionTypeRef => FunctionCheck(value),
+            IrFunctionTypeRef => FunctionCheck(value, scope.DelegateArityFloor),
             IrCollectionTypeRef collection => IrToTsRuntimeTestBridge.DispatchCollectionTest(
                 value,
                 collection
@@ -192,14 +192,30 @@ internal static class IrTypeCheckBuilder
             );
 
     /// <summary>
-    /// A delegate parameter: any function. Its arity is not tested:
-    /// <c>Function.length</c> leaves out ignored, defaulted and rest parameters
-    /// (<c>() =&gt; 42</c> is a valid <c>(arg: number) =&gt; number</c>), so
-    /// delegate overloads have the same test and the dispatcher keeps one of
-    /// them (#778, <see cref="ShadowedDispatchOverloads"/>).
+    /// A delegate parameter: any function, or, when the dispatcher tells
+    /// delegates of different arities apart at this position, a function of
+    /// at least <paramref name="arityFloor"/> parameters (tried before the
+    /// delegate of fewest parameters, which takes any function).
+    /// <c>Function.length</c> leaves out ignored, defaulted and rest
+    /// parameters (<c>() =&gt; 42</c> is a valid <c>(arg: number) =&gt;
+    /// number</c>), so it is never an exact test, and delegates of one arity
+    /// share the same test (#778, <see cref="ShadowedDispatchOverloads"/>).
     /// </summary>
-    private static TsExpression FunctionCheck(TsExpression value) =>
-        IrToTsRuntimeTestBridge.TypeofTest(value, "function");
+    private static TsExpression FunctionCheck(TsExpression value, int? arityFloor)
+    {
+        var isFunction = IrToTsRuntimeTestBridge.TypeofTest(value, "function");
+
+        if (arityFloor is not { } floor)
+            return isFunction;
+
+        var arityCheck = new TsBinaryExpression(
+            new TsPropertyAccess(value, "length"),
+            ">=",
+            new TsLiteral(floor.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        );
+
+        return new TsBinaryExpression(isFunction, "&&", arityCheck);
+    }
 
     private static TsExpression TypeofObject(TsExpression value) =>
         IrToTsRuntimeTestBridge.TypeofTest(value, "object");

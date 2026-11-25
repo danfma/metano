@@ -238,4 +238,57 @@ public class ShadowedDispatchOverloadTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    /// <summary>
+    /// The constructor dispatcher follows the same delegate rules: different
+    /// arities stay apart by minimum length, one arity keeps the overload
+    /// whose delegate returns a value and reports the other's factory.
+    /// </summary>
+    [Test]
+    public async Task ConstructorDispatcher_DelegateOverloads()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+
+            [Transpile]
+            public class Wide
+            {
+                public int K;
+                public Wide(Action<int> a) { K = 1; }
+                public Wide(Action<int, int> a) { K = 2; }
+            }
+
+            [Transpile]
+            public class Same
+            {
+                public int K;
+                public Same(Action<int> a) { K = 1; }
+                public Same(Func<int, int> a) { K = 2; }
+            }
+            """
+        );
+
+        await Assert
+            .That(files["wide.ts"])
+            .Contains(
+                "if (args.length === 1 && typeof args[0] === \"function\" && args[0].length >= 2) {"
+            );
+
+        await Assert
+            .That(files["wide.ts"])
+            .Contains("if (args.length === 1 && typeof args[0] === \"function\") {");
+
+        var same = files["same.ts"];
+
+        await Assert.That(same).Contains("  constructor(a: (arg: number) => number);");
+        await Assert.That(same).DoesNotContain("  constructor(a: (obj: number) => void);");
+
+        var message = diagnostics
+            .Single(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch)
+            .Message;
+
+        await Assert.That(message).StartsWith("Overload 'Same.Same(Action<int>)'");
+        await Assert.That(message).EndsWith("must call 'Same.fromActionOfInt32'.");
+    }
 }
