@@ -1141,6 +1141,15 @@ public static partial class IrToTsExpressionBridge
             tpl.ExternalImports
         );
 
+        if (!context.ShadowedImports.IsEmpty)
+        {
+            (text, externalImports) = TsImportFacadeBinding.Unshadowed(
+                text,
+                externalImports,
+                context.ShadowedImports
+            );
+        }
+
         var template = new TsTemplate(
             text,
             tpl.Receiver is null ? null : Map(tpl.Receiver, context),

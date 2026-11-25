@@ -207,6 +207,26 @@ public class FsObservedDerived : FsPublishingBase
     public int N => _n + _k;
 }
 
+public static class FsExternal
+{
+    [Import("basename", "node:path")]
+    public static string Basename(string path) => System.IO.Path.GetFileName(path);
+}
+
+public class FsImportShadow
+{
+    private readonly string _name = FsExternal.Basename("a/b.txt");
+
+    public FsImportShadow(Func<string, string> basename)
+    {
+        Y = basename("q");
+    }
+
+    public string Y { get; }
+
+    public string Name => _name;
+}
+
 public static class FieldStoreProbes
 {
     public static string InitializersRunInDeclarationOrderBeforeTheBody()
@@ -291,4 +311,11 @@ public static class FieldStoreProbes
     }
 
     public static string BaseConstructorPublishesThis() => new FsObservedDerived().N.ToString();
+
+    public static string ImportedFunctionNamedLikeAParameter()
+    {
+        var shadow = new FsImportShadow(text => text + "!");
+
+        return $"{shadow.Name}|{shadow.Y}";
+    }
 }

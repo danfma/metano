@@ -125,6 +125,8 @@ internal sealed class IrToTsClassEmitter(
             ShadowedImports = ConstructorScopeAliases.Of(ir, ctorParams),
         };
 
+        RecordConstructorScopeBindings(type, typeName, ctorLowering.ShadowedImports.Keys);
+
         var promotedMemberDeclaration = ir
             is { Semantics.IsValueType: true, StaticInitializer: not null }
             ? PromotedMemberDeclaration.OwnDeclarations
@@ -511,6 +513,37 @@ internal sealed class IrToTsClassEmitter(
                     );
                     break;
             }
+        }
+    }
+
+    /// <summary>
+    /// Records where each name of the constructor scope is declared — the
+    /// constructor parameter it spells, else the first constructor, else the
+    /// type — so an unaliasable shadowed read reports there (W10-1b).
+    /// </summary>
+    private void RecordConstructorScopeBindings(
+        INamedTypeSymbol type,
+        string typeName,
+        IEnumerable<string> names
+    )
+    {
+        var constructors = type
+            .InstanceConstructors.Where(ctor => !ctor.IsImplicitlyDeclared)
+            .ToList();
+
+        var fallback = constructors.FirstOrDefault()?.Locations.FirstOrDefault()
+            ?? type.Locations.FirstOrDefault();
+
+        foreach (var name in names)
+        {
+            var location = constructors
+                .SelectMany(ctor => ctor.Parameters)
+                .FirstOrDefault(p => IrToTsNamingPolicy.ToParameterName(p.Name) == name)
+                ?.Locations.FirstOrDefault()
+                ?? fallback;
+
+            if (location is not null)
+                _context.ConstructorScopeBindings.TryAdd((typeName, name), location);
         }
     }
 

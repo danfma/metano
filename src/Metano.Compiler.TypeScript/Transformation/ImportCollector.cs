@@ -861,7 +861,9 @@ public sealed partial class ImportCollector(
         );
 
         return new CollectedImports(
-            MergeImportsByPath(WithReferenceAliases(stampedImports, sink.ReferenceAliases)),
+            MergeImportsByPath(
+                WithReferenceAliases(stampedImports, sink.ReferenceAliases, statements)
+            ),
             helperAliases
         );
     }

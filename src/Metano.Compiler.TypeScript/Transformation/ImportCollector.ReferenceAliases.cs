@@ -28,7 +28,8 @@ public sealed partial class ImportCollector
     /// </summary>
     private List<TsImport> WithReferenceAliases(
         List<TsImport> imports,
-        IReadOnlyDictionary<string, string> aliases
+        IReadOnlyDictionary<string, string> aliases,
+        IReadOnlyList<TsTopLevel> statements
     )
     {
         if (aliases.Count is 0)
@@ -37,7 +38,7 @@ public sealed partial class ImportCollector
         var named = imports.Where(import => !import.IsDefault && !import.IsNamespace).ToList();
 
         foreach (var name in aliases.Keys.Where(name => !named.Any(i => i.Names.Contains(name))))
-            ReportUnaliasableShadow(name);
+            ReportUnaliasableShadow(name, statements);
 
         return
         [
@@ -47,16 +48,33 @@ public sealed partial class ImportCollector
         ];
     }
 
-    private void ReportUnaliasableShadow(string name) =>
+    /// <summary>
+    /// Reports a shadowed read no import can alias at the binding that shadows
+    /// it: the constructor parameter of that name in a class of this module, else
+    /// the constructor.
+    /// </summary>
+    private void ReportUnaliasableShadow(string name, IReadOnlyList<TsTopLevel> statements) =>
         _context.ReportDiagnostic(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
                 DiagnosticCodes.UnsupportedFeature,
                 $"An instance initializer reads '{name}', which this module declares, inside a "
                     + "constructor whose parameter or local of the same name shadows it. Rename "
-                    + "the parameter or local in C#."
+                    + "the parameter or local in C#.",
+                ShadowingBindingOf(name, statements)
             )
         );
+
+    private Microsoft.CodeAnalysis.Location? ShadowingBindingOf(
+        string name,
+        IReadOnlyList<TsTopLevel> statements
+    ) =>
+        statements
+            .OfType<TsClass>()
+            .Select(tsClass =>
+                _context.ConstructorScopeBindings.GetValueOrDefault((tsClass.Name, name))
+            )
+            .FirstOrDefault(location => location is not null);
 
     private static TsImport WithReferenceAliases(
         TsImport import,

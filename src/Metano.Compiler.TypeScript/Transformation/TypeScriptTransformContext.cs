@@ -435,6 +435,15 @@ public sealed class TypeScriptTransformContext(
 
     public IReadOnlyDictionary<string, IrExternalImport> ExternalImportMap { get; } =
         externalImportMap;
+
+    /// <summary>
+    /// Where each name a class's constructor scope binds is declared (its
+    /// parameter, else the constructor), keyed by the emitted class name: the
+    /// import collector reports an unaliasable shadowed read there (W10-1b).
+    /// </summary>
+    public Dictionary<(string ClassName, string Name), Location> ConstructorScopeBindings { get; } =
+    [];
+
     public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
     public IReadOnlyDictionary<string, string> TypeNamesBySymbol { get; } = typeNamesBySymbol;
     public IReadOnlySet<string> GuardableTypeKeys { get; } = guardableTypeKeys;

@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -282,5 +284,64 @@ public class InstanceFieldStoreTests
         await Assert.That(output).Contains("compute as compute$1");
         await Assert.That(output).Contains("    this._x = compute$1();\n");
         await Assert.That(output).Contains("static create(args: { compute: number }): Options");
+    }
+
+    [Test]
+    public async Task ImportedFunctionNamedLikeAParameter_MatchesTheGolden()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Ext
+            {
+                [Import("extCompute", "ext-lib")]
+                public static int ExtCompute() => 0;
+
+                [Import("extDefault", "ext-def", AsDefault = true)]
+                public static int ExtDefault() => 0;
+            }
+
+            [Transpile]
+            public class UsesExt
+            {
+                private int _x = Ext.ExtCompute();
+                private int _y = Ext.ExtDefault();
+
+                public UsesExt(System.Func<int> extCompute, int extDefault) { }
+            }
+            """
+        );
+
+        await TranspileHelper.AssertGolden(
+            "instance-initializer-import-capture.ts",
+            files["uses-ext.ts"]
+        );
+    }
+
+    [Test]
+    public async Task ModuleDeclaredNameAShadowingParameterHides_ReportsAtTheParameter()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer, EmitInFile("same")]
+            public static class SameHelpers { public static int Calc() => 9; }
+
+            [Transpile, EmitInFile("same")]
+            public class UsesSame
+            {
+                private int _x = SameHelpers.Calc();
+
+                public UsesSame(int calc) { }
+            }
+            """
+        );
+
+        var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+        var location = error.Location!;
+        var spelled = location.SourceTree!.GetText().ToString(location.SourceSpan);
+
+        await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(error.Message).Contains("reads 'calc', which this module declares");
+        await Assert.That(spelled).IsEqualTo("calc");
     }
 }
