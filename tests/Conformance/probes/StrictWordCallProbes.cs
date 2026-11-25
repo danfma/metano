@@ -40,4 +40,56 @@ public static class StrictWordCallProbes
 
         return s4;
     }
+
+    public static string VarConcatDeconstructionWrite()
+    {
+        var s = "a";
+        (s, var k) = (Null(), 1);
+        s += "d" + k;
+
+        return s;
+    }
+
+    public static string VarConcatOtherSwitchSection()
+    {
+        var kind = Null() is null ? 2 : 1;
+        string result = "";
+
+        switch (kind)
+        {
+            case 1:
+                var s = "a";
+                result = s;
+                break;
+            case 2:
+                s = Null()!;
+                s += "z";
+                result = s;
+                break;
+        }
+
+        return result;
+    }
+
+    static void FillOut(out string? value) => value = null;
+
+    static void FillRef(ref string? value) => value = null;
+
+    public static string VarConcatOutArgument()
+    {
+        var s = "a";
+        FillOut(out s!);
+        s += "o";
+
+        return s;
+    }
+
+    public static string VarConcatRefArgument()
+    {
+        var s = "a";
+        FillRef(ref s!);
+        s += "f";
+
+        return s;
+    }
 }

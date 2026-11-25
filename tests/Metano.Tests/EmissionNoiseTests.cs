@@ -161,4 +161,36 @@ public class EmissionNoiseTests
         await Assert.That(output).Contains("(s ?? \"\") + \"q\"");
         await Assert.That(output).Contains("s4 = (s4 ?? \"\") + \"w\";");
     }
+
+    [Test]
+    public async Task StringCompoundAssignment_KeepsTheGuardForEveryUnclassifiedWrite()
+    {
+        var output = Emit(
+            """
+            static string? Null() => null;
+            static void FillOut(out string? v) { v = null; }
+
+            static string Deconstructed()
+            {
+                var s = "a";
+                (s, var k) = (Null(), 1);
+                s += "d";
+
+                return s;
+            }
+
+            static string OutArg()
+            {
+                var s = "a";
+                FillOut(out s!);
+                s += "o";
+
+                return s;
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("s = (s ?? \"\") + \"d\";");
+        await Assert.That(output).Contains("s = (s ?? \"\") + \"o\";");
+    }
 }

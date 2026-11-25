@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Metano.Compiler.Extraction;
 
@@ -48,46 +49,79 @@ internal static class ReferenceNullability
 
     private static bool IsNeverNullVarLocal(SemanticModel model, ExpressionSyntax target)
     {
-        if (
-            model.GetSymbolInfo(target).Symbol is not ILocalSymbol local
-            || local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-                is not VariableDeclaratorSyntax
-                {
-                    Initializer: { } initializer,
-                    Parent: VariableDeclarationSyntax { Type.IsVar: true } declaration
-                }
-        )
+        if (NeverNullVarDeclaration(model, target) is not var (local, declaration))
+        {
             return false;
+        }
 
-        var scope = declaration.Parent is ForStatementSyntax or UsingStatementSyntax
-            ? declaration.Parent
-            : declaration.Parent?.Parent;
+        var member = declaration.Ancestors().FirstOrDefault(IsMemberBody);
 
-        return IsNeverNull(model, initializer.Value)
-            && scope is not null
-            && scope.DescendantNodes().All(node => KeepsNeverNull(model, node, local));
+        return member is not null
+            && model.GetOperation(member) is { } body
+            && body.DescendantsAndSelf()
+                .OfType<ILocalReferenceOperation>()
+                .Where(reference => SymbolEqualityComparer.Default.Equals(reference.Local, local))
+                .All(reference => !IsWrite(reference) || IsNeverNullWrite(model, reference));
     }
 
-    private static bool KeepsNeverNull(SemanticModel model, SyntaxNode node, ILocalSymbol local) =>
-        node switch
-        {
-            AssignmentExpressionSyntax assignment when IsLocal(model, assignment.Left, local) =>
-                !assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)
-                    && !assignment.IsKind(SyntaxKind.CoalesceAssignmentExpression)
-                    || IsNeverNull(model, assignment.Right),
-            ArgumentSyntax { RefKindKeyword.RawKind: not 0 } argument => !IsLocal(
-                model,
-                argument.Expression,
-                local
-            ),
-            _ => true,
-        };
+    /// <summary>
+    /// The local and declaration of a <c>var</c> local whose initializer is a never-null
+    /// string expression; <c>null</c> for any other target.
+    /// </summary>
+    private static (
+        ILocalSymbol Local,
+        VariableDeclarationSyntax Declaration
+    )? NeverNullVarDeclaration(SemanticModel model, ExpressionSyntax target) =>
+        model.GetSymbolInfo(target).Symbol is ILocalSymbol local
+        && local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            is VariableDeclaratorSyntax
+            {
+                Initializer: { } initializer,
+                Parent: VariableDeclarationSyntax { Type.IsVar: true } declaration
+            }
+        && IsNeverNull(model, initializer.Value)
+            ? (local, declaration)
+            : null;
 
-    private static bool IsLocal(
-        SemanticModel model,
-        ExpressionSyntax expression,
-        ILocalSymbol local
-    ) => SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(expression).Symbol, local);
+    private static bool IsMemberBody(SyntaxNode node) =>
+        node is MemberDeclarationSyntax or AccessorDeclarationSyntax;
+
+    /// <summary>
+    /// Whether the reference is written: the target of any assignment (simple, compound,
+    /// coalescing, an element of a deconstruction), an <c>out</c> / <c>ref</c> argument
+    /// or an increment. Every other use reads the local.
+    /// </summary>
+    private static bool IsWrite(ILocalReferenceOperation reference)
+    {
+        IOperation current = reference;
+
+        while (current.Parent is ITupleOperation tuple)
+            current = tuple;
+
+        return current.Parent switch
+        {
+            IAssignmentOperation assignment => assignment.Target == current,
+            IArgumentOperation argument => argument.Parameter?.RefKind != RefKind.None,
+            IIncrementOrDecrementOperation => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// A write that keeps the local non-null: a simple <c>=</c> of a never-null string
+    /// expression, or a <c>+=</c> (a concatenation never yields null). Any other write
+    /// (a deconstruction, <c>out</c>, <c>ref</c>, <c>??=</c>, an increment) is not
+    /// classified and keeps the guard.
+    /// </summary>
+    private static bool IsNeverNullWrite(SemanticModel model, ILocalReferenceOperation reference) =>
+        reference.Parent switch
+        {
+            ISimpleAssignmentOperation { Value.Syntax: ExpressionSyntax value } assignment =>
+                assignment.Target == reference && IsNeverNull(model, value),
+            ICompoundAssignmentOperation { OperatorKind: BinaryOperatorKind.Add } compound =>
+                compound.Target == reference,
+            _ => false,
+        };
 
     private static bool IsNeverNull(SemanticModel model, ExpressionSyntax expression) =>
         expression switch
