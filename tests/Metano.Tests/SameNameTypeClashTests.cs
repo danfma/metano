@@ -309,6 +309,180 @@ public class SameNameTypeClashTests
             .Contains("import { Node as CNode } from \"../app/cyc/node.js\";");
     }
 
+    /// <summary>
+    /// #754: a <c>using</c> alias applies to the type it names only. A same-named type
+    /// of another namespace the file also names keeps its own name and module, in type
+    /// and in value positions.
+    /// </summary>
+    [Test]
+    public async Task UsingAlias_RenamesOnlyTheTypeItNames()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            AliasNodes
+                + """
+                namespace Consumer
+                {
+                    using CNode = App.Cyc.Node;
+
+                    [Transpile]
+                    public static class UsesAlias
+                    {
+                        public static int Sizes(CNode cyc, App.Node<int> node) =>
+                            cyc.Size() + node.Value + App.Node<int>.Count + CNode.Total;
+                    }
+                }
+                """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
+            .IsEmpty();
+
+        var output = files["consumer/uses-alias.ts"];
+
+        await Assert.That(output).Contains("import { Node as CNode } from \"../app/cyc/node.js\";");
+        await Assert.That(output).Contains("import { Node } from \"../app/node.js\";");
+
+        await Assert
+            .That(output)
+            .Contains("static sizes(cyc: CNode, node: Node<number>): number {");
+
+        await Assert.That(output).Contains("Node.count + CNode.total");
+    }
+
+    /// <summary>
+    /// #754: two aliases of two same-named types bind one import each, and an alias
+    /// that spells its target's own name renames nothing.
+    /// </summary>
+    [Test]
+    public async Task TwoAliasesOfSameNamedTypes_BindTheirOwnModules()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            AliasNodes
+                + """
+                namespace Consumer
+                {
+                    using GN = App.Node<int>;
+                    using Node = App.Cyc.Node;
+
+                    [Transpile]
+                    public static class TwoAliases
+                    {
+                        public static int Run() => new GN().Value + new Node().Size();
+                    }
+                }
+                """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
+            .IsEmpty();
+
+        var output = files["consumer/two-aliases.ts"];
+
+        await Assert.That(output).Contains("import { Node as GN } from \"../app/node.js\";");
+        await Assert.That(output).Contains("import { Node } from \"../app/cyc/node.js\";");
+        await Assert.That(output).Contains("new GN<number>().value + new Node().size()");
+    }
+
+    /// <summary>
+    /// #754: an alias declared in one <c>namespace { }</c> block does not reach a type
+    /// the same C# file declares in another block.
+    /// </summary>
+    [Test]
+    public async Task UsingAliasOfAnotherNamespaceBlock_DoesNotApply()
+    {
+        var files = TranspileHelper.Transpile(
+            AliasNodes
+                + """
+                namespace Consumer.First
+                {
+                    using CNode = App.Cyc.Node;
+
+                    [Transpile]
+                    public static class First
+                    {
+                        public static int Size(CNode cyc) => cyc.Size();
+                    }
+                }
+
+                namespace Consumer.Second
+                {
+                    [Transpile]
+                    public static class Second
+                    {
+                        public static int Size(App.Cyc.Node cyc) => cyc.Size();
+                    }
+                }
+                """
+        );
+
+        await Assert
+            .That(files["consumer/first/first.ts"])
+            .Contains("import type { Node as CNode } from \"../../app/cyc/node.js\";");
+
+        await Assert
+            .That(files["consumer/second/second.ts"])
+            .Contains("import type { Node } from \"../../app/cyc/node.js\";");
+
+        await Assert.That(files["consumer/second/second.ts"]).DoesNotContain("CNode");
+    }
+
+    [Test]
+    public async Task AliasedSameNamedTypes_TypeCheckStrictly()
+    {
+        var files = TranspileHelper.Transpile(
+            AliasNodes
+                + """
+                namespace Consumer
+                {
+                    using CNode = App.Cyc.Node;
+                    using GN = App.Node<int>;
+
+                    [Transpile]
+                    public static class Mixed
+                    {
+                        public static int Run(CNode cyc, App.Node<int> node) =>
+                            cyc.Size() + node.Value + new GN().Value + CNode.Total;
+                    }
+                }
+                """
+        );
+
+        var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(
+            files,
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
+
+    private const string AliasNodes = """
+        namespace App
+        {
+            [Transpile]
+            public class Node<T>
+            {
+                public T Value { get; set; } = default!;
+
+                public static int Count => 1;
+            }
+        }
+
+        namespace App.Cyc
+        {
+            [Transpile]
+            public class Node
+            {
+                public int Size() => 1;
+
+                public static int Total => 2;
+            }
+        }
+
+        """;
+
     [Test]
     public async Task StrictUnionGuardModule_ImportsItsOwnVariants()
     {

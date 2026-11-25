@@ -166,17 +166,15 @@ public static class IrToTsTypeMapper
     }
 
     /// <summary>
-    /// Returns the alias for <paramref name="canonicalName"/> if one is
-    /// active for the current emitted file, otherwise the canonical name
-    /// itself. Used at every emit site that produces a type-name token —
-    /// declarations, body-position identifiers, and static-member access
-    /// roots — so the alias replaces the canonical consistently.
+    /// Returns the alias the type <paramref name="canonicalName"/> of
+    /// <paramref name="namespace"/> prints as in the current emitted file, otherwise
+    /// the canonical name itself (<see cref="UsingAliasScope.AliasOf"/>). Used at every
+    /// emit site that produces a type-name token — declarations, body-position
+    /// identifiers, and static-member access roots — so the alias replaces the
+    /// canonical consistently.
     /// </summary>
-    public static string ResolveAliasedName(string canonicalName) =>
-        UsingAliases is { } scope
-        && scope.CanonicalToAlias.TryGetValue(canonicalName, out var alias)
-            ? alias
-            : canonicalName;
+    public static string ResolveAliasedName(string canonicalName, string? @namespace) =>
+        UsingAliases?.AliasOf(canonicalName, @namespace) ?? canonicalName;
 
     private static bool IsSystemType(IrNamedTypeRef named) =>
         named is { Name: "Type", Namespace: "System", Origin: null }
@@ -213,10 +211,8 @@ public static class IrToTsTypeMapper
             name = renamed;
 
         string? originalName = null;
-        if (
-            UsingAliases is { } aliasScope
-            && aliasScope.CanonicalToAlias.TryGetValue(name, out var aliasName)
-        )
+
+        if (UsingAliases?.AliasOf(name, named.Namespace) is { } aliasName)
         {
             originalName = name;
             name = aliasName;

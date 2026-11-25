@@ -1765,7 +1765,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var layerA = UsingAliasResolver.ResolveForTree(
             primarySyntaxTree,
             Context.Compilation,
-            type => DeclaresType(groupTypes, type)
+            type => DeclaresType(groupTypes, type),
+            groupTypes
         );
 
         var filePath = primarySyntaxTree?.FilePath ?? string.Empty;
@@ -3666,8 +3667,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var factoryFilePath = factoryTree?.FilePath ?? string.Empty;
 
         if (
-            UsingAliasResolver.ResolveForTree(factoryTree, compilation) is { } scope
-            && scope.CanonicalToAlias.ContainsKey(factoryName)
+            UsingAliasResolver
+                .ResolveForTree(factoryTree, compilation, fileTypes: [factory.ContainingType])
+                .Any(alias => alias.Target.Name == factoryName)
         )
             return false;
 

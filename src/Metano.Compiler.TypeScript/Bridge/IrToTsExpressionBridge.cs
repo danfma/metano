@@ -997,7 +997,8 @@ public static partial class IrToTsExpressionBridge
     {
         var segments = IrToTsTypeMapper
             .ResolveAliasedName(
-                ModuleLocalNaming.Flatten(reference.Name, reference.PrivateNestedSegments)
+                ModuleLocalNaming.Flatten(reference.Name, reference.PrivateNestedSegments),
+                reference.Namespace
             )
             .Split('.');
 

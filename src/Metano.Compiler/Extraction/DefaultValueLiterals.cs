@@ -125,7 +125,12 @@ internal static class DefaultValueLiterals
         Func<ITypeSymbol, IrTypeRef> mapType
     ) =>
         mapType(type) is IrNamedTypeRef named
-            ? new IrTypeReference(named.Name, named.Origin, named.PrivateNestedSegments)
+            ? new IrTypeReference(
+                named.Name,
+                named.Origin,
+                named.PrivateNestedSegments,
+                named.Namespace
+            )
             : new IrTypeReference(type.Name);
 
     private static IrExpression StaticMember(

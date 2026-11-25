@@ -6,78 +6,116 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Metano.Compiler.TypeScript.Transformation;
 
 /// <summary>
-/// Reads <c>using X = Y;</c> aliases from each C# source file and projects
-/// them into a per-file <see cref="UsingAliasScope"/> the TS bridge uses to
-/// substitute canonical type names with the user-declared alias on every
-/// emit site (declarations, body identifiers, static member access).
-/// <para>
-/// Aliases declared at compilation-unit scope and inside a
-/// <c>namespace { … }</c> block both qualify — Roslyn exposes both via
-/// <see cref="CompilationUnitSyntax.Usings"/> and
-/// <see cref="BaseNamespaceDeclarationSyntax.Usings"/>. The keys of the map
-/// are the canonical type names produced by the IR (matching
-/// <c>IrNamedTypeRef.Name</c>), and the values are the local alias the
-/// printed TS module should use.
-/// </para>
+/// Reads the <c>using X = Y;</c> aliases in scope of one emitted file's types: the
+/// compilation unit's and those of every <c>namespace { … }</c> block that encloses
+/// one of the types (Roslyn exposes both via <see cref="CompilationUnitSyntax.Usings"/>
+/// and <see cref="BaseNamespaceDeclarationSyntax.Usings"/>). Each alias keeps the type
+/// it names (<see cref="UsingAlias"/>), so the TS bridge substitutes it for that type
+/// only (#754) on every emit site (declarations, body identifiers, static member
+/// access).
 /// </summary>
 public static class UsingAliasResolver
 {
     /// <param name="declaresHere">Whether the emitted file declares a type: an alias
     /// of such a type is dropped, since the file binds the type under its own name and
     /// imports nothing to bind the alias (#635).</param>
-    public static UsingAliasScope? ResolveForTree(
+    /// <param name="fileTypes">The types the emitted file declares: only the
+    /// namespace blocks that enclose one of them contribute their aliases. Every block
+    /// of the tree does when it is <c>null</c>.</param>
+    public static IReadOnlyList<UsingAlias> ResolveForTree(
         SyntaxTree? tree,
         Compilation compilation,
-        Func<INamedTypeSymbol, bool>? declaresHere = null
+        Func<INamedTypeSymbol, bool>? declaresHere = null,
+        IReadOnlyList<INamedTypeSymbol>? fileTypes = null
     )
     {
         if (tree is null)
-            return null;
-        var canonicalToAlias = new Dictionary<string, string>(StringComparer.Ordinal);
-        var aliasToCanonical = new Dictionary<string, string>(StringComparer.Ordinal);
+            return [];
+
+        var aliases = new List<UsingAlias>();
         var semanticModel = compilation.GetSemanticModel(tree);
         var root = tree.GetCompilationUnitRoot();
-
         var excluded = declaresHere ?? (_ => false);
 
-        Collect(root.Usings, semanticModel, excluded, canonicalToAlias, aliasToCanonical);
+        Collect(root.Usings, semanticModel, excluded, aliases);
 
-        foreach (var ns in root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>())
-            Collect(ns.Usings, semanticModel, excluded, canonicalToAlias, aliasToCanonical);
+        foreach (var ns in NamespaceBlocksInScope(root, tree, fileTypes))
+            Collect(ns.Usings, semanticModel, excluded, aliases);
 
-        return UsingAliasScope.Create(canonicalToAlias, aliasToCanonical);
+        return aliases;
+    }
+
+    private static IEnumerable<BaseNamespaceDeclarationSyntax> NamespaceBlocksInScope(
+        CompilationUnitSyntax root,
+        SyntaxTree tree,
+        IReadOnlyList<INamedTypeSymbol>? fileTypes
+    )
+    {
+        var blocks = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>();
+
+        if (fileTypes is null)
+            return blocks;
+
+        var enclosing = fileTypes
+            .SelectMany(type => type.DeclaringSyntaxReferences)
+            .Where(reference => reference.SyntaxTree == tree)
+            .SelectMany(reference =>
+                reference.GetSyntax().Ancestors().OfType<BaseNamespaceDeclarationSyntax>()
+            )
+            .ToHashSet();
+
+        return blocks.Where(enclosing.Contains);
     }
 
     private static void Collect(
         SyntaxList<UsingDirectiveSyntax> usings,
         SemanticModel semanticModel,
         Func<INamedTypeSymbol, bool> excluded,
-        Dictionary<string, string> canonicalToAlias,
-        Dictionary<string, string> aliasToCanonical
+        List<UsingAlias> aliases
     )
     {
         foreach (var directive in usings)
         {
-            if (directive.Alias is null)
-                continue;
-
-            var aliasName = directive.Alias.Name.Identifier.ValueText;
-            if (string.IsNullOrEmpty(aliasName))
-                continue;
-
-            if (directive.Name is null)
-                continue;
-            var symbol = semanticModel.GetSymbolInfo(directive.Name).Symbol as INamedTypeSymbol;
-
-            if (symbol is null || excluded(symbol.OriginalDefinition))
-                continue;
-
-            var canonicalName = symbol.Name;
-            if (canonicalName == aliasName)
-                continue;
-
-            canonicalToAlias[canonicalName] = aliasName;
-            aliasToCanonical[aliasName] = canonicalName;
+            if (AliasOf(directive, semanticModel, excluded) is { } alias)
+                aliases.Add(alias);
         }
+    }
+
+    /// <summary>
+    /// The alias <paramref name="directive"/> declares for a type, or <c>null</c> when
+    /// it declares none, names no type, names a type the file declares, or spells the
+    /// type's own name (which renames nothing).
+    /// </summary>
+    private static UsingAlias? AliasOf(
+        UsingDirectiveSyntax directive,
+        SemanticModel semanticModel,
+        Func<INamedTypeSymbol, bool> excluded
+    )
+    {
+        if (directive.Alias is null || directive.Name is null)
+            return null;
+
+        var aliasName = directive.Alias.Name.Identifier.ValueText;
+
+        if (string.IsNullOrEmpty(aliasName))
+            return null;
+
+        if (semanticModel.GetSymbolInfo(directive.Name).Symbol is not INamedTypeSymbol symbol)
+            return null;
+
+        if (excluded(symbol.OriginalDefinition) || symbol.Name == aliasName)
+            return null;
+
+        var definition = symbol.OriginalDefinition;
+
+        var @namespace = definition.ContainingNamespace is { IsGlobalNamespace: false } ns
+            ? ns.ToDisplayString()
+            : null;
+
+        return new UsingAlias(
+            aliasName,
+            new UsingAliasTarget(@namespace, definition.Name),
+            definition
+        );
     }
 }

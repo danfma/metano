@@ -156,7 +156,7 @@ public static class IrToTsJsxBridge
         {
             if (s.JsxNativeElementTag is { } nativeTag)
                 return nativeTag;
-            return IrToTsTypeMapper.ResolveAliasedName(named.Name);
+            return IrToTsTypeMapper.ResolveAliasedName(named.Name, named.Namespace);
         }
 
         // Fallback — should be unreachable because the caller only routes

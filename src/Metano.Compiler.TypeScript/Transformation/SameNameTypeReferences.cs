@@ -13,7 +13,8 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// import: the clash check (#504) reports a file that names two of them, and the import
 /// collector binds the name to the one type the file names (#743). A reference may
 /// spell the type's C# name or a <c>using</c> alias of it; an alias prints under its own
-/// name, so only the spelled references can clash, but both bind the import.
+/// name and binds its import by the symbol it names (#754), so only the spelled
+/// references can clash or bind the name.
 /// </summary>
 internal sealed class SameNameTypeReferences(
     Compilation compilation,
@@ -70,8 +71,9 @@ internal sealed class SameNameTypeReferences(
 
     /// <summary>
     /// The project type each ambiguous name of one file binds: a type the file declares,
-    /// else the first one its <paramref name="references"/> name. Empty when the
-    /// project has no ambiguous name.
+    /// else the first one its spelled <paramref name="references"/> name. A reference
+    /// through a <c>using</c> alias binds its import by the alias's symbol instead
+    /// (#754), so it binds no name here. Empty when the project has no ambiguous name.
     /// </summary>
     public IReadOnlyDictionary<string, IrTranspilableTypeRef> BindingsIn(
         IReadOnlyList<INamedTypeSymbol> fileTypes,
@@ -85,7 +87,11 @@ internal sealed class SameNameTypeReferences(
 
         var declared = fileTypes.Where(IsAmbiguous);
 
-        foreach (var type in declared.Concat(references.Select(reference => reference.Type)))
+        var spelled = references
+            .Where(reference => !reference.IsAlias)
+            .Select(reference => reference.Type);
+
+        foreach (var type in declared.Concat(spelled))
             bindings.TryAdd(Emitted(type), TranspilableTypeProjection.Of(type, Emitted(type)));
 
         return bindings;
