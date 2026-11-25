@@ -3,7 +3,7 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Tests;
 
 /// <summary>
-/// #770 (decision W9-9, baseline FR-101): under <c>[assembly: TranspileAssembly]</c> an
+/// #770 (decision W9-9, baseline FR-102): under <c>[assembly: TranspileAssembly]</c> an
 /// internal type that emitted code reaches is transpiled into its own module and imported
 /// where used, but no barrel re-exports it; a type that still cannot be emitted reports
 /// <c>MS0002</c> at the reference site.
