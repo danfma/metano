@@ -4,6 +4,20 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 3.1.0
+
+_2026-11-25_
+
+
+### ✨ Features
+
+* ship wave 7 (closed hierarchies, record value semantics, .js specifiers, read-only JS array views) ([#742](https://github.com/danfma/metano/issues/742)) ([976ba74](https://github.com/danfma/metano/commit/976ba74115197ca4df6a1fe1d0798b4301b8fcfd)), closes [#304](https://github.com/danfma/metano/issues/304) [#695](https://github.com/danfma/metano/issues/695) [#733](https://github.com/danfma/metano/issues/733) [#734](https://github.com/danfma/metano/issues/734) [#735](https://github.com/danfma/metano/issues/735) [#664](https://github.com/danfma/metano/issues/664) [#573](https://github.com/danfma/metano/issues/573) [#737](https://github.com/danfma/metano/issues/737) [#573](https://github.com/danfma/metano/issues/573) [#664](https://github.com/danfma/metano/issues/664) [#733](https://github.com/danfma/metano/issues/733) [#734](https://github.com/danfma/metano/issues/734) [#737](https://github.com/danfma/metano/issues/737) [#304](https://github.com/danfma/metano/issues/304) [#695](https://github.com/danfma/metano/issues/695)
+* ship wave 8 (closed-family unions, closure-free switch expressions, [ObjectArgs] records, symbol-based imports) ([#760](https://github.com/danfma/metano/issues/760)) ([de031a8](https://github.com/danfma/metano/commit/de031a81d297a7d4376ac4f1c097124d9616b54e)), closes [#738](https://github.com/danfma/metano/issues/738) [#735](https://github.com/danfma/metano/issues/735) [#743](https://github.com/danfma/metano/issues/743) [#745](https://github.com/danfma/metano/issues/745) [#741](https://github.com/danfma/metano/issues/741) [#740](https://github.com/danfma/metano/issues/740) [#735](https://github.com/danfma/metano/issues/735) [#738](https://github.com/danfma/metano/issues/738) [#739](https://github.com/danfma/metano/issues/739) [#740](https://github.com/danfma/metano/issues/740) [#741](https://github.com/danfma/metano/issues/741) [#743](https://github.com/danfma/metano/issues/743) [#745](https://github.com/danfma/metano/issues/745)
+
+### 📝 Documentation
+
+* document that object maps to Object and object? to Object | null ([#736](https://github.com/danfma/metano/issues/736)) ([30c955e](https://github.com/danfma/metano/commit/30c955e8a171dd9828aab4183c2c81139279252c)), closes [#732](https://github.com/danfma/metano/issues/732)
+
 ## 3.0.2
 
 _2026-11-24_
