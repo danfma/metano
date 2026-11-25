@@ -14,20 +14,21 @@ namespace Metano.Compiler.TypeScript.Transformation;
 internal static class EventDiagnostics
 {
     /// <summary>
-    /// Reports MS0001 (warning) at each event of <paramref name="type"/> declared with
-    /// non-empty custom accessors or as <c>static</c>: the emitted shape does not run its
-    /// accessor bodies or keep it on the class.
+    /// Reports MS0001 at each event of <paramref name="type"/> the emitted shape does not
+    /// reproduce. Non-empty custom accessors are an error (decision W9-13): their bodies
+    /// are dropped, so the output is known to be wrong. A static event is a warning: it is
+    /// read from the instance, which fails loudly (TypeScript and run time).
     /// </summary>
     public static void Report(INamedTypeSymbol type, Action<MetanoDiagnostic> report)
     {
         foreach (var evt in type.GetMembers().OfType<IEventSymbol>())
         {
-            if (UnsupportedShape(evt) is not { } shape)
+            if (UnsupportedShape(evt) is not var (shape, severity))
                 continue;
 
             report(
                 new MetanoDiagnostic(
-                    MetanoDiagnosticSeverity.Warning,
+                    severity,
                     DiagnosticCodes.UnsupportedFeature,
                     $"The event '{type.Name}.{evt.Name}' is {shape}, which TypeScript "
                         + "emission does not support: it is emitted as a field-like "
@@ -38,7 +39,9 @@ internal static class EventDiagnostics
         }
     }
 
-    private static string? UnsupportedShape(IEventSymbol evt)
+    private static (string Shape, MetanoDiagnosticSeverity Severity)? UnsupportedShape(
+        IEventSymbol evt
+    )
     {
         var notEmitted =
             evt.IsImplicitlyDeclared
@@ -49,9 +52,9 @@ internal static class EventDiagnostics
             return null;
 
         if (DeclaresAccessorBodies(evt))
-            return "declared with custom add/remove accessors";
+            return ("declared with custom add/remove accessors", MetanoDiagnosticSeverity.Error);
 
-        return evt.IsStatic ? "static" : null;
+        return evt.IsStatic ? ("static", MetanoDiagnosticSeverity.Warning) : null;
     }
 
     /// <summary>

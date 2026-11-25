@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -314,13 +316,107 @@ public class AccessorBodyImportTests
                 """
         );
 
+        var unsupported = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+
         await Assert
-            .That(diagnostics.Select(d => d.Message))
-            .Contains(
+            .That(unsupported.Message)
+            .IsEqualTo(
                 "The event 'Notifier.Changed' is declared with custom add/remove accessors, "
                     + "which TypeScript emission does not support: it is emitted as a "
                     + "field-like instance event."
             );
+
+        // Decision W9-13: the accessor bodies are dropped, so the output is known wrong.
+        await Assert.That(unsupported.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+    }
+
+    [Test]
+    public async Task FieldLikeEventsAndEmptyStubs_ReportNothing()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+            using Metano.Annotations;
+
+            [Transpile]
+            public interface INotifier
+            {
+                event Action Changed;
+            }
+
+            [Transpile]
+            public class Notifier : INotifier
+            {
+                public event Action? Raised;
+
+                event Action INotifier.Changed
+                {
+                    add { }
+                    remove { }
+                }
+
+                public void Fire() => Raised?.Invoke();
+            }
+            """
+        );
+
+        await Assert.That(diagnostics).IsEmpty();
+    }
+
+    [Test]
+    public async Task OverloadSignatures_ImportTheirTypes()
+    {
+        // The overload signatures of module functions, constructors and methods (with
+        // their type-parameter constraints) are walked like the implementation: every
+        // type they name is imported, and the module type-checks.
+        var files = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            [Transpile]
+            public interface IShape { }
+
+            [Transpile]
+            public interface ILabel { }
+
+            [Transpile]
+            public interface IKey { }
+
+            [Transpile, ExportedAsModule]
+            public static class Shapes
+            {
+                public static int Area(IShape shape) => 1;
+
+                public static int Area(IShape shape, int scale) => scale;
+            }
+
+            [Transpile]
+            public class Tag
+            {
+                public Tag(ILabel label) { }
+
+                public Tag(ILabel label, int weight) { }
+
+                public T Pick<T>(T key)
+                    where T : IKey => key;
+
+                public T Pick<T>(T key, int index)
+                    where T : IKey => key;
+            }
+            """
+        );
+
+        await Assert.That(files["shapes.ts"]).Contains("type IShape } from \"./i-shape.js\";");
+        await Assert.That(files["tag.ts"]).Contains("type ILabel } from \"./i-label.js\";");
+        await Assert.That(files["tag.ts"]).Contains("type IKey } from \"./i-key.js\";");
+
+        var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(
+            files,
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
     }
 
     [Test]
@@ -339,11 +435,16 @@ public class AccessorBodyImportTests
             """
         );
 
+        var unsupported = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+
         await Assert
-            .That(diagnostics.Select(d => d.Message))
-            .Contains(
+            .That(unsupported.Message)
+            .IsEqualTo(
                 "The event 'Clock.Ticked' is static, which TypeScript emission does not "
                     + "support: it is emitted as a field-like instance event."
             );
+
+        // A static event fails loudly (read from the instance), so it stays a warning.
+        await Assert.That(unsupported.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
     }
 }
