@@ -944,6 +944,10 @@ export class CardPayment extends PaymentMethod {
     `switch (x.kind)` after it is exhaustive (#758), also for a consumer that sees
     only the package's `.d.ts` files. `x instanceof CardPayment` (a case, or any
     class below one, your own subclasses included) still narrows to that class.
+    This narrowing comes from the `Symbol.hasInstance` type guard the binding
+    declares, which TypeScript honors from 5.3 on (Metano already requires a
+    newer one); the generated code itself relies on it, as it binds a tested
+    value without a cast.
   - A generic family narrows too. For `Tree<T>` with a fixed case
     `IntLeaf : Tree<int>`, `IntLeaf` is part of `Tree<number>` and absent from
     `Tree<string>`, as in C#.
@@ -1086,6 +1090,11 @@ prototype, so a plain object of the same shape is not a case, and a `switch` on
 family, deserialize it with `JsonSerializer` (which constructs the cases) instead
 of guarding the raw object. A family that keeps the class shape (`MS0073` or
 `[Discriminator]`) keeps the structural guard.
+
+**Migration note (since 3.1.0):** in 3.1.0 these guards also admitted a plain
+object of the same shape. Code that ran a guard over raw parsed JSON of a closed
+family now gets `false` (and `assertX` throws); deserialize with `JsonSerializer`
+first.
 
 ### JSON serialization
 
