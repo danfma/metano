@@ -1131,6 +1131,12 @@ public static class IrTypeRefMapper
         return path;
     }
 
+    /// <summary>
+    /// The C# namespace an <see cref="IrNamedTypeRef"/> of <paramref name="type"/>
+    /// carries: <c>null</c> for the global one.
+    /// </summary>
+    internal static string? NamespaceOf(INamedTypeSymbol type) => GetNamespace(type);
+
     private static string? GetNamespace(INamedTypeSymbol type)
     {
         var ns = type.ContainingNamespace;

@@ -119,6 +119,8 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
             predicateType = BuildVariantUnionType(unionVariants);
             guard = GenerateUnionGuard(type, guardName, predicateType, valueParam, unionVariants);
         }
+        else if (UnionFamilyClassOf(type, tsName) is { } familyClass)
+            guard = GenerateInstanceGuard(guardName, tsName, familyClass, valueParam);
         else if (type.TypeKind == TypeKind.Enum)
             guard = GenerateEnumGuard(type, guardName, tsName, valueParam);
         else if (type.TypeKind == TypeKind.Interface)
@@ -137,6 +139,53 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
 
         return guard is null ? null : (guard, predicateType);
     }
+
+    /// <summary>
+    /// The runtime class a guard of a closed-family type tests with
+    /// <c>instanceof</c> when the family lowers to a union (spec 010 FR-C5,
+    /// decision W9-1): <c>X$Base</c> for a closed type, the class itself for a
+    /// case or a type below one. <c>null</c> for any other type, including one of
+    /// a family that keeps the class shape (MS0073).
+    /// </summary>
+    private string? UnionFamilyClassOf(INamedTypeSymbol type, string tsName)
+    {
+        if (_context.ClosedFamilies.IsLowered(type))
+            return tsName + ClosedFamilyLowering.RuntimeClassSuffix;
+
+        for (var ancestor = type.BaseType; ancestor is not null; ancestor = ancestor.BaseType)
+        {
+            if (_context.ClosedFamilies.IsLowered(ancestor))
+                return tsName;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// <c>return value instanceof C</c>, with no structural fallback: every case of
+    /// a union-lowered family reads its <c>kind</c> from its class's prototype, so
+    /// a plain object of the same shape is not one (decision W9-1, #757).
+    /// </summary>
+    private static TsFunction GenerateInstanceGuard(
+        string guardName,
+        string tsName,
+        string runtimeClass,
+        TsParameter valueParam
+    ) =>
+        new(
+            guardName,
+            [valueParam],
+            new TsTypePredicateType("value", new TsNamedType(tsName)),
+            [
+                new TsReturnStatement(
+                    new TsBinaryExpression(
+                        new TsIdentifier("value"),
+                        "instanceof",
+                        new TsIdentifier(runtimeClass)
+                    )
+                ),
+            ]
+        );
 
     private IReadOnlyList<INamedTypeSymbol>? TryFindDiscriminatedVariants(INamedTypeSymbol baseType)
     {

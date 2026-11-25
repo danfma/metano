@@ -13,12 +13,20 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <code>
 /// abstract class JobStatus$Base { abstract readonly kind: "Queued" | "Running"; … }
 /// export type JobStatus = Queued | Running;
-/// export const JobStatus: typeof JobStatus$Base = JobStatus$Base;
+/// export const JobStatus = JobStatus$Base as { [Symbol.hasInstance]: … } &amp; typeof JobStatus$Base;
 /// export class Running extends JobStatus { override get kind(): "Running" { return "Running"; } … }
 /// </code>
 /// </summary>
 internal static class IrToTsClosedFamilyBridge
 {
+    private const string HasInstanceKey = "[Symbol.hasInstance]";
+
+    /// <summary>
+    /// The binding's <c>hasInstance</c> type parameter: a <c>$</c> keeps it apart from
+    /// every type name a C# declaration emits.
+    /// </summary>
+    private const string PrototypeParameter = "$P";
+
     private static readonly TsNamedType Never = new("never");
 
     /// <summary>
@@ -98,12 +106,54 @@ internal static class IrToTsClosedFamilyBridge
 
         var binding = new TsVariableDeclaration(
             self.FamilyName,
-            new TsIdentifier(self.RuntimeClassName),
-            Exported: true,
-            Type: new TsTypeQuery(self.RuntimeClassName)
+            new TsCastExpression(new TsIdentifier(self.RuntimeClassName), BindingType(self, ir)),
+            Exported: true
         );
 
         return [alias, new TsTopLevelStatement(binding)];
+    }
+
+    /// <summary>
+    /// The value binding's type: the runtime class's static side with a
+    /// <c>Symbol.hasInstance</c> that narrows <c>v instanceof X</c> to the union
+    /// rather than to the runtime class (#758). The signature reads the prototype of
+    /// the class <c>instanceof</c> tests against, so a case, or any class below one,
+    /// that inherits it still narrows to its own instance type; it comes first, so a
+    /// closed intermediate's own signature wins over the one it inherits. The runtime
+    /// class's own <c>hasInstance</c> returns a plain boolean, so the binding asserts
+    /// the type instead of annotating it. A generic family narrows to its union over
+    /// <c>any</c>, which keeps the instantiation a value is already typed with.
+    /// <code>
+    /// { [Symbol.hasInstance]: &lt;$P&gt;(this: { prototype: $P }, value: unknown) =&gt;
+    ///     value is X$Base extends $P ? X : $P } &amp; typeof X$Base
+    /// </code>
+    /// </summary>
+    private static TsType BindingType(ClosedSelfLowering self, IrClassDeclaration ir)
+    {
+        var anyArguments = ir.TypeParameters is { Count: > 0 } parameters
+            ? parameters.Select(_ => (TsType)new TsAnyType()).ToList()
+            : null;
+
+        var prototype = new TsNamedType(PrototypeParameter);
+
+        var narrowed = new TsConditionalType(
+            new TsNamedType(self.RuntimeClassName, anyArguments),
+            prototype,
+            new TsNamedType(self.FamilyName, anyArguments),
+            prototype
+        );
+
+        var hasInstance = new TsFunctionType(
+            [new TsParameter("value", new TsNamedType("unknown"))],
+            new TsTypePredicateType("value", narrowed),
+            ThisType: new TsObjectType([new TsObjectTypeField("prototype", prototype)]),
+            TypeParameters: [new TsTypeParameter(PrototypeParameter)]
+        );
+
+        return new TsIntersectionType([
+            new TsObjectType([new TsObjectTypeField(HasInstanceKey, hasInstance)]),
+            new TsTypeQuery(self.RuntimeClassName),
+        ]);
     }
 
     private static List<TsType> UnionMembers(

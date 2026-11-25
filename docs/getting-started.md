@@ -83,8 +83,8 @@ Edit the generated `.csproj`:
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Metano" Version="3.0.*" />
-    <PackageReference Include="Metano.Build.TypeScript" Version="3.0.*" />
+    <PackageReference Include="Metano" Version="3.*" />
+    <PackageReference Include="Metano.Build.TypeScript" Version="3.*" />
   </ItemGroup>
 
   <PropertyGroup>

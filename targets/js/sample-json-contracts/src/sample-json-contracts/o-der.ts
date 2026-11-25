@@ -29,11 +29,11 @@ export class ODer extends OBase {
     });
   }
 
-  get name(): string {
+  override get name(): string {
     return this.name$ODer_qoo6r7;
   }
 
-  set name(value: string) {
+  override set name(value: string) {
     this.name$ODer_qoo6r7 = value;
   }
 

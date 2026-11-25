@@ -46,7 +46,7 @@ export declare namespace ShotSource {
 
 export type ShotSource = ShotSource$Fresh | ShotSource$Reused;
 
-export const ShotSource: typeof ShotSource$Base = ShotSource$Base;
+export const ShotSource = ShotSource$Base as { [Symbol.hasInstance]: <$P>(this: { prototype: $P }, value: unknown) => value is ShotSource$Base extends $P ? ShotSource : $P } & typeof ShotSource$Base;
 
 class ShotSource$Fresh extends ShotSource {
   constructor() {

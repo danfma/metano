@@ -5,7 +5,7 @@ export class Coupon extends Money {
     super(Money.byMoneyCents, cents);
   }
 
-  static fromAmount(text: string): Coupon {
+  static override fromAmount(text: string): Coupon {
     return new Coupon(text.length);
   }
 }

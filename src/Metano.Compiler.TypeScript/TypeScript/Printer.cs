@@ -962,6 +962,10 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
 
                 if (setter.Static)
                     _sb.Write("static ");
+
+                if (setter.Override)
+                    _sb.Write("override ");
+
                 _sb.Write("set ");
                 _sb.Write(setter.Name);
                 _sb.Write("(");
@@ -1189,6 +1193,7 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
                 break;
 
             case TsFunctionType funcType:
+                PrintTypeParameters(funcType.TypeParameters);
                 _sb.Write("(");
                 if (funcType.ThisType is { } thisType)
                 {

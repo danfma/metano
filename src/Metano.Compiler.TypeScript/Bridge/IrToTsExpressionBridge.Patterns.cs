@@ -947,7 +947,7 @@ public static partial class IrToTsExpressionBridge
     ) =>
         context.RuntimeTypes.BoxingEnabled && EnumOnBoxCapableInput(type, inputType) is { } enumType
             ? UnboxedEnum(value, enumType)
-            : ClosedFamilyNarrowing.Bind(value, type, inputType, context);
+            : value;
 
     private static IEnumerable<PatternBinding> DesignatorBinding(
         IrPatternDesignator? designator,

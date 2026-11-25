@@ -1,5 +1,6 @@
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
@@ -183,13 +184,37 @@ public sealed class ImportCollector(
         // W2`), each with its own type-only flag. The canonical name binds plainly
         // only when the text names it too (a value position keeps the source
         // spelling), which `spelledCanonically` records before the substitution.
+        //
+        // A `using` alias of a project type binds its import by the symbol it names
+        // (#754): two aliases may name two same-named types, which the canonical name
+        // cannot tell apart.
         var spelledCanonically = referencedTypes.ToHashSet(Ordinal);
         var aliasBindings = new Dictionary<string, List<(string Alias, bool IsValue)>>(Ordinal);
+        var symbolAliases = new List<SymbolAliasImport>();
+        var externalAliases = new List<ExternalAliasImport>();
 
         if (IrToTsTypeMapper.UsingAliases is { } activeScope)
         {
             foreach (var name in referencedTypes.ToList())
             {
+                if (ExternalTypeAliasedBy(activeScope, name) is { } external)
+                {
+                    var isValue = valueTypes.Remove(name);
+
+                    externalAliases.Add(new ExternalAliasImport(name, external, isValue));
+                    referencedTypes.Remove(name);
+
+                    continue;
+                }
+
+                if (ProjectTypeAliasedBy(activeScope, name) is { } target)
+                {
+                    symbolAliases.Add(new SymbolAliasImport(name, target, valueTypes.Remove(name)));
+                    referencedTypes.Remove(name);
+
+                    continue;
+                }
+
                 if (!activeScope.AliasToCanonical.TryGetValue(name, out var canonical))
                     continue;
 
@@ -738,6 +763,27 @@ public sealed class ImportCollector(
 
             var typeOnly = !valueTypes.Contains(typeName);
             AddLocalType(importPath, typeName, referencedRef.TsName, typeOnly);
+        }
+
+        foreach (var externalAlias in externalAliases)
+            imports.Add(ExternalAliasImportOf(externalAlias));
+
+        foreach (var symbolAlias in symbolAliases)
+        {
+            var target = symbolAlias.Target;
+
+            if (target.Namespace == currentNs && target.FileName == currentFileName)
+                continue;
+
+            var aliasPath = _context.PathNaming.LocalModule(target.Namespace, target.FileName);
+
+            if (!localByPath.TryGetValue(aliasPath, out var aliasBucket))
+            {
+                aliasBucket = new ImportBindings();
+                localByPath[aliasPath] = aliasBucket;
+            }
+
+            aliasBucket.Add(target.TsName, symbolAlias.Alias, typeOnly: !symbolAlias.IsValue);
         }
 
         AddModuleExportImports(
@@ -1808,6 +1854,82 @@ public sealed class ImportCollector(
                 break;
         }
     }
+
+    /// <summary>
+    /// The project type the <c>using</c> alias <paramref name="name"/> names, resolved
+    /// by its symbol; <c>null</c> when the name is no such alias, or names a type the
+    /// project does not emit, which keeps resolving by its canonical name.
+    /// </summary>
+    private IrTranspilableTypeRef? ProjectTypeAliasedBy(UsingAliasScope scope, string name)
+    {
+        if (scope.UsingTargetOf(name) is not { } target || !IsOwnTopLevelType(target))
+            return null;
+
+        return TranspilableTypeProjection.Of(target, _context.ResolveTsName(target));
+    }
+
+    /// <summary>
+    /// The <c>[Import]</c> declaration of the type the <c>using</c> alias
+    /// <paramref name="name"/> names: such a type lives in its external module, which
+    /// the alias imports from under its own name. <c>null</c> for any other name.
+    /// </summary>
+    private IrExternalImport? ExternalTypeAliasedBy(UsingAliasScope scope, string name) =>
+        scope.UsingTargetOf(name) is { } target && SymbolHelper.HasImport(target)
+            ? _context.ExternalImportMap.GetValueOrDefault(target.Name)
+            : null;
+
+    /// <summary>
+    /// <c>import { External as Alias } from "module"</c>, or the default import bound
+    /// to the alias; records the declared package version.
+    /// </summary>
+    private TsImport ExternalAliasImportOf(ExternalAliasImport alias)
+    {
+        var external = alias.External;
+
+        if (external.Version is { Length: > 0 } version)
+            _typeMappingContext.CrossPackageDependencies.Record(external.From, version);
+
+        if (external.IsDefault)
+            return new TsImport([alias.Alias], new TsPackageModule(external.From), IsDefault: true);
+
+        return new TsImport(
+            [external.Name],
+            new TsPackageModule(external.From),
+            TypeOnly: !alias.IsValue,
+            Aliases: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [external.Name] = alias.Alias,
+            }
+        );
+    }
+
+    /// <summary>A <c>using</c> alias the file spells for an <c>[Import]</c> type.</summary>
+    private sealed record ExternalAliasImport(
+        string Alias,
+        IrExternalImport External,
+        bool IsValue
+    );
+
+    /// <summary>A top-level type of the project being transpiled that it emits.</summary>
+    private bool IsOwnTopLevelType(INamedTypeSymbol type) =>
+        !SymbolHelper.HasImport(type)
+        && type.ContainingType is null
+        && SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _context.CurrentAssembly)
+        && SymbolHelper.IsTranspilable(
+            type,
+            _context.AssemblyWideTranspile,
+            _context.CurrentAssembly
+        );
+
+    /// <summary>
+    /// A <c>using</c> alias the file spells for a project type, imported as
+    /// <c>{ TsName as Alias }</c> from the type's module.
+    /// </summary>
+    private sealed record SymbolAliasImport(
+        string Alias,
+        IrTranspilableTypeRef Target,
+        bool IsValue
+    );
 
     /// <summary>
     /// The project type a bare type name in this file refers to: the symbol-resolved

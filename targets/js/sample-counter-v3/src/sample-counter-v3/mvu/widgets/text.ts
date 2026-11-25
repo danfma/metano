@@ -9,7 +9,7 @@ export class Text extends Widget {
     this._content = content;
   }
 
-  render(): HTMLElement {
+  override render(): HTMLElement {
     const span = document.createElement("span");
     span.textContent = this._content;
 

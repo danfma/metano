@@ -775,8 +775,9 @@ with `switch (method.kind)` and no cast. The shape has three parts:
 
 - a non-exported runtime class `PaymentMethod$Base` that carries the shared members;
 - `export type PaymentMethod = CardPayment | BankTransfer`, the union of the cases;
-- `export const PaymentMethod: typeof PaymentMethod$Base = PaymentMethod$Base`, so
-  `instanceof PaymentMethod` and static members keep working.
+- `export const PaymentMethod = PaymentMethod$Base as …`, a value binding to the
+  runtime class, so static members keep working and `x instanceof PaymentMethod`
+  narrows `x` to the union (#758).
 
 Each case carries a read-only `kind` literal (its TypeScript name, or its `[Name]`)
 as a prototype getter: it costs nothing per instance and never appears in `equals`,
@@ -856,7 +857,7 @@ abstract class PaymentMethod$Base {
 
 export type PaymentMethod = CardPayment | BankTransfer;
 
-export const PaymentMethod: typeof PaymentMethod$Base = PaymentMethod$Base;
+export const PaymentMethod = PaymentMethod$Base as { [Symbol.hasInstance]: <$P>(this: { prototype: $P }, value: unknown) => value is PaymentMethod$Base extends $P ? PaymentMethod : $P } & typeof PaymentMethod$Base;
 ```
 
 ```typescript
@@ -939,8 +940,14 @@ export class CardPayment extends PaymentMethod {
   }
   ```
 
-  - `x instanceof PaymentMethod` still works at run time, but today it narrows to
-    `PaymentMethod$Base`, not to the union (#758). Prefer `kind`.
+  - `x instanceof PaymentMethod` narrows `x` to the union `PaymentMethod`, so a
+    `switch (x.kind)` after it is exhaustive (#758), also for a consumer that sees
+    only the package's `.d.ts` files. `x instanceof CardPayment` (a case, or any
+    class below one, your own subclasses included) still narrows to that class.
+    This narrowing comes from the `Symbol.hasInstance` type guard the binding
+    declares, which TypeScript honors from 5.3 on (Metano already requires a
+    newer one); the generated code itself relies on it, as it binds a tested
+    value without a cast.
   - A generic family narrows too. For `Tree<T>` with a fixed case
     `IntLeaf : Tree<int>`, `IntLeaf` is part of `Tree<number>` and absent from
     `Tree<string>`, as in C#.
@@ -1074,10 +1081,20 @@ the literal `"OrderCreated"`, so in TypeScript you narrow `IDomainEvent` using
 (or add `[StrictUnionGuard]` on an abstract base class to validate the variant
 shape in `isT`).
 
-A `[GenerateGuard]` on the root of a closed family still accepts a plain object
-through its structural fallback, and a plain object has no `kind` getter. Do not
-switch on `kind` for a value a guard admitted from `unknown`; construct the case
-first (tracked in [#757](https://github.com/danfma/metano/issues/757)).
+A `[GenerateGuard]` on a type of a closed family that takes the union shape admits
+instances only: `isPaymentMethod(value)` is `value instanceof PaymentMethod$Base`
+and `isCardPayment(value)` is `value instanceof CardPayment`, with no structural
+fallback (spec 010 FR-C5, #757). Every case reads `kind` from its class's
+prototype, so a plain object of the same shape is not a case, and a `switch` on
+`kind` after a guard never falls through. To validate parsed JSON against such a
+family, deserialize it with `JsonSerializer` (which constructs the cases) instead
+of guarding the raw object. A family that keeps the class shape (`MS0073` or
+`[Discriminator]`) keeps the structural guard.
+
+**Migration note (since 3.1.0):** in 3.1.0 these guards also admitted a plain
+object of the same shape. Code that ran a guard over raw parsed JSON of a closed
+family now gets `false` (and `assertX` throws); deserialize with `JsonSerializer`
+first.
 
 ### JSON serialization
 

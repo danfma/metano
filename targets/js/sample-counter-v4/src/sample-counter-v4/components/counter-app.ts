@@ -28,7 +28,7 @@ export class CounterApp extends Component<EmptyProps, Counter> {
     });
   }
 
-  render(): InfernoElement {
+  override render(): InfernoElement {
     const state = this.state ?? Counter.zero;
 
     return Column({

@@ -135,26 +135,6 @@ public sealed class TypeScriptTransformContext(
     internal Bridge.ClosedFamilyLowering ClosedFamilies =>
         field ??= new Bridge.ClosedFamilyLowering(ResolveOwnTsName);
 
-    /// <summary>
-    /// Whether the closed type <paramref name="type"/> names lowers to the union
-    /// (<see cref="ClosedFamilies"/>); a reference the compilation cannot resolve
-    /// counts as lowered, the shape a closed family takes unless suppressed.
-    /// </summary>
-    internal bool IsLoweredClosedType(IrNamedTypeRef type)
-    {
-        var segments = type.Name.Split('.');
-        var arity = type.TypeArguments?.Count ?? 0;
-        var last = arity > 0 ? $"{segments[^1]}`{arity}" : segments[^1];
-        var nested = string.Join('+', [.. segments[..^1], last]);
-
-        var metadataName = string.IsNullOrEmpty(type.Namespace)
-            ? nested
-            : $"{type.Namespace}.{nested}";
-
-        return Compilation.GetTypeByMetadataName(metadataName) is not { } symbol
-            || ClosedFamilies.IsLowered(symbol);
-    }
-
     private IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildExtensionHelperFunctions()
     {
         var map = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);

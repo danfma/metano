@@ -99,11 +99,18 @@ public sealed record IrIdentifier(string Name) : IrExpression;
 /// how many leading segments of the dotted <see cref="Name"/> lead to a <c>private</c>
 /// nested declaration (<c>0</c> when none is private).
 /// </para>
+/// <para>
+/// <see cref="Namespace"/> is the referenced type's C# namespace, as
+/// <see cref="IrNamedTypeRef.Namespace"/> carries it, so a backend can tell two
+/// same-named types apart (a <c>using</c> alias names one of them, #754). Null for
+/// a type of the global namespace and for synthesized references.
+/// </para>
 /// </summary>
 public sealed record IrTypeReference(
     string Name,
     IrTypeOrigin? Origin = null,
-    int PrivateNestedSegments = 0
+    int PrivateNestedSegments = 0,
+    string? Namespace = null
 ) : IrExpression;
 
 /// <summary>

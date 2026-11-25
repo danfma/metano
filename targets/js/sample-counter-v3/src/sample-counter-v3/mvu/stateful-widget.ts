@@ -18,7 +18,7 @@ export abstract class StatefulWidget<TState> extends Widget {
     this._context = context;
   }
 
-  render(): HTMLElement {
+  override render(): HTMLElement {
     if (this._context == null) {
       throw new InvalidOperationException("Widget not bound to a context.");
     }
