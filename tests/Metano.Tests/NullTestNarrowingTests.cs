@@ -44,4 +44,50 @@ public class NullTestNarrowingTests
         await Assert.That(output).Contains("return last != null && last.message === \"x\";");
         await Assert.That(output).DoesNotContain("last!");
     }
+
+    [Test]
+    public async Task ReassignedLocalReadInAClosure_KeepsTheAssertion()
+    {
+        var output = Emit(
+            """
+            public static string Captured(Func<Exception?> get)
+            {
+                Exception? cur = new Exception("x");
+                Func<string> read = () => cur.Message;
+                cur = get();
+
+                return read();
+            }
+
+            public static string GuardedThenReassigned(Func<Exception?> get)
+            {
+                Exception? cur = get();
+
+                if (cur != null)
+                {
+                    Func<string> read = () => cur.Message;
+                    cur = null;
+
+                    return read();
+                }
+
+                return "";
+            }
+
+            public static string NeverReassigned(Func<Exception?> get)
+            {
+                Exception? cur = get();
+
+                if (cur == null) return "";
+
+                Func<string> read = () => cur.Message;
+
+                return read();
+            }
+            """
+        );
+
+        await Assert.That(output).Contains("() => cur!.message");
+        await Assert.That(output).Contains("const read = () => cur.message;");
+    }
 }

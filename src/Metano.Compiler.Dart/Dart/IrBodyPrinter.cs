@@ -269,14 +269,18 @@ public static class IrBodyPrinter
     /// <summary>
     /// A non-null assertion the IR inserted from C# flow analysis (#775) that
     /// Dart leaves out: a local or parameter read after <c>x!</c>, which Dart
-    /// promotes itself. A member read keeps it: Dart never promotes a
+    /// promotes itself, and the read of a reassigned local inside a closure
+    /// (<see cref="IrFlowNonNullProof.CapturedLocalRead"/>, which only a
+    /// TypeScript checker needs). A member read keeps it: Dart never promotes a
     /// non-final field (its <c>!</c> may then throw where a call changed the
     /// field, which C# does not track; FR-101). Also the <c>!</c> over a
     /// <c>null</c> literal (<c>null!</c>, <c>default!</c>), which on Dart would
     /// throw: Dart takes the bare literal for a non-nullable type.
     /// </summary>
     private static bool IsLeftOutOnDart(IrUnaryExpression unary) =>
-        unary.FlowProof is IrFlowNonNullProof.ForgivenLocalRead
+        unary.FlowProof
+            is IrFlowNonNullProof.ForgivenLocalRead
+                or IrFlowNonNullProof.CapturedLocalRead
         || unary
             is {
                 Operator: IrUnaryOp.NonNullAssertion,

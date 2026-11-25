@@ -45,6 +45,9 @@ internal static class ForgivenNullStateReads
 
         var symbol = model.GetSymbolInfo(read).Symbol;
 
+        if (IsReassignedAndCaptured(model, read, symbol))
+            return IrFlowNonNullProof.CapturedLocalRead;
+
         return (LastEventBefore(model, read, symbol), symbol) switch
         {
             (ReadEvent.Narrowing, _) => null,
@@ -54,6 +57,55 @@ internal static class ForgivenNullStateReads
             _ => IrFlowNonNullProof.AttributedLocalRead,
         };
     }
+
+    /// <summary>
+    /// Whether <paramref name="read"/> sits in a lambda or local function that
+    /// captures a local or parameter assigned after its declaration: a checker
+    /// never narrows such a read, whatever test or assignment precedes it.
+    /// </summary>
+    private static bool IsReassignedAndCaptured(
+        SemanticModel model,
+        ExpressionSyntax read,
+        ISymbol? symbol
+    )
+    {
+        if (symbol is not (ILocalSymbol or IParameterSymbol))
+            return false;
+
+        var closure = read.Ancestors().FirstOrDefault(IsClosure);
+
+        return closure is not null
+            && !DeclaredWithin(symbol, closure)
+            && read.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault() is { } member
+            && member.DescendantNodes().Any(node => Rebinds(model, node, symbol));
+    }
+
+    private static bool IsClosure(SyntaxNode node) =>
+        node
+            is LambdaExpressionSyntax
+                or AnonymousMethodExpressionSyntax
+                or LocalFunctionStatementSyntax;
+
+    private static bool DeclaredWithin(ISymbol symbol, SyntaxNode scope) =>
+        symbol.DeclaringSyntaxReferences.Any(reference => scope.Span.Contains(reference.Span));
+
+    private static bool Rebinds(SemanticModel model, SyntaxNode node, ISymbol symbol) =>
+        node switch
+        {
+            AssignmentExpressionSyntax assignment => IsSymbol(model, assignment.Left, symbol),
+            ArgumentSyntax { RefKindKeyword.ValueText: "ref" or "out" } argument => IsSymbol(
+                model,
+                argument.Expression,
+                symbol
+            ),
+            _ => false,
+        };
+
+    private static bool IsSymbol(
+        SemanticModel model,
+        ExpressionSyntax expression,
+        ISymbol symbol
+    ) => SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(expression).Symbol, symbol);
 
     private static bool UsedAsNonNull(SemanticModel model, ExpressionSyntax read) =>
         read.Parent switch
