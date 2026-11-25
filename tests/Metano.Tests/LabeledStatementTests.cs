@@ -142,6 +142,75 @@ public class LabeledStatementTests
         await Assert.That(grid).Contains("continue rows;");
     }
 
+    private const string OutVarLoopsSource = """
+        [Transpile]
+        public static class Cursor
+        {
+            public static bool TryNext(int[] a, int i, out int v)
+            {
+                v = i < a.Length ? a[i] : 0;
+                return i < a.Length;
+            }
+
+            public static int Sum(int[] a)
+            {
+                var i = 0;
+                var total = 0;
+                outer: while (TryNext(a, i++, out var v))
+                {
+                    for (var k = 0; k < 2; k++)
+                    {
+                        if (v < 0) continue outer;
+                        if (v > 100) break outer;
+                        total += v;
+                    }
+                }
+                return total;
+            }
+
+            public static int Until(int[] a)
+            {
+                var i = 0;
+                var total = 0;
+                outer: do
+                {
+                    for (var k = 0; k < 2; k++)
+                    {
+                        if (a[i] > 100) break outer;
+                        total += a[i];
+                    }
+                    i++;
+                } while (TryNext(a, i, out var v) && v >= 0);
+                return total;
+            }
+        }
+        """;
+
+    [Test]
+    public async Task LabeledLoops_WithOutVarConditions_KeepTheirLabels()
+    {
+        // The out-var condition moves into the body (`while (true) { … if (!c)
+        // break; … }`, and `do` becomes such a `while`): the rebuilt loop keeps
+        // the label its nested jumps target.
+        var (output, diagnostics) = TranspileHelper.TranspileWithDiagnostics(OutVarLoopsSource);
+        var cursor = output["cursor.ts"];
+
+        await Assert.That(diagnostics).IsEmpty();
+        await TranspileHelper.AssertGolden("labeled-out-var-loops.ts", cursor);
+        await Assert.That(cursor.Split("outer: while (true) {").Length).IsEqualTo(3);
+    }
+
+    [Test]
+    public async Task LabeledLoops_WithOutVarConditions_TypeCheckUnderStrict()
+    {
+        var output = TranspileHelper.Transpile(OutVarLoopsSource);
+
+        var (exitCode, log) = await StrictTypeCheck.Run(new Dictionary<string, string>(), output);
+
+        await Assert.That(log).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
+
     [Test]
     public async Task Goto_ReportsAnError()
     {

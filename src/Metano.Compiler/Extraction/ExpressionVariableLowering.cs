@@ -273,23 +273,30 @@ internal sealed partial class ExpressionVariableLowering
         };
 
     /// <summary>
-    /// <c>while (c) body</c> → <c>while (true) { bindings; if (!c) break; body }</c>.
+    /// <c>while (c) body</c> → <c>while (true) { bindings; if (!c) break; body }</c>,
+    /// keeping the loop's label (#772).
     /// </summary>
     private IrWhileStatement LowerWhile(IrWhileStatement loop) =>
-        new(
-            new IrLiteral(true, IrLiteralKind.Boolean),
-            [.. ExitUnless(loop.Condition), .. loop.Body]
-        );
+        loop with
+        {
+            Condition = new IrLiteral(true, IrLiteralKind.Boolean),
+            Body = [.. ExitUnless(loop.Condition), .. loop.Body],
+        };
 
     /// <summary>
-    /// <c>do body while (c)</c> → <c>while (true) { body; bindings; if (!c) break; }</c>.
-    /// Only for a body without <c>continue</c>, which would skip the condition.
+    /// <c>do body while (c)</c> → <c>while (true) { body; bindings; if (!c) break; }</c>,
+    /// keeping the loop's label (#772): a labeled <c>break</c> from the body
+    /// still targets it. Only for a body without <c>continue</c>, which would
+    /// skip the condition.
     /// </summary>
     private IrWhileStatement LowerDoWhile(IrDoWhileStatement loop) =>
         new(
             new IrLiteral(true, IrLiteralKind.Boolean),
             [.. loop.Body, .. ExitUnless(loop.Condition)]
-        );
+        )
+        {
+            Label = loop.Label,
+        };
 
     /// <summary>
     /// <c>for (init; c; inc) body</c> → <c>for (init; ; inc) { bindings; if (!c) break; body }</c>,

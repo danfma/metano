@@ -115,4 +115,52 @@ public static class LabeledJumpProbes
 
         return log;
     }
+
+    private static bool TryNext(int[] a, int i, out int v)
+    {
+        v = i < a.Length ? a[i] : 0;
+
+        return i < a.Length;
+    }
+
+    public static string OutVarWhileAndDo()
+    {
+        int[] a = [1, -2, 3, 500, 7];
+        var i = 0;
+        var whileTotal = 0;
+
+        outer:
+        while (TryNext(a, i++, out var v))
+        {
+            for (var k = 0; k < 2; k++)
+            {
+                if (v < 0)
+                    continue outer;
+
+                if (v > 100)
+                    break outer;
+
+                whileTotal += v;
+            }
+        }
+
+        var j = 0;
+        var doTotal = 0;
+
+        loop:
+        do
+        {
+            for (var k = 0; k < 2; k++)
+            {
+                if (a[j] > 100)
+                    break loop;
+
+                doTotal += a[j];
+            }
+
+            j++;
+        } while (TryNext(a, j, out var w) && w != 7);
+
+        return $"{whileTotal} {doTotal} {i} {j}";
+    }
 }
