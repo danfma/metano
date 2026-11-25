@@ -71,6 +71,18 @@ internal sealed record IrToTsBridgeContext(
     /// </summary>
     public ClosedSelfLowering? ClosedSelf { get; init; }
 
+    /// <summary>
+    /// The imported names a constructor parameter or local shadows, each with
+    /// the alias a read of the import spells instead (W10-1b): the instance
+    /// initializers a constructor stores run in its scope. Empty outside a
+    /// class's constructor and member initializers.
+    /// </summary>
+    public System.Collections.Immutable.ImmutableDictionary<
+        string,
+        string
+    > ShadowedImports { get; init; } =
+        System.Collections.Immutable.ImmutableDictionary<string, string>.Empty;
+
     public IrToTsBridgeContext WithTypeParameters(TsTypeParameterScope scope) =>
         this with
         {

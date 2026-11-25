@@ -81,7 +81,6 @@ class ShotSchedule$Box<T> {
 
   constructor(value: T) {
     this.value = value;
-    this.value = value;
   }
 }
 

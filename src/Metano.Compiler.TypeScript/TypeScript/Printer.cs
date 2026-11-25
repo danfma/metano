@@ -1611,6 +1611,10 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
                 _sb.Write(exportReference.Name);
                 break;
 
+            case TsAliasedReference aliased:
+                _sb.Write(aliased.LocalName);
+                break;
+
             case TsRuntimeHelperReference helper:
                 _sb.Write(HelperName(helper.Name));
                 break;

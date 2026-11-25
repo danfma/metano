@@ -135,6 +135,78 @@ public class FsComputed
     public string N => _name + _f!();
 }
 
+[NoContainer]
+public static class FsFlat
+{
+    public static int Twice() => 14;
+}
+
+public record FsPromotedShadow(Func<int> Twice)
+{
+    public int X { get; } = FsFlat.Twice();
+}
+
+public class FsCapturedShadow(Func<int> twice)
+{
+    public int X { get; } = FsFlat.Twice();
+
+    public int Y => twice();
+}
+
+[ObjectArgs]
+public class FsObjectArgsShadow
+{
+    private readonly int _x = FsFlat.Twice();
+
+    public FsObjectArgsShadow(int twice)
+    {
+        Y = twice * 2;
+    }
+
+    public int Y { get; }
+
+    public int X => _x;
+}
+
+public partial class FsPartialShadow
+{
+    public int Y;
+
+    public FsPartialShadow(Func<int> twice)
+    {
+        Y = twice();
+    }
+}
+
+public static class FsEscapeLog
+{
+    public static object? Last;
+}
+
+public class FsPublishingBase
+{
+    public FsPublishingBase()
+    {
+        FsEscapeLog.Last = this;
+    }
+}
+
+public class FsObservedDerived : FsPublishingBase
+{
+    private readonly int _n;
+    private readonly int _k;
+
+    public FsObservedDerived()
+    {
+        _n = Peek();
+        _k = 1;
+    }
+
+    private static int Peek() => ((FsObservedDerived)FsEscapeLog.Last!)._k + 10;
+
+    public int N => _n + _k;
+}
+
 public static class FieldStoreProbes
 {
     public static string InitializersRunInDeclarationOrderBeforeTheBody()
@@ -204,4 +276,19 @@ public static class FieldStoreProbes
     }
 
     public static string ComputedPropertyNamedLikeAParameter() => new FsComputed("a", () => 1).N;
+
+    public static string PromotedOrCapturedParameterNamedLikeACalledFunction() =>
+        $"{new FsPromotedShadow(() => 1).X}|{new FsCapturedShadow(() => 2).X}|{new FsCapturedShadow(() => 2).Y}";
+
+    public static string ObjectArgsParameterNamedLikeACalledFunction() =>
+        (new FsObjectArgsShadow(twice: 3).Y + new FsObjectArgsShadow(4).X).ToString();
+
+    public static string PartialInitializerNamedLikeAParameter()
+    {
+        var p = new FsPartialShadow(() => 1);
+
+        return $"{p.X}|{p.Y}";
+    }
+
+    public static string BaseConstructorPublishesThis() => new FsObservedDerived().N.ToString();
 }

@@ -90,7 +90,6 @@ export class Tick {
   constructor();
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Tick.byTickDefault) {
-      this.n = 0;
       this.n = 7;
 
       return;
@@ -98,7 +97,6 @@ export class Tick {
 
     if (typeof args[0] === "symbol" && args[0] === Tick.byTickN) {
       const n = args[1] as number;
-      this.n = 0;
       this.n = n;
 
       return;
@@ -106,14 +104,12 @@ export class Tick {
 
     if (args.length === 1 && isInt32(args[0])) {
       const n = args[0] as number;
-      this.n = 0;
       this.n = n;
 
       return;
     }
 
     if (args.length === 0) {
-      this.n = 0;
       this.n = 7;
 
       return;

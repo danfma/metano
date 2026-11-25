@@ -22,7 +22,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <para>
 /// The trailing fields every constructor path assigns first, in declaration
 /// order, at the start of its body (<see cref="InstanceFieldStorePlan"/>,
-/// #787 N11) store nothing more: that body store is their one store.
+/// #787 N11) store nothing more: that body store is their one store. This
+/// includes a member an explicit constructor promotes, when every field after
+/// it is replaced too, so its key keeps its place.
 /// </para>
 /// <para>
 /// Left alone: static and abstract members, members that already are
@@ -175,7 +177,7 @@ internal static class InstanceFieldStoreLowering
                 .Promoted.Select(binding => binding.Member)
                 .ToHashSet(StringComparer.Ordinal);
 
-            foreach (var binding in point.Promoted)
+            foreach (var binding in point.Promoted.Where(IsStoredHere))
                 yield return Store(binding.Member, binding.Value);
 
             foreach (var field in fields)
@@ -186,6 +188,9 @@ internal static class InstanceFieldStoreLowering
                 yield return Store(field.Name, ValueOf(field, point));
             }
         }
+
+        private bool IsStoredHere(TsFieldStoreBinding binding) =>
+            !replacedByTheBody.Contains(binding.Member);
 
         private static TsExpression ValueOf(TsFieldMember field, TsInstanceFieldStores point) =>
             point.Captured.FirstOrDefault(binding => binding.Member == field.Name)?.Value
@@ -208,7 +213,7 @@ internal static class InstanceFieldStoreLowering
 /// (#787 N11): the <see cref="LeadingRuns"/> — per declared constructor, the
 /// fields its body assigns before anything can read the instance, in the
 /// order of their first store (empty for one chaining with <c>: this(...)</c>;
-/// none when the class declares no constructor) — and the
+/// none when the class declares no constructor or has a base class) — and the
 /// <see cref="Replaceable"/> fields, whose store has no effect to keep (no
 /// C# initializer, or a literal one).
 /// </summary>

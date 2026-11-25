@@ -105,43 +105,6 @@ internal static class LocalBindingDisambiguator
         ForRoots([root], root, context);
 
     /// <summary>
-    /// The map of a constructor. An explicit constructor's bindings also yield
-    /// to the functions the type's instance initializers call: a target may
-    /// emit those initializers inside the constructor (W10-1), where a
-    /// parameter or local of the same name would shadow the function
-    /// (<c>Shadow(int compute)</c> beside <c>int _x = Helpers.Compute()</c>).
-    /// </summary>
-    public static LocalBindingNames ForConstructor(
-        IMethodSymbol ctor,
-        IrExtractionContext context
-    ) =>
-        ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-            is ConstructorDeclarationSyntax declaration
-            ? ForRoots(
-                [declaration],
-                declaration,
-                context,
-                InstanceInitializersBeside(declaration, ctor.ContainingType)
-            )
-            : ForMember(ctor, context);
-
-    /// <summary>
-    /// The instance initializers of <paramref name="type"/> declared in the
-    /// syntax tree of <paramref name="declaration"/>.
-    /// </summary>
-    private static IEnumerable<SyntaxNode> InstanceInitializersBeside(
-        ConstructorDeclarationSyntax declaration,
-        INamedTypeSymbol type
-    ) =>
-        type
-            .DeclaringSyntaxReferences.Where(reference =>
-                reference.SyntaxTree == declaration.SyntaxTree
-            )
-            .Select(reference => reference.GetSyntax())
-            .OfType<TypeDeclarationSyntax>()
-            .SelectMany(part => part.Members.Where(IsInstanceMember).SelectMany(InitializersOf));
-
-    /// <summary>
     /// The map of a field declarator's or property's initializer. An
     /// instance initializer of a type with a primary constructor reads the
     /// constructor's parameters directly (the target emits it inside the
@@ -261,8 +224,7 @@ internal static class LocalBindingDisambiguator
     private static LocalBindingNames ForRoots(
         IReadOnlyList<SyntaxNode> roots,
         SyntaxNode reportAt,
-        IrExtractionContext context,
-        IEnumerable<SyntaxNode>? calledNameRoots = null
+        IrExtractionContext context
     )
     {
         if (context.LocalNaming is not { } naming || context.Compilation is null)
@@ -277,12 +239,7 @@ internal static class LocalBindingDisambiguator
             return LocalBindingNames.Empty;
 
         var collector = new BindingCollector(model, naming, context.GroupingPolicy);
-
-        var calledNames = CalledFunctionNames(
-            roots.Concat(calledNameRoots ?? []),
-            model,
-            context.GroupingPolicy
-        );
+        var calledNames = CalledFunctionNames(roots, model, context.GroupingPolicy);
 
         return Disambiguate(
             roots.SelectMany(collector.Collect).ToList(),

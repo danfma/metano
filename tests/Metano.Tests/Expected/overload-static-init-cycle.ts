@@ -23,7 +23,6 @@ export class B {
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === B.byBV) {
       const v = args[1] as number;
-      this.v = 0;
       this.v = v;
 
       return;
@@ -31,7 +30,6 @@ export class B {
 
     if (typeof args[0] === "symbol" && args[0] === B.byBText) {
       const text = args[1] as string;
-      this.v = 0;
       this.v = text.length;
 
       return;
@@ -39,7 +37,6 @@ export class B {
 
     if (args.length === 1 && isInt32(args[0])) {
       const v = args[0] as number;
-      this.v = 0;
       this.v = v;
 
       return;
@@ -47,7 +44,6 @@ export class B {
 
     if (args.length === 1 && isString(args[0])) {
       const text = args[0] as string;
-      this.v = 0;
       this.v = text.length;
 
       return;

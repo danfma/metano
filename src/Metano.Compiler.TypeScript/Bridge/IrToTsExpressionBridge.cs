@@ -66,7 +66,50 @@ public static partial class IrToTsExpressionBridge
     /// fall back to the raw lowering when no entry matches. Without a registry the
     /// bridge emits raw <c>receiver.member</c> / <c>receiver.method(args)</c>.
     /// </summary>
-    internal static TsExpression Map(IrExpression expression, IrToTsBridgeContext context)
+    internal static TsExpression Map(IrExpression expression, IrToTsBridgeContext context) =>
+        context.ShadowedImports.IsEmpty || expression is IrIdentifier
+            ? MapUnshadowed(expression, context)
+            : AliasedIfShadowed(MapUnshadowed(expression, context), context);
+
+    /// <summary>
+    /// A read of an imported binding a constructor parameter or local shadows,
+    /// spelled under its alias (<see cref="IrToTsBridgeContext.ShadowedImports"/>):
+    /// a module export or a cross-package export. A bare identifier is a local
+    /// as often as an import, so only a flattened module member is aliased as
+    /// one (<see cref="AliasedModuleMemberIfShadowed"/>).
+    /// </summary>
+    private static TsExpression AliasedIfShadowed(
+        TsExpression lowered,
+        IrToTsBridgeContext context
+    ) =>
+        ImportedNameOf(lowered) is { } name
+        && context.ShadowedImports.TryGetValue(name, out var alias)
+            ? new TsAliasedReference(lowered, name, alias)
+            : lowered;
+
+    private static string? ImportedNameOf(TsExpression lowered) =>
+        lowered switch
+        {
+            TsModuleExportReference export => export.Name,
+            TsTypeReference packageExport => packageExport.Name,
+            _ => null,
+        };
+
+    /// <summary>
+    /// The flattened module member <paramref name="reference"/> (a bare
+    /// containerless function or variable, or a module export) under its alias
+    /// when a constructor parameter or local shadows its name.
+    /// </summary>
+    private static TsExpression AliasedModuleMemberIfShadowed(
+        TsExpression reference,
+        IrToTsBridgeContext context
+    ) =>
+        reference is TsIdentifier { Name: var name }
+        && context.ShadowedImports.TryGetValue(name, out var alias)
+            ? new TsAliasedReference(reference, name, alias)
+            : AliasedIfShadowed(reference, context);
+
+    private static TsExpression MapUnshadowed(IrExpression expression, IrToTsBridgeContext context)
     {
         if (
             NeedsStaticCallGuard(expression.BoundStaticCall)
@@ -929,7 +972,10 @@ public static partial class IrToTsExpressionBridge
             && FlattensToModuleMember(containerless)
             && ma.Target is IrTypeReference container
         )
-            return ModuleMemberReference(containerless, memberName, container);
+            return AliasedModuleMemberIfShadowed(
+                ModuleMemberReference(containerless, memberName, container),
+                context
+            );
 
         return new TsPropertyAccess(loweredTarget, memberName);
     }
@@ -2746,7 +2792,13 @@ public static partial class IrToTsExpressionBridge
         // The access maps first, so its own lowerings — the containerless
         // flatten that turns `Greets.Twice` into the bare imported helper —
         // still apply; only the member name swaps for the claimed fast path.
-        return MapNullTolerant(access, context) switch
+        var mapped = MapNullTolerant(access, context) switch
+        {
+            TsAliasedReference aliased => aliased.Reference,
+            var other => other,
+        };
+
+        TsExpression callee = mapped switch
         {
             TsPropertyAccess property => new TsPropertyAccess(
                 boundReceiver ?? property.Object,
@@ -2761,6 +2813,10 @@ public static partial class IrToTsExpressionBridge
             TsTypeReference packageExport => new TsTypeReference(fastPath, packageExport.Origin),
             _ => new TsIdentifier(fastPath),
         };
+
+        return context.ShadowedImports.IsEmpty
+            ? callee
+            : AliasedModuleMemberIfShadowed(callee, context);
     }
 
     /// <summary>

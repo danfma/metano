@@ -235,4 +235,52 @@ public class InstanceFieldStoreTests
             files["shadow.ts"] + files["local-shadow.ts"]
         );
     }
+
+    [Test]
+    public async Task DerivedClass_KeepsTheDefaultStoreOfAFieldTheBodyAssignsFirst()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Base { }
+
+            [Transpile]
+            public class Derived : Base
+            {
+                private int _k;
+
+                public Derived() { _k = 1; }
+            }
+            """
+        )["derived.ts"];
+
+        await Assert.That(output).Contains("    super();\n    this._k = 0;\n    this._k = 1;\n");
+    }
+
+    [Test]
+    public async Task ObjectArgsParameterNamedLikeACalledFunction_KeepsItsKeyAndAliasesTheImport()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Helpers { public static int Compute() => 7; }
+
+            [Transpile, ObjectArgs]
+            public class Options
+            {
+                private int _x = Helpers.Compute();
+
+                public Options(int compute) { Y = compute; }
+
+                public int Y { get; }
+            }
+            """
+        );
+
+        var output = files["options.ts"];
+
+        await Assert.That(output).Contains("compute as compute$1");
+        await Assert.That(output).Contains("    this._x = compute$1();\n");
+        await Assert.That(output).Contains("static create(args: { compute: number }): Options");
+    }
 }

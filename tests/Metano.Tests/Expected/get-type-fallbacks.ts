@@ -8,7 +8,6 @@ export class Box<T> {
 
   constructor(value: T) {
     this.value = value;
-    this.value = value;
   }
 
   static get $runtimeType(): ClassType<Box<unknown>> {

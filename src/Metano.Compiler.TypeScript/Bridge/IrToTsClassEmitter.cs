@@ -120,6 +120,11 @@ internal sealed class IrToTsClassEmitter(
         if (hasSlot && !emitsDispatcher)
             ctorParams = IrToTsClassBridge.WithTypeArgsParam(ctorParams, ir.TypeParameters!);
 
+        ctorLowering = ctorLowering with
+        {
+            ShadowedImports = ConstructorScopeAliases.Of(ir, ctorParams),
+        };
+
         var promotedMemberDeclaration = ir
             is { Semantics.IsValueType: true, StaticInitializer: not null }
             ? PromotedMemberDeclaration.OwnDeclarations
@@ -514,15 +519,14 @@ internal sealed class IrToTsClassEmitter(
     /// (<see cref="InstanceFieldStorePlan"/>): the constructors' leading runs
     /// (<see cref="IrConstructorLeadingStores"/>) and the fields and
     /// auto-properties with no initializer or a literal one, under their
-    /// TypeScript names. A promoted or captured member is stored from its
-    /// parameter, never replaced.
+    /// TypeScript names. A class with a base class has no runs: the base
+    /// constructor runs first and may publish <c>this</c>, so a field must hold
+    /// its default before the body stores it (W10-1b).
     /// </summary>
     private static InstanceFieldStorePlan FieldStorePlanOf(IrClassDeclaration ir)
     {
-        var bound = (ir.Constructor?.Parameters ?? [])
-            .Where(p => p.Promotion is not IrParameterPromotion.None)
-            .Select(IrToTsClassBridge.PromotedName)
-            .ToHashSet(StringComparer.Ordinal);
+        if (ir.BaseType is not null)
+            return InstanceFieldStorePlan.None;
 
         var storage = (ir.Members ?? [])
             .Where(member => member is IrFieldDeclaration or IrPropertyDeclaration)
@@ -541,7 +545,6 @@ internal sealed class IrToTsClassEmitter(
         var replaceable = (ir.Members ?? [])
             .Where(HasNoEffectfulInitializer)
             .Select(member => storage[member.Name])
-            .Where(name => !bound.Contains(name))
             .ToHashSet(StringComparer.Ordinal);
 
         return new InstanceFieldStorePlan(runs, replaceable);

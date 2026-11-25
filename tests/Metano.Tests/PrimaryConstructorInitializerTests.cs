@@ -58,7 +58,9 @@ public class PrimaryConstructorInitializerTests
 
         await Assert
             .That(derived)
-            .Contains("super((seed + 1) | 0);\n    this.double = Math.imul(seed, 2);");
+            .Contains(
+                "super((seed + 1) | 0);\n    this.double = 0;\n    this.double = Math.imul(seed, 2);"
+            );
 
         await Assert.That(derived).DoesNotContain("private readonly _seed");
         await Assert.That(result["base.ts"]).Contains("constructor(value: number) {");
