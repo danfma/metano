@@ -2,31 +2,7 @@ using System.Collections;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Metano.Annotations;
 using Metano.Interop;
-
-// Probe-local mappings: the product maps neither the static JsonSerializer
-// calls nor JsonSerializerContext.Default (it emits `default_`, while the
-// generated context exposes `static get default()`; tracked in #741).
-[assembly: MapMethod(
-    typeof(JsonSerializer),
-    nameof(JsonSerializer.Serialize),
-    JsTemplate = "JSON.stringify(JsonSerializer.serialize($0, $1))",
-    RuntimeImports = "JsonSerializer",
-    WhenArgCount = 2
-)]
-[assembly: MapMethod(
-    typeof(JsonSerializer),
-    nameof(JsonSerializer.Deserialize),
-    JsTemplate = "JsonSerializer.deserializeText($0, $1)",
-    RuntimeImports = "JsonSerializer",
-    WhenArgCount = 2
-)]
-[assembly: MapMethod(
-    typeof(Conformance.ReadOnlyListViewProbes),
-    "GetDefaultContext",
-    JsTemplate = "$T0.default"
-)]
 
 namespace Conformance;
 
@@ -147,12 +123,9 @@ public static class ReadOnlyListViewProbes
         return $"{view.Length}:{view[0]},{view[1]},{view[2]}|{view.Join(",")}";
     }
 
-    private static T GetDefaultContext<T>()
-        where T : JsonSerializerContext => (T)(object)ReadOnlyJsArrayBagContext.Default;
-
     public static string ReadOnlyJsArrayJsonRoundTrip()
     {
-        var ctx = GetDefaultContext<ReadOnlyJsArrayBagContext>();
+        var ctx = ReadOnlyJsArrayBagContext.Default;
         var full = new ReadOnlyJsArrayBag([1, 2, 3], ["a", "b"]);
         var withNull = new ReadOnlyJsArrayBag([4, 5], null);
         var fullJson = JsonSerializer.Serialize(full, ctx.ReadOnlyJsArrayBag);

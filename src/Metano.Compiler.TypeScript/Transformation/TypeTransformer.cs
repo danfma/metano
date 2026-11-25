@@ -717,7 +717,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
 
         var jsonPlans = new JsonSerializerContextTransformer(Context).PlanContexts(
-            emittedTypes.Where(IsJsonSerializerContextType)
+            emittedTypes.Where(SymbolHelper.IsJsonSerializerContext)
         );
 
         _context = NewContext(RuntimeTypeReachabilityResult.Empty, jsonPlans);
@@ -1274,9 +1274,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     private bool TryEmitJsonSerializerContext(INamedTypeSymbol type, List<TsTopLevel> sink)
     {
-        if (!IsJsonSerializerContextType(type))
+        if (!SymbolHelper.IsJsonSerializerContext(type))
             return false;
+
         new JsonSerializerContextTransformer(Context).Transform(type, sink);
+
         return true;
     }
 
@@ -1296,7 +1298,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         return
         [
             .. emittedTypes
-                .Where(IsJsonSerializerContextType)
+                .Where(SymbolHelper.IsJsonSerializerContext)
                 .SelectMany(contextTransformer.CollectionTypesOf),
         ];
     }
@@ -1313,7 +1315,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var contextTransformer = new JsonSerializerContextTransformer(Context);
 
         return emittedTypes
-            .Where(IsJsonSerializerContextType)
+            .Where(SymbolHelper.IsJsonSerializerContext)
             .ToDictionary(
                 context => context,
                 context =>
@@ -1830,7 +1832,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             foreach (var req in IrRuntimeRequirementScanner.Scan(typeIr))
                 acc.Add(req);
 
-        if (IsJsonSerializerContextType(type))
+        if (SymbolHelper.IsJsonSerializerContext(type))
             acc.UnionWith(
                 new JsonSerializerContextTransformer(Context).RuntimeRequirementsOf(type)
             );
@@ -1852,7 +1854,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IDictionary<INamedTypeSymbol, IrTypeDeclaration> irCache
     )
     {
-        if (!IsJsonSerializerContextType(type))
+        if (!SymbolHelper.IsJsonSerializerContext(type))
             return GetOrExtractIr(type, irCache);
 
         using var muted = ExtractionDiagnostics.Suppress();
@@ -3179,19 +3181,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         while (current is not null)
         {
             if (current.ToDisplayString() == "System.Exception")
-                return true;
-            current = current.BaseType;
-        }
-
-        return false;
-    }
-
-    internal static bool IsJsonSerializerContextType(INamedTypeSymbol type)
-    {
-        var current = type.BaseType;
-        while (current is not null)
-        {
-            if (current.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializerContext")
                 return true;
             current = current.BaseType;
         }

@@ -389,6 +389,7 @@
     "system/json/index",
     "system/json/json-serializer",
     "system/json/json-text-reader",
+    "system/json/json-text-writer",
     "system/json/null-reads",
     "system/json/number-from-string",
     "system/json/numeric-converters",

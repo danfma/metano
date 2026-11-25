@@ -130,6 +130,33 @@ JSON text, reads each `decimal` from its exact digits and throws .NET's
 `JsonException` messages for invalid text ([details](#exact-reads)). Both
 return `TodoItem | null` ([Null roots](#null-roots)).
 
+### Serializing from transpiled C# (#741)
+
+C# code that serializes through the context transpiles to the same runtime API.
+`Context.Default` reads the emitted `static get default()`, and the static
+`System.Text.Json` calls over a `JsonTypeInfo` are mapped:
+
+```csharp
+var json = JsonSerializer.Serialize(todo, JsonContext.Default.TodoItem);
+var back = JsonSerializer.Deserialize(json, JsonContext.Default.TodoItem);
+```
+
+```typescript
+const json = JsonSerializer.serializeText(todo, JsonContext.default.todoItem);
+const back = JsonSerializer.deserializeText(json, JsonContext.default.todoItem);
+```
+
+| C# | TypeScript | Behavior (as measured on .NET 10) |
+|---|---|---|
+| `JsonSerializer.Serialize(value, JsonTypeInfo<T>)`, `Serialize(object?, JsonTypeInfo)` | `JsonSerializer.serializeText(value, spec)` | JSON text as STJ's default options write it: no whitespace; strings escaped by the default encoder (`"` is `\u0022`, `<` is `\u003C`, every non-ASCII code unit is `\uXXXX`, a lone surrogate is `\uFFFD`); numbers in .NET's round-trip text (`1E+20`, `1E-07`, `-0`); `decimal` and 64-bit integers with their exact digits; a `null` root as `null`. NaN and the infinities throw `ArgumentException`. |
+| `JsonSerializer.Deserialize(string, JsonTypeInfo<T>)`, `Deserialize(string, JsonTypeInfo)` | `JsonSerializer.deserializeText(text, spec)` | [Exact reads](#exact-reads); invalid text throws `JsonException`; the text `null` reads as `null` ([Null roots](#null-roots)). |
+
+A `null` text or type info throws `ArgumentNullException` (parameter `json` /
+`jsonTypeInfo`), as .NET does. The overloads that take `JsonSerializerOptions`,
+a `Type`, a stream, a `Utf8JsonWriter`, a span or a `JsonElement` stay unmapped
+(`MS0001`). Known gap: a `float` property is written from its double value
+(`0.10000000149011612` where STJ writes `0.1`).
+
 ## What the transpiler does
 
 When it sees a class that inherits from `JsonSerializerContext`:

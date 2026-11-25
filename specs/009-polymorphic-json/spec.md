@@ -1005,6 +1005,20 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   #310). The release notes MUST contain the migration note of
   [Migration](#migration-breaking-changes).
 
+- **FR-050** (#741, wave 8 group J): The emitted context's public surface MUST be reachable
+  from transpiled C#. A read of a context's `Default` emits `Context.default` (the static
+  getter the emitted context declares) and a read of one of its `JsonTypeInfo` properties emits the getter
+  name, never a reserved-word-escaped data-member name (`default_`, `delete_`). The static
+  `JsonSerializer.Serialize(value, JsonTypeInfo<T>)` / `Serialize(object?, JsonTypeInfo)` calls
+  MUST lower to the runtime `JsonSerializer.serializeText`, which writes the JSON text
+  System.Text.Json writes with its default options (default encoder escapes, .NET's round-trip
+  number text, exact `decimal` / 64-bit digits, `null` for a null root, `ArgumentException`
+  for NaN and the infinities), and `Deserialize(string, JsonTypeInfo<T>)` /
+  `Deserialize(string, JsonTypeInfo)` MUST lower to `deserializeText` (FR-048 item 7). A
+  null text or type info throws `ArgumentNullException`. The declarations are
+  `[MapMethod]` entries in `src/Metano/Runtime/Json.cs`; the other overloads stay unmapped
+  (MS0001).
+
 ### Diagnostics (reserved codes, DECIDED-2)
 
 This spec owns `MS0032`–`MS0037`. The C# unions specification (PR #310) owns `MS0038`–`MS0043`.

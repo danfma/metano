@@ -161,7 +161,7 @@ internal sealed class NestedTypeHoisting(
         && !SymbolHelper.IsJsxComponent(type)
         && !TsCompanionPlan.AppliesTo(type)
         && !TypeTransformer.IsModuleShapedStaticClass(type)
-        && !TypeTransformer.IsJsonSerializerContextType(type)
+        && !SymbolHelper.IsJsonSerializerContext(type)
         && !type.GetMembers().Any(member => member.HasModuleEntryPoint());
 
     /// <summary>
