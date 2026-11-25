@@ -233,7 +233,25 @@ public sealed partial class IrExpressionExtractor
         LocalNames.NameOf(symbol, identifier);
 
     public IrExpression Extract(ExpressionSyntax expression) =>
-        WithImplicitTupleConversion(expression, ExtractWithoutTupleConversion(expression));
+        WithForgivenNullStateAssertion(
+            expression,
+            WithImplicitTupleConversion(expression, ExtractWithoutTupleConversion(expression))
+        );
+
+    /// <summary>
+    /// <paramref name="value"/> asserted non-null where C# flow analysis proves
+    /// the read non-null by a construct a static checker does not follow
+    /// (<c>stack!.Value</c> earlier in the flow, #775), and the read is used as
+    /// non-null; see <see cref="ForgivenNullStateReads"/>.
+    /// </summary>
+    private IrExpression WithForgivenNullStateAssertion(
+        ExpressionSyntax expression,
+        IrExpression value
+    ) =>
+        value is not IrUnaryExpression { Operator: IrUnaryOp.NonNullAssertion }
+        && ForgivenNullStateReads.NeedsAssertion(_semantic, expression)
+            ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, value, IsPrefix: false)
+            : value;
 
     /// <summary>
     /// <paramref name="expression"/> with its scalar conversions, but not

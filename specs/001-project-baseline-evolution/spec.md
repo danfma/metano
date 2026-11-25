@@ -1577,6 +1577,20 @@ Product requirements added after the migration (normative; each one is traced by
   equivalent, reports `MS0001` as an error (FR-099). Tests:
   `tests/Metano.Tests/LabeledStatementTests.cs`; conformance `LabeledJumpProbes`.
 
+- **FR-101** (null state proved by a forgiving construct, #775): Where C# flow analysis
+  (`NullableFlowState`) proves a variable, parameter, field or property declared with a nullable
+  reference type non-null by a construct a static type checker does not follow — a
+  null-forgiving `x!` earlier in the flow (`stack!.Value` then `stack.Prev`), or a call whose
+  nullable attributes prove it (`ArgumentNullException.ThrowIfNull(x)`, `string.IsNullOrEmpty`
+  false, a `[MemberNotNull]` method) — the read MUST be asserted non-null (`stack!.prev`) where
+  it is used as non-null: the receiver of a member access, an invocation or an indexer, and an
+  argument to a parameter declared non-nullable. The IR carries the assertion as the existing
+  `NonNullAssertion` unary; it has no runtime effect in TypeScript. A read whose state comes from
+  an assignment, a local's initializer or a null test of the same variable is left unasserted,
+  since checkers narrow on those; the origin is the last such event before the read in the
+  member's source. Nullable-disabled code has no flow state and is unchanged. Tests:
+  `tests/Metano.Tests/ForgivenNullStateTests.cs` (output type-checked with `tsgo --strict`).
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
