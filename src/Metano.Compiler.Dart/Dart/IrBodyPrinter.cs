@@ -254,11 +254,13 @@ public static class IrBodyPrinter
     /// it has none.
     /// </summary>
     private static string LabelOf(IrBreakableStatement target) =>
-        target.Label is { } label ? $"{label}: " : string.Empty;
+        target.Label is { } label
+            ? $"{IrToDartNamingPolicy.ToParameterName(label)}: "
+            : string.Empty;
 
     /// <summary><c>break;</c> / <c>continue;</c>, naming the label it targets, if any.</summary>
     private static string Jump(string keyword, string? label) =>
-        label is null ? $"{keyword};" : $"{keyword} {label};";
+        label is null ? $"{keyword};" : $"{keyword} {IrToDartNamingPolicy.ToParameterName(label)};";
 
     /// <summary>
     /// Appends a placeholder that drops code, reporting it as an error (W9-13).

@@ -212,6 +212,48 @@ public class LabeledStatementTests
     }
 
     [Test]
+    public async Task ReservedWordLabels_AreEscapedLikeLocals()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class Words
+            {
+                public static int Run(int[] a)
+                {
+                    var n = 0;
+                    function: foreach (var x in a)
+                    {
+                        @class: for (var i = 0; i < x; i++)
+                        {
+                            if (i == 2) continue function;
+                            if (i == 5) break @class;
+                            n++;
+                        }
+                    }
+                    export: switch (n)
+                    {
+                        case 0:
+                            foreach (var x in a) { if (x > 0) break export; }
+                            break;
+                    }
+                    return n;
+                }
+            }
+            """
+        );
+
+        var (exitCode, log) = await StrictTypeCheck.Run(new Dictionary<string, string>(), output);
+        var words = output["words.ts"];
+
+        await Assert.That(words).DoesNotContain("function:");
+        await Assert.That(words).DoesNotContain("class:");
+        await Assert.That(words).DoesNotContain("export:");
+        await Assert.That(log).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
+
+    [Test]
     public async Task Goto_ReportsAnError()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
