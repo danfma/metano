@@ -14,6 +14,16 @@ public static class RoslynTypeQueries
 
     private const string EmitPackageAttributeName = "EmitPackage";
 
+    private const string UnversionedPackageVersion = "0.0.0";
+
+    private static readonly System.Text.RegularExpressions.Regex SemanticVersion = new(
+        @"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant
+    );
+
+    /// <summary>The range operators whose lower bound, the base version, satisfies the range.</summary>
+    private static readonly string[] SatisfiedByBaseVersionPrefixes = [">=", "^", "~", "=", "v"];
+
     private static readonly string[] DictionaryTypeNames =
     [
         "System.Collections.Generic.Dictionary",
@@ -33,19 +43,85 @@ public static class RoslynTypeQueries
     ];
 
     /// <summary>
-    /// Formats an assembly's version as an npm-compatible specifier.
-    /// Assemblies that don't declare a version (Roslyn defaults to
-    /// <c>0.0.0.0</c>) get <c>workspace:*</c>, which is the right call for
-    /// sibling projects in a Bun monorepo. Anything with a real version
-    /// becomes <c>^Major.Minor.Patch</c>.
+    /// Formats an assembly's version as the npm dependency range a consumer writes: the
+    /// caret form (<c>^1.2.3</c>) of <see cref="ReadPackageVersion"/>. An unversioned
+    /// assembly (<c>0.0.0</c>) gets <c>workspace:*</c>, which is the right call for sibling
+    /// projects in a Bun monorepo. The range and the <c>version</c> the dependency's own
+    /// package.json carries come from the same source, so a workspace satisfies it (#765).
     /// </summary>
     public static string FormatAssemblyVersion(IAssemblySymbol assembly)
     {
-        var v = assembly.Identity.Version;
-        if (v.Major == 0 && v.Minor == 0 && v.Build <= 0)
-            return "workspace:*";
-        var build = v.Build > 0 ? v.Build : 0;
-        return $"^{v.Major}.{v.Minor}.{build}";
+        var version = ReadPackageVersion(assembly);
+
+        return version == UnversionedPackageVersion ? "workspace:*" : $"^{version}";
+    }
+
+    /// <summary>
+    /// The version an assembly gives its npm package: its informational version without the
+    /// build metadata (<c>1.2.3-beta.1+sha</c> gives <c>1.2.3-beta.1</c>) when that is a
+    /// semantic version, else the assembly identity's <c>Major.Minor.Build</c>.
+    /// </summary>
+    public static string ReadPackageVersion(IAssemblySymbol assembly)
+    {
+        var informational = assembly
+            .GetAttributes()
+            .Where(attribute =>
+                attribute.AttributeClass?.ToDisplayString()
+                == "System.Reflection.AssemblyInformationalVersionAttribute"
+            )
+            .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value as string)
+            .FirstOrDefault();
+
+        var withoutMetadata = informational?.Split('+')[0].Trim();
+
+        if (withoutMetadata is not null && SemanticVersion.IsMatch(withoutMetadata))
+            return withoutMetadata;
+
+        var identity = assembly.Identity.Version;
+
+        return $"{identity.Major}.{identity.Minor}.{Math.Max(identity.Build, 0)}";
+    }
+
+    /// <summary>
+    /// The concrete version written to a generated package's own <c>package.json</c>:
+    /// <paramref name="explicitVersion"/> (<c>[EmitPackage(Version = …)]</c>) when
+    /// <see cref="TryParseExplicitVersion"/> reads one from it, else
+    /// <see cref="ReadPackageVersion"/>.
+    /// </summary>
+    public static string ResolveOwnPackageVersion(
+        IAssemblySymbol assembly,
+        string? explicitVersion
+    ) =>
+        TryParseExplicitVersion(explicitVersion, out var version)
+            ? version
+            : ReadPackageVersion(assembly);
+
+    /// <summary>
+    /// Reads a concrete version from an explicit <c>Version</c>: a semantic version, or a
+    /// range whose base version satisfies it (<c>^1.2.3</c>, <c>~1.2.3</c>, <c>&gt;=1.2.3</c>,
+    /// <c>=1.2.3</c>, <c>v1.2.3</c>). Anything else (<c>&lt;2.0.0</c>, <c>&gt;1.0.0</c>,
+    /// compound ranges, <c>workspace:*</c>) names no version that is known to satisfy it.
+    /// </summary>
+    public static bool TryParseExplicitVersion(
+        string? explicitVersion,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? version
+    )
+    {
+        var candidate = explicitVersion?.Trim();
+
+        foreach (var prefix in SatisfiedByBaseVersionPrefixes)
+        {
+            if (candidate?.StartsWith(prefix, StringComparison.Ordinal) == true)
+            {
+                candidate = candidate[prefix.Length..];
+
+                break;
+            }
+        }
+
+        version = candidate is not null && SemanticVersion.IsMatch(candidate) ? candidate : null;
+
+        return version is not null;
     }
 
     /// <summary>Whether <paramref name="type"/> is <c>Nullable&lt;T&gt;</c> (<c>int?</c>, <c>DateOnly?</c>).</summary>

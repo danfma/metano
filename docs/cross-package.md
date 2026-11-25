@@ -40,9 +40,29 @@ The `Version` field is optional. Common values:
 
 - `"workspace:*"` — for Bun/pnpm/Yarn workspace siblings
 - `"^1.2.3"` — for a published npm version
-- Omit entirely — Metano falls back to `workspace:*` if the assembly has no
-  explicit `Version`, or `^Major.Minor.Patch` from the assembly's
-  `Identity.Version` otherwise
+- Omit entirely — Metano uses the assembly's informational version (the MSBuild
+  `Version`, without build metadata) as `^Major.Minor.Patch`, or `workspace:*` when
+  the assembly is unversioned (`0.0.0`)
+
+**One version rule.** The consumer's range and the `version` field Metano writes into
+the producer's own `package.json` come from the same source: `Version` when set (an
+exact `0.1.0` or a range such as `^1.2.3`; its base version is written, and a
+`workspace:*` protocol names none, so the assembly's version is written instead), else
+the assembly's informational version without build metadata. So a workspace always
+satisfies the range and `bun install` resolves the sibling locally instead of asking
+the registry. Metano owns `package.json#version`: it is rewritten on every run, so a
+hand-written value is replaced (an informational message says so when it differs). The
+consumer cannot read the producer's `package.json`, so keeping a hand-written value
+would let the two drift again. MSBuild is the version source: set `<Version>` in the C#
+project, and let a release tool drive it, for example a semantic-release
+`prepareCmd: dotnet build -p:Version=${nextRelease.version}`. A `Version` such as
+`<2.0.0` or `>=1 <2` has no base version to write, so the assembly's version is
+written and a warning asks you to make sure it satisfies the range.
+
+**pnpm.** pnpm links a sibling only when the range names the workspace protocol (its
+default `link-workspace-packages=false` sends `^1.0.0` to the registry), so a pnpm
+workspace needs `[assembly: EmitPackage("name", Version = "workspace:*")]` on each
+producer.
 
 ### Consumer project references the producer via `ProjectReference`
 
@@ -81,6 +101,16 @@ including ancestors of missing output folders. Thus macOS's `/var` and
 `/private/var` aliases compare equal without moving package ownership or changing
 the writer's relative import/export paths for outputs linked outside a repository.
 An explicit `MetanoPackageRoot` is still used as given.
+
+A `package.json` that declares `workspaces`, or that sits beside a
+`pnpm-workspace.yaml`, is a workspace root: a boundary, never a package. The walk
+stops below it, and a package that has no `package.json` of its own yet falls back
+as described next and gets its own file, while the workspace root's `package.json`
+is left untouched. A fallback folder that is itself a workspace root is refused with
+`MS0044` (the message says a workspace root was reached), unless its `package.json#name`
+is the `[assembly: EmitPackage]` name: a single-repo library that also declares
+`workspaces` for its examples keeps using its own `package.json`. Pin
+`MetanoPackageRoot` to choose another root.
 
 If no package file is found, it falls back to the legacy convention: the parent
 directory of the output folder. When that parent lies above the topmost
@@ -235,9 +265,11 @@ When you publish your packages to npm:
 2. Consumers see `"@acme/shared": "^x.y.z"` in their generated `package.json`
 3. The normal npm/yarn/pnpm/bun install flow resolves dependencies
 
-For monorepo development, use `Version = "workspace:*"` (or omit `Version`
-entirely to let it fall back automatically) so Bun/pnpm/Yarn workspaces link
-the packages symbolically.
+For monorepo development, Bun and npm workspaces link the packages with the
+default range (omit `Version`: the dependency gets `^<version>` and its own
+package.json carries that version). pnpm needs `Version = "workspace:*"`,
+because its default `link-workspace-packages=false` sends a plain range to the
+registry.
 
 ## Consuming a generated package from an app
 

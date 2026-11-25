@@ -1,21 +1,9 @@
 {
   "name": "sample-json-contracts",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
   "sideEffects": false,
-  "imports": {
-    "#/*": {
-      "source": "./src/*.ts",
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "default": "./src/*.ts"
-    },
-    "#": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./src/index.ts"
-    }
-  },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
     "decimal.js": "^10.6.0",

@@ -24,7 +24,7 @@ part of the transpiler contract (ADR-0010) and are searchable across docs, tests
 | `MS0004` | `ConflictingAttributes` | Conflicting attributes are present on a single symbol. |
 | `MS0005` | `CyclicReference` | A cyclic reference exists between generated target files. |
 | `MS0006` | `InvalidModuleEntryPoint` | Invalid `[ModuleEntryPoint]` (signature or conflicting setup). |
-| `MS0007` | `CrossPackageResolution` | Cross-package resolution failure (missing/divergent package identity). |
+| `MS0007` | `CrossPackageResolution` | Cross-package resolution failure (missing/divergent package identity). Also a warning when an `EmitPackage` Version range is not satisfied by the version Metano writes, and an info message when a hand-written `package.json#version` is replaced (#765). |
 | `MS0008` | `EmitInFileConflict` | Conflicting `[EmitInFile]` grouping makes output placement ambiguous. |
 | `MS0009` | `FrontendLoadFailure` | Source frontend failed to load or compile the project. |
 | `MS0010` | `OptionalRequiresNullable` | `[Optional]` applied to a non-nullable parameter/property. |
