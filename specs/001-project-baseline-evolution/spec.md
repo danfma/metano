@@ -1550,22 +1550,27 @@ Product requirements added after the migration (normative; each one is traced by
   derived arguments with the same type and requiredness. A type-level attribute on a type with
   no constructor (a static class) reports that there is no constructor to lower.
 
-- **FR-097** (workspace roots and one package version, #764, #765, decisions W9-6, W9-7):
+- **FR-098** (workspace roots and one package version, #764, #765, decisions W9-6, W9-7):
   *Workspace roots.* Package-root inference (baseline FR-030) MUST treat a `package.json` that
-  declares `workspaces` as a workspace boundary and never adopt it: the walk stops below it, and
-  the documented fallback (the parent of the output directory) applies. A fallback that is itself
-  a workspace root MUST be refused with `MS0044`, so a workspace root's `package.json` is never
-  written and `MS0007` is not raised against it. An explicit package root still wins as given.
+  declares `workspaces`, or that sits beside a `pnpm-workspace.yaml`, as a workspace boundary and
+  never adopt it: the walk stops below it, and the documented fallback (the parent of the output
+  directory) applies. A fallback that is itself a workspace root MUST be refused with `MS0044`
+  (the message names the workspace root), so a workspace root's `package.json` is never written
+  and `MS0007` is not raised against it, unless its `name` equals the `[EmitPackage]` name (a
+  single-repo library that declares `workspaces` for its examples), in which case it is adopted. An explicit package root still wins as given.
   *One version.* The generated `package.json` MUST always carry `version`, from the same source as
   the range a cross-package consumer writes for the package: `[EmitPackage(Version)]` when set
-  (an exact version, or the base version of a range; a protocol such as `workspace:*` names no
-  version), else the assembly's informational version without build metadata, else
+  (an exact version, or the base version of a `^`, `~`, `>=` or `=` range; `<`, `>`, compound
+  ranges and protocols such as `workspace:*` name none and fall back, with a warning unless it is a
+  protocol), else the assembly's informational version without build metadata, else
   `Major.Minor.Build`. The range keeps its style (the explicit value verbatim; `^` plus the
   version when derived; `workspace:*` for an unversioned assembly), so the package's `version`
-  satisfies every range written for it. Metano owns the field and replaces a hand-written value;
-  no `workspace:` protocol is introduced. Without an import alias, the bare `#` and `#/*`
+  satisfies every range written for it. Metano owns the field and replaces a hand-written value
+  (reported as an informational message); MSBuild `Version` is the intended source; no
+  `workspace:` protocol is introduced. Without an import alias, the bare `#` and `#/*`
   `imports` entries an earlier version seeded are removed while they still hold exactly the
-  writer's own mapping; a retargeted or host-authored entry stays. Traced by
+  writer's own mapping and no condition of the consumer's; a retargeted, extended or
+  host-authored entry stays (this amends spec 004 FR-014). Traced by
   `PackageWorkspaceTests` and `EmitPackageTests`.
 
 ### Key Entities

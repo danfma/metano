@@ -29,10 +29,13 @@ namespace Metano.Packaging;
 /// </list>
 /// </para>
 /// <para>
-/// A <c>package.json</c> that declares <c>workspaces</c> is a workspace boundary, not a
-/// package: the walk stops below it, and the fallback below applies (#764). A fallback
-/// that would itself be such a workspace root is refused the same way as one outside the
-/// workspace, so a workspace root's <c>package.json</c> is never written.
+/// A <c>package.json</c> that declares <c>workspaces</c>, or that sits beside a
+/// <c>pnpm-workspace.yaml</c>, is a workspace boundary, not a package: the walk stops
+/// below it, and the fallback below applies (#764). A fallback that is itself such a
+/// workspace root is refused (<see cref="DiagnosticCodes.PackageRootOutsideWorkspace"/>), so
+/// a workspace root's <c>package.json</c> is never written, unless its <c>name</c> is the
+/// package's <c>[EmitPackage]</c> name (a single-repo library that declares workspaces for
+/// its examples).
 /// </para>
 /// <para>
 /// When the search finds nothing, the root falls back to the legacy default, the
@@ -53,6 +56,8 @@ namespace Metano.Packaging;
 /// </summary>
 public static class PackageRootResolver
 {
+    private const string PnpmWorkspaceFileName = "pnpm-workspace.yaml";
+
     private static readonly string[] SolutionFileExtensions = [".sln", ".slnx"];
 
     private static readonly StringComparison PathComparison =
@@ -64,12 +69,16 @@ public static class PackageRootResolver
     /// Resolves the package root for the files generated into
     /// <paramref name="outputDir"/> from the C# project at <paramref name="projectPath"/>.
     /// A non-blank <paramref name="explicitPackageRoot"/> wins without any search; a blank one
-    /// counts as unset (#353).
+    /// counts as unset (#353). A workspace-root fallback is adopted only when its
+    /// <c>package.json#name</c> equals <paramref name="packageName"/> (the
+    /// <c>[EmitPackage]</c> name): a single-repo library whose own package.json also declares
+    /// <c>workspaces</c> for its examples.
     /// </summary>
     public static PackageRootResolution Resolve(
         string outputDir,
         string projectPath,
-        string? explicitPackageRoot = null
+        string? explicitPackageRoot = null,
+        string? packageName = null
     )
     {
         if (!string.IsNullOrWhiteSpace(explicitPackageRoot))
@@ -87,12 +96,14 @@ public static class PackageRootResolver
         if (nearestPackageJsonDirectory is not null)
             return PackageRootResolution.Resolved(nearestPackageJsonDirectory);
 
-        if (
-            FallbackLeavesWorkspace(outputDirectory, topmostDirectory, defaultPackageRoot)
-            || IsWorkspaceRoot(defaultPackageRoot)
-        )
+        if (FallbackLeavesWorkspace(outputDirectory, topmostDirectory, defaultPackageRoot))
             return PackageRootResolution.Refused(
                 CreateOutsideWorkspaceDiagnostic(outputDirectory, defaultPackageRoot)
+            );
+
+        if (IsWorkspaceRoot(defaultPackageRoot) && !NamesPackage(defaultPackageRoot, packageName))
+            return PackageRootResolution.Refused(
+                CreateWorkspaceRootDiagnostic(outputDirectory, defaultPackageRoot)
             );
 
         return PackageRootResolution.Resolved(defaultPackageRoot);
@@ -206,7 +217,7 @@ public static class PackageRootResolver
 
     /// <summary>
     /// Whether <paramref name="dir"/> holds a <c>package.json</c> that declares
-    /// <c>workspaces</c>: a workspace boundary that groups packages and is never a package
+    /// <c>workspaces</c> or has a <c>pnpm-workspace.yaml</c> beside it: a workspace boundary that groups packages and is never a package
     /// itself (#764). An unreadable or malformed file declares nothing.
     /// </summary>
     private static bool IsWorkspaceRoot(string dir)
@@ -216,15 +227,28 @@ public static class PackageRootResolver
         if (!File.Exists(path))
             return false;
 
+        // pnpm keeps its workspace globs beside the package.json, not inside it.
+        return File.Exists(Path.Combine(dir, PnpmWorkspaceFileName))
+            || (ReadManifest(path)?.ContainsKey("workspaces") ?? false);
+    }
+
+    private static bool NamesPackage(string dir, string? packageName) =>
+        packageName is not null
+        && ReadManifest(Path.Combine(dir, PackageJsonWriter.PackageJsonFileName))?["name"]
+            is JsonValue name
+        && name.TryGetValue<string>(out var existing)
+        && existing == packageName;
+
+    private static JsonObject? ReadManifest(string path)
+    {
         try
         {
-            return JsonNode.Parse(File.ReadAllText(path)) is JsonObject manifest
-                && manifest.ContainsKey("workspaces");
+            return JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
         }
         catch (Exception exception)
             when (exception is JsonException or IOException or UnauthorizedAccessException)
         {
-            return false;
+            return null;
         }
     }
 
@@ -267,19 +291,36 @@ public static class PackageRootResolver
         var cause = defaultPackageRoot is null
             ? "the output directory is the filesystem root, so there is no default package root"
             : $"the default package root (the parent of the output directory, '{defaultPackageRoot}') "
-                + "cannot be used: it lies outside the workspace or is a workspace root "
-                + "(a package.json declaring workspaces), which is never written (see the "
-                + "package root rules in docs/cross-package.md)";
+                + "lies outside the workspace: the output directory is already the topmost "
+                + "directory the search may use (see the package root rules in "
+                + "docs/cross-package.md)";
 
-        return new MetanoDiagnostic(
+        return RefusalOf(
+            $"No package.json was found for the output directory '{outputDirectory}' inside "
+                + $"its workspace, and {cause}."
+        );
+    }
+
+    private static MetanoDiagnostic CreateWorkspaceRootDiagnostic(
+        string outputDirectory,
+        string workspaceRoot
+    ) =>
+        RefusalOf(
+            $"The package.json search for the output directory '{outputDirectory}' reached "
+                + $"'{workspaceRoot}', a workspace root (it declares workspaces, or holds a "
+                + "pnpm-workspace.yaml) whose name is not the [assembly: EmitPackage] name. "
+                + "A workspace root is never used as a package root, so it was not written "
+                + "(see the package root rules in docs/cross-package.md)."
+        );
+
+    private static MetanoDiagnostic RefusalOf(string cause) =>
+        new(
             MetanoDiagnosticSeverity.Error,
             DiagnosticCodes.PackageRootOutsideWorkspace,
-            $"No package.json was found for the output directory '{outputDirectory}' inside "
-                + $"its workspace, and {cause}. package.json was not written. Pass "
+            $"{cause} package.json was not written. Pass "
                 + "--package-root (MSBuild: MetanoPackageRoot) to choose the package root, or "
                 + "--skip-package-json (MetanoSkipPackageJson) to skip the update."
         );
-    }
 }
 
 /// <summary>

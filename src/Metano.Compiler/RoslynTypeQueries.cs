@@ -21,6 +21,9 @@ public static class RoslynTypeQueries
         System.Text.RegularExpressions.RegexOptions.CultureInvariant
     );
 
+    /// <summary>The range operators whose lower bound, the base version, satisfies the range.</summary>
+    private static readonly string[] SatisfiedByBaseVersionPrefixes = [">=", "^", "~", "=", "v"];
+
     private static readonly string[] DictionaryTypeNames =
     [
         "System.Collections.Generic.Dictionary",
@@ -81,18 +84,44 @@ public static class RoslynTypeQueries
 
     /// <summary>
     /// The concrete version written to a generated package's own <c>package.json</c>:
-    /// <paramref name="explicitVersion"/> (<c>[EmitPackage(Version = …)]</c>) when it is a
-    /// semantic version or a range over one (<c>^1.2.3</c>, <c>~1.2.3</c>, <c>&gt;=1.2.3</c>,
-    /// whose base version satisfies it), else <see cref="ReadPackageVersion"/>. A protocol
-    /// specifier such as <c>workspace:*</c> names no version, so it falls back too.
+    /// <paramref name="explicitVersion"/> (<c>[EmitPackage(Version = …)]</c>) when
+    /// <see cref="TryParseExplicitVersion"/> reads one from it, else
+    /// <see cref="ReadPackageVersion"/>.
     /// </summary>
-    public static string ResolveOwnPackageVersion(IAssemblySymbol assembly, string? explicitVersion)
-    {
-        var baseVersion = explicitVersion?.Trim().TrimStart('^', '~', '>', '<', '=', ' ', 'v');
-
-        return baseVersion is not null && SemanticVersion.IsMatch(baseVersion)
-            ? baseVersion
+    public static string ResolveOwnPackageVersion(
+        IAssemblySymbol assembly,
+        string? explicitVersion
+    ) =>
+        TryParseExplicitVersion(explicitVersion, out var version)
+            ? version
             : ReadPackageVersion(assembly);
+
+    /// <summary>
+    /// Reads a concrete version from an explicit <c>Version</c>: a semantic version, or a
+    /// range whose base version satisfies it (<c>^1.2.3</c>, <c>~1.2.3</c>, <c>&gt;=1.2.3</c>,
+    /// <c>=1.2.3</c>, <c>v1.2.3</c>). Anything else (<c>&lt;2.0.0</c>, <c>&gt;1.0.0</c>,
+    /// compound ranges, <c>workspace:*</c>) names no version that is known to satisfy it.
+    /// </summary>
+    public static bool TryParseExplicitVersion(
+        string? explicitVersion,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? version
+    )
+    {
+        var candidate = explicitVersion?.Trim();
+
+        foreach (var prefix in SatisfiedByBaseVersionPrefixes)
+        {
+            if (candidate?.StartsWith(prefix, StringComparison.Ordinal) == true)
+            {
+                candidate = candidate[prefix.Length..];
+
+                break;
+            }
+        }
+
+        version = candidate is not null && SemanticVersion.IsMatch(candidate) ? candidate : null;
+
+        return version is not null;
     }
 
     /// <summary>Whether <paramref name="type"/> is <c>Nullable&lt;T&gt;</c> (<c>int?</c>, <c>DateOnly?</c>).</summary>

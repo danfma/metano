@@ -74,6 +74,81 @@ public class PackageWorkspaceTests
         await Assert.That(resolution.Root).IsEqualTo(Path.GetDirectoryName(rootPackageJson));
     }
 
+    [Test]
+    public async Task PnpmWorkspaceFile_MakesThePackageJsonBesideItAWorkspaceRoot()
+    {
+        var rootPackageJson = CreateWorkspace("""{ "name": "plain" }""");
+
+        File.WriteAllText(
+            Path.Combine(_root, "ws", "pnpm-workspace.yaml"),
+            "packages:\n  - 'targets/js/*'\n"
+        );
+
+        var before = File.ReadAllBytes(rootPackageJson);
+        var output = Path.Combine(_root, "ws", "targets", "js", "pkg-b", "src");
+        var project = Path.Combine(_root, "ws", "src", "B", "B.csproj");
+
+        var resolution = PackageRootResolver.Resolve(output, project);
+        Reconcile(resolution, output, packageName: "pkg-b");
+
+        await Assert.That(resolution.Root).IsEqualTo(Path.GetDirectoryName(output));
+        await Assert.That(File.ReadAllBytes(rootPackageJson).SequenceEqual(before)).IsTrue();
+    }
+
+    [Test]
+    public async Task WorkspacesObjectForm_IsAWorkspaceRoot()
+    {
+        CreateWorkspace("""{ "name": "ws", "workspaces": { "packages": ["targets/js/*"] } }""");
+
+        var output = Path.Combine(_root, "ws", "targets", "js", "pkg-b", "src");
+        var project = Path.Combine(_root, "ws", "src", "B", "B.csproj");
+
+        var resolution = PackageRootResolver.Resolve(output, project);
+
+        await Assert.That(resolution.Root).IsEqualTo(Path.GetDirectoryName(output));
+    }
+
+    [Test]
+    public async Task ExplicitPackageRoot_UnderAWorkspaceRoot_IsUsedAsGiven()
+    {
+        CreateWorkspace();
+
+        var explicitRoot = Path.Combine(_root, "ws");
+        var output = Path.Combine(_root, "ws", "targets", "js", "pkg-b", "src");
+        var project = Path.Combine(_root, "ws", "src", "B", "B.csproj");
+
+        var resolution = PackageRootResolver.Resolve(output, project, explicitRoot);
+
+        await Assert.That(resolution.Root).IsEqualTo(explicitRoot);
+    }
+
+    [Test]
+    public async Task WorkspaceRootFallback_NamedLikeThePackage_IsAdopted()
+    {
+        CreateWorkspace("""{ "name": "my-lib", "workspaces": ["examples/*"] }""");
+
+        var output = Path.Combine(_root, "ws", "src");
+        var project = Path.Combine(_root, "ws", "App.csproj");
+
+        var resolution = PackageRootResolver.Resolve(output, project, packageName: "my-lib");
+
+        await Assert.That(resolution.Root).IsEqualTo(Path.Combine(_root, "ws"));
+    }
+
+    [Test]
+    public async Task WorkspaceRootFallback_WithAnotherName_IsRefusedNamingTheCause()
+    {
+        CreateWorkspace("""{ "name": "ws", "workspaces": ["examples/*"] }""");
+
+        var output = Path.Combine(_root, "ws", "src");
+        var project = Path.Combine(_root, "ws", "App.csproj");
+
+        var resolution = PackageRootResolver.Resolve(output, project, packageName: "my-lib");
+
+        await Assert.That(resolution.IsRefused).IsTrue();
+        await Assert.That(resolution.Refusal!.Message).Contains("workspace root");
+    }
+
     // ── #765: one version rule ─────────────────────────────────────────────
 
     [Test]
@@ -128,6 +203,114 @@ public class PackageWorkspaceTests
         );
 
         await Assert.That(Satisfies(range, version)).IsTrue();
+    }
+
+    [Test]
+    [Arguments("<2.0.0")]
+    [Arguments(">1.0.0")]
+    [Arguments(">=1.0.0 <2.0.0")]
+    [Arguments("workspace:*")]
+    public async Task ExplicitVersionWithoutABaseVersion_FallsBackToTheAssemblyVersion(
+        string explicitVersion
+    )
+    {
+        var compilation = TranspileHelper.CompileLibrary(
+            """
+            [assembly: System.Reflection.AssemblyVersion("1.5.2.0")]
+            [assembly: TranspileAssembly]
+            """
+        );
+
+        await Assert
+            .That(RoslynTypeQueries.TryParseExplicitVersion(explicitVersion, out _))
+            .IsFalse();
+        await Assert
+            .That(RoslynTypeQueries.ResolveOwnPackageVersion(compilation.Assembly, explicitVersion))
+            .IsEqualTo("1.5.2");
+    }
+
+    [Test]
+    [Arguments("^1.2.3", "1.2.3")]
+    [Arguments("~1.2.3", "1.2.3")]
+    [Arguments(">=1.2.3", "1.2.3")]
+    [Arguments("=1.2.3", "1.2.3")]
+    [Arguments("v1.2.3", "1.2.3")]
+    [Arguments("1.2.3-rc.1", "1.2.3-rc.1")]
+    public async Task ExplicitVersionWithABaseVersion_WritesTheBaseVersion(
+        string explicitVersion,
+        string expected
+    )
+    {
+        await Assert
+            .That(RoslynTypeQueries.TryParseExplicitVersion(explicitVersion, out var version))
+            .IsTrue();
+        await Assert.That(version).IsEqualTo(expected);
+    }
+
+    [Test]
+    public async Task Writer_ReplacingADifferentVersion_ReportsAnInfoDiagnostic()
+    {
+        var dir = Directory.CreateDirectory(Path.Combine(_root, "info")).FullName;
+        var src = Directory.CreateDirectory(Path.Combine(dir, "src")).FullName;
+
+        File.WriteAllText(
+            Path.Combine(dir, "package.json"),
+            """{ "name": "pkg-a", "version": "0.1.0" }"""
+        );
+
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        var replaced = PackageJsonWriter.UpdateOrCreate(
+            dir,
+            src,
+            files,
+            authoritativePackageName: "pkg-a",
+            packageVersion: "1.5.2"
+        );
+
+        var unchanged = PackageJsonWriter.UpdateOrCreate(
+            dir,
+            src,
+            files,
+            authoritativePackageName: "pkg-a",
+            packageVersion: "1.5.2"
+        );
+
+        await Assert
+            .That(
+                replaced.Count(d =>
+                    d.Severity == Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Info
+                )
+            )
+            .IsEqualTo(1);
+        await Assert.That(unchanged).IsEmpty();
+    }
+
+    [Test]
+    public async Task Writer_PrunesNoUnaliasedImport_WhenItCarriesAConditionOfTheConsumer()
+    {
+        var dir = Directory.CreateDirectory(Path.Combine(_root, "extended")).FullName;
+        var src = Directory.CreateDirectory(Path.Combine(dir, "src")).FullName;
+
+        File.WriteAllText(
+            Path.Combine(dir, "package.json"),
+            """
+            { "name": "pkg", "imports": { "#/*": {
+              "types": "./dist/*.d.ts", "import": "./dist/*.js", "default": "./src/*.ts",
+              "development": "./dev/*.ts" } } }
+            """
+        );
+
+        PackageJsonWriter.UpdateOrCreate(
+            dir,
+            src,
+            [new TsSourceFile("index.ts", [], "")],
+            authoritativePackageName: "pkg"
+        );
+
+        var imports = Read(Path.Combine(dir, "package.json"))["imports"] as JsonObject;
+
+        await Assert.That(imports!.ContainsKey("#/*")).IsTrue();
     }
 
     [Test]

@@ -100,7 +100,8 @@ public class Commands
             var packageRootResolution = PackageRootResolver.Resolve(
                 outputDir,
                 project,
-                packageRoot
+                packageRoot,
+                target.LastPackageManifestInputs.PackageName
             );
 
             var reconciliation = PackageJsonReconciler.Reconcile(

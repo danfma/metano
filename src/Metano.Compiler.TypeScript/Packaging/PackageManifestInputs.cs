@@ -1,4 +1,5 @@
 using Metano.Compiler;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.TypeScript.AST;
 
 namespace Metano.Packaging;
@@ -28,6 +29,8 @@ namespace Metano.Packaging;
 /// writes for this package (<c>[EmitPackage(Version)]</c>, else the assembly's
 /// informational version without build metadata), so a workspace always satisfies it
 /// (#765). <see langword="null"/> writes no <c>version</c>.</param>
+/// <param name="PackageVersionDiagnostics">Warnings raised while choosing
+/// <paramref name="PackageVersion"/>, reported with the package.json stage's own.</param>
 /// <param name="IsExecutable">Whether the source project is an executable
 /// (ConsoleApplication). Executables are not consumed by other packages, so they get no
 /// <c>exports</c>, only <c>imports</c>.</param>
@@ -38,7 +41,8 @@ public sealed record PackageManifestInputs(
     IReadOnlyDictionary<string, string> CrossPackageDependencies,
     bool IsExecutable,
     string? RuntimePeerSpecifier = null,
-    string? PackageVersion = null
+    string? PackageVersion = null,
+    IReadOnlyList<MetanoDiagnostic>? PackageVersionDiagnostics = null
 )
 {
     /// <summary>The inputs before any run: nothing to write.</summary>

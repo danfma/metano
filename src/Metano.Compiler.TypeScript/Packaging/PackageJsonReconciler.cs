@@ -63,7 +63,10 @@ public static class PackageJsonReconciler
             packageVersion: inputs.PackageVersion
         );
 
-        return PackageJsonReconciliation.Written(packageJsonPath, diagnostics);
+        return PackageJsonReconciliation.Written(
+            packageJsonPath,
+            [.. inputs.PackageVersionDiagnostics ?? [], .. diagnostics]
+        );
     }
 }
 

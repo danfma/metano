@@ -163,7 +163,7 @@ public static class PackageJsonWriter
         }
 
         ApplyAuthoritativePackageName(root, authoritativePackageName, diagnostics);
-        ApplyPackageVersion(root, packageVersion);
+        ApplyPackageVersion(root, packageVersion, diagnostics);
 
         // Seed defaults when the consumer has not picked their own
         // values. The transpiler must not flip a hand-curated `type`
@@ -246,27 +246,47 @@ public static class PackageJsonWriter
     /// <summary>
     /// Writes <paramref name="version"/> to <c>package.json#version</c>: Metano owns the
     /// field, because a consumer's dependency range derives from the same source and a
-    /// hand-written value could contradict it. A new field lands right after <c>name</c>.
+    /// hand-written value could contradict it. Replacing a different value is reported as an
+    /// informational diagnostic. A new field lands right after <c>name</c>.
     /// </summary>
-    private static void ApplyPackageVersion(JsonObject root, string? version)
+    private static void ApplyPackageVersion(
+        JsonObject root,
+        string? version,
+        List<MetanoDiagnostic> diagnostics
+    )
     {
         if (version is null)
             return;
 
         var nameIndex = root.IndexOf("name");
 
-        if (root.ContainsKey("version") || nameIndex < 0)
-            root["version"] = version;
-        else
+        if (!root.ContainsKey("version") && nameIndex >= 0)
+        {
             root.Insert(nameIndex + 1, "version", version);
+
+            return;
+        }
+
+        if (StringOf(root["version"]) is { } existing && existing != version)
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Info,
+                    DiagnosticCodes.CrossPackageResolution,
+                    $"package.json#version '{existing}' was replaced by '{version}': Metano "
+                        + "writes the version from the C# project (MSBuild Version, or "
+                        + "[EmitPackage(Version)]), the same source as the range consumers get."
+                )
+            );
+
+        root["version"] = version;
     }
 
     /// <summary>
     /// Without an alias no <c>imports</c> are written, and the bare <c>#</c> and <c>#/*</c>
     /// keys an earlier version seeded are rejected by Node 24 and Bun. An entry that still
     /// holds exactly the mapping this writer would have produced (shape-based ownership,
-    /// as in <see cref="HoldsTranspilerMapping"/>) is removed; a retargeted or
-    /// host-authored one stays. An <c>imports</c> object left empty is removed too.
+    /// as in <see cref="HoldsTranspilerMapping"/>) and carries no condition beyond the
+    /// writer's own is removed; a retargeted, extended or host-authored one stays. An <c>imports</c> object left empty is removed too.
     /// </summary>
     private static void PruneUnaliasedImports(
         JsonObject root,
@@ -293,7 +313,7 @@ public static class PackageJsonWriter
             if (
                 existing[key] is JsonObject entry
                 && generated is JsonObject generatedEntry
-                && HoldsTranspilerMapping(entry, generatedEntry, sourceCondition)
+                && HoldsOnlyTranspilerMapping(entry, generatedEntry, sourceCondition)
             )
                 existing.Remove(key);
         }
@@ -805,6 +825,22 @@ public static class PackageJsonWriter
             && JsonNode.DeepEquals(target, condition.Value)
         );
     }
+
+    /// <summary>
+    /// <see cref="HoldsTranspilerMapping"/> and no condition of the consumer's own: a
+    /// <c>source</c> condition under the default name counts as the writer's, since an earlier
+    /// run wrote it.
+    /// </summary>
+    private static bool HoldsOnlyTranspilerMapping(
+        JsonObject existingEntry,
+        JsonObject generatedEntry,
+        SourceCondition sourceCondition
+    ) =>
+        HoldsTranspilerMapping(existingEntry, generatedEntry, sourceCondition)
+        && existingEntry.All(condition =>
+            generatedEntry.ContainsKey(condition.Key)
+            || condition.Key == SourceCondition.DefaultName
+        );
 
     /// <summary>
     /// The conditions added to the transpiler's <c>imports</c> entries after they were
