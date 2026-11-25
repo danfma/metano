@@ -1573,6 +1573,15 @@ Product requirements added after the migration (normative; each one is traced by
   failing; the warning is fixed, or its code is listed in `WarningsNotAsErrors` or `NoWarn`.
   Changing a warning setting changes the CLI arguments, which reruns the transpile.
 
+- **FR-107** (TypeScript 7 and the Temporal polyfill types, #786): `metano-runtime`'s
+  declarations of the Temporal-typed API reference `@js-temporal/polyfill`, and so do the
+  generated files that use a mapped BCL date/time type. The polyfill 0.5.1 declarations clash
+  with the built-in `Temporal` and `Intl` types of TypeScript 7 under `lib: esnext`
+  (TS2430), which `skipLibCheck: true` or a `lib` without `esnext.temporal` (for example
+  `es2024`) avoids. This is a documented limitation of the pair of versions, not of the
+  runtime; removing it needs the polyfill, or a design that changes the Temporal-typed
+  public API (see the issue).
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

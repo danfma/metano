@@ -129,6 +129,13 @@ if you're sure about the shape), and cast back to plain `string` with `uuid as s
 Metano uses the [Temporal API](https://tc39.es/proposal-temporal/docs/) via the
 `@js-temporal/polyfill` package.
 
+**TypeScript 7.** `@js-temporal/polyfill` 0.5.1 declares an `Intl.DateTimeFormat` that clashes with
+the built-in `Temporal`/`Intl` types of TypeScript 7 under `lib: esnext`, so a package that imports
+`metano-runtime` or a generated Temporal type fails `tsgo --strict` with TS2430 inside
+`node_modules/@js-temporal/polyfill/index.d.ts` unless it sets `"skipLibCheck": true` or a `lib`
+without `esnext.temporal` (for example `es2024`). TypeScript 5.9 is not affected (baseline
+FR-107, #786).
+
 | C# | TypeScript |
 |----|----|
 | `DateTime` | `Temporal.PlainDateTime` |
