@@ -49,6 +49,32 @@ public static class XiBagExtensions
     }
 }
 
+public sealed class XiTexts
+{
+    public List<string?> Items { get; } = [null, "a"];
+
+    public string? Note { get; set; }
+}
+
+public static class XiTextsExtensions
+{
+    extension(XiTexts t)
+    {
+        [Name("xiText")]
+        public string? this[int i]
+        {
+            get => t.Items[i];
+            set => t.Items[i] = value;
+        }
+
+        public string? Memo
+        {
+            get => t.Note;
+            set => t.Note = value;
+        }
+    }
+}
+
 public sealed class XiGrid
 {
     public int[] Cells { get; } = [10, 20, 30];
@@ -175,5 +201,29 @@ public static class ExtensionIndexerProbes
         grid[0] += grid["ab"];
 
         return $"{grid[0]},{grid["abc"]}";
+    }
+
+    public static string nullableStringCompound()
+    {
+        var texts = new XiTexts();
+        texts[0] += "x";
+        var used = texts[0] += null;
+        texts[1] += 5;
+        texts.Memo += "y";
+        texts.Memo += "z";
+
+        return $"{texts[0]},{texts[1]},{used},{texts.Memo}";
+    }
+
+    public static string nullConditionalCompound()
+    {
+        XiBag? bag = new XiBag();
+        XiBag? none = null;
+        _picks = 0;
+        bag?[Pick(0)] += 4;
+        none?[Pick(0)] += 4;
+        bag?[1] += 1;
+
+        return $"{Show(bag![0])},{Show(bag[1])},{_picks}";
     }
 }

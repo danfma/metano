@@ -476,6 +476,119 @@ public class ExtensionIndexerTests
             .Contains("itemAt$set(bag, 0, (itemAt$get(bag, 0) + itemByKey$get(bag, \"k\")) | 0);");
     }
 
+    [Test]
+    public async Task ExtensionAccessor_NullableStringCompound_ConcatenatesNullAsEmpty()
+    {
+        var output = TranspileTexts(
+            "public string? Run(Texts t) { t[0] += \"x\"; t.Label += \"y\"; return t[0] += null; }"
+        );
+
+        await Assert.That(output).Contains("item$set(t, 0, (item$get(t, 0) ?? \"\") + \"x\");");
+        await Assert.That(output).Contains("label$set(t, (label$get(t) ?? \"\") + \"y\");");
+        await Assert.That(output).DoesNotContain("item$get(t, 0) + null");
+    }
+
+    [Test]
+    public async Task ExtensionAccessor_DelegateCompound_ReportsMs0001Error()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            TextsSource(
+                "public void Run(Texts t, System.Action a) { t.OnEvent += a; t[1] += \"z\"; }"
+            )
+        );
+
+        var unsupported = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+
+        await Assert.That(unsupported.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(unsupported.Message).Contains("delegate '+=' / '-='");
+    }
+
+    [Test]
+    public async Task ExtensionIndexer_NullConditionalCompound_GuardsTheStore()
+    {
+        var output = TranspileNullableBag(
+            """
+            private int _next;
+            public int Next() => _next++;
+            public void Run(Bag? bag) { bag?[0] += 1; bag?[Next()] += 2; }
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                "bag != null && item$set(bag, 0, item$get(bag, 0) == null ? null : (item$get(bag, 0)! + 1) | 0);"
+            );
+
+        await Assert.That(CountOccurrences(output, "this.next()")).IsEqualTo(1);
+        await Assert.That(output).DoesNotContain("Unsupported expression");
+    }
+
+    [Test]
+    public async Task ExtensionIndexer_DeconstructionTarget_ReportsMs0001Error()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            TextsSource("public void Run(Texts t) { (t[0], t[1]) = (\"p\", \"q\"); }")
+        );
+
+        var unsupported = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .ToList();
+
+        await Assert.That(unsupported.Count).IsEqualTo(2);
+
+        await Assert
+            .That(unsupported.All(d => d.Severity == MetanoDiagnosticSeverity.Error))
+            .IsTrue();
+    }
+
+    private static string TranspileTexts(string callerMembers) =>
+        TranspileHelper.Transpile(TextsSource(callerMembers))["app/caller.ts"];
+
+    private static string TextsSource(string callerMembers) =>
+        $$"""
+            using System.Collections.Generic;
+            namespace App;
+
+            public class Texts
+            {
+                public List<string?> Items { get; } = new();
+                public string? Note { get; set; }
+                public System.Action? Handler { get; set; }
+            }
+
+            [Transpile]
+            public static class TextsExtensions
+            {
+                extension(Texts t)
+                {
+                    public string? this[int i]
+                    {
+                        get => t.Items[i];
+                        set => t.Items[i] = value;
+                    }
+
+                    public string? Label
+                    {
+                        get => t.Note;
+                        set => t.Note = value;
+                    }
+
+                    public System.Action? OnEvent
+                    {
+                        get => t.Handler;
+                        set => t.Handler = value;
+                    }
+                }
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                {{callerMembers}}
+            }
+            """;
+
     private static string TwoIndexerSource(string intIndexerName, string stringIndexerName) =>
         $$"""
             using System.Collections.Generic;

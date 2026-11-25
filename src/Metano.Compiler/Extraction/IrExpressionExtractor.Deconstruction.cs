@@ -249,15 +249,29 @@ public sealed partial class IrExpressionExtractor
         if (IsPlainStorePlace(place, target))
             return place;
 
-        if (!IsUnsupportedPlaceholder(place))
-            ReportUnsupportedFeature(
-                target,
-                $"Deconstruction into '{target}' is not supported by the transpiler: only "
-                    + "locals, fields, properties and array elements can be written."
-            );
+        if (IsUnsupportedPlaceholder(place))
+            return null;
+
+        var message =
+            $"Deconstruction into '{target}' is not supported by the transpiler: only "
+            + "locals, fields, properties and array elements can be written.";
+
+        // A deconstruction into an extension member emits a throwing placeholder,
+        // which the dropped-code policy reports with the target's severity.
+        if (WritesExtensionAccessor(target))
+            DroppedCodeDiagnostics.Report(message, target.GetLocation());
+        else
+            ReportUnsupportedFeature(target, message);
 
         return null;
     }
+
+    private bool WritesExtensionAccessor(ExpressionSyntax target) =>
+        _semantic.GetSymbolInfo(target).Symbol is IPropertySymbol property
+        && (
+            TryResolveExtensionPropertyLoweringForSymbol(property) is not null
+            || TryResolveExtensionIndexerLoweringForSymbol(property) is not null
+        );
 
     private bool IsPlainStorePlace(IrExpression place, ExpressionSyntax target) =>
         place switch

@@ -106,6 +106,43 @@ public sealed partial class IrExpressionExtractor
     }
 
     /// <summary>
+    /// The inner write of a null-conditional assignment (<c>r?[i] op= v</c>)
+    /// against an extension indexer, or <c>null</c> when the target is not
+    /// one. The receiver is already reusable; the indices are evaluated once.
+    /// </summary>
+    private IrExpression? TryBuildExtensionIndexerStoreForNullConditional(
+        IrExpression receiver,
+        AssignmentExpressionSyntax assign
+    )
+    {
+        if (
+            assign.Left is not ElementBindingExpressionSyntax binding
+            || _semantic.GetSymbolInfo(binding).Symbol is not IPropertySymbol indexer
+            || TryResolveExtensionIndexerLoweringForSymbol(indexer) is not { } lowering
+        )
+            return null;
+
+        var accessors = ExtensionIndexerAccessors.Of(indexer, lowering, this);
+
+        IrExpression Store(IrExpression boundReceiver, IReadOnlyList<IrExpression> indices) =>
+            BuildExtensionAccessorStore(
+                assign,
+                indexer,
+                () => accessors.Read(boundReceiver, indices),
+                value => accessors.Write(boundReceiver, indices, value),
+                isValueUsed: false
+            );
+
+        var indices = binding
+            .ArgumentList.Arguments.Select(argument => Extract(argument.Expression))
+            .ToList();
+
+        return ReadsCurrentValue(assign)
+            ? BindIndexerTargetOnce(receiver, indices, Store)
+            : Store(receiver, indices);
+    }
+
+    /// <summary>
     /// Builds <c>receiver[i] op= value</c> (any assignment form) against an
     /// extension indexer: <c>item$set(r, i, value)</c>, with the slot read
     /// through <c>item$get(r, i)</c> when the store needs its current value.
@@ -188,6 +225,17 @@ public sealed partial class IrExpressionExtractor
         bool isValueUsed
     )
     {
+        if (IsDelegateCompound(assign, property))
+        {
+            DroppedCodeDiagnostics.Report(
+                $"'{assign}' is not supported: a delegate '+=' / '-=' through the extension "
+                    + $"accessor '{property.ToDisplayString()}' is not lowered.",
+                assign.GetLocation()
+            );
+
+            return new IrUnsupportedExpression(assign.Kind().ToString());
+        }
+
         if (assign.IsKind(SyntaxKind.CoalesceAssignmentExpression))
             return new IrBinaryExpression(
                 read(),
@@ -197,6 +245,21 @@ public sealed partial class IrExpressionExtractor
 
         return StoreThroughSetter(ExtensionStoredValue(assign, property, read), write, isValueUsed);
     }
+
+    /// <summary>
+    /// Whether <paramref name="assign"/> combines or removes a delegate
+    /// (<c>+=</c> / <c>-=</c> on a delegate-typed accessor), which has no
+    /// lowering through accessor helpers and is reported instead of emitted
+    /// as the JS <c>+</c>.
+    /// </summary>
+    private static bool IsDelegateCompound(
+        AssignmentExpressionSyntax assign,
+        IPropertySymbol property
+    ) =>
+        property.Type.TypeKind == TypeKind.Delegate
+        && assign.Kind()
+            is SyntaxKind.AddAssignmentExpression
+                or SyntaxKind.SubtractAssignmentExpression;
 
     /// <summary>
     /// The value an extension accessor store passes to the setter: the
@@ -215,6 +278,9 @@ public sealed partial class IrExpressionExtractor
         if (TryMapCompoundAssignmentToBinary(assign.Kind()) is not { } op)
             return Extract(assign.Right);
 
+        if (IsStringConcatenation(assign))
+            return StringCompoundValue(assign, read(), StringCompoundOperand(assign));
+
         if (IsNullableBooleanLogic(_semantic.GetOperation(assign), op))
             return LiftBooleanLogic(
                 new OperatorOperand(read(), IsNullableValueOperand(assign.Left), assign.Left),
@@ -225,17 +291,6 @@ public sealed partial class IrExpressionExtractor
         var current = read();
 
         return ExtensionCompoundValue(
-        if (IsDelegateCompound(assign, property))
-        {
-            DroppedCodeDiagnostics.Report(
-                $"'{assign}' is not supported: a delegate '+=' / '-=' through the extension "
-                    + $"accessor '{property.ToDisplayString()}' is not lowered.",
-                assign.GetLocation()
-            );
-
-            return new IrUnsupportedExpression(assign.Kind().ToString());
-        }
-
             assign,
             property,
             current,
@@ -246,21 +301,6 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// <c>write(value)</c>, followed by the stored value when the store's
-    /// <summary>
-    /// Whether <paramref name="assign"/> combines or removes a delegate
-    /// (<c>+=</c> / <c>-=</c> on a delegate-typed accessor), which has no
-    /// lowering through accessor helpers and is reported instead of emitted
-    /// as the JS <c>+</c>.
-    /// </summary>
-    private static bool IsDelegateCompound(
-        AssignmentExpressionSyntax assign,
-        IPropertySymbol property
-    ) =>
-        property.Type.TypeKind == TypeKind.Delegate
-        && assign.Kind()
-            is SyntaxKind.AddAssignmentExpression
-                or SyntaxKind.SubtractAssignmentExpression;
-
     /// value is used: the setter helper returns nothing, so
     /// <c>(write(v), v)</c> yields what C# yields.
     /// </summary>
@@ -304,9 +344,6 @@ public sealed partial class IrExpressionExtractor
     /// a backend may assign inline instead of scoping it, so no IIFE (W10-6a).
     /// </summary>
     private IrExpression BindStoreReceiverOnce(
-        if (IsStringConcatenation(assign))
-            return StringCompoundValue(assign, read(), StringCompoundOperand(assign));
-
         IrExpression receiver,
         Func<IrExpression, IrExpression> build
     ) =>

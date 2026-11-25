@@ -617,6 +617,9 @@ public sealed partial class IrExpressionExtractor
         if (!IrEvaluationTraits.IsReusableReceiver(receiver))
             return null;
 
+        if (TryBuildExtensionIndexerStoreForNullConditional(receiver, assign) is { } indexerWrite)
+            return WhenNotNull(receiver, indexerWrite);
+
         if (RebindAssignmentTarget(assign.Left, receiver) is not { } rebound)
             return null;
         // Reject event accessors — the dedicated `event += handler`
@@ -639,16 +642,20 @@ public sealed partial class IrExpressionExtractor
             )
             ?? CompoundStoreOf(assign)(rebound);
 
-        return new IrBinaryExpression(
+        return WhenNotNull(receiver, memberWrite);
+    }
+
+    /// <summary><c>receiver != null &amp;&amp; write</c>, a null-conditional assignment's shape.</summary>
+    private static IrBinaryExpression WhenNotNull(IrExpression receiver, IrExpression write) =>
+        new(
             new IrBinaryExpression(
                 receiver,
                 IrBinaryOp.NotEqual,
                 new IrLiteral(null, IrLiteralKind.Null)
             ),
             IrBinaryOp.LogicalAnd,
-            memberWrite
+            write
         );
-    }
 
     /// <summary>
     /// The inner write of a null-conditional compound assignment over its
@@ -4750,35 +4757,29 @@ public sealed partial class IrExpressionExtractor
     private ExtensionPropertyLowering? TryResolveExtensionIndexerLowering(
         IPropertySymbol indexer,
         ElementAccessExpressionSyntax access
-    )
-    {
-        if (!indexer.IsIndexer)
-            return null;
-        var containing = indexer.ContainingType;
-        if (containing is null)
-            return null;
+    ) =>
+        _semantic.GetSymbolInfo(access.Expression).Symbol is INamedTypeSymbol
+            ? null
+            : TryResolveExtensionIndexerLoweringForSymbol(indexer);
 
-        // C# 14 extension block indexer — ContainingType is the synthetic
-        // anonymous type Roslyn manufactures inside `extension(R r) { … }`.
-        if (
-            string.IsNullOrEmpty(containing.Name)
-            && containing.ContainingType is { IsStatic: true } parentStatic
-            && IsTranspilableExtensionContainer(parentStatic)
-        )
-        {
-            var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
-            if (receiverSymbol is INamedTypeSymbol)
-                return null;
-
-            return new ExtensionPropertyLowering(
+    /// <summary>
+    /// The helper-emission metadata of a C# 14 extension-block indexer, or
+    /// <c>null</c> for any other indexer. The block's <c>ContainingType</c> is
+    /// the synthetic anonymous type Roslyn manufactures inside
+    /// <c>extension(R r) { … }</c>.
+    /// </summary>
+    private ExtensionPropertyLowering? TryResolveExtensionIndexerLoweringForSymbol(
+        IPropertySymbol indexer
+    ) =>
+        indexer is { IsIndexer: true, ContainingType: { Name: "" } block }
+        && block.ContainingType is { IsStatic: true } parentStatic
+        && IsTranspilableExtensionContainer(parentStatic)
+            ? new ExtensionPropertyLowering(
                 IrExtensionConventions.GetterName(indexer, _target),
                 ResolvePropertyEmittedName(indexer),
                 parentStatic
-            );
-        }
-
-        return null;
-    }
+            )
+            : null;
 
     /// <summary>
     /// <see cref="TryMapCompoundAssignmentToBinary"/> narrowed by
