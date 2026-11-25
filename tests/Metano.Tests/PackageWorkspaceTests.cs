@@ -283,6 +283,7 @@ public class PackageWorkspaceTests
                 )
             )
             .IsEqualTo(1);
+
         await Assert.That(unchanged).IsEmpty();
     }
 
@@ -326,6 +327,7 @@ public class PackageWorkspaceTests
         await Assert
             .That(RoslynTypeQueries.ReadPackageVersion(compilation.Assembly))
             .IsEqualTo("3.4.5-rc.2");
+
         await Assert
             .That(RoslynTypeQueries.FormatAssemblyVersion(compilation.Assembly))
             .IsEqualTo("^3.4.5-rc.2");
