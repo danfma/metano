@@ -143,6 +143,15 @@ incremental cache is keyed on the compiler release. A tool installed with
 `<MetanoOutputDir>/.metano-stamp` (`dotnet build --no-incremental` does not
 remove it).
 
+**Warnings and the build.** Metano warnings (`MS0001`, ...) follow the project's own warning
+settings: `TreatWarningsAsErrors`, `WarningsAsErrors`, `WarningsNotAsErrors` and `NoWarn`
+(and MSBuild's `MSBuild*` spellings) are passed to the compiler, so a project that treats
+warnings as errors fails on a Metano warning, and `NoWarn` silences one. A run that fails
+leaves no up-to-date stamp, so the next build fails again, and a build that skips the
+transpile as up to date prints the warnings of the run that produced the output again.
+Projects with `TreatWarningsAsErrors` that already report Metano warnings start failing when
+they upgrade: fix the warning, or list its code in `WarningsNotAsErrors` or `NoWarn`.
+
 Every `Metano*` property can be overridden for the TypeScript target alone
 with its `MetanoTs*` form (`MetanoTsOutputDir`, `MetanoTsImportAlias`, ...);
 the unprefixed name is the global value every enabled Metano target reads.

@@ -35,6 +35,21 @@ public static class TranspilerHost
         var outputDir = Path.GetFullPath(options.OutputDir);
         var projectDir = Path.GetDirectoryName(projectPath) ?? Directory.GetCurrentDirectory();
         var assets = options.Assets ?? [];
+        var policy = options.DiagnosticPolicy ?? DiagnosticPolicy.Default;
+        var replayLines = new List<string>();
+
+        (int Warnings, int Errors) Report(IReadOnlyList<MetanoDiagnostic> diagnostics)
+        {
+            var applied = policy.Apply(diagnostics);
+
+            replayLines.AddRange(
+                applied
+                    .Where(diagnostic => diagnostic.Severity == MetanoDiagnosticSeverity.Warning)
+                    .Select(diagnostic => diagnostic.Format())
+            );
+
+            return ReportDiagnostics(applied);
+        }
 
         var totalSw = Stopwatch.StartNew();
         var compileSw = Stopwatch.StartNew();
@@ -55,7 +70,10 @@ public static class TranspilerHost
             // Surface the frontend's load-failure diagnostics via the
             // standard reporter so the CLI shows the MS0009 line(s)
             // alongside the raw stderr trace the frontend already wrote.
-            var (frontendWarnings, frontendErrors) = ReportDiagnostics(ir.Diagnostics);
+            var (frontendWarnings, frontendErrors) = ReportDiagnostics(
+                policy.Apply(ir.Diagnostics)
+            );
+
             var errors = frontendErrors > 0 ? frontendErrors : roslynErrorCount;
             return new TranspileResult(false, [], frontendWarnings, errors);
         }
@@ -100,11 +118,27 @@ public static class TranspilerHost
             {
                 target.AdoptCachedOutput(ir, compilation, cached);
 
+                // Replay what the producing run reported (#785): the frontend's
+                // diagnostics are current, the target's come from the cache, and the
+                // policy of this run decides whether they fail it.
+                var (cachedWarnings, cachedErrors) = Report([
+                    .. ir.Diagnostics,
+                    .. cached.Diagnostics,
+                ]);
+
+                if (cachedErrors > 0)
+                {
+                    DeleteStamp(outputDir);
+
+                    return new TranspileResult(false, cached.Files, cachedWarnings, cachedErrors);
+                }
+
                 // Refresh the MSBuild stamp so the next incremental
                 // build still sees a fresh Outputs timestamp even when
                 // the entire pipeline short-circuited via the cache.
-                WriteStamp(outputDir);
-                return new TranspileResult(true, cached.Files, 0, 0);
+                WriteStamp(outputDir, replayLines);
+
+                return new TranspileResult(true, cached.Files, cachedWarnings, 0);
             }
         }
 
@@ -127,10 +161,16 @@ public static class TranspilerHost
             ir.Diagnostics.Count == 0
                 ? output.Diagnostics
                 : ir.Diagnostics.Concat(output.Diagnostics).ToList();
-        var (warningCount, errorCount) = ReportDiagnostics(allDiagnostics);
+        var (warningCount, errorCount) = Report(allDiagnostics);
 
         if (errorCount > 0)
+        {
+            // No stamp for a run that failed, escalated warnings included (#785): a
+            // stamp left by an earlier run must not let the next build skip the target.
+            DeleteStamp(outputDir);
+
             return new TranspileResult(false, output.Files, warningCount, errorCount);
+        }
 
         if (output.Files.Count == 0 && assets.Count == 0)
         {
@@ -140,6 +180,7 @@ public static class TranspilerHost
             // prior manifest so its now-orphaned files are pruned, and refresh the
             // (now-empty) manifest so the next run starts clean.
             PruneOrphanedOutputs(outputDir, output.Files, options);
+
             WriteCacheIfEnabled(
                 options,
                 target,
@@ -150,7 +191,8 @@ public static class TranspilerHost
                 referenceFingerprints,
                 assetSourceHashes,
                 assets,
-                compilation
+                compilation,
+                output.Diagnostics
             );
 
             return new TranspileResult(true, output.Files, warningCount, 0);
@@ -181,12 +223,16 @@ public static class TranspilerHost
             .ToList();
 
         var (assetWarnings, assetErrors) =
-            outputDiagnostics.Count > 0 ? ReportDiagnostics(outputDiagnostics) : (0, 0);
+            outputDiagnostics.Count > 0 ? Report(outputDiagnostics) : (0, 0);
 
         warningCount += assetWarnings;
 
         if (assetErrors > 0)
+        {
+            DeleteStamp(outputDir);
+
             return new TranspileResult(false, output.Files, warningCount, assetErrors);
+        }
 
         // Self-cleaning builds (ADR-0025): the current output set is now written
         // successfully, so remove generated files a previous run produced but this
@@ -214,10 +260,11 @@ public static class TranspilerHost
             referenceFingerprints,
             assetSourceHashes,
             assets,
-            compilation
+            compilation,
+            [.. output.Diagnostics, .. outputDiagnostics]
         );
 
-        WriteStamp(outputDir);
+        WriteStamp(outputDir, replayLines);
 
         return new TranspileResult(true, output.Files, warningCount, 0);
     }
@@ -230,13 +277,21 @@ public static class TranspilerHost
     /// the stamp. The file's content is the run's UTC timestamp;
     /// MSBuild only inspects the file's <c>LastWriteTime</c>, but a
     /// timestamp body makes the file self-describing in tooling that
-    /// opens it.
+    /// opens it. Next to it, <c>.metano-diagnostics</c> keeps the warnings the
+    /// run reported, one canonical line each, so the MSBuild target can report
+    /// them again on a build that skips the transpile (#785).
     /// </summary>
-    private static void WriteStamp(string outputDir)
+    private static void WriteStamp(string outputDir, IReadOnlyList<string> warningLines)
     {
         try
         {
             Directory.CreateDirectory(outputDir);
+
+            if (warningLines.Count > 0)
+                File.WriteAllLines(ReplayPath(outputDir), warningLines);
+            else
+                File.Delete(ReplayPath(outputDir));
+
             File.WriteAllText(
                 StampPath(outputDir),
                 DateTime.UtcNow.ToString("O") + Environment.NewLine
@@ -251,16 +306,22 @@ public static class TranspilerHost
     }
 
     /// <summary>
-    /// Removes <c>&lt;outputDir&gt;/.metano-stamp</c> so the next incremental MSBuild build
-    /// runs the <c>MetanoTranspile</c> target again. A target calls it when a post-emit
+    /// Removes <c>&lt;outputDir&gt;/.metano-stamp</c> (and the warnings kept beside it) so
+    /// the next incremental MSBuild build runs the <c>MetanoTranspile</c> target again. A target calls it when a post-emit
     /// stage it runs after <see cref="RunAsync(TranspileOptions, ITranspilerTarget)"/>
     /// fails, since the stamp of the successful transpile would otherwise let MSBuild
     /// skip the failed stage. Best-effort, like the stamp write after a successful run.
     /// </summary>
-    public static void DeleteStamp(string outputDir) =>
+    public static void DeleteStamp(string outputDir)
+    {
         TryDelete(() => File.Delete(StampPath(outputDir)));
+        TryDelete(() => File.Delete(ReplayPath(outputDir)));
+    }
 
     private static string StampPath(string outputDir) => Path.Combine(outputDir, ".metano-stamp");
+
+    private static string ReplayPath(string outputDir) =>
+        Path.Combine(outputDir, ".metano-diagnostics");
 
     private static bool ShouldAttemptCache(TranspileOptions options) =>
         !options.NoCache && !options.DryRun && !options.Clean;
@@ -287,7 +348,8 @@ public static class TranspilerHost
         IReadOnlyDictionary<string, string>? referenceFingerprints,
         IReadOnlyDictionary<string, string>? assetSourceHashes,
         IReadOnlyList<AssetSpec> assets,
-        Microsoft.CodeAnalysis.Compilation compilation
+        Microsoft.CodeAnalysis.Compilation compilation,
+        IEnumerable<MetanoDiagnostic> diagnostics
     )
     {
         if (options.NoCache || options.DryRun)
@@ -312,7 +374,8 @@ public static class TranspilerHost
             AssetSourceHashes: assetSourceHashes,
             OutputHashes: outputHashes,
             PackageDependencies: output.PackageDependencies,
-            ModuleSideEffectFiles: output.ModuleSideEffectFiles
+            ModuleSideEffectFiles: output.ModuleSideEffectFiles,
+            Diagnostics: CachedDiagnostic.FromAll(diagnostics)
         );
 
         cache.Write(outputDir);
@@ -336,6 +399,7 @@ public static class TranspilerHost
         cached = new CachedTargetOutput(
             [],
             new Dictionary<string, string>(StringComparer.Ordinal),
+            [],
             []
         );
 
@@ -366,7 +430,8 @@ public static class TranspilerHost
         cached = new CachedTargetOutput(
             rehydrated,
             cache.PackageDependencies,
-            cache.ModuleSideEffectFiles ?? []
+            cache.ModuleSideEffectFiles ?? [],
+            CachedDiagnostic.ToAll(cache.Diagnostics)
         );
 
         totalSw.Stop();

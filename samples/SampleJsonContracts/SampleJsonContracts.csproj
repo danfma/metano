@@ -7,6 +7,8 @@
     <MetanoFilePrefix>/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */</MetanoFilePrefix>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
     <MetanoPostBuildCommand>bunx biome check --write &quot;$(MetanoOutputDir)&quot;</MetanoPostBuildCommand>
+    <!-- the sample shows the JSON diagnostics as warnings; the repo-wide TreatWarningsAsErrors would otherwise fail the build (#785). -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);MS0033;MS0037</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>

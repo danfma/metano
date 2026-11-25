@@ -32,6 +32,53 @@ public class TypeScriptArgumentsTests
     }
 
     [Test]
+    public async Task WarningSettings_ReachTheWorker_AsCommaSeparatedMetanoFlags()
+    {
+        WriteProject(
+            """
+            <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+            <WarningsAsErrors>$(WarningsAsErrors);MS0001;nullable</WarningsAsErrors>
+            <WarningsNotAsErrors>MS0002</WarningsNotAsErrors>
+            <NoWarn>$(NoWarn);MS0003;1591</NoWarn>
+            """
+        );
+
+        var run = await Transpile();
+        var arguments = File.ReadAllText(Path.Combine(_root, "arguments.txt"));
+
+        await Assert.That(run.ExitCode).IsEqualTo(0);
+        await Assert.That(arguments).Contains("--warn-as-error");
+        await Assert.That(arguments).Contains("--warnings-as-errors \"MS0001,nullable\"");
+        await Assert.That(arguments).Contains("--warnings-not-as-errors \"MS0002\"");
+        await Assert.That(arguments).Contains("--no-warn \"MS0003,1591\"");
+    }
+
+    [Test]
+    public async Task WithoutWarningSettings_NoWarningFlagIsPassed()
+    {
+        WriteProject("");
+
+        await Transpile();
+        var arguments = File.ReadAllText(Path.Combine(_root, "arguments.txt"));
+
+        await Assert.That(arguments).DoesNotContain("--warn");
+        await Assert.That(arguments).DoesNotContain("--no-warn");
+    }
+
+    [Test]
+    public async Task ChangingAWarningSetting_RerunsTheWorker()
+    {
+        WriteProject("");
+
+        await Transpile();
+        var unchanged = await Transpile();
+        var escalated = await Transpile("-p:MSBuildTreatWarningsAsErrors=true");
+
+        await Assert.That(unchanged.Output).DoesNotContain("WORKER-RAN");
+        await Assert.That(escalated.Output).Contains("WORKER-RAN");
+    }
+
+    [Test]
     public async Task ChangedArguments_Rerun_AndUnchangedArgumentsSkipTheWorker()
     {
         WriteProject("");
