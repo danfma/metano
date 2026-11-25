@@ -2,6 +2,7 @@ using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -71,7 +72,10 @@ internal static class IrToTsSwitchStatementBridge
             new TsSwitchStatement(
                 subject,
                 [.. sw.Cases.SelectMany(section => MapConstantSection(section, context))]
-            ),
+            )
+            {
+                Label = LabelOf(sw),
+            },
         ];
     }
 
@@ -158,7 +162,7 @@ internal static class IrToTsSwitchStatementBridge
             MapTestedSection(section, subject, promoteCatchAllToDefault, context)
         );
 
-        return new TsSwitchStatement(new TsLiteral("true"), [.. cases]);
+        return new TsSwitchStatement(new TsLiteral("true"), [.. cases]) { Label = LabelOf(sw) };
     }
 
     private static bool IsDefaultLabel(IrCaseLabel label) => label is IrDefaultCaseLabel;
@@ -262,4 +266,8 @@ internal static class IrToTsSwitchStatementBridge
             (test, i) => new TsSwitchCase(test, i == labelTests.Count - 1 ? body : [])
         );
     }
+
+    /// <summary>The JavaScript label of a labeled <c>switch</c> (#772), spelled as C# names it.</summary>
+    private static string? LabelOf(IrSwitchStatement sw) =>
+        sw.Label is { } label ? TypeScriptNaming.ToLabel(label) : null;
 }

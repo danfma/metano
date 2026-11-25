@@ -3,7 +3,20 @@ namespace Metano.Compiler.IR;
 /// <summary>
 /// A semantic statement in the IR.
 /// </summary>
-public abstract record IrStatement;
+public abstract record IrStatement
+{
+    /// <summary>
+    /// Where the statement came from in the C# source, for a target that
+    /// reports a diagnostic while it renders the statement; <c>null</c> for a
+    /// statement the core synthesized. Not part of the statement's equality.
+    /// </summary>
+    public IrSourceSpan? Span { get; init; }
+
+    public virtual bool Equals(IrStatement? other) =>
+        other is not null && EqualityContract == other.EqualityContract;
+
+    public override int GetHashCode() => EqualityContract.GetHashCode();
+}
 
 /// <summary>
 /// An expression used as a statement.
@@ -79,7 +92,7 @@ public sealed record IrIfStatement(
 /// A <c>switch</c> statement.
 /// </summary>
 public sealed record IrSwitchStatement(IrExpression Expression, IReadOnlyList<IrSwitchCase> Cases)
-    : IrStatement;
+    : IrBreakableStatement;
 
 /// <summary>
 /// A section of a <c>switch</c> statement: one or more labels sharing a body.
@@ -112,7 +125,7 @@ public sealed record IrForEachStatement(
     IrTypeRef? VariableType,
     IrExpression Collection,
     IReadOnlyList<IrStatement> Body
-) : IrStatement
+) : IrBreakableStatement
 {
     /// <summary>
     /// The static type of the enumerated expression, <c>null</c> when
@@ -147,19 +160,19 @@ public sealed record IrForStatement(
     IrExpression? Condition,
     IReadOnlyList<IrExpression> Incrementors,
     IReadOnlyList<IrStatement> Body
-) : IrStatement;
+) : IrBreakableStatement;
 
 /// <summary>
 /// A <c>while</c> loop.
 /// </summary>
 public sealed record IrWhileStatement(IrExpression Condition, IReadOnlyList<IrStatement> Body)
-    : IrStatement;
+    : IrBreakableStatement;
 
 /// <summary>
 /// A <c>do..while</c> loop.
 /// </summary>
 public sealed record IrDoWhileStatement(IReadOnlyList<IrStatement> Body, IrExpression Condition)
-    : IrStatement;
+    : IrBreakableStatement;
 
 /// <summary>
 /// A <c>try..catch..finally</c> statement.
@@ -216,14 +229,30 @@ public sealed record IrCatchClause(
 }
 
 /// <summary>
+/// A statement a <c>break</c> leaves: a loop or a <c>switch</c>. C# 15 lets a
+/// label name it (<c>outer: for (…)</c>) so a nested <c>break outer;</c> /
+/// <c>continue outer;</c> targets it; every target has a native equivalent
+/// (a JavaScript or Dart label on the same statement).
+/// </summary>
+public abstract record IrBreakableStatement : IrStatement
+{
+    /// <summary>The C# label on the statement, or <c>null</c> when it has none.</summary>
+    public string? Label { get; init; }
+}
+
+/// <summary>
 /// A <c>break</c> statement.
 /// </summary>
-public sealed record IrBreakStatement() : IrStatement;
+/// <param name="Label">The label of the statement it leaves (<c>break outer;</c>),
+/// or <c>null</c> for the innermost one.</param>
+public sealed record IrBreakStatement(string? Label = null) : IrStatement;
 
 /// <summary>
 /// A <c>continue</c> statement.
 /// </summary>
-public sealed record IrContinueStatement() : IrStatement;
+/// <param name="Label">The label of the loop it continues (<c>continue outer;</c>),
+/// or <c>null</c> for the innermost one.</param>
+public sealed record IrContinueStatement(string? Label = null) : IrStatement;
 
 /// <summary>
 /// A <c>yield break</c> statement (terminates an iterator).

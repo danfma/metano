@@ -66,7 +66,7 @@ public static class IrToTsStatementBridge
         var collection = IrToTsExpressionBridge.Map(fe.Collection, context);
         var body = MapBody(fe.Body, context);
         var loopVariable = IrToTsNamingPolicy.ToLocalName(fe.Variable);
-        var loop = fe.IsAwait ? "for await" : "for";
+        var loop = $"{LabelOf(fe)}{(fe.IsAwait ? "for await" : "for")}";
         var header = $"{loop} (const {loopVariable} of {PrintExpression(collection)}) {{";
 
         return new TsRawStatement(WrapLoop(header, body))
@@ -124,7 +124,7 @@ public static class IrToTsStatementBridge
             $"  const {items} = {list}._items;",
             $"  const {length} = {items}.length;",
             $"  const {version} = {checks} ? {list}._version : 0;",
-            $"  for (let {index} = 0; ; {index}++) {{",
+            $"  {LabelOf(fe)}for (let {index} = 0; ; {index}++) {{",
             $"    if ({checks} && ({list}._version !== {version} || {items}.length !== {length})) {PrintExpression(throwModified)};",
             $"    if ({index} === {length}) break;",
             $"    const {loopVariable} = {items}[{index}]!;"
@@ -159,7 +159,7 @@ public static class IrToTsStatementBridge
             "\n",
             "{",
             $"  const {text} = {PrintExpression(collection)};",
-            $"  for (let {index} = 0; {index} < {text}.length; {index}++) {{",
+            $"  {LabelOf(fe)}for (let {index} = 0; {index} < {text}.length; {index}++) {{",
             $"    const {loopVariable} = {text}[{index}]!;"
         );
 
@@ -203,7 +203,7 @@ public static class IrToTsStatementBridge
         var conditionText = condition is null ? string.Empty : PrintExpression(condition);
 
         var header =
-            $"for ({RenderForInitializers(initializers)}; {conditionText}; {RenderCommaList(incrementors)}) {{";
+            $"{LabelOf(fs)}for ({RenderForInitializers(initializers)}; {conditionText}; {RenderCommaList(incrementors)}) {{";
 
         return new TsRawStatement(WrapLoop(header, body))
         {
@@ -314,12 +314,31 @@ public static class IrToTsStatementBridge
     private static string RenderCommaList(IReadOnlyList<TsExpression> expressions) =>
         string.Join(", ", expressions.Select(PrintExpression));
 
+    /// <summary>
+    /// The JavaScript label a loop's header starts with (<c>outer: </c>), the
+    /// target of a labeled <c>break</c> / <c>continue</c> (#772); empty for a
+    /// loop without one. A loop lowered inside its own block carries the
+    /// label on the inner loop, which the jumps target.
+    /// </summary>
+    private static string LabelOf(IrBreakableStatement loop) =>
+        loop.Label is { } label ? $"{TypeScriptNaming.ToLabel(label)}: " : string.Empty;
+
+    /// <summary><c>break</c> / <c>continue</c>, naming the label it targets, if any.</summary>
+    private static TsExpressionStatement Jump(string keyword, string? label) =>
+        new(
+            new TsIdentifier(
+                label is null ? keyword : $"{keyword} {TypeScriptNaming.ToLabel(label)}"
+            )
+        );
+
     private static TsStatement MapWhile(IrWhileStatement ws, IrToTsBridgeContext context)
     {
         var condition = IrToTsExpressionBridge.Map(ws.Condition, context);
         var body = MapBody(ws.Body, context);
 
-        return new TsRawStatement(WrapLoop($"while ({PrintExpression(condition)}) {{", body))
+        var header = $"{LabelOf(ws)}while ({PrintExpression(condition)}) {{";
+
+        return new TsRawStatement(WrapLoop(header, body))
         {
             EmbeddedStatements = body,
             EmbeddedExpressions = [condition],
@@ -332,7 +351,9 @@ public static class IrToTsStatementBridge
         var body = MapBody(dw.Body, context);
         var inner = RenderIndentedBody(body);
 
-        return new TsRawStatement($"do {{\n{inner}}} while ({PrintExpression(condition)});")
+        return new TsRawStatement(
+            $"{LabelOf(dw)}do {{\n{inner}}} while ({PrintExpression(condition)});"
+        )
         {
             EmbeddedStatements = body,
             EmbeddedExpressions = [condition],
@@ -415,7 +436,14 @@ public static class IrToTsStatementBridge
         return inner.TrimEnd(';');
     }
 
-    internal static TsStatement Map(IrStatement statement, IrToTsBridgeContext context) =>
+    internal static TsStatement Map(IrStatement statement, IrToTsBridgeContext context)
+    {
+        using var location = DroppedCodeDiagnostics.At(statement);
+
+        return MapAtLocation(statement, context);
+    }
+
+    private static TsStatement MapAtLocation(IrStatement statement, IrToTsBridgeContext context) =>
         statement switch
         {
             // Yield return surfaces as IrExpressionStatement(IrYieldExpression) —
@@ -509,6 +537,21 @@ public static class IrToTsStatementBridge
                     Const: vd.IsConst,
                     Type: new TsAnyType()
                 ),
+            // A reassigned local declared nullable (`Link? current = link;`):
+            // TypeScript would type it by its initializer and reject a later
+            // `null` store, so the declared type stays (#774). A `var` local
+            // has no declared type and follows its inferred one.
+            IrVariableDeclaration
+            {
+                Type: IrNullableTypeRef declaredType,
+                Initializer: { } initializer,
+                IsConst: false,
+            } vd => new TsVariableDeclaration(
+                IrToTsNamingPolicy.ToLocalName(vd.Name),
+                IrToTsExpressionBridge.Map(initializer, context),
+                Const: false,
+                Type: IrToTsTypeMapper.Map(declaredType, context.TypeOverrides)
+            ),
             IrVariableDeclaration { Initializer: { } initializer } vd
                 when EnumValueAssertion.IsClosedNumericEnum(vd.Type ?? vd.InferredType) =>
                 new TsVariableDeclaration(
@@ -555,8 +598,8 @@ public static class IrToTsStatementBridge
                 )
             ),
             IrBlockStatement block => new TsBlockStatement(MapBody(block.Statements, context)),
-            IrBreakStatement => new TsExpressionStatement(new TsIdentifier("break")),
-            IrContinueStatement => new TsExpressionStatement(new TsIdentifier("continue")),
+            IrBreakStatement jump => Jump("break", jump.Label),
+            IrContinueStatement jump => Jump("continue", jump.Label),
             IrSwitchStatement sw => IrToTsSwitchStatementBridge.Map(sw, context),
             IrYieldBreakStatement => new TsYieldBreakStatement(),
             IrForEachStatement fe => MapForEach(fe, context),
@@ -567,8 +610,24 @@ public static class IrToTsStatementBridge
             IrUnsupportedStatement u => new TsExpressionStatement(
                 new TsIdentifier($"/* TODO: unsupported IR statement {u.Kind} */")
             ),
-            _ => new TsExpressionStatement(
-                new TsIdentifier($"/* TODO: {statement.GetType().Name} */")
-            ),
+            _ => DroppedStatement(statement),
         };
+
+    /// <summary>
+    /// A node the bridge has no lowering for: its placeholder drops the
+    /// statement, so it reports an error (W9-13). An
+    /// <see cref="IrUnsupportedStatement"/> was already reported where it was
+    /// extracted.
+    /// </summary>
+    private static TsStatement DroppedStatement(IrStatement statement)
+    {
+        var kind = statement.GetType().Name;
+
+        DroppedCodeDiagnostics.Report(
+            $"The C# {DroppedCodeDiagnostics.ConstructName(statement)} is not supported by "
+                + "the TypeScript target."
+        );
+
+        return new TsExpressionStatement(new TsIdentifier($"/* TODO: {kind} */"));
+    }
 }

@@ -385,6 +385,8 @@ DefaultValueTextProbes.erasedPrimitives = True|1E-07|True1E-07|True/True/True|1E
 DefaultValueTextProbes.nullNullableText = [||]
 DefaultValueTextProbes.tupleText = (1, a)|(True, 1E-07, (1, a))|(, False)
 DerivedProbes.derivedToString = M3:5|X5|M3:5|Y5|M3:5|M3:5|M3:5|TTT
+DiscardProbes.discardEvaluatesOnce = 4 14
+DiscardProbes.localNamedUnderscore = 8
 DispatchProbes.bigInt = 10|2
 DispatchProbes.direct = objectshapesquaresquarestringint
 DispatchProbes.equalsPair = TTFFFTT
@@ -655,6 +657,11 @@ JsonSerializerCallProbes.nullRoot = null|True
 JsonSerializerCallProbes.roundTripKeepsExactDigits = xé|0.5|79228162514264337593543950335|-9223372036854775808
 JsonSerializerCallProbes.serializeEscapesAndNumbers = {"Text":"\u003Ca\u0026b\u003E\u0027\u002B\u0060\u0022\\\n\u00E9\u20AC/","Number":1E+20,"Money":12345678901234567890.123,"Count":9007199254740993}
 JsonSerializerCallProbes.smallNumbersAndNegativeZero = {"Text":"","Number":1E-07,"Money":0.1,"Count":-1}|{"Text":"","Number":-0,"Money":0,"Count":0}
+LabeledJumpProbes.nestedForAndList = 1,2,break@1
+LabeledJumpProbes.outVarWhileAndDo = 8 4 4 3
+LabeledJumpProbes.stringAndDoWhile = ababab0
+LabeledJumpProbes.switchBreak = 3d
+LabeledJumpProbes.whileContinueAndBreak = 3 4
 LazyAliasShadowProbes.callThroughAlias = cctor-aliased-owner,v=1
 LazyBarrelProbes.viaBarrel = square
 LazyCallGapProbes.emitFailureCached = arg,init-fail,arg,cached=True,end

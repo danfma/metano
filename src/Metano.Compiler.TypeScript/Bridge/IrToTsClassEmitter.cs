@@ -957,10 +957,6 @@ internal sealed class IrToTsClassEmitter(
         IrToTsBridgeContext lowering
     )
     {
-        if (irMethod.Body is { } body)
-            foreach (var stmt in body)
-                ReportUnsupportedInBody(stmt, type);
-
         if (irMethod.OverloadName is not null)
         {
             var overloads = irMethod.Overloads ?? [];
@@ -1703,34 +1699,6 @@ internal sealed class IrToTsClassEmitter(
         method.Body is { } body
             ? IrBodyCoverageProbe.IsFullyCovered(body)
             : method.Semantics.IsAbstract || method.SynthesizedKind is not null;
-
-    /// <summary>
-    /// Reports MS0001 (UnsupportedFeature) when the IR statement extractor
-    /// produced an <see cref="IrUnsupportedStatement"/> for a method body —
-    /// the bridge would emit a "Not implemented" stub for the same node, so
-    /// surfacing the diagnostic alongside keeps the build noisy about gaps.
-    /// The IR doesn't carry per-statement source locations, so the diagnostic
-    /// points at the containing type — granular enough for the user to find
-    /// the offending member. Nested statements are reported too, so a block
-    /// (a lowered <c>checked { }</c>, a branch, a loop body) never hides one.
-    /// </summary>
-    private void ReportUnsupportedInBody(IrStatement stmt, INamedTypeSymbol type)
-    {
-        if (stmt is IrUnsupportedStatement u)
-        {
-            _context.ReportDiagnostic(
-                new MetanoDiagnostic(
-                    MetanoDiagnosticSeverity.Warning,
-                    DiagnosticCodes.UnsupportedFeature,
-                    $"Statement '{u.Kind}' is not supported by the transpiler.",
-                    type.Locations.FirstOrDefault()
-                )
-            );
-        }
-
-        foreach (var nested in IrNodeChildren.StatementsOf(stmt))
-            ReportUnsupportedInBody(nested, type);
-    }
 
     // ─── Constructor helpers ────────────────────────────────────
 

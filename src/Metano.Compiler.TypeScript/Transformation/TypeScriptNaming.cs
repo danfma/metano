@@ -121,4 +121,12 @@ public static class TypeScriptNaming
     /// freely.
     /// </summary>
     public static string EscapeIfReserved(string name) => IsReservedWord(name) ? name + "_" : name;
+
+    /// <summary>
+    /// The JavaScript spelling of a C# statement label (#772): the C# name,
+    /// so two labels C# tells apart stay apart, with a reserved word prefixed
+    /// by <c>$</c>, which no C# identifier holds, so the escape never meets
+    /// another label.
+    /// </summary>
+    public static string ToLabel(string name) => IsReservedWord(name) ? "$" + name : name;
 }

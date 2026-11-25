@@ -54,10 +54,11 @@ public sealed record IrInlineCodeExpression(
 /// expression statement, an expression-bodied <c>void</c> member included. The
 /// target decides how the text ends.
 /// </summary>
+/// <remarks>Its <see cref="IrStatement.Span"/> is the call's, where a target reports
+/// an invalid text.</remarks>
 public sealed record IrInlineCodeStatement(
     IReadOnlyList<IrInlineCodePart> Parts,
-    TargetLanguage Language,
-    IrSourceSpan? Span
+    TargetLanguage Language
 ) : IrStatement;
 
 /// <summary>

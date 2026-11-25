@@ -107,8 +107,11 @@ public sealed class IrStatementExtractor(
 
         if (arrow is not null)
         {
-            var statement = _expressions.InlineCodeStatementOf(arrow.Expression)
-                ?? ArrowStatement(_expressions.Extract(arrow.Expression), isVoid);
+            var statement = IrStatementSpans.WithSpanOf(
+                arrow.Expression,
+                _expressions.InlineCodeStatementOf(arrow.Expression)
+                    ?? ArrowStatement(_expressions.Extract(arrow.Expression), isVoid)
+            );
 
             return new ExtractedBody(_expressions.LowerExpressionVariables(statement), localNames);
         }
@@ -170,7 +173,10 @@ public sealed class IrStatementExtractor(
         return extracted
             .SelectMany(
                 (stmt, index) =>
-                    _expressions.ExpressionVariables.Lower(stmt, extracted[(index + 1)..])
+                    IrStatementSpans.Inherit(
+                        stmt,
+                        _expressions.ExpressionVariables.Lower(stmt, extracted[(index + 1)..])
+                    )
             )
             .ToList();
     }
@@ -287,18 +293,66 @@ public sealed class IrStatementExtractor(
     /// <summary>
     /// The statements one C# statement of a scope extracts to: a local
     /// declaration contributes one declaration per declarator
-    /// (<c>int a = 1, b = 2;</c>), every other statement exactly one. A
-    /// declaration statement only appears directly in a scope — C# rejects it
-    /// as an embedded statement — so it never needs a single-statement form.
+    /// (<c>int a = 1, b = 2;</c>), an empty statement (<c>;</c>) none, every
+    /// other statement exactly one. A declaration statement only appears
+    /// directly in a scope — C# rejects it as an embedded statement — so it
+    /// never needs a single-statement form.
     /// </summary>
     private IEnumerable<IrStatement> ExtractStatementInScope(StatementSyntax statement) =>
-        statement is LocalDeclarationStatementSyntax local
-            ? ExtractDeclarators(local.Declaration, local.IsConst)
-            : [ExtractStatement(statement)];
+        statement switch
+        {
+            LocalDeclarationStatementSyntax local => ExtractLocalDeclaration(local),
+            EmptyStatementSyntax => [],
+            LocalFunctionStatementSyntax function => ExtractLocalFunction(function),
+            _ => [ExtractStatement(statement)],
+        };
+
+    /// <summary>
+    /// A local function declaration emits nothing: no target lowers local
+    /// functions yet. An unused one drops nothing that runs, so it reports
+    /// nothing; one referenced from outside its own body (a call, a method
+    /// group, an event handler, but not <c>nameof</c>) reports the dropped
+    /// declaration (W9-13) — each reference also reports where it is used.
+    /// </summary>
+    private List<IrStatement> ExtractLocalFunction(LocalFunctionStatementSyntax function)
+    {
+        if (LocalFunctionReferences.IsReferenced(_semantic, function))
+        {
+            DroppedCodeDiagnostics.Report(
+                $"The C# local function '{function.Identifier.ValueText}' is not supported by "
+                    + "the transpiler, and the code references it.",
+                function.Identifier.GetLocation()
+            );
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// The declarators of a local declaration. A <c>using</c> declaration
+    /// (<c>using var x = r;</c>) disposes its value at the end of the scope,
+    /// which no target emits yet, so it reports the dropped call.
+    /// </summary>
+    private List<IrStatement> ExtractLocalDeclaration(LocalDeclarationStatementSyntax local)
+    {
+        if (local.UsingKeyword.IsKind(SyntaxKind.UsingKeyword))
+        {
+            DroppedCodeDiagnostics.Report(
+                "The C# using declaration is not supported by the transpiler: its value would "
+                    + "never be disposed at the end of the scope.",
+                local.GetLocation()
+            );
+        }
+
+        return ExtractDeclarators(local.Declaration, local.IsConst);
+    }
 
     private IrStatement ExtractStatement(StatementSyntax statement) =>
-        InlineCodeStatementOf(statement)
-        ?? ReportedIfAsyncIterator(statement, ExtractOrdinaryStatement(statement));
+        IrStatementSpans.WithSpanOf(
+            statement,
+            InlineCodeStatementOf(statement)
+                ?? ReportedIfAsyncIterator(statement, ExtractOrdinaryStatement(statement))
+        );
 
     /// <summary>A <c>Js.Code</c> call as an expression statement keeps its statement form (spec 011 FR-031).</summary>
     private IrStatement? InlineCodeStatementOf(StatementSyntax statement) =>
@@ -310,6 +364,7 @@ public sealed class IrStatementExtractor(
         statement switch
         {
             BlockSyntax block => new IrBlockStatement(ExtractStatementSequence(block.Statements)),
+            EmptyStatementSyntax => new IrBlockStatement([]),
             // `checked { }` / `unchecked { }`: Roslyn folds the context into the
             // IsChecked flag of every operation inside, so the statement lowers
             // to its block.
@@ -343,8 +398,11 @@ public sealed class IrStatementExtractor(
             ),
             TryStatementSyntax ts => ExtractTry(ts),
             SwitchStatementSyntax sw => ExtractSwitch(sw),
-            BreakStatementSyntax => new IrBreakStatement(),
-            ContinueStatementSyntax => new IrContinueStatement(),
+            BreakStatementSyntax jump => new IrBreakStatement(jump.Name?.Identifier.ValueText),
+            ContinueStatementSyntax jump => new IrContinueStatement(
+                jump.Name?.Identifier.ValueText
+            ),
+            LabeledStatementSyntax labeled => ExtractLabeled(labeled),
             YieldStatementSyntax ys
                 when ys.IsKind(SyntaxKind.YieldReturnStatement) && ys.Expression is not null =>
                 new IrExpressionStatement(
@@ -352,7 +410,21 @@ public sealed class IrStatementExtractor(
                 ),
             YieldStatementSyntax ys when ys.IsKind(SyntaxKind.YieldBreakStatement) =>
                 new IrYieldBreakStatement(),
-            _ => new IrUnsupportedStatement(statement.Kind().ToString()),
+            _ => DroppedCodeDiagnostics.UnsupportedStatement(statement),
+        };
+
+    /// <summary>
+    /// A labeled statement (#772). A loop or <c>switch</c> keeps its label,
+    /// which the labeled <c>break</c> / <c>continue</c> of C# 15 target. Any
+    /// other statement can only be reached through its label by a
+    /// <c>goto</c>, which reports where it jumps, so it is extracted without
+    /// one.
+    /// </summary>
+    private IrStatement ExtractLabeled(LabeledStatementSyntax labeled) =>
+        ExtractStatement(labeled.Statement) switch
+        {
+            IrBreakableStatement target => target with { Label = labeled.Identifier.ValueText },
+            var statement => statement,
         };
 
     /// <summary>
@@ -671,7 +743,10 @@ public sealed class IrStatementExtractor(
     ) =>
         declaration
             .Variables.Select(variable =>
-                (IrStatement)ExtractDeclarator(declaration, variable, isConst)
+                IrStatementSpans.WithSpanOf(
+                    variable,
+                    ExtractDeclarator(declaration, variable, isConst)
+                )
             )
             .ToList();
 

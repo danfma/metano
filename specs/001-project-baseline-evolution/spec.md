@@ -1651,6 +1651,66 @@ Product requirements added after the migration (normative; each one is traced by
   `es2024`) avoids. This is a documented limitation of the pair of versions, not of the
   runtime; removing it needs the polyfill, or a design that changes the Temporal-typed
   public API (see the issue).
+- **FR-099** (placeholder severity, wave 9 decisions W9-13 / W9-13a): An unsupported construct
+  whose emission replaces executable code with a placeholder — a `/* TODO … */` marker, a dropped
+  statement or expression, a read that yields nothing instead of the value — MUST report `MS0001`
+  with the severity of the target: an **error** on TypeScript (the output is known to be wrong),
+  a **warning** on the Dart prototype, which does not render every body yet (revisit when it
+  leaves prototype status). `MS0001` stays a **warning** on every target where the emitted code
+  still preserves the .NET behaviour or fails loudly at run time (the expression placeholder that
+  throws when reached). Each report names the C# construct (`The C# for statement is not
+  supported by the Dart target.`) and carries the C# source location: the core records each
+  statement's span on the IR (`IrStatement.Span`, not part of its equality) and a target that
+  renders the IR later reports at the statement it is rendering. The rule lives at the
+  placeholder emission points, in one place (`Extraction/DroppedCodeDiagnostics.cs`, with the
+  target's `DroppedCodePolicy`): a statement no target models (core, at the statement: `lock`,
+  `goto` / `goto case` / `goto default`, …), a `using` declaration (`using var x = r;`, whose
+  `Dispose` would never run), a positional pattern element no member answers (core), a node the
+  TypeScript bridge has no lowering for (statement and expression fallbacks), and each Dart
+  body-printer placeholder (a statement or expression it has no Dart form for, an `[Emit]`
+  template, an `is` pattern, a list or positional pattern outside a `switch`, a `not` pattern in
+  a `switch`, an unsupported pattern); the Dart static-constructor drop and the Dart overloads
+  that keep only the primary signature stay warnings at their declaration. Not placeholders: an
+  empty statement (`;`) emits nothing, and so does a local function declaration, which no target
+  lowers yet: an unused one (or one only its own body or a `nameof` names) drops nothing that
+  runs and reports nothing, while one referenced from elsewhere (matched by symbol: a call, a
+  method group, an event handler, a call before the declaration) reports the dropped declaration
+  at its name, besides the warning each reference reports (its placeholder throws). Tests: `tests/Metano.Tests/DiagnosticsTests.cs`.
+
+- **FR-100** (labeled statements, #772, decision W9-12): A C# label on a loop (`while`, `do`,
+  `for`, `foreach`) or a `switch` statement MUST be kept, and the labeled `break label;` /
+  `continue label;` of C# 15 MUST lower to the native label and jumps of the target: in
+  TypeScript `outer: for (…) { … continue outer; }` and `dispatch: switch (…) { … break
+  dispatch; }`, on the loop itself when a lowering wraps it in a block (the indexed
+  `List<T>` / `string` `foreach`) and on the `switch` inside the block that holds a hoisted
+  subject; in Dart the same label syntax. A labeled `continue` from a nested loop counts as a
+  `continue` of the loop it names, so a lowering that moves a `for` increment into the body does
+  not skip it. A label on any other statement can only be a `goto` target; it is emitted without
+  the label, and the `goto` (also `goto case` / `goto default`), which has no JavaScript
+  equivalent, reports `MS0001` (FR-099). A label keeps its C# spelling, so two labels C# tells
+  apart stay apart (`Outer` and `outer`); a JavaScript reserved word is prefixed with `$`
+  (`$function:`), which no C# identifier holds. Tests:
+  `tests/Metano.Tests/LabeledStatementTests.cs`; conformance `LabeledJumpProbes`.
+
+- **FR-101** (null state proved by a forgiving construct, #775): Where C# flow analysis
+  (`NullableFlowState`) proves a variable, parameter, field or property declared with a nullable
+  reference type non-null by a construct a static type checker does not follow — a
+  null-forgiving `x!` earlier in the flow (`stack!.Value` then `stack.Prev`), or a call whose
+  nullable attributes prove it (`ArgumentNullException.ThrowIfNull(x)`, `string.IsNullOrEmpty`
+  false, a `[MemberNotNull]` method) — the read MUST be asserted non-null (`stack!.prev`) where
+  it is used as non-null: the receiver of a member access, an invocation or an indexer, and an
+  argument to a parameter declared non-nullable. The IR carries the assertion as the existing
+  `NonNullAssertion` unary; it has no runtime effect in TypeScript. A read whose state comes from
+  an assignment, a local's initializer or a null test of the same variable is left unasserted,
+  since checkers narrow on those; the origin is the last such event before the read in the
+  member's source. Nullable-disabled code has no flow state and is unchanged. The IR records why
+  the read is proven (`IrFlowNonNullProof`): the Dart target leaves out the assertion of a local
+  or parameter read after `x!`, which Dart promotes itself, and keeps the others; TypeScript
+  keeps every one (erased, type-only). Known Dart divergence: a field or property keeps its `!`
+  (Dart never promotes a non-final field), and since C# does not reset a field's state across a
+  call that may change it, Dart's run-time `!` throws where .NET lets such a `null` through (a
+  `null` stored in a slot C# proves non-null). Tests:
+  `tests/Metano.Tests/ForgivenNullStateTests.cs` (output type-checked with `tsgo --strict`).
 
 ### Key Entities
 
