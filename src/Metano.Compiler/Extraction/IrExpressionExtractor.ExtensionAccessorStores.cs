@@ -1,3 +1,4 @@
+using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -27,7 +28,7 @@ public sealed partial class IrExpressionExtractor
         AssignmentExpressionSyntax assign
     )
     {
-        var setterName = IrExtensionConventions.SetterName(property);
+        var setterName = IrExtensionConventions.SetterName(property, _target);
         var emittedSetterName = ResolvePropertySetterEmittedName(property);
         var isValueUsed = !IsValueUnused(assign);
 
@@ -55,7 +56,7 @@ public sealed partial class IrExpressionExtractor
         var receiver = Extract(targetSyntax.Expression);
 
         return ReadsCurrentValue(assign)
-            ? BindReceiverOnce(receiver, bound => Store([bound]))
+            ? BindStoreReceiverOnce(receiver, bound => Store([bound]))
             : Store([receiver]);
     }
 
@@ -78,7 +79,7 @@ public sealed partial class IrExpressionExtractor
         )
             return null;
 
-        var setterName = IrExtensionConventions.SetterName(property);
+        var setterName = IrExtensionConventions.SetterName(property, _target);
         var emittedSetterName = ResolvePropertySetterEmittedName(property);
 
         return BuildExtensionAccessorStore(
@@ -242,7 +243,7 @@ public sealed partial class IrExpressionExtractor
         bool isValueUsed
     ) =>
         isValueUsed
-            ? BindValueOnce(value, stored => new IrSequenceExpression([write(stored)], stored))
+            ? BindStoreValueOnce(value, stored => new IrSequenceExpression([write(stored)], stored))
             : write(value);
 
     /// <summary>
@@ -266,9 +267,31 @@ public sealed partial class IrExpressionExtractor
         IReadOnlyList<IrExpression> indices,
         Func<IrExpression, IReadOnlyList<IrExpression>, IrExpression> build
     ) =>
-        BindReceiverOnce(receiver, boundReceiver =>
+        BindStoreReceiverOnce(receiver, boundReceiver =>
             BindEachValueOnce(indices, boundIndices => build(boundReceiver, boundIndices))
         );
+
+    /// <summary>
+    /// <see cref="BindReceiverOnce"/> for an accessor store: the binding is a
+    /// store temporary (<see cref="IrLetExpression.IsStoreTemporary"/>), which
+    /// a backend may assign inline instead of scoping it, so no IIFE (W10-6a).
+    /// </summary>
+    private IrExpression BindStoreReceiverOnce(
+        IrExpression receiver,
+        Func<IrExpression, IrExpression> build
+    ) =>
+        BindOnce(
+            receiver,
+            IrEvaluationTraits.IsReusableReceiver(receiver),
+            build,
+            isStoreTemporary: true
+        );
+
+    /// <summary><see cref="BindValueOnce"/> for an accessor store (see <see cref="BindStoreReceiverOnce"/>).</summary>
+    private IrExpression BindStoreValueOnce(
+        IrExpression value,
+        Func<IrExpression, IrExpression> build
+    ) => BindOnce(value, IrEvaluationTraits.IsSideEffectFree(value), build, isStoreTemporary: true);
 
     private IrExpression BindEachValueOnce(
         IReadOnlyList<IrExpression> values,
@@ -278,7 +301,7 @@ public sealed partial class IrExpressionExtractor
         if (values.Count == 0)
             return build([]);
 
-        return BindValueOnce(values[0], first =>
+        return BindStoreValueOnce(values[0], first =>
             BindEachValueOnce(values.Skip(1).ToList(), rest => build([first, .. rest]))
         );
     }
@@ -302,7 +325,7 @@ public sealed partial class IrExpressionExtractor
             new(
                 extractor,
                 lowering,
-                IrExtensionConventions.SetterName(indexer),
+                IrExtensionConventions.SetterName(indexer, extractor._target),
                 extractor.ResolvePropertySetterEmittedName(indexer)
             );
 

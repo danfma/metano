@@ -1,3 +1,5 @@
+using Metano.Annotations;
+
 namespace Conformance;
 
 public sealed class XiBag
@@ -44,6 +46,27 @@ public static class XiBagExtensions
                 bag.Text = value;
             }
         }
+    }
+}
+
+public sealed class XiGrid
+{
+    public int[] Cells { get; } = [10, 20, 30];
+}
+
+public static class XiGridExtensions
+{
+    extension(XiGrid grid)
+    {
+        [Name("at")]
+        public int this[int index]
+        {
+            get => grid.Cells[index];
+            set => grid.Cells[index] = value;
+        }
+
+        [Name("byName")]
+        public int this[string name] => grid.Cells[name.Length - 1];
     }
 }
 
@@ -134,5 +157,23 @@ public static class ExtensionIndexerProbes
         bag.Flag &= true;
 
         return $"{Show(afterAnd)},{Show(afterOr)},{Show(bag.Flag)}";
+    }
+
+    public static string postIncrementedIndex()
+    {
+        var bag = new XiBag();
+        var i = 0;
+        bag[i++] += 5;
+        bag[i++]++;
+
+        return $"{Show(bag[0])},{Show(bag[1])},{i}";
+    }
+
+    public static string namedIndexers()
+    {
+        var grid = new XiGrid();
+        grid[0] += grid["ab"];
+
+        return $"{grid[0]},{grid["abc"]}";
     }
 }

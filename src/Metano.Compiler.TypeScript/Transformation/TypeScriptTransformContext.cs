@@ -322,16 +322,22 @@ public sealed class TypeScriptTransformContext(
             : null;
 
     private static string ResolvePropertyHelperName(IPropertySymbol property) =>
-        (
-            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
-            ?? TypeScriptNaming.ToCamelCase(IrExtensionConventions.AccessorBaseName(property))
-        ) + IrExtensionConventions.PropertyGetterSuffix;
+        AccessorHelperBaseName(property) + IrExtensionConventions.PropertyGetterSuffix;
 
     private static string ResolvePropertySetterHelperName(IPropertySymbol property) =>
-        (
-            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
-            ?? TypeScriptNaming.ToCamelCase(IrExtensionConventions.AccessorBaseName(property))
-        ) + IrExtensionConventions.PropertySetterSuffix;
+        AccessorHelperBaseName(property) + IrExtensionConventions.PropertySetterSuffix;
+
+    /// <summary>
+    /// The emitted base name of an extension property's or indexer's helpers:
+    /// its <c>[Name]</c> when that renames the whole helper, else the camelCased
+    /// <see cref="IrExtensionConventions.AccessorBaseName"/> (which carries the
+    /// suffix a <c>[Name]</c> pins on an indexer sharing its name with another).
+    /// </summary>
+    private static string AccessorHelperBaseName(IPropertySymbol property) =>
+        IrExtensionConventions.WholeHelperNameOverride(property, TargetLanguage.TypeScript)
+        ?? TypeScriptNaming.ToCamelCase(
+            IrExtensionConventions.AccessorBaseName(property, TargetLanguage.TypeScript)
+        );
 
     /// <summary>
     /// Records <paramref name="ownerRef"/> as the import target for
@@ -545,17 +551,6 @@ public sealed class TypeScriptTransformContext(
             : type.Name;
 
     /// <summary>
-    /// The identifier <paramref name="type"/> is declared under in its TypeScript
-    /// module: the module-local identifier of a nested type declared at module level
-    /// (a <c>private</c> one, #412, or a hoisted one, <see cref="NestedTypes"/>),
-    /// otherwise its own name (<see cref="ResolveOwnTsName"/>). Declarations and the
-    /// identifiers that must match them (predicate types, <c>instanceof</c> operands)
-    /// read this.
-    /// </summary>
-    public string ResolveTsName(INamedTypeSymbol type) =>
-        NestedTypes.ModuleLevelName(type) ?? ResolveOwnTsName(type);
-
-    /// <summary>
     /// The project-type entry of <paramref name="type"/>, looked up by its emitted
     /// name: a <c>[Name]</c>-renamed type's C# name may be another type's emitted
     /// name (<c>[Name("Signals")] static class Signal</c> beside <c>Signal&lt;T&gt;</c>,
@@ -566,6 +561,17 @@ public sealed class TypeScriptTransformContext(
         IReadOnlyDictionary<string, string>? typeNamesBySymbol,
         INamedTypeSymbol type
     ) => transpilableTypes.GetValueOrDefault(ResolveTsName(typeNamesBySymbol, type));
+
+    /// <summary>
+    /// The identifier <paramref name="type"/> is declared under in its TypeScript
+    /// module: the module-local identifier of a nested type declared at module level
+    /// (a <c>private</c> one, #412, or a hoisted one, <see cref="NestedTypes"/>),
+    /// otherwise its own name (<see cref="ResolveOwnTsName"/>). Declarations and the
+    /// identifiers that must match them (predicate types, <c>instanceof</c> operands)
+    /// read this.
+    /// </summary>
+    public string ResolveTsName(INamedTypeSymbol type) =>
+        NestedTypes.ModuleLevelName(type) ?? ResolveOwnTsName(type);
 
     /// <summary>
     /// The target-facing name of <paramref name="type"/> itself, read from the

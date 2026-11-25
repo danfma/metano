@@ -83,16 +83,20 @@ public class ExtensionPropertySetterTests
         );
 
         var output = result["app/caller.ts"];
-        // Receiver Pick() should appear exactly once — the let binding
-        // captures it and both the read and the write reference the temp.
+        // Receiver Pick() should appear exactly once — assigned inline to a
+        // temporary that both the read and the write reference, with no IIFE
+        // (W10-6a).
         var pickOccurrences = CountOccurrences(output, "this.pick()");
         await Assert.That(pickOccurrences).IsEqualTo(1);
-        await Assert.That(output).Contains("count$get(");
-        await Assert.That(output).Contains("count$set(");
-        // IIFE shape signals the let lowering (no statement extraction).
-        // Pin the opener so a future bridge tweak that drops the
-        // outer parens fails the test instead of silently passing.
-        await Assert.That(output).Contains("((receiver$temp$0) =>");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "(receiver$temp$0 = this.pick(), count$set(receiver$temp$0, "
+                    + "(count$get(receiver$temp$0) + 1) | 0));"
+            );
+
+        await Assert.That(output).DoesNotContain("=>");
     }
 
     [Test]
@@ -284,9 +288,12 @@ public class ExtensionPropertySetterTests
             "public int Run(Cell c) { var v = c.Count += 2; return v; }"
         );
 
-        await Assert.That(output).DoesNotContain("const v = count$set(");
-        await Assert.That(output).Contains("count$set(c, receiver$temp$0);");
-        await Assert.That(output).Contains("return receiver$temp$0;");
+        await Assert
+            .That(output)
+            .Contains(
+                "const v = (receiver$temp$0 = (count$get(c) + 2) | 0, count$set(c, receiver$temp$0), "
+                    + "receiver$temp$0);"
+            );
     }
 
     private static string TranspileLabeledCell(string callerMembers)

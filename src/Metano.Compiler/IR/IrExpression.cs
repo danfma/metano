@@ -1466,7 +1466,18 @@ public sealed record IrThrowExpression(IrExpression Expression) : IrExpression;
 /// body expression and the surrounding statement remains an expression.
 /// </summary>
 public sealed record IrLetExpression(string Name, IrExpression Value, IrExpression Body)
-    : IrExpression;
+    : IrExpression
+{
+    /// <summary>
+    /// The binding is a compiler temporary that only evaluates a receiver or an
+    /// index once for the store its body performs, and no closure can observe
+    /// it, so a backend with an inline assignment expression may assign it to a
+    /// temporary of the enclosing statement list (<c>($t = value, body)</c>)
+    /// instead of scoping it. Set by the extension accessor stores (W10-6a);
+    /// the other lowerings keep the scoped form for now.
+    /// </summary>
+    public bool IsStoreTemporary { get; init; }
+}
 
 /// <summary>
 /// Evaluates every expression of <see cref="Effects"/> in order for its side

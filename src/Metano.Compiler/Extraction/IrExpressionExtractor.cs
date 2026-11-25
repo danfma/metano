@@ -684,7 +684,7 @@ public sealed partial class IrExpressionExtractor
         )
         {
             return new ExtensionPropertyLowering(
-                IrExtensionConventions.GetterName(prop),
+                IrExtensionConventions.GetterName(prop, _target),
                 ResolvePropertyEmittedName(prop),
                 parentStatic
             );
@@ -697,7 +697,7 @@ public sealed partial class IrExpressionExtractor
         )
         {
             return new ExtensionPropertyLowering(
-                IrExtensionConventions.GetterName(prop),
+                IrExtensionConventions.GetterName(prop, _target),
                 ResolvePropertyEmittedName(prop),
                 containing
             );
@@ -774,7 +774,8 @@ public sealed partial class IrExpressionExtractor
     private IrExpression BindOnce(
         IrExpression value,
         bool isReusable,
-        Func<IrExpression, IrExpression> build
+        Func<IrExpression, IrExpression> build,
+        bool isStoreTemporary = false
     )
     {
         if (isReusable)
@@ -782,7 +783,10 @@ public sealed partial class IrExpressionExtractor
 
         var tempName = NextReceiverTempName();
 
-        return new IrLetExpression(tempName, value, build(new IrIdentifier(tempName)));
+        return new IrLetExpression(tempName, value, build(new IrIdentifier(tempName)))
+        {
+            IsStoreTemporary = isStoreTemporary,
+        };
     }
 
     /// <summary>
@@ -4625,7 +4629,7 @@ public sealed partial class IrExpressionExtractor
         if (property.SetMethod is null)
             return new IrUnsupportedExpression("ExtensionPropertyIncrementWithoutSetter");
 
-        var setterName = IrExtensionConventions.SetterName(property);
+        var setterName = IrExtensionConventions.SetterName(property, _target);
         var emittedSetterName = ResolvePropertySetterEmittedName(property);
         var getterName = propLowering.HelperName;
         var emittedGetterName = propLowering.EmittedName;
@@ -4658,7 +4662,7 @@ public sealed partial class IrExpressionExtractor
 
         var receiver = Extract(targetSyntax.Expression);
 
-        return BindReceiverOnce(receiver, recv =>
+        return BindStoreReceiverOnce(receiver, recv =>
             StoreIncrementThroughSetter(
                 node,
                 Accessor(getterName, emittedGetterName, [new IrArgument(recv)]),
@@ -4690,15 +4694,19 @@ public sealed partial class IrExpressionExtractor
             return store(step(current));
 
         if (node is PrefixUnaryExpressionSyntax)
-            return BindOnce(step(current), isReusable: false, next => new IrSequenceExpression(
-                [store(next)],
-                next
-            ));
+            return BindOnce(
+                step(current),
+                isReusable: false,
+                next => new IrSequenceExpression([store(next)], next),
+                isStoreTemporary: true
+            );
 
-        return BindOnce(current, isReusable: false, previous => new IrSequenceExpression(
-            [store(step(previous))],
-            previous
-        ));
+        return BindOnce(
+            current,
+            isReusable: false,
+            previous => new IrSequenceExpression([store(step(previous))], previous),
+            isStoreTemporary: true
+        );
     }
 
     /// <summary>
@@ -4763,7 +4771,7 @@ public sealed partial class IrExpressionExtractor
                 return null;
 
             return new ExtensionPropertyLowering(
-                IrExtensionConventions.GetterName(indexer),
+                IrExtensionConventions.GetterName(indexer, _target),
                 ResolvePropertyEmittedName(indexer),
                 parentStatic
             );
@@ -4816,7 +4824,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private string? ResolvePropertySetterEmittedName(IPropertySymbol property)
     {
-        var overrideName = SymbolHelper.GetNameOverride(property, _target);
+        var overrideName = IrExtensionConventions.WholeHelperNameOverride(property, _target);
         return overrideName is null
             ? null
             : overrideName + IrExtensionConventions.PropertySetterSuffix;
@@ -4862,7 +4870,7 @@ public sealed partial class IrExpressionExtractor
             if (prop.IsStatic && receiverSymbol is INamedTypeSymbol)
             {
                 return new ExtensionPropertyLowering(
-                    IrExtensionConventions.GetterName(prop),
+                    IrExtensionConventions.GetterName(prop, _target),
                     ResolvePropertyEmittedName(prop),
                     parentStatic,
                     IsStatic: true
@@ -4873,7 +4881,7 @@ public sealed partial class IrExpressionExtractor
                 return null;
 
             return new ExtensionPropertyLowering(
-                IrExtensionConventions.GetterName(prop),
+                IrExtensionConventions.GetterName(prop, _target),
                 ResolvePropertyEmittedName(prop),
                 parentStatic
             );
@@ -4893,7 +4901,7 @@ public sealed partial class IrExpressionExtractor
                 return null;
 
             return new ExtensionPropertyLowering(
-                IrExtensionConventions.GetterName(prop),
+                IrExtensionConventions.GetterName(prop, _target),
                 ResolvePropertyEmittedName(prop),
                 containing
             );
@@ -4910,7 +4918,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private string? ResolvePropertyEmittedName(IPropertySymbol property)
     {
-        var overrideName = SymbolHelper.GetNameOverride(property, _target);
+        var overrideName = IrExtensionConventions.WholeHelperNameOverride(property, _target);
         return overrideName is null
             ? null
             : overrideName + IrExtensionConventions.PropertyGetterSuffix;

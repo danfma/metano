@@ -1,3 +1,4 @@
+using Metano.Compiler.Diagnostics;
 using static Metano.Tests.Assertions.OutputAssertions;
 
 namespace Metano.Tests;
@@ -126,12 +127,20 @@ public class ExtensionIndexerTests
         );
 
         var output = result["app/caller.ts"];
-        // Receiver Pick() should appear exactly once — the IIFE captures it.
+        // Receiver Pick() should appear exactly once — assigned inline to a
+        // temporary declared at the head of the body, with no IIFE (W10-6a).
         var pickOccurrences = CountOccurrences(output, "this.pick()");
         await Assert.That(pickOccurrences).IsEqualTo(1);
-        await Assert.That(output).Contains("item$get(receiver$temp$0,");
-        await Assert.That(output).Contains("item$set(receiver$temp$0,");
-        await Assert.That(output).Contains("((receiver$temp$0) =>");
+        await Assert.That(output).Contains("let receiver$temp$0;");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "(receiver$temp$0 = this.pick(), item$set(receiver$temp$0, 0, "
+                    + "(item$get(receiver$temp$0, 0) + 1) | 0));"
+            );
+
+        await Assert.That(output).DoesNotContain("=>");
     }
 
     [Test]
@@ -337,6 +346,17 @@ public class ExtensionIndexerTests
         );
 
         await Assert.That(CountOccurrences(output, "this.next()")).IsEqualTo(1);
+        await Assert.That(output).DoesNotContain("=>");
+    }
+
+    [Test]
+    public async Task ExtensionIndexer_PostIncrementedIndex_EvaluatesOnceWithoutIife()
+    {
+        var output = TranspileNullableBag("public void Run(Bag bag, int i) { bag[i++] += 1; }");
+
+        await Assert.That(output).Contains("let receiver$temp$0;");
+        await Assert.That(CountOccurrences(output, "receiver$temp$0 = ")).IsEqualTo(1);
+        await Assert.That(output).DoesNotContain("=>");
     }
 
     [Test]
@@ -346,8 +366,14 @@ public class ExtensionIndexerTests
             "public int? Run(Bag bag) { var x = bag[0]++; return x; }"
         );
 
-        await Assert.That(output).DoesNotContain("const x = item$set(");
-        await Assert.That(output).Contains("return receiver$temp$0;");
+        await Assert
+            .That(output)
+            .Contains(
+                "const x = (receiver$temp$0 = item$get(bag, 0), item$set(bag, 0, receiver$temp$0 "
+                    + "== null ? null : (receiver$temp$0! + 1) | 0), receiver$temp$0);"
+            );
+
+        await Assert.That(output).DoesNotContain("=>");
     }
 
     [Test]
@@ -357,9 +383,7 @@ public class ExtensionIndexerTests
             "public int? Run(Bag bag) { var x = bag[0] = 4; return x; }"
         );
 
-        await Assert.That(output).DoesNotContain("const x = item$set(");
-        await Assert.That(output).Contains("item$set(bag, 0, 4);");
-        await Assert.That(output).Contains("return 4;");
+        await Assert.That(output).Contains("const x = (item$set(bag, 0, 4), 4);");
     }
 
     [Test]
@@ -408,6 +432,83 @@ public class ExtensionIndexerTests
         await Assert.That(output).DoesNotContain("& other");
         await Assert.That(output).Contains("=== false");
     }
+
+    [Test]
+    public async Task TwoIndexersOfOneClassWithoutName_ReportMs0001()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(TwoIndexerSource("", ""));
+
+        var unsupported = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .ToList();
+
+        await Assert
+            .That(unsupported.Count(d => d.Message.Contains("shares its helper name")))
+            .IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task TwoIndexersOfOneClassWithName_PinTheirSuffixes()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            TwoIndexerSource("[Name(\"at\")]", "[Name(\"byKey\")]")
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+
+        var helpers = files["app/bag-extensions.ts"];
+        await Assert.That(helpers).Contains("export function itemAt$get(bag: Bag, index: number)");
+        await Assert.That(helpers).Contains("export function itemAt$set(");
+        await Assert.That(helpers).Contains("export function itemByKey$get(bag: Bag, key: string)");
+
+        var caller = files["app/caller.ts"];
+
+        await Assert
+            .That(caller)
+            .Contains(
+                "import { itemAt$get, itemAt$set, itemByKey$get } from \"./bag-extensions.js\";"
+            );
+
+        await Assert
+            .That(caller)
+            .Contains("itemAt$set(bag, 0, (itemAt$get(bag, 0) + itemByKey$get(bag, \"k\")) | 0);");
+    }
+
+    private static string TwoIndexerSource(string intIndexerName, string stringIndexerName) =>
+        $$"""
+            using System.Collections.Generic;
+            namespace App;
+
+            public class Bag
+            {
+                public List<int> Storage { get; } = new();
+            }
+
+            [Transpile]
+            public static class BagExtensions
+            {
+                extension(Bag bag)
+                {
+                    {{intIndexerName}}
+                    public int this[int index]
+                    {
+                        get => bag.Storage[index];
+                        set => bag.Storage[index] = value;
+                    }
+
+                    {{stringIndexerName}}
+                    public int this[string key] => key.Length;
+                }
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public void Run(Bag bag) { bag[0] += bag["k"]; }
+            }
+            """;
 
     private static string TranspileNullableBag(string callerMembers)
     {

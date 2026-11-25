@@ -103,6 +103,25 @@ public class CrossPackageExtensionAccessorTests
         }
     }
 
+    [Test]
+    public async Task ExtensionIndexerFromAReferencedPackage_ImportsItsAccessors()
+    {
+        const string consumer = """
+            [Transpile]
+            public static class Use
+            {
+                public static int Bump(Sig s) => s[1]++;
+
+                public static void Write(Sig s) { s[2] = 7; }
+            }
+            """;
+
+        await TranspileHelper.AssertGolden(
+            "extension-indexer-cross-package.ts",
+            TranspileHelper.TranspileWithLibrary(Library, consumer)["use.ts"]
+        );
+    }
+
     private static IEnumerable<Dictionary<string, string>> BothLibraryShapes(string consumer)
     {
         yield return TranspileHelper.TranspileWithLibrary(Library, consumer);

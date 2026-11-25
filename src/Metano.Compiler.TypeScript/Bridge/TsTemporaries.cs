@@ -72,6 +72,20 @@ internal sealed class TsTemporaries
     }
 
     /// <summary>
+    /// The temporary <paramref name="name"/> exactly, declared untyped, or
+    /// <c>null</c> when that name is taken here.
+    /// </summary>
+    public TsIdentifier? TryDeclareExactly(string name)
+    {
+        if (IsTaken(null)(name))
+            return null;
+
+        _names.Add(name);
+
+        return new TsIdentifier(name);
+    }
+
+    /// <summary>
     /// A new temporary named after <paramref name="stem"/>, declared with
     /// <paramref name="type"/> (<c>let $c: Circle;</c>) so a closure may read it.
     /// </summary>
