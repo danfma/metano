@@ -25,6 +25,7 @@ public class ObjectArgsPrimaryConstructorTests
         await Assert
             .That(output)
             .Contains("constructor(readonly x: number, readonly y: number = 2) { }");
+
         await Assert
             .That(output)
             .Contains(
@@ -36,6 +37,7 @@ public class ObjectArgsPrimaryConstructorTests
                   }
                 """
             );
+
         await Assert.That(output).Contains("equals(other: any): boolean {");
         await Assert.That(output).Contains("hashCode(): number {");
         await Assert.That(output).Contains("copyRecordWith<Point>(this, overrides)");
@@ -59,9 +61,11 @@ public class ObjectArgsPrimaryConstructorTests
         await Assert
             .That(output)
             .Contains("constructor(readonly a: number, readonly b: string = \"x\") { }");
+
         await Assert
             .That(output)
             .Contains("static create(args: { a: number; b?: string }): Entry {");
+
         await Assert.That(output).Contains("const { a, b = \"x\" } = args;");
     }
 
@@ -115,7 +119,7 @@ public class ObjectArgsPrimaryConstructorTests
 
         await Assert.That(output).Contains("return Point.create({ x: 1 });");
         await Assert.That(output).Contains("return Point.create({ x: 1, y: 7 });");
-        await Assert.That(output).Contains("return Entry.create({ a: 1, b: \"y\" });");
+        await Assert.That(output).Contains("return Entry.create({ b: \"y\", a: 1 });");
         await Assert.That(output).Contains("return p.with({ x: 3 });");
         await Assert.That(output).DoesNotContain("new Point(");
         await Assert.That(output).DoesNotContain("=> ");
@@ -134,7 +138,7 @@ public class ObjectArgsPrimaryConstructorTests
 
             [Transpile]
             [method: ObjectArgs]
-            public record Point3(int X, int Y, int Z = 0) : Point(X, Y);
+            public record Point3(int X, int Y = 2, int Z = 0) : Point(X, Y);
 
             [Transpile]
             public class Use
@@ -148,14 +152,17 @@ public class ObjectArgsPrimaryConstructorTests
 
         await Assert
             .That(derived)
-            .Contains("constructor(x: number, y: number, readonly z: number = 0) {");
+            .Contains("constructor(x: number, y: number = 2, readonly z: number = 0) {");
+
         await Assert.That(derived).Contains("super(x, y);");
+
         await Assert
             .That(derived)
             .Contains(
-                "static override create(args: { x: number; y: number; z?: number }): Point3 {"
+                "static override create(args: { x: number; y?: number; z?: number }): Point3 {"
             );
-        await Assert.That(result["app/use.ts"]).Contains("Point3.create({ x: 1, y: 2, z: 3 })");
+
+        await Assert.That(result["app/use.ts"]).Contains("Point3.create({ x: 1, z: 3 })");
     }
 
     [Test]
@@ -189,7 +196,7 @@ public class ObjectArgsPrimaryConstructorTests
         var output = TranspileHelper.TranspileWithLibrary(library, consumer)["app/use.ts"];
 
         await Assert.That(output).Contains("return Point.create({ x: 1 });");
-        await Assert.That(output).Contains("return Entry.create({ a: 1, b: \"y\" });");
+        await Assert.That(output).Contains("return Entry.create({ b: \"y\", a: 1 });");
     }
 
     [Test]
@@ -223,7 +230,223 @@ public class ObjectArgsPrimaryConstructorTests
                 )
             )
             .IsTrue();
+
         await Assert.That(files["app/column.ts"]).DoesNotContain("static create(");
         await Assert.That(files["app/use.ts"]).DoesNotContain("Column.create");
     }
+
+    [Test]
+    public async Task NamedArgumentsOutOfOrder_KeepEvaluationOrderInTheLiteral()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            [method: ObjectArgs]
+            public record Point(int X, int Y = 2);
+
+            [Transpile]
+            public class Use
+            {
+                static int L(int v) => v;
+
+                public Point Make() => new Point(Y: L(2), X: L(1));
+            }
+            """
+        );
+
+        await Assert
+            .That(result["app/use.ts"])
+            .Contains("return Point.create({ y: Use.l(2), x: Use.l(1) });");
+    }
+
+    [Test]
+    public async Task ParamsParameter_DefaultsToEmptyAndSpreadsIntoTheConstructor()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            [method: ObjectArgs]
+            public record Tags(string Name, params string[] Items);
+
+            [Transpile]
+            public class Use
+            {
+                public Tags A() => new Tags("a", "x", "y");
+                public Tags B() => new Tags("b");
+                public Tags C() => new Tags("c", new[] { "z" });
+            }
+            """
+        );
+
+        var tags = result["app/tags.ts"];
+        var use = Flat(result["app/use.ts"]);
+
+        var factory = "static create(args: { name: string; items?: string[] }): Tags {";
+        var withItems = "return Tags.create({ name: \"a\", items: [\"x\", \"y\"], });";
+
+        await Assert.That(tags).Contains(factory);
+        await Assert.That(tags).Contains("const { name, items = [] } = args;");
+        await Assert.That(tags).Contains("return new Tags(name, ...items);");
+        await Assert.That(use).Contains(withItems);
+        await Assert.That(use).Contains("return Tags.create({ name: \"b\" });");
+        await Assert.That(use).Contains("return Tags.create({ name: \"c\", items: [\"z\"], });");
+    }
+
+    [Test]
+    public async Task AbstractType_HasNoFactoryAndReports()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile, ObjectArgs]
+            public abstract record Shape(string Name);
+
+            [Transpile]
+            public record Circle(double R) : Shape("circle");
+            """
+        );
+
+        await Assert.That(files["app/shape.ts"]).DoesNotContain("static create(");
+        await Assert.That(HasUnsupported(diagnostics, "abstract type 'Shape'")).IsTrue();
+    }
+
+    [Test]
+    public async Task PlainObject_KeepsObjectLiteralAndReports()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile, PlainObject, ObjectArgs]
+            public record Dto(int A, string? B = null);
+
+            [Transpile]
+            public class Use
+            {
+                public Dto Make() => new Dto(1);
+            }
+            """
+        );
+
+        await Assert.That(files["app/use.ts"]).DoesNotContain("Dto.create");
+        await Assert.That(files["app/use.ts"]).Contains("a: 1");
+        await Assert.That(HasUnsupported(diagnostics, "[PlainObject] type 'Dto'")).IsTrue();
+    }
+
+    [Test]
+    public async Task Dart_KeepsPositionalConstruction()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            [method: ObjectArgs]
+            public record Point(int X, int Y = 2);
+
+            [Transpile]
+            public class Use
+            {
+                public Point Make() => new Point(1);
+            }
+            """
+        );
+
+        await Assert.That(string.Join("\n", files.Values)).DoesNotContain("TODO: IrObjectLiteral");
+    }
+
+    [Test]
+    public async Task DerivedFactory_OverridesOnlyWhenTheBaseKeysStayCompatible()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            [method: ObjectArgs]
+            public record Point(int X, int Y = 2);
+
+            [Transpile]
+            [method: ObjectArgs]
+            public record Narrower(int X, int Y) : Point(X, Y);
+
+            [Transpile]
+            [method: ObjectArgs]
+            public record Box<T>(T Value, int Count = 1);
+
+            [Transpile]
+            [method: ObjectArgs]
+            public record IntBox(int Value) : Box<int>(Value);
+
+            [Transpile]
+            public class Use
+            {
+                public Narrower A() => new Narrower(1, 2);
+                public IntBox B() => new IntBox(1);
+            }
+            """
+        );
+
+        await Assert.That(files["app/narrower.ts"]).DoesNotContain("static override create(");
+        await Assert.That(files["app/narrower.ts"]).DoesNotContain("static create(");
+        await Assert.That(files["app/int-box.ts"]).DoesNotContain("create(");
+        await Assert.That(files["app/use.ts"]).Contains("new Narrower(1, 2)");
+        await Assert.That(files["app/use.ts"]).Contains("new IntBox(1)");
+        await Assert.That(HasUnsupported(diagnostics, "cannot override")).IsTrue();
+    }
+
+    [Test]
+    public async Task UserStaticCreate_ReportsInsteadOfDuplicatingTheFactory()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            [method: ObjectArgs]
+            public record Coll(int A)
+            {
+                public static int Create() => 1;
+            }
+            """
+        );
+
+        await Assert.That(files["app/coll.ts"]).DoesNotContain("static create(args");
+        await Assert.That(HasUnsupported(diagnostics, "static member named 'create'")).IsTrue();
+    }
+
+    [Test]
+    public async Task TypeLevelOnStaticClass_SaysThereIsNoConstructor()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile, ObjectArgs]
+            public static class Helpers
+            {
+                public static int F(int a) => a;
+            }
+            """
+        );
+
+        await Assert.That(HasUnsupported(diagnostics, "no constructor to lower")).IsTrue();
+    }
+
+    private static string Flat(string text) =>
+        System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+
+    private static bool HasUnsupported(
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> diagnostics,
+        string text
+    ) =>
+        diagnostics.Any(d =>
+            d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.UnsupportedFeature
+            && d.Message.Contains(text)
+        );
 }

@@ -3020,6 +3020,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IndexerDiagnostics.Report(type, ir, ReportDiagnostic);
         PlainObjectOverloads.ReportCollisions(type, ir, ReportDiagnostic);
 
+        if (IrConstructorExtractor.ObjectArgsProblem(type) is { } objectArgsProblem)
+            ReportUnsupportedBody(type, objectArgsProblem);
+
         return IrToTsPlainObjectBridge.Convert(ir, sink, lowering);
     }
 

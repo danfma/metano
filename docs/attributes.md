@@ -329,7 +329,15 @@ On a constructor, the runtime constructor stays positional and a static
 `create({ ... })` factory takes the object; call sites become `T.create({ ... })`.
 A positional record or primary constructor takes the attribute through
 `[method: ObjectArgs]`; a type-level `[ObjectArgs]` applies to the type's only
-constructor (several constructors report `MS0001`).
+constructor (several constructors report `MS0001`). Arguments are listed in the order the
+source evaluates them; a `params` parameter becomes `items?: T[]` defaulting to
+`[]`. TypeScript only: Dart keeps positional construction.
+
+Not supported (each reports `MS0001`, no factory, positional constructions):
+abstract types, `[PlainObject]` types, a type declaring a static `create`,
+constructor overloading, and a derived type whose factory would not be
+compatible with its base factory (the base must be non-generic and every base
+key must appear in the derived arguments with the same type and requiredness).
 
 ```csharp
 [Transpile]

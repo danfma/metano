@@ -12,10 +12,40 @@ namespace Conformance
 
     /// <summary>A derived record over an [ObjectArgs] base (#739).</summary>
     [method: ObjectArgs]
-    public record OaPoint3(int X, int Y, int Z = 0) : OaPoint(X, Y);
+    public record OaPoint3(int X, int Y = 2, int Z = 0) : OaPoint(X, Y);
+
+    [method: ObjectArgs]
+    public record OaTags(string Name, params string[] Items);
 
     public static class ObjectArgsRecordProbes
     {
+        private static readonly List<string> OaLog = new();
+
+        private static int OaL(string name, int value)
+        {
+            OaLog.Add(name);
+
+            return value;
+        }
+
+        public static string NamedEvaluationOrder()
+        {
+            OaLog.Clear();
+
+            var p = new OaPoint(Y: OaL("y", 2), X: OaL("x", 1));
+
+            return $"{string.Join(",", OaLog)} {p.X} {p.Y}";
+        }
+
+        public static string ParamsExpanded()
+        {
+            var a = new OaTags("a", "x", "y");
+            var b = new OaTags("b");
+            var c = new OaTags("c", new[] { "z" });
+
+            return $"{a.Items.Length}{b.Items.Length}{c.Items.Length} {string.Join("+", a.Items)}";
+        }
+
         public static string DefaultsOmitted()
         {
             var p = new OaPoint(1);

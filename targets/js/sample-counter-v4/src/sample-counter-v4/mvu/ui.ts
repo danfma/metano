@@ -2,14 +2,14 @@
 import type { VNode as InfernoElement } from "inferno";
 import { createElement } from "inferno-create-element";
 
-export function Column(args: { gap?: number; children: InfernoElement[] }): InfernoElement {
-  const { gap = 0, children } = args;
+export function Column(args: { gap?: number; children?: InfernoElement[] }): InfernoElement {
+  const { gap = 0, children = [] } = args;
 
   return createElement("div", { className: `column gap-${gap}` }, children);
 }
 
-export function Row(args: { gap?: number; children: InfernoElement[] }): InfernoElement {
-  const { gap = 0, children } = args;
+export function Row(args: { gap?: number; children?: InfernoElement[] }): InfernoElement {
+  const { gap = 0, children = [] } = args;
 
   return createElement("div", { className: `row gap-${gap}` }, children);
 }

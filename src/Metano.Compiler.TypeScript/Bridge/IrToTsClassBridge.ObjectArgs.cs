@@ -79,9 +79,7 @@ internal static partial class IrToTsClassBridge
             context.Bcl
         );
 
-        var ctorArgs = parameters
-            .Select(p => (TsExpression)new TsIdentifier(IrToTsNamingPolicy.ToParameterName(p.Name)))
-            .ToList();
+        var ctorArgs = parameters.Select(ConstructorArgument).ToList();
 
         TsType returnType = typeParameters is { Count: > 0 } tps
             ? new TsNamedType(typeName, tps.Select(tp => (TsType)new TsNamedType(tp.Name)).ToList())
@@ -103,5 +101,16 @@ internal static partial class IrToTsClassBridge
             TypeParameters: typeParameters,
             Override: overridesBaseFactory
         );
+    }
+
+    /// <summary>
+    /// The factory's argument for <paramref name="parameter"/>: its binding, spread
+    /// when it is a <c>params</c> array (the runtime constructor takes a rest parameter).
+    /// </summary>
+    private static TsExpression ConstructorArgument(IrParameter parameter)
+    {
+        TsExpression binding = new TsIdentifier(IrToTsNamingPolicy.ToParameterName(parameter.Name));
+
+        return parameter.ParamsElementType is null ? binding : new TsSpreadExpression(binding);
     }
 }

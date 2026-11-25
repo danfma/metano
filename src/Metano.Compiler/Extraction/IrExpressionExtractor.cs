@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Metano.Annotations;
 using Metano.Compiler.Analysis;
@@ -117,6 +118,13 @@ public sealed partial class IrExpressionExtractor
     /// receiver is never re-extracted.
     /// </summary>
     private ExpressionSyntax? _conditionalReceiverSyntax;
+
+    /// <summary>
+    /// Whether the target lowers a construction through the <c>create({...})</c>
+    /// factory (#739): TypeScript only, since Dart has no object-literal expression.
+    /// </summary>
+    private bool HonorsObjectArgsConstructors =>
+        _target is null or Metano.Annotations.TargetLanguage.TypeScript;
 
     private string NextReceiverTempName() => _temporaries.Next("receiver$temp$");
 
@@ -3803,23 +3811,46 @@ public sealed partial class IrExpressionExtractor
     {
         if (_semantic.GetOperation(inv) is not IInvocationOperation op)
             return null;
+
+        return new List<IrArgument>
+        {
+            new(new IrObjectLiteral(ObjectArgsPropertiesFromOperation(op.Arguments))),
+        };
+    }
+
+    /// <summary>
+    /// The <c>[ObjectArgs]</c> properties of a call or construction, one per
+    /// argument Roslyn bound, in the order the source evaluates them (a named
+    /// argument keeps its written position). A <c>params</c> expansion folds into
+    /// one array literal, default-filled slots and explicit values equal to the
+    /// parameter's default are skipped.
+    /// </summary>
+    private List<(string Name, IrExpression Value)> ObjectArgsPropertiesFromOperation(
+        ImmutableArray<IArgumentOperation> arguments
+    )
+    {
         var properties = new List<(string Name, IrExpression Value)>();
-        foreach (var arg in op.Arguments)
+
+        foreach (var arg in arguments)
         {
             if (arg.Parameter is null)
                 continue;
+
             if (arg.ArgumentKind == ArgumentKind.DefaultValue)
                 continue;
 
             IrExpression value;
+
             if (
                 arg.ArgumentKind == ArgumentKind.ParamArray
                 && arg.Value is IArrayCreationOperation arrayOp
             )
             {
                 var elements = arrayOp.Initializer?.ElementValues ?? default;
+
                 if (elements.IsDefaultOrEmpty)
                     continue;
+
                 value = new IrArrayLiteral(
                     elements
                         .Select(e =>
@@ -3848,7 +3879,8 @@ public sealed partial class IrExpressionExtractor
 
             properties.Add((arg.Parameter.Name, value));
         }
-        return new List<IrArgument> { new(new IrObjectLiteral(properties)) };
+
+        return properties;
     }
 
     private List<IrArgument> WrapInObjectArgsFromArgs(
@@ -5621,9 +5653,16 @@ public sealed partial class IrExpressionExtractor
 
         var initializer = InitializerOf(creationSyntax);
 
-        if (ctor is not null && IrConstructorExtractor.HasObjectArgsSurface(ctor))
+        if (
+            HonorsObjectArgsConstructors
+            && ctor is not null
+            && IrConstructorExtractor.HasObjectArgsSurface(ctor)
+        )
         {
-            var properties = BuildObjectArgsProperties(ctor, args);
+            var properties = _semantic.GetOperation(creationSyntax) is IObjectCreationOperation op
+                ? ObjectArgsPropertiesFromOperation(op.Arguments)
+                : BuildObjectArgsProperties(ctor, args);
+
             var objectArgsCreation = new IrNewExpression(
                 type,
                 [new IrArgument(new IrObjectLiteral(properties))],

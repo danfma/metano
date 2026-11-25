@@ -65,7 +65,8 @@ internal static class IrToTsObjectArgsBridge
         var key = TypeScriptNaming.ToCamelCase(parameter.Name);
         var binding = IrToTsNamingPolicy.ToParameterName(parameter.Name);
         var type = IrToTsTypeMapper.Map(parameter.Type);
-        var isOptional = parameter.CanBeOmitted;
+        var isParamsArray = parameter.ParamsElementType is not null;
+        var isOptional = parameter.CanBeOmitted || isParamsArray;
         var field = new TsObjectTypeField(key, type, isOptional);
 
         var bindingFragment = key == binding ? key : $"{key}: {binding}";
@@ -73,7 +74,8 @@ internal static class IrToTsObjectArgsBridge
         var defaultSuffix =
             parameter.HasDefaultValue && parameter.DefaultValue is not null
                 ? $" = {RenderDefaultValue(parameter.DefaultValue, bclRegistry)}"
-                : "";
+            : isParamsArray ? " = []"
+            : "";
 
         return (field, $"{bindingFragment}{defaultSuffix}");
     }

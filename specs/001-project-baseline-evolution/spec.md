@@ -1481,7 +1481,7 @@ Product requirements added after the migration (normative; each one is traced by
      A record used as a key that the runtime turns into text (a `ConcurrentDictionary` key's
      `toJSON`) now prints the record text instead of `[object Object]`.
 
-- **FR-095** (`[ObjectArgs]` on primary constructors and positional records, #739, decision W8-1,
+- **FR-096** (`[ObjectArgs]` on primary constructors and positional records, #739, decision W8-1,
   amends the `[ObjectArgs]` constructor behaviour): `[ObjectArgs]` on a constructor already emits
   a positional runtime constructor plus `static create(args: {...})` and lowers `new T(...)` to
   `T.create({...})`. This requirement extends the same lowering, with no new emission strategy,
@@ -1499,7 +1499,20 @@ Product requirements added after the migration (normative; each one is traced by
   be ignored: a type-level attribute on a type with several constructors (or none) reports
   `MS0001` (the existing "not supported" code) and no `create` is emitted, and a constructor
   `[ObjectArgs]` combined with constructor overloading keeps reporting `MS0001`. The Dart target
-  is unchanged.
+  is unchanged: it never lowers a construction to `create` (no object-literal expression), so a
+  Dart construction stays positional. The call site builds its object from the arguments Roslyn
+  bound, in the order the source evaluates them (`new P(Y: F(), X: G())` lists `y` then `x`,
+  with no temporary), folds a `params` expansion into one array literal and omits an argument
+  equal to its default. A `params T[]` parameter is the optional property `items?: T[]`
+  defaulting to `[]`, and the factory spreads it into the positional constructor
+  (`new T(name, ...items)`). Limitations, each reported as `MS0001` with no factory emitted and
+  constructions kept positional: an abstract type; a `[PlainObject]` type (it already
+  constructs as an object literal, so `[PlainObject]` wins); a type declaring a static member
+  named `create`; and a derived type whose factory could not override its nearest base factory
+  without breaking TypeScript's static-side rule (TS2417): the derived factory is emitted as
+  `static override create` only when the base is not generic and every base key appears in the
+  derived arguments with the same type and requiredness. A type-level attribute on a type with
+  no constructor (a static class) reports that there is no constructor to lower.
 
 ### Key Entities
 
