@@ -37,6 +37,13 @@ namespace Conformance
             return $"{string.Join(",", OaLog)} {p.X} {p.Y}";
         }
 
+        public static string NullParamsArray()
+        {
+            var t = new OaTags("a", null!);
+
+            return $"{t.Items?.Length ?? 0}";
+        }
+
         public static string ParamsExpanded()
         {
             var a = new OaTags("a", "x", "y");

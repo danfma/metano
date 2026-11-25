@@ -215,7 +215,7 @@ public static class IrConstructorExtractor
         var typeLevel = type.HasObjectArgs();
 
         if (!typeLevel && !constructors.Any(c => c.HasObjectArgs()))
-            return null;
+            return ShadowsInheritedFactory(type);
 
         if (typeLevel && constructors.Count == 0)
         {
@@ -267,13 +267,37 @@ public static class IrConstructorExtractor
             && DeclarationOrdinalOf(constructor) is not null
         );
 
-    private static bool DeclaresStaticCreate(INamedTypeSymbol type) =>
+    private static bool DeclaresStaticCreate(INamedTypeSymbol type)
+    {
+        for (var current = type; current is { SpecialType: not SpecialType.System_Object }; )
+        {
+            if (DeclaresOwnStaticCreate(current))
+                return true;
+
+            current = current.BaseType;
+        }
+
+        return false;
+    }
+
+    private static bool DeclaresOwnStaticCreate(INamedTypeSymbol type) =>
         type.GetMembers()
             .Any(m =>
                 m.IsStatic
                 && m is not IMethodSymbol { MethodKind: MethodKind.StaticConstructor }
                 && string.Equals(m.Name, "create", StringComparison.OrdinalIgnoreCase)
             );
+
+    /// <summary>
+    /// A type that asks for no <c>[ObjectArgs]</c> but declares its own static
+    /// <c>create</c> under a base type that emits the factory would clash with
+    /// the inherited one (TS2417 / TS4114).
+    /// </summary>
+    private static string? ShadowsInheritedFactory(INamedTypeSymbol type) =>
+        DeclaresOwnStaticCreate(type) && NearestObjectArgsAncestor(type) is { } ancestor
+            ? $"Type '{type.Name}' declares a static member named 'create', which collides with "
+                + $"the [ObjectArgs] create({{...}}) factory it inherits from '{ancestor.Type.Name}'."
+            : null;
 
     /// <summary>
     /// A derived type's <c>static create</c> must override the nearest base

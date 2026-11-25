@@ -3863,6 +3863,9 @@ public sealed partial class IrExpressionExtractor
             }
             else if (arg.Value.Syntax is ExpressionSyntax valueSyntax)
             {
+                if (arg.Parameter.IsParams && IsConstantNull(valueSyntax))
+                    continue;
+
                 value = Extract(valueSyntax);
             }
             else
@@ -5438,6 +5441,9 @@ public sealed partial class IrExpressionExtractor
             symbol
         );
     }
+
+    private bool IsConstantNull(ExpressionSyntax syntax) =>
+        _semantic.GetConstantValue(syntax) is { HasValue: true, Value: null };
 
     /// <summary>
     /// A <c>params</c> array passed as a constant <c>null</c> (<c>f(null)</c>,

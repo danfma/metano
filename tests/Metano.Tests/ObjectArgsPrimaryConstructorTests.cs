@@ -438,6 +438,113 @@ public class ObjectArgsPrimaryConstructorTests
         await Assert.That(HasUnsupported(diagnostics, "no constructor to lower")).IsTrue();
     }
 
+    [Test]
+    public async Task NullParamsArgument_OmitsTheProperty()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            [method: ObjectArgs]
+            public record Tg(string Name, params string[] Items);
+
+            [Transpile]
+            public class Use
+            {
+                public Tg Make() => new Tg("a", null!);
+            }
+            """
+        );
+
+        var use = Flat(result["app/use.ts"]);
+
+        await Assert.That(use).Contains("return Tg.create({ name: \"a\" });");
+        await Assert.That(use).DoesNotContain("items");
+    }
+
+    [Test]
+    public async Task InheritedStaticCreate_ReportsOnTheObjectArgsType()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            public class SB
+            {
+                public static SB Create() => new();
+            }
+
+            [Transpile, ObjectArgs]
+            public class D8(int a) : SB
+            {
+                public int A => a;
+            }
+            """
+        );
+
+        await Assert.That(files["app/d8.ts"]).DoesNotContain("static create(args");
+        await Assert.That(HasUnsupported(diagnostics, "static member named 'create'")).IsTrue();
+    }
+
+    [Test]
+    public async Task DerivedStaticCreateUnderObjectArgsBase_Reports()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile, ObjectArgs]
+            public class Base(int a)
+            {
+                public int A => a;
+            }
+
+            [Transpile]
+            public class Derived(int a) : Base(a)
+            {
+                public static Derived Create(string s) => new(s.Length);
+            }
+            """
+        );
+
+        await Assert.That(HasUnsupported(diagnostics, "inherits from 'Base'")).IsTrue();
+    }
+
+    [Test]
+    [Arguments(
+        "public record Base(int X, int Y = 2);",
+        "public record D(int X) : Base(X)",
+        "missing"
+    )]
+    [Arguments("public class Base(int x);", "public class D(long x) : Base((int)x)", "differs")]
+    [Arguments("public record Base(string? S);", "public record D(string S) : Base(S)", "differs")]
+    [Arguments("public record Base(int X = 1);", "public record D(int X) : Base(X)", "differs")]
+    public async Task DerivedOverride_IncompatibleVariants_Report(
+        string baseRecord,
+        string derivedRecord,
+        string reason
+    )
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            namespace App;
+
+            [Transpile]
+            [method: ObjectArgs]
+            {{baseRecord}}
+
+            [Transpile]
+            [method: ObjectArgs]
+            {{derivedRecord}};
+            """
+        );
+
+        await Assert.That(HasUnsupported(diagnostics, "cannot override")).IsTrue();
+        await Assert.That(HasUnsupported(diagnostics, reason)).IsTrue();
+        await Assert.That(files["app/d.ts"]).DoesNotContain("create(");
+    }
+
     private static string Flat(string text) =>
         System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
 
