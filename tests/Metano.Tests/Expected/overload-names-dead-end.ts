@@ -12,14 +12,9 @@ export class Generic {
   }
 
   m<T>(x: number): number;
-  m(x: number): number;
   m(...args: unknown[]): any {
     if (args.length === 1 && isInt32(args[0])) {
       return this.mInt32$1(args[0] as any);
-    }
-
-    if (args.length === 1 && isInt32(args[0])) {
-      return this.mInt32$2(args[0] as number);
     }
 
     throw new Error("No matching overload for m");

@@ -70,9 +70,18 @@ public static class IrToTsConstructorDispatcherBridge
             return null;
 
         var hasSlot = typeArgumentSlot is not null && typeParameters.Count > 0;
-        var sorted = OverloadDispatchOrder.Sort([primary, .. primary.Overloads], ctor =>
-            ctor.PlainParameters
+        var scope = DispatchScopeOf(primary, typeParameters, context);
+
+        var shadowed = new HashSet<IrConstructorDeclaration>(
+            ShadowedIn(primary, typeParameters, typeArgumentSlot, scope)
+                .Select(found => found.Overload),
+            ReferenceEqualityComparer.Instance
         );
+
+        var sorted = OverloadDispatchOrder
+            .Sort([primary, .. primary.Overloads], ctor => ctor.PlainParameters)
+            .Where(ctor => !shadowed.Contains(ctor))
+            .ToList();
 
         var declared = primary.DeclarationsInOrder;
 
@@ -125,7 +134,7 @@ public static class IrToTsConstructorDispatcherBridge
 
         foreach (var ctor in sorted)
         {
-            body.Add(BuildBranch(ctor, baseCall, typeParameters, typeArgumentSlot, context));
+            body.Add(BuildBranch(ctor, baseCall, typeParameters, typeArgumentSlot, scope, context));
         }
 
         // Unmatched — match the legacy behavior: the bare TS `throw` so a
@@ -296,22 +305,72 @@ public static class IrToTsConstructorDispatcherBridge
         DispatcherBaseCall baseCall,
         IReadOnlyList<IrTypeParameter> typeParameters,
         string? typeArgumentSlot,
+        TypeCheckScope scope,
         IrToTsBridgeContext context
     )
     {
-        var slotReified = SlotReifiedParameters(ctor, typeParameters, typeArgumentSlot);
-        var arguments = new OverloadArgumentShape(ctor.PlainParameters, slotReified);
+        var arguments = ArgumentShapeOf(ctor, typeParameters, typeArgumentSlot);
 
         return new TsIfStatement(
-            arguments.Guard(
-                new TypeCheckScope(typeParameters, context.TypeOverrides)
-                {
-                    RuntimeTypes = context.RuntimeTypes,
-                }
-            ),
+            arguments.Guard(scope),
             BuildBranchBody(ctor, arguments, baseCall, typeParameters, typeArgumentSlot, context)
         );
     }
+
+    /// <summary>
+    /// The constructor overloads whose fallback branch an earlier branch with
+    /// the same runtime test shadows (#778): the dispatcher drops them, their
+    /// factory still reaches them through the selector branch, and the emitter
+    /// reports them through this same rule.
+    /// </summary>
+    internal static IReadOnlyList<
+        ShadowedOverload<IrConstructorDeclaration>
+    > ShadowedConstructorsOf(
+        IrConstructorDeclaration primary,
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        string? typeArgumentSlot,
+        IrToTsBridgeContext context
+    ) =>
+        primary.Overloads is not { Count: > 0 }
+            ? []
+            : ShadowedIn(
+                primary,
+                typeParameters,
+                typeArgumentSlot,
+                DispatchScopeOf(primary, typeParameters, context)
+            );
+
+    private static IReadOnlyList<ShadowedOverload<IrConstructorDeclaration>> ShadowedIn(
+        IrConstructorDeclaration primary,
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        string? typeArgumentSlot,
+        TypeCheckScope scope
+    ) =>
+        ShadowedDispatchOverloads.Find(
+            OverloadDispatchOrder.Sort([primary, .. primary.Overloads ?? []], ctor =>
+                ctor.PlainParameters
+            ),
+            ctor => ArgumentShapeOf(ctor, typeParameters, typeArgumentSlot).Guard(scope),
+            ctor => ShadowedDispatchOverloads.TakesValueReturningDelegate(ctor.PlainParameters)
+        );
+
+    private static TypeCheckScope DispatchScopeOf(
+        IrConstructorDeclaration primary,
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        IrToTsBridgeContext context
+    ) =>
+        new TypeCheckScope(typeParameters, context.TypeOverrides)
+        {
+            RuntimeTypes = context.RuntimeTypes,
+        }.WithDelegateAritiesOf(
+            new[] { primary }.Concat(primary.Overloads ?? []).Select(ctor => ctor.PlainParameters)
+        );
+
+    private static OverloadArgumentShape ArgumentShapeOf(
+        IrConstructorDeclaration ctor,
+        IReadOnlyList<IrTypeParameter> typeParameters,
+        string? typeArgumentSlot
+    ) => new(ctor.PlainParameters, SlotReifiedParameters(ctor, typeParameters, typeArgumentSlot));
 
     private static IReadOnlyList<IrReifiedTypeParameter>? SlotReifiedParameters(
         IrConstructorDeclaration ctor,

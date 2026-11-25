@@ -1711,6 +1711,61 @@ Product requirements added after the migration (normative; each one is traced by
   call that may change it, Dart's run-time `!` throws where .NET lets such a `null` through (a
   `null` stored in a slot C# proves non-null). Tests:
   `tests/Metano.Tests/ForgivenNullStateTests.cs` (output type-checked with `tsgo --strict`).
+- **FR-103** (deconstruction, #779, Group U): Every deconstruction C# accepts in statement
+  position MUST lower without a closure and keep .NET's evaluation order: the receivers and
+  indices of the existing variables written are evaluated first, left to right, then the right
+  side in full — every element of a tuple literal first, then every `Deconstruct` call, depth
+  first — then the writes, left to right. Each written receiver and index, a local included
+  (the right side or a closure may reassign it), is read once into a `const` before the right
+  side; each part converts to its variable as an implicit tuple-element conversion does
+  (`(long l, decimal d) = IntPair()`). This covers
+  `var (a, b) = e`, `(var a, var b) = e`, `(T a, U b) = e`, a mix of declarations and existing
+  variables (`(x, var y) = e`), nesting (`(a, (b, c))`), discards, `foreach (var (k, v) in e)`,
+  and the expression body of a `void` member or lambda (`void Swap() => (a, b) = (b, a);`).
+  1. *Parts.* A value that lowers to a JS array (a `ValueTuple`, an array, a `KeyValuePair`, a
+     `Tuple`, a `[JsTuple]` record) is read by position (`const [a, b] = e`); a record's
+     synthesized `Deconstruct` reads its positional members (`const { x, y } = p`); a user
+     instance `Deconstruct` of a transpiled type is called and its multi-value result read by
+     position (`const [a, b] = p.deconstruct()`, the overload's own name when `Deconstruct` is
+     overloaded). A nested part taken apart by a `Deconstruct` call is bound to a temporary and
+     deconstructed after the enclosing binding.
+  2. *Tuple literals.* A tuple literal on the right side is taken apart element by element
+     (`var (n, s) = (1, "x")` → `const n = 1; const s = "x";`), so no array is allocated only
+     to be read back; a discarded element is still evaluated for its effects.
+  3. *Existing variables.* A local, field, property or array element is written after
+     everything else is evaluated, from a `$partN` temporary (a constant is written as is):
+     `(x, y) = (y, x)` → `const $part0 = y; const $part1 = x; x = $part0; y = $part1;`.
+  4. *Not supported* (MS0001, the unsupported placeholder): an extension or BCL
+     `Deconstruct` (`DateOnly`), a write through a collection indexer or an extension member,
+     and a deconstruction whose value is used (`var t = (x, y) = …`, a `for` incrementor).
+  5. *Dart.* A deconstruction of a tuple (a Dart record) prints as a record pattern
+     (`var (a, (b, _)) = e;`), a tuple literal as one declaration per element; every other
+     shape keeps the unsupported placeholder.
+
+- **FR-104** (indistinguishable dispatcher branches, #778, Group U): A TypeScript overload
+  dispatcher (a constructor, a class method group, or the function group of an
+  `[ExportedAsModule]` / `[NoContainer]` class or an extension container) MUST NOT keep a branch
+  whose runtime test is the same JavaScript as the test of a branch tried before it
+  (`Func<Action, T>` and `Action<Action>` are both a one-parameter function; `JsArray<T>` and
+  `T[]`, `int[]` and `double[]` are both an array): the branch and its overload signature are
+  dropped, the overload's fast path (a constructor's factory) stays, and `MS0063` is reported at
+  the overload, naming the overload that takes its calls and the function hand-written TypeScript
+  must call (`Reactivity.rootActionOfAction`). C# call sites already bind to the fast path
+  (spec 013 FR-018) and are unchanged. `Function.length` is never an exact test (it leaves out
+  ignored, defaulted and rest parameters: `Probes.run(() => 42)` must not throw "No matching
+  overload"): at a parameter position where the overloads' delegates have one arity, the test is
+  `typeof === "function"` alone, so they share it and the dispatcher keeps the overload whose
+  delegate returns a value (`Func<Action, T>` over `Action<Action>`). Where the arities of the
+  overloads whose argument counts overlap differ, each takes a non-overlapping `length` range
+  (arities {0, 2, 3} test `< 2`, `>= 2 && < 3`, `>= 3`), so the dispatch order does not matter
+  and the smallest, with no lower bound, takes a callback that ignores its arguments; overloads
+  of disjoint argument counts test no arity. Limits of `Function.length`: a defaulted or rest
+  parameter shortens it, so `(a, b = 0) => {}` reaches the one-parameter overload; a same-arity
+  value/`void` pair exposes only the value-returning signature to TypeScript, and `MS0063` names
+  the other's fast path (a constructor's factory). A pair that differs only by a branded 64-bit
+  type keeps its existing once-per-group `MS0063`.
+  Dispatchers that also dispatch to a synthesized member and the static groups of a branded
+  companion object apply the delegate test but drop nothing.
 
 ### Key Entities
 

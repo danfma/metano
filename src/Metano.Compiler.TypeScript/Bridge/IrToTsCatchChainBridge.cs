@@ -311,8 +311,8 @@ internal static class IrToTsCatchChainBridge
                 IrVariableDeclaration declaration => IrToTsNamingPolicy.ToLocalName(
                     declaration.Name
                 ) == name,
-                IrTupleDeconstruction deconstruction => deconstruction.Elements.Any(element =>
-                    element.Name is { } bound && IrToTsNamingPolicy.ToLocalName(bound) == name
+                IrTupleDeconstruction deconstruction => deconstruction.BoundNames.Any(bound =>
+                    IrToTsNamingPolicy.ToLocalName(bound) == name
                 ),
                 _ => false,
             }

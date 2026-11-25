@@ -97,6 +97,12 @@ public static class IrBodyPrinter
                 sb.AppendLine(";");
                 break;
 
+            case IrTupleDeconstruction td when DartRecordPattern.Of(td) is { } pattern:
+                sb.Append(indent).Append("var ").Append(pattern).Append(" = ");
+                PrintExpression(sb, td.Initializer);
+                sb.AppendLine(";");
+                break;
+
             case IrIfStatement ifs:
                 sb.Append(indent).Append("if (");
                 PrintExpression(sb, ifs.Condition);

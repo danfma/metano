@@ -57,8 +57,6 @@ IndexProbes.outOfRange THROWS TypeError: undefined is not an object (evaluating 
 IndexProbes.outOfRangeNullable = wasnull
 IndexProbes.refArgs = 1,7
 IndexProbes.structElems THROWS Error: Unsupported expression: ArrayCreationExpression
-IndexProbes.swap THROWS Error: Unsupported expression: tuple deconstruction
-IndexProbes.tupleElems THROWS Error: Unsupported expression: DeclarationExpression
 InteropProbes.inlineCodeExpression = 42
 InteropProbes.inlineCodeHoles = 42
 InteropProbes.inlineCodeStatement = 5

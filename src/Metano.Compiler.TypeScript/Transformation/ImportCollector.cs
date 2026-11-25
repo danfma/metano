@@ -1215,7 +1215,7 @@ public sealed class ImportCollector(
             ],
             TsTopLevelStatement topLevel
                 when topLevel.Inner is TsDestructuringDeclaration destructuring =>
-                destructuring.Names.OfType<string>(),
+                destructuring.BoundNames,
             _ => [],
         };
 
@@ -1759,7 +1759,7 @@ public sealed class ImportCollector(
         statement switch
         {
             TsVariableDeclaration declaration => [declaration.Name],
-            TsDestructuringDeclaration destructuring => destructuring.Names.OfType<string>(),
+            TsDestructuringDeclaration destructuring => destructuring.BoundNames,
             _ => [],
         };
 
@@ -1878,11 +1878,9 @@ public sealed class ImportCollector(
                 // template (e.g. `const [count, setCount] = createSignal(0)`),
                 // so its external imports must be collected the same way a
                 // plain variable initializer's are.
-                foreach (var element in destructuring.Names)
-                {
-                    if (element is not null)
-                        sink.ShadowingNames.Add(element);
-                }
+                foreach (var name in destructuring.BoundNames)
+                    sink.ShadowingNames.Add(name);
+
                 CollectFromExpression(destructuring.Initializer, sink);
                 break;
         }

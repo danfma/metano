@@ -187,6 +187,14 @@ Declarative array-tuple / callable shapes + tuple deconstruction (no hand-writte
 | Interop | `[JsCallable]` interface → direct invocation | TS | Implemented | `Bridge/IrToTsExpressionBridge.cs`, `Annotations/TypeScript/JsCallableAttribute.cs` | `tests/Metano.Tests/JsCallableTranspileTests.cs` | `recv.Invoke(a)`→`recv(a)`; overloaded `Invoke`; erased; misuse → MS0028. |
 | Interop | Tuple deconstruction `var (a,b)=e` | TS | Implemented | `Extraction/IrStatementExtractor.cs`, `TypeScript/AST/TsDestructuringDeclaration.cs` | `tests/Metano.Tests/DeconstructionTranspileTests.cs` | → `const [a, b] = e`; discards supported; flat only. |
 
+## Deconstruction (#779)
+
+FR-103: every deconstruction C# accepts in statement position. Extends the flat `[JsTuple]` row above.
+
+| Area | Feature | Target | Status | Code area | Test | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Statements | `ValueTuple`, record, user `Deconstruct`, nested, mixed and existing-variable deconstruction, discards, `foreach (var (k, v) in e)`, `void` expression bodies | TS, Dart (tuples) | Implemented | `Extraction/IrExpressionExtractor.Deconstruction.cs`, `Extraction/IrExpressionExtractor.DeconstructionLowering.cs`, `Bridge/IrToTsDeconstructionBridge.cs`, `TypeScript/AST/TsBindingTarget.cs`, Dart `Dart/DartRecordPattern.cs` | `tests/Metano.Tests/DeconstructionLoweringTests.cs`, `tests/Conformance/probes/DeconstructionProbes.cs` | C# evaluation order (left receivers, right side, writes); tuple literals taken apart per element. Extension / BCL `Deconstruct`, collection-indexer targets and a deconstruction used as a value report MS0001. Dart prints tuple record patterns only. |
+
 ## Node-resolvable import specifiers (#573)
 
 Implemented. Generated internal imports are relative and `.js`-suffixed, so the output loads under plain Node ESM (22, 24, 26), Bun and TypeScript `nodenext` with no resolve hook, no tsconfig `paths` and no `package.json#imports`. `--import-alias` stays opt-in and writes a valid map (no bare `#`, a `bun` condition before `import`). Spec: [specs/004-configurable-import-alias/ Amendment A1](../../004-configurable-import-alias/spec.md) (FR-011–FR-017; FR-016 is a future extension option).

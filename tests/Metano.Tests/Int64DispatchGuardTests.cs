@@ -172,8 +172,10 @@ public class Int64DispatchGuardTests
     /// <summary>
     /// An overload that names a non-64-bit parameter where the neighbor names
     /// a 64-bit one is not a sibling: <c>Mixed.H(long)</c> is declared before
-    /// <c>Mixed.H(UId)</c> and keeps its slot, so the branded arm (a
-    /// <c>typeof</c> test) never captures the plain <c>long</c> call.
+    /// <c>Mixed.H(UId)</c> and keeps its slot, so the branded arm never
+    /// captures the plain <c>long</c> call. The branded wrapper tests its
+    /// underlying long (spec 011 FR-022), the same test, so the dispatcher
+    /// drops its unreachable arm (#778) and keeps its fast path.
     /// </summary>
     [Test]
     public async Task Siblings_BrandedNeighborKeepsDeclarationOrder()
@@ -184,7 +186,6 @@ public class Int64DispatchGuardTests
 
         var longBranch = output.IndexOf("isInt64(args[0])", StringComparison.Ordinal);
 
-        // The branded wrapper tests its underlying long (spec 011 FR-022).
         var brandedBranch = output.IndexOf(
             "isInt64(args[0])",
             longBranch + 1,
@@ -192,7 +193,9 @@ public class Int64DispatchGuardTests
         );
 
         await Assert.That(longBranch).IsGreaterThan(-1);
-        await Assert.That(brandedBranch).IsGreaterThan(longBranch);
+        await Assert.That(output).Contains("return this.hL(args[0] as bigint);");
+        await Assert.That(brandedBranch).IsEqualTo(-1);
+        await Assert.That(output).Contains("hU(u: UId): string {");
     }
 
     /// <summary>

@@ -576,11 +576,7 @@ public static class IrToTsStatementBridge
                     DeconstructedValue(td, context)
                 )
             ),
-            IrTupleDeconstruction td => new TsDestructuringDeclaration(
-                td.Elements.Select(LocalElementName).ToList(),
-                DeconstructedValue(td, context),
-                Const: td.IsConst
-            ),
+            IrTupleDeconstruction td => IrToTsDeconstructionBridge.Map(td, context),
             IrIfStatement ifs => new TsIfStatement(
                 IrToTsExpressionBridge.Map(ifs.Condition, context),
                 MapBody(ifs.Then, context),

@@ -386,21 +386,32 @@ public static class IrToTsOverloadDispatcherBridge
 
         var typeOverrides = context.TypeOverrides;
         var inherited = group.Primary.InheritedOverloads ?? [];
-        var branches = OverloadDispatchOrder.Sort(group.Branches, m => m.Parameters);
+
+        var classScope = new TypeCheckScope(classTypeParameters, typeOverrides)
+        {
+            RuntimeTypes = context.RuntimeTypes,
+        }.WithDelegateAritiesOf(group.Branches.Select(branch => branch.Parameters));
+
+        var shadowed = new HashSet<IrMethodDeclaration>(
+            ShadowedIn(group, classScope).Select(found => found.Overload),
+            ReferenceEqualityComparer.Instance
+        );
+
+        var branches = OverloadDispatchOrder
+            .Sort(group.Branches, m => m.Parameters)
+            .Where(branch => !shadowed.Contains(branch))
+            .ToList();
 
         var signatures = OverloadDispatchOrder
             .Sort(inherited, m => m.Parameters)
             .Concat(OverloadDispatchOrder.Sort(SignatureMembersOf(group), m => m.Parameters))
+            .Where(member => !shadowed.Contains(member))
             .ToList();
 
         var plan = PlanOverloadGroup(signatures, typeOverrides, sort: false);
         var overridesInherited = kind is IrDispatcherKind.OverridesInherited;
         var name = TsClassMemberTable.MethodNameOf(group.Primary);
         var receiver = DispatchReceiver(group.Primary.IsStatic, containingTypeName);
-        var classScope = new TypeCheckScope(classTypeParameters, typeOverrides)
-        {
-            RuntimeTypes = context.RuntimeTypes,
-        };
 
         var unmatched = overridesInherited
             ? ForwardToBase(name, inherited)
@@ -438,6 +449,56 @@ public static class IrToTsOverloadDispatcherBridge
             Override: overridesInherited || overridesBaseValueEquality
         );
     }
+
+    /// <summary>
+    /// The overloads of <paramref name="primary"/>'s dispatchers whose
+    /// runtime test repeats an earlier overload's (#778), which the
+    /// dispatchers drop: the emitter reports them through this same rule.
+    /// </summary>
+    internal static IReadOnlyList<ShadowedOverload<IrMethodDeclaration>> ShadowedOverloadsOf(
+        IrMethodDeclaration primary,
+        IReadOnlyList<IrTypeParameter> classTypeParameters,
+        IrToTsBridgeContext context
+    )
+    {
+        var group = IrMethodGroup.Of(LiftClassTypeParameters(primary, classTypeParameters));
+
+        if (!group.IsDispatched || group.DispatcherKind is IrDispatcherKind.None)
+            return [];
+
+        var classScope = new TypeCheckScope(classTypeParameters, context.TypeOverrides)
+        {
+            RuntimeTypes = context.RuntimeTypes,
+        };
+
+        return
+        [
+            .. (StaticAndInstanceSidesOf(group) ?? [group]).SelectMany(side =>
+                ShadowedIn(side, classScope)
+            ),
+        ];
+    }
+
+    /// <summary>
+    /// The branches of <paramref name="group"/>'s dispatcher that an earlier
+    /// branch with the same test shadows. A dispatcher that also dispatches to
+    /// a synthesized member keeps its own order rules and is left as it is.
+    /// </summary>
+    private static IReadOnlyList<ShadowedOverload<IrMethodDeclaration>> ShadowedIn(
+        IrMethodGroup group,
+        TypeCheckScope classScope
+    ) =>
+        group.Synthesized is not null || group.DispatcherKind is IrDispatcherKind.None
+            ? []
+            : ShadowedDispatchOverloads.Find(
+                OverloadDispatchOrder.Sort(group.Branches, m => m.Parameters),
+                method =>
+                    BranchTestOf(
+                        method,
+                        classScope.WithDelegateAritiesOf(group.Branches.Select(b => b.Parameters))
+                    ),
+                method => ShadowedDispatchOverloads.TakesValueReturningDelegate(method.Parameters)
+            );
 
     /// <summary>
     /// The members whose signatures the dispatcher declares besides the
@@ -562,10 +623,12 @@ public static class IrToTsOverloadDispatcherBridge
                     methods,
                     group.FastPaths.Select(fastPath => fastPath.Name).ToList(),
                     receiver: companion,
-                    TypeCheckScope.Empty with
-                    {
-                        RuntimeTypes = context.RuntimeTypes,
-                    },
+                    (
+                        TypeCheckScope.Empty with
+                        {
+                            RuntimeTypes = context.RuntimeTypes,
+                        }
+                    ).WithDelegateAritiesOf(methods.Select(method => method.Parameters)),
                     NoMatchingOverload(ErrorNameOf(group, methods[0]))
                 ),
                 Exported: true,
@@ -929,7 +992,7 @@ public static class IrToTsOverloadDispatcherBridge
         TypeCheckScope classScope
     )
     {
-        var arguments = new OverloadArgumentShape(method.Parameters, method.ReifiedTypeParameters);
+        var arguments = ArgumentShapeOf(method);
 
         var delegateCall = new TsCallExpression(
             FastPathCallee(receiver, fastPathName),
@@ -943,10 +1006,19 @@ public static class IrToTsOverloadDispatcherBridge
         );
 
         return new TsIfStatement(
-            arguments.Guard(classScope.Within(method)),
+            BranchTestOf(method, classScope),
             BuildBranchStatements(method, delegateCall)
         );
     }
+
+    /// <summary>The runtime test of <paramref name="method"/>'s dispatcher branch.</summary>
+    private static TsExpression BranchTestOf(
+        IrMethodDeclaration method,
+        TypeCheckScope classScope
+    ) => ArgumentShapeOf(method).Guard(classScope.Within(method));
+
+    private static OverloadArgumentShape ArgumentShapeOf(IrMethodDeclaration method) =>
+        new(method.Parameters, method.ReifiedTypeParameters);
 
     /// <summary>
     /// The name a companion dispatcher's error spells, as its class

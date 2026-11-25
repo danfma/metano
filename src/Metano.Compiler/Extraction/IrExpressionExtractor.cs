@@ -4288,7 +4288,7 @@ public sealed partial class IrExpressionExtractor
     {
         var receiverType = ResolveLambdaReceiverType(lambda);
         var parameter = BuildLambdaParameter(lambda.Parameter);
-        var body = ExtractLambdaBody(lambda.Body);
+        var body = ExtractLambdaBody(lambda);
         var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
             WithTargetParams(lambda, [parameter]),
@@ -4309,7 +4309,7 @@ public sealed partial class IrExpressionExtractor
     {
         var receiverType = ResolveLambdaReceiverType(lambda);
         var parameters = lambda.ParameterList.Parameters.Select(BuildLambdaParameter).ToList();
-        var body = ExtractLambdaBody(lambda.Body);
+        var body = ExtractLambdaBody(lambda);
         var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
             WithTargetParams(lambda, parameters),
@@ -4383,8 +4383,8 @@ public sealed partial class IrExpressionExtractor
     /// (<c>x => { ... return x + 1; }</c>). We normalize to a list of
     /// <see cref="IrStatement"/> so the IR carries a single uniform shape.
     /// </summary>
-    private IReadOnlyList<IrStatement> ExtractLambdaBody(CSharpSyntaxNode body) =>
-        body switch
+    private IReadOnlyList<IrStatement> ExtractLambdaBody(LambdaExpressionSyntax lambda) =>
+        lambda.Body switch
         {
             // The lambda's block inherits the member's local-binding renames
             // (#398): the member-level walk already covers the lambda's own
@@ -4397,13 +4397,19 @@ public sealed partial class IrExpressionExtractor
             )
                 .ExtractBody(block, arrow: null, isVoid: false)
                 .Statements,
+            // A `void` lambda discards its body's value, so a deconstruction
+            // body lowers like the statement it stands for.
+            ExpressionSyntax expr
+                when VoidReturnTypeOf(lambda) is not null
+                    && TryLowerDeconstruction(expr) is { } deconstruction =>
+                IrStatementExtractor.PromoteEffectiveConsts(deconstruction),
             ExpressionSyntax expr => LowerExpressionVariables(
                 IrStatementSpans.WithSpanOf(
                     expr,
                     InlineCodeStatementOf(expr) ?? LambdaExpressionBodyStatement(expr)
                 )
             ),
-            _ => [DroppedCodeDiagnostics.UnsupportedStatement(body)],
+            var body => [DroppedCodeDiagnostics.UnsupportedStatement(body)],
         };
 
     /// <summary>

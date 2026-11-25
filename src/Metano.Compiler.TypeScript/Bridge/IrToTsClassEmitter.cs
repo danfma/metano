@@ -430,6 +430,16 @@ internal sealed class IrToTsClassEmitter(
                         RuntimeTypes = RuntimeTypeReachabilityResult.Unchecked,
                     }
                 );
+
+                ShadowedOverloadReporter.ReportConstructors(
+                    type,
+                    constructor,
+                    ir.TypeParameters ?? [],
+                    ir.TypeArgumentSlot,
+                    selectors.Claims,
+                    lowering,
+                    _context.ReportDiagnostic
+                );
             }
 
             // The IR pipeline owns multi-constructor dispatch. When the body
@@ -982,6 +992,15 @@ internal sealed class IrToTsClassEmitter(
                 {
                     RuntimeTypes = RuntimeTypeReachabilityResult.Unchecked,
                 }
+            );
+
+            ShadowedOverloadReporter.ReportMethods(
+                type,
+                irMethod,
+                ir.TypeParameters ?? [],
+                claims,
+                lowering,
+                _context.ReportDiagnostic
             );
 
             var dispatcher = TryBuildOverloadDispatcherFromIr(

@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 public class MethodOverloadTests
@@ -165,6 +167,7 @@ public class MethodOverloadTests
         await Assert
             .That(output)
             .Contains("build(name: string, count: number, flag: boolean): string;");
+
         await Assert.That(output).Contains("build(name: string, count: number): string;");
         await Assert.That(output).Contains("build(name: string): string;");
         // Dispatcher
@@ -228,7 +231,7 @@ public class MethodOverloadTests
     }
 
     [Test]
-    public async Task DelegateOverload_DispatchesOnTypeofFunctionAndArity()
+    public async Task DelegateOverload_DispatchesOnTypeofFunction()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -245,9 +248,8 @@ public class MethodOverloadTests
         );
 
         var output = result["app/setter.ts"];
-        await Assert
-            .That(output)
-            .Contains("typeof args[0] === \"function\" && args[0].length === 1");
+        await Assert.That(output).Contains("typeof args[0] === \"function\")");
+        await Assert.That(output).DoesNotContain("args[0].length");
     }
 
     [Test]
@@ -269,15 +271,19 @@ public class MethodOverloadTests
 
         var output = result["app/pipe.ts"];
         await Assert.That(output).Contains("args[0] === null");
-        await Assert
-            .That(output)
-            .Contains("typeof args[0] === \"function\" && args[0].length === 1");
+        await Assert.That(output).Contains("typeof args[0] === \"function\"");
+        await Assert.That(output).DoesNotContain("args[0].length");
     }
 
+    /// <summary>
+    /// Delegate overloads of different arities stay apart (#778) by
+    /// non-overlapping <c>Function.length</c> ranges; the smallest has no
+    /// lower bound, so a callback that ignores its arguments still lands.
+    /// </summary>
     [Test]
-    public async Task DelegateOverload_DifferentArity_DistinguishesByArityCheck()
+    public async Task DelegateOverload_DifferentArity_DispatchesByLengthRange()
     {
-        var result = TranspileHelper.Transpile(
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using System;
             namespace App;
@@ -292,7 +298,24 @@ public class MethodOverloadTests
         );
 
         var output = result["app/bus.ts"];
-        await Assert.That(output).Contains("args[0].length === 0");
-        await Assert.That(output).Contains("args[0].length === 1");
+
+        var wider = output.IndexOf(
+            "if (args.length === 1 && typeof args[0] === \"function\" && args[0].length >= 1) {",
+            StringComparison.Ordinal
+        );
+
+        var narrower = output.IndexOf(
+            "if (args.length === 1 && typeof args[0] === \"function\" && args[0].length < 1) {",
+            StringComparison.Ordinal
+        );
+
+        await Assert.That(wider).IsGreaterThan(-1);
+        await Assert.That(narrower).IsGreaterThan(wider);
+        await Assert.That(output).Contains("this.subscribeActionOfInt32(");
+        await Assert.That(output).Contains("this.subscribeAction(");
+
+        await Assert
+            .That(diagnostics.Count(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch))
+            .IsEqualTo(0);
     }
 }

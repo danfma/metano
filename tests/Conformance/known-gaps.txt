@@ -79,8 +79,6 @@ EqualityProbes.objectArrays           #688  a tuple is a plain array, so arrays 
 EqualityProbes.objectBoxed            #684  a boxed int and a boxed double are the same JavaScript number
 IndexProbes.nested                    #688  array-creation expression unsupported
 IndexProbes.structElems               #688  array-creation expression unsupported
-IndexProbes.swap                      #688  tuple deconstruction unsupported
-IndexProbes.tupleElems                #688  declaration expression unsupported
 IndexProbes.refArgs                   none  a ref argument that is an array element is passed by value
 LinqProbes.intOverflowSum             #639  checked int arithmetic in LINQ sums
 LinqSetProbes.comparers               #687  equality comparers are not accepted

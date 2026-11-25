@@ -2920,6 +2920,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 group.Select(FunctionOverloadShape.Of).ToList()
             );
 
+            ShadowedOverloadReporter.ReportFunctions(
+                type,
+                group,
+                Context.ModuleFunctionClaims,
+                lowering,
+                Context.ReportDiagnostic
+            );
+
             IrToTsModuleBridge.ConvertDispatchedGroup(
                 group,
                 Context.ModuleFunctionClaims,
