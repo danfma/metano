@@ -2764,6 +2764,8 @@ public sealed partial class IrExpressionExtractor
         // BclMapper behavior. Similarly `decimal.Parse(s)` rewrites to
         // `new Decimal(s)`.
         var symbol = _semantic.GetSymbolInfo(member.Node).Symbol;
+        ReportUnmodeledBclMember(member.Node, symbol as IPropertySymbol);
+
         if (symbol is IFieldSymbol { IsStatic: true } field)
         {
             var displayName = field.ContainingType?.ToDisplayString();
@@ -3289,6 +3291,7 @@ public sealed partial class IrExpressionExtractor
 
         var symbol = _semantic.GetSymbolInfo(inv).Symbol as IMethodSymbol;
         ReportTupleValueLookup(inv, symbol);
+        ReportUnmodeledBclMember(inv, symbol);
 
         if (TryExtractGetType(inv, symbol) is { } getType)
             return getType;

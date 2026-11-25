@@ -422,6 +422,7 @@
     "system/linq/terminals",
     "system/linq/types",
     "system/math",
+    "system/min-max",
     "system/number-members",
     "system/number-parsing",
     "system/record-copy",

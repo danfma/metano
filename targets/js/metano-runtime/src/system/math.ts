@@ -12,6 +12,7 @@
 import { ArgumentException } from "./exceptions/argument-exception.ts";
 import { ArgumentOutOfRangeException } from "./exceptions/argument-out-of-range-exception.ts";
 import { OverflowException } from "./exceptions/overflow-exception.ts";
+import { throwMinGreaterThanMax } from "./min-max.ts";
 
 /**
  * Mirror of `System.MidpointRounding`. The numeric values match the .NET enum, so a
@@ -198,4 +199,47 @@ export function absInt32(value: number): number {
   }
 
   return Math.abs(value);
+}
+
+/**
+ * `Math.Clamp(value, min, max)` for the `int`, `short`, `byte`, `float`, `double` (and the
+ * other `number`-backed) overloads (#750); JavaScript has no `Math.clamp`. A `NaN` `value`
+ * stays `NaN`, as in .NET.
+ *
+ * @throws ArgumentException, with .NET's message, when `min` is greater than `max`.
+ */
+export function clampNumber(value: number, min: number, max: number): number {
+  if (min > max) {
+    throwMinGreaterThanMax(min, max);
+  }
+
+  if (value < min) {
+    return min;
+  }
+
+  return value > max ? max : value;
+}
+
+/** Structural view of a `decimal.js` `Decimal`, the only operations {@link clampDecimal} uses. */
+export interface DecimalClampable<D> {
+  lt(other: D): boolean;
+  gt(other: D): boolean;
+  toString(): string;
+}
+
+/**
+ * `Math.Clamp(decimal, decimal, decimal)` (#750): the `Decimal` keeps its kind.
+ *
+ * @throws ArgumentException, with .NET's message, when `min` is greater than `max`.
+ */
+export function clampDecimal<D extends DecimalClampable<D>>(value: D, min: D, max: D): D {
+  if (min.gt(max)) {
+    throwMinGreaterThanMax(min, max);
+  }
+
+  if (value.lt(min)) {
+    return min;
+  }
+
+  return value.gt(max) ? max : value;
 }

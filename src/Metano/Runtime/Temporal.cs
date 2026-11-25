@@ -140,6 +140,49 @@ using Metano.Annotations;
     ]
 )]
 
+// Constructors with a `DateTimeKind` (#753): a `Temporal.PlainDateTime` carries no kind, so the
+// argument is dropped (the same limit the `(DateTime, TimeSpan)` offset constructor documents
+// below) and the value lowers like the kind-less overload. Without these entries the call fell
+// through to `new Temporal.PlainDateTime(..., DateTimeKind.Utc)`, with no import for either name.
+[assembly: MapMethod(
+    typeof(DateTime),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainDateTimeFromTicks($0)",
+    RuntimeImports = "plainDateTimeFromTicks",
+    WhenParameterTypes = [typeof(long), typeof(DateTimeKind)]
+)]
+[assembly: MapMethod(
+    typeof(DateTime),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainDateTime($0, $1, $2, $3, $4, $5)",
+    RuntimeImports = "plainDateTime",
+    WhenParameterTypes = [
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(DateTimeKind),
+    ]
+)]
+[assembly: MapMethod(
+    typeof(DateTime),
+    MapMethodAttribute.ConstructorName,
+    JsTemplate = "plainDateTime($0, $1, $2, $3, $4, $5, $6)",
+    RuntimeImports = "plainDateTime",
+    WhenParameterTypes = [
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(int),
+        typeof(DateTimeKind),
+    ]
+)]
+
 // TimeSpan components (#673): `new TimeSpan(0, 5, 0)` is five minutes, where
 // `new Temporal.Duration(0, 5, 0)` reads its arguments as years, months and weeks. The runtime
 // builds the duration from the component sum and throws .NET's `ArgumentOutOfRangeException`

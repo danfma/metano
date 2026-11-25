@@ -156,6 +156,18 @@ unmapped (MS0001). `DateTimeOffset` takes an offset in whole minutes within four
 9999; a `DateTime` argument carries no kind in TypeScript, so the UTC-kind offset check is
 skipped.
 
+### `DateTime` with a `DateTimeKind` (#753)
+
+| C# | TypeScript |
+|----|----|
+| `new DateTime(y, mo, d, h, mi, s, kind)` / `(…, ms, kind)` | `plainDateTime(y, mo, d, h, mi, s)` / `plainDateTime(…, ms)` |
+| `new DateTime(ticks, kind)` | `plainDateTimeFromTicks(ticks)` |
+
+A `Temporal.PlainDateTime` carries no kind, so the `kind` argument is dropped: the value keeps
+its wall time, but a `Utc` value serialized to JSON writes `2024-03-05T10:20:30` where .NET
+writes `2024-03-05T10:20:30Z`. `DateTime.Kind`, `ToUniversalTime()`, `ToLocalTime()` and
+`DateTime.SpecifyKind(...)` have no counterpart and report MS0001.
+
 The `@js-temporal/polyfill` dependency is added to your `package.json`
 automatically whenever any Temporal mapping is used.
 
@@ -470,6 +482,15 @@ built-in only does reference equality, which would lose C# semantics.
 | `KeyValuePair<K, V>` | `[K, V]` |
 | `KeyValuePair.Create(k, v)` | `[k, v] as [K, V]` |
 
+Tuples are plain JS arrays, which the runtime collections compare by reference (a C# array
+also lowers to an array, and C# compares those by reference too). A tuple used as a
+`HashSet` element or `Dictionary` key, in `List` lookups (`Contains`, `IndexOf`, `Remove`) or
+as the element or key of a LINQ operator that compares by default (`Distinct`, `DistinctBy`,
+`GroupBy`, `Except`, `Intersect`, `Union`, `ToHashSet`, `ToDictionary`, `ToLookup`, `Join`,
+`GroupJoin`, `SequenceEqual`, `Contains`; nullable tuples included) reports MS0001, because two
+equal tuples built separately are not found (#746). Pass an `IEqualityComparer` or use a
+record as the element or key.
+
 ### IGrouping and other LINQ shapes
 
 | C# | TypeScript |
@@ -721,6 +742,22 @@ rounds to `267.5`) and the sign of a zero result. Parity is pinned to the .NET 1
 algorithm: .NET 11 rounds the exact binary value instead (`Math.Round(2.675, 2)` is `2.67`
 there). `MidpointRounding` maps to
 the runtime `MidpointRounding` object, which keeps the .NET member names and values.
+
+### `Math.Clamp` and `HashCode` (#749, #750)
+
+| C# | TypeScript |
+|----|----|
+| `Math.Clamp(v, lo, hi)` / `int.Clamp` / `double.Clamp` (every `number`-backed overload) | `clampNumber(v, lo, hi)` (runtime) |
+| `Math.Clamp` / `decimal.Clamp` on `decimal` | `clampDecimal(v, lo, hi)` (runtime; keeps the `Decimal`) |
+| `Math.Clamp` / `long.Clamp` on `long`, `ulong` | `clampInt64` / `clampUInt64` (runtime) |
+| `HashCode.Combine(v1 … v8)` | `HashCode.combine(v1, …)` (runtime, variadic) |
+| `new HashCode()`, `Add(v)`, `ToHashCode()` | `new HashCode()`, `add(v)`, `toHashCode()` |
+
+JavaScript has no `Math.clamp`. Every clamp throws .NET's `ArgumentException` when `lo > hi`
+(`'5' cannot be greater than 2.`, bounds formatted as .NET formats them). `HashCode` hashes by
+the runtime's rules and is deterministic across runs, where .NET seeds it per process, so
+compare hashes only for equality. `HashCode` lowers to a class, so copying one (`var b = a;`)
+shares state (#762). `Add(value, comparer)` and `AddBytes` report MS0001.
 
 ## Default text of `bool`, `double` and `float`
 
