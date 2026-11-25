@@ -48,9 +48,24 @@ public class TypeScriptArgumentsTests
 
         await Assert.That(run.ExitCode).IsEqualTo(0);
         await Assert.That(arguments).Contains("--warn-as-error");
-        await Assert.That(arguments).Contains("--warnings-as-errors \"MS0001,nullable\"");
+        await Assert.That(arguments).Contains("--warnings-as-errors \"MS0001\"");
         await Assert.That(arguments).Contains("--warnings-not-as-errors \"MS0002\"");
-        await Assert.That(arguments).Contains("--no-warn \"MS0003,1591\"");
+        await Assert.That(arguments).Contains("--no-warn \"MS0003\"");
+    }
+
+    [Test]
+    public async Task CompilerOnlyWarningCodes_DoNotChangeTheArguments()
+    {
+        WriteProject("<NoWarn>$(NoWarn);1591</NoWarn>");
+
+        await Transpile();
+        var unchanged = await Transpile("-p:NoWarn=1591%3BCS8618");
+
+        await Assert.That(unchanged.Output).DoesNotContain("WORKER-RAN");
+
+        await Assert
+            .That(File.ReadAllText(Path.Combine(_root, "arguments.txt")))
+            .DoesNotContain("--no-warn");
     }
 
     [Test]

@@ -44,6 +44,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// How many diagnostics the group being transformed on this thread reported, deduplicated
     /// ones included. A group transforms on one thread, so the count tells whether its output
     /// must not be reused: a reused group does not run, and its diagnostics would vanish (#785).
+    /// The count is attributed to the group whose transform runs on the reporting thread, not
+    /// to the type the diagnostic names, so a diagnostic about another type counts for the
+    /// group that triggered it.
     /// </summary>
     [ThreadStatic]
     private static int t_groupDiagnosticCount;

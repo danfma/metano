@@ -248,14 +248,18 @@
       <!-- Warning policy (#785): the project's warning settings reach the CLI, which applies
            them to the Metano diagnostics it reports (the Exec below cannot be governed by
            csc's switches). MSBuild's own spellings count too. Lists are normalized to commas:
-           a semicolon would split the item below, and the CLI ignores codes that are not
-           Metano's. -->
+           a semicolon would split the item below, and only Metano codes (MS and four digits)
+           are kept, so editing a compiler NoWarn does not change the arguments or rerun the
+           transpile. -->
       <_MetanoTsWarnAsError
         Condition="'$(TreatWarningsAsErrors)' == 'true' or '$(MSBuildTreatWarningsAsErrors)' == 'true'"
         >true</_MetanoTsWarnAsError>
-      <_MetanoTsWarningsAsErrors>$([System.Text.RegularExpressions.Regex]::Replace('$(WarningsAsErrors);$(MSBuildWarningsAsErrors)', '[;\s]+', ',').Trim(','))</_MetanoTsWarningsAsErrors>
-      <_MetanoTsWarningsNotAsErrors>$([System.Text.RegularExpressions.Regex]::Replace('$(WarningsNotAsErrors);$(MSBuildWarningsNotAsErrors)', '[;\s]+', ',').Trim(','))</_MetanoTsWarningsNotAsErrors>
-      <_MetanoTsNoWarn>$([System.Text.RegularExpressions.Regex]::Replace('$(NoWarn);$(MSBuildWarningsAsMessages)', '[;\s]+', ',').Trim(','))</_MetanoTsNoWarn>
+      <_MetanoTsRawWarningsAsErrors>,$([System.Text.RegularExpressions.Regex]::Replace('$(WarningsAsErrors);$(MSBuildWarningsAsErrors)', '[;\s]+', ',')),</_MetanoTsRawWarningsAsErrors>
+      <_MetanoTsWarningsAsErrors>$([System.Text.RegularExpressions.Regex]::Replace('$(_MetanoTsRawWarningsAsErrors)', '(?i),(?!MS[0-9]{4},)[^,]*(?=,)', '').Trim(','))</_MetanoTsWarningsAsErrors>
+      <_MetanoTsRawWarningsNotAsErrors>,$([System.Text.RegularExpressions.Regex]::Replace('$(WarningsNotAsErrors);$(MSBuildWarningsNotAsErrors)', '[;\s]+', ',')),</_MetanoTsRawWarningsNotAsErrors>
+      <_MetanoTsWarningsNotAsErrors>$([System.Text.RegularExpressions.Regex]::Replace('$(_MetanoTsRawWarningsNotAsErrors)', '(?i),(?!MS[0-9]{4},)[^,]*(?=,)', '').Trim(','))</_MetanoTsWarningsNotAsErrors>
+      <_MetanoTsRawNoWarn>,$([System.Text.RegularExpressions.Regex]::Replace('$(NoWarn);$(MSBuildWarningsAsMessages)', '[;\s]+', ',')),</_MetanoTsRawNoWarn>
+      <_MetanoTsNoWarn>$([System.Text.RegularExpressions.Regex]::Replace('$(_MetanoTsRawNoWarn)', '(?i),(?!MS[0-9]{4},)[^,]*(?=,)', '').Trim(','))</_MetanoTsNoWarn>
     </PropertyGroup>
 
     <!-- Compose once before the key write and incremental check, then pass this exact line to

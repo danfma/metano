@@ -131,6 +131,29 @@ public class DiagnosticReplayTests
         await Assert.That(run.Result.WarningCount).IsEqualTo(0);
     }
 
+    [Test]
+    public async Task AppendReplayLines_KeepsTheLaterStageWarningsBesideTheRunsOwn()
+    {
+        await Run();
+
+        TranspilerHost.AppendReplayLines(
+            OutputDir,
+            [
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    "MS0007",
+                    "package name differs"
+                ),
+                new MetanoDiagnostic(MetanoDiagnosticSeverity.Info, "MS0099", "ignored"),
+            ]
+        );
+
+        var lines = File.ReadAllLines(Path.Combine(OutputDir, ".metano-diagnostics"));
+
+        await Assert.That(lines.Length).IsEqualTo(2);
+        await Assert.That(lines[1]).IsEqualTo("warning MS0007: package name differs");
+    }
+
     private sealed record HostRun(TranspileResult Result, bool ServedFromCache);
 
     private async Task<HostRun> Run(
@@ -139,6 +162,7 @@ public class DiagnosticReplayTests
     )
     {
         var recordingTarget = new CacheAdoptionRecorder(new TypeScriptTarget());
+
         var options = new TranspileOptions(
             Path.Combine(_root, "Notes.csproj"),
             OutputDir,

@@ -22,6 +22,11 @@ public sealed record DiagnosticPolicy(
 {
     public static DiagnosticPolicy Default { get; } = new();
 
+    private bool IsInert =>
+        !TreatWarningsAsErrors
+        && WarningsAsErrors is not { Count: > 0 }
+        && NoWarn is not { Count: > 0 };
+
     /// <summary>
     /// Builds a policy from the CLI values. Each list is separated by commas, semicolons
     /// or white space; entries that are not a Metano code (<c>MS</c> and four digits) are
@@ -75,11 +80,6 @@ public sealed record DiagnosticPolicy(
 
         return result;
     }
-
-    private bool IsInert =>
-        !TreatWarningsAsErrors
-        && WarningsAsErrors is not { Count: > 0 }
-        && NoWarn is not { Count: > 0 };
 
     private bool IsEscalated(string code)
     {

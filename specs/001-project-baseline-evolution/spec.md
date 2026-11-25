@@ -1572,6 +1572,11 @@ Product requirements added after the migration (normative; each one is traced by
   project that sets `TreatWarningsAsErrors` and already reports Metano warnings starts
   failing; the warning is fixed, or its code is listed in `WarningsNotAsErrors` or `NoWarn`.
   Changing a warning setting changes the CLI arguments, which reruns the transpile.
+  Codes in `MSBuildWarningsAsMessages` are suppressed (as `NoWarn`), not demoted to messages.
+  Only Metano codes are passed, so editing a compiler-only `NoWarn` does not rerun the
+  transpile. Warnings of the package.json stage are appended to `.metano-diagnostics` and a
+  failed load removes the stamp. `.metano-*` files are build state: they are not committed and
+  not published.
 
 - **FR-107** (TypeScript 7 and the Temporal polyfill types, #786): `metano-runtime`'s
   declarations of the Temporal-typed API reference `@js-temporal/polyfill`, and so do the

@@ -75,6 +75,9 @@ public static class TranspilerHost
             );
 
             var errors = frontendErrors > 0 ? frontendErrors : roslynErrorCount;
+
+            DeleteStamp(outputDir);
+
             return new TranspileResult(false, [], frontendWarnings, errors);
         }
 
@@ -316,6 +319,34 @@ public static class TranspilerHost
     {
         TryDelete(() => File.Delete(StampPath(outputDir)));
         TryDelete(() => File.Delete(ReplayPath(outputDir)));
+    }
+
+    /// <summary>
+    /// Adds warnings a target reports after <see cref="RunAsync(TranspileOptions, ITranspilerTarget)"/>
+    /// (the package.json stage) to <c>.metano-diagnostics</c>, so a build that skips the transpile
+    /// reports them too. Call it only for a run that succeeded; best-effort like the stamp write.
+    /// </summary>
+    public static void AppendReplayLines(
+        string outputDir,
+        IEnumerable<MetanoDiagnostic> diagnostics
+    )
+    {
+        var lines = diagnostics
+            .Where(diagnostic => diagnostic.Severity == MetanoDiagnosticSeverity.Warning)
+            .Select(diagnostic => diagnostic.Format())
+            .ToList();
+
+        if (lines.Count == 0)
+            return;
+
+        try
+        {
+            File.AppendAllLines(ReplayPath(outputDir), lines);
+        }
+        catch
+        {
+            // Best-effort: the warning was already reported by this run.
+        }
     }
 
     private static string StampPath(string outputDir) => Path.Combine(outputDir, ".metano-stamp");

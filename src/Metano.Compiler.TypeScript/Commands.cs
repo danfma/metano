@@ -147,6 +147,8 @@ public class Commands
                 return;
             }
 
+            TranspilerHost.AppendReplayLines(outputDir, reconciliationDiagnostics);
+
             if (reconciliation.WasWritten)
                 Console.WriteLine($"  Updated: {reconciliation.PackageJsonPath}");
         }

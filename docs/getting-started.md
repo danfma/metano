@@ -152,6 +152,12 @@ transpile as up to date prints the warnings of the run that produced the output 
 Projects with `TreatWarningsAsErrors` that already report Metano warnings start failing when
 they upgrade: fix the warning, or list its code in `WarningsNotAsErrors` or `NoWarn`.
 
+The output directory also holds build state, the `.metano-*` files (`.metano-stamp`,
+`.metano-cache*.json`, `.metano-diagnostics`). Add `.metano-*` to your `.gitignore`, and keep
+them out of a published package (list only the files you ship in the package's `files`, or
+add them to `.npmignore`). Codes in `MSBuildWarningsAsMessages` are treated like `NoWarn`:
+suppressed, not turned into messages.
+
 Every `Metano*` property can be overridden for the TypeScript target alone
 with its `MetanoTs*` form (`MetanoTsOutputDir`, `MetanoTsImportAlias`, ...);
 the unprefixed name is the global value every enabled Metano target reads.
