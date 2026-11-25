@@ -36,20 +36,72 @@ internal static class ReferenceNullability
 
     /// <summary>
     /// <see cref="MayBeNull(SemanticModel, ExpressionSyntax)"/> for a string
-    /// compound assignment's target, where a <c>var</c> local trusts its flow
-    /// state: <c>var</c> is declared nullable-annotated whatever the
-    /// initializer, so its declared annotation says nothing, while the flow
-    /// state of a local that holds a string at that point is not-null
-    /// (nullable-enabled code only; disabled code has no flow state).
+    /// compound assignment's target, where a <c>var</c> local that is never null
+    /// by construction needs no guard: its initializer and every simple assignment
+    /// to it in its scope (closures included) is a string expression that cannot
+    /// yield <c>null</c> (a constant, an interpolation, a concatenation). Roslyn's
+    /// flow state proves nothing here: it is the state where a closure is created,
+    /// and an element of <c>new string[n]</c> is not-null by type.
     /// </summary>
     public static bool MayBeNullAsTarget(SemanticModel model, ExpressionSyntax target) =>
-        MayBeNull(model, target) && !IsNotNullVarLocal(model, target);
+        MayBeNull(model, target) && !IsNeverNullVarLocal(model, target);
 
-    private static bool IsNotNullVarLocal(SemanticModel model, ExpressionSyntax target) =>
-        model.GetSymbolInfo(target).Symbol is ILocalSymbol local
-        && local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-            is VariableDeclaratorSyntax { Parent: VariableDeclarationSyntax { Type.IsVar: true } }
-        && model.GetTypeInfo(target).Nullability.FlowState == NullableFlowState.NotNull;
+    private static bool IsNeverNullVarLocal(SemanticModel model, ExpressionSyntax target)
+    {
+        if (
+            model.GetSymbolInfo(target).Symbol is not ILocalSymbol local
+            || local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                is not VariableDeclaratorSyntax
+                {
+                    Initializer: { } initializer,
+                    Parent: VariableDeclarationSyntax { Type.IsVar: true } declaration
+                }
+        )
+            return false;
+
+        var scope = declaration.Parent is ForStatementSyntax or UsingStatementSyntax
+            ? declaration.Parent
+            : declaration.Parent?.Parent;
+
+        return IsNeverNull(model, initializer.Value)
+            && scope is not null
+            && scope.DescendantNodes().All(node => KeepsNeverNull(model, node, local));
+    }
+
+    private static bool KeepsNeverNull(SemanticModel model, SyntaxNode node, ILocalSymbol local) =>
+        node switch
+        {
+            AssignmentExpressionSyntax assignment when IsLocal(model, assignment.Left, local) =>
+                !assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)
+                    && !assignment.IsKind(SyntaxKind.CoalesceAssignmentExpression)
+                    || IsNeverNull(model, assignment.Right),
+            ArgumentSyntax { RefKindKeyword.RawKind: not 0 } argument => !IsLocal(
+                model,
+                argument.Expression,
+                local
+            ),
+            _ => true,
+        };
+
+    private static bool IsLocal(
+        SemanticModel model,
+        ExpressionSyntax expression,
+        ILocalSymbol local
+    ) => SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(expression).Symbol, local);
+
+    private static bool IsNeverNull(SemanticModel model, ExpressionSyntax expression) =>
+        expression switch
+        {
+            ParenthesizedExpressionSyntax parenthesized => IsNeverNull(
+                model,
+                parenthesized.Expression
+            ),
+            InterpolatedStringExpressionSyntax => true,
+            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AddExpression } => model
+                .GetTypeInfo(expression)
+                .Type?.SpecialType == SpecialType.System_String,
+            _ => model.GetConstantValue(expression) is { HasValue: true, Value: string },
+        };
 
     /// <summary>
     /// Whether a value read from a symbol of <paramref name="type"/> may hold

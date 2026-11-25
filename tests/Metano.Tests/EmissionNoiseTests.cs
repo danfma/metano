@@ -130,4 +130,35 @@ public class EmissionNoiseTests
         await Assert.That(output).DoesNotContain("else {\n      if");
         await Assert.That(output).Contains("return s != null;");
     }
+
+    [Test]
+    public async Task StringCompoundAssignment_KeepsTheGuardWhereFlowStateIsNotAProof()
+    {
+        var output = Emit(
+            """
+            static string InLambda()
+            {
+                var s = "a";
+                Action act = () => s += "q";
+                s = null!;
+                act();
+
+                return s;
+            }
+
+            static string ArrayHole()
+            {
+                var arr = new string[2];
+                var s4 = arr[0];
+                s4 += "w";
+
+                return s4;
+            }
+            """,
+            "using System;"
+        );
+
+        await Assert.That(output).Contains("(s ?? \"\") + \"q\"");
+        await Assert.That(output).Contains("s4 = (s4 ?? \"\") + \"w\";");
+    }
 }

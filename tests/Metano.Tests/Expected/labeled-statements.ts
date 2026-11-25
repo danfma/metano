@@ -62,9 +62,9 @@ export class Jumps {
             break dispatch;
           }
 
-          log = (log ?? "") + step;
+          log += step;
         }
-        log = (log ?? "") + "!";
+        log += "!";
         break;
       default:
         log = "default";
