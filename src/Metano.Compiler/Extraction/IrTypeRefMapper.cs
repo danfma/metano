@@ -551,6 +551,7 @@ public static class IrTypeRefMapper
             )
             {
                 HasExplicitParameterlessCtor = HasExplicitParameterlessCtor(named, target),
+                IsClosed = named.IsClosed,
             };
 
         if (named.TypeKind == TypeKind.Struct)
@@ -587,7 +588,10 @@ public static class IrTypeRefMapper
                 IsJsxComponent: isJsxComponent,
                 RendersAsJsxElement: rendersAsJsx,
                 Supertypes: SupertypesOf(named, target)
-            );
+            )
+            {
+                IsClosed = named.IsClosed,
+            };
 
         return null;
     }

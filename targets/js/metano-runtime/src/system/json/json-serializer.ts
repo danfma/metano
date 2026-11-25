@@ -11,6 +11,8 @@ import { specNumberTextLeaves } from "./exact-number-reads.ts";
 import { mayHoldNumberTextLeaf, parseJsonText, readJsonText } from "./json-text-reader.ts";
 import { readNull } from "./null-reads.ts";
 import { isValueSpec } from "./spec-kind.ts";
+import { writeJsonText } from "./json-text-writer.ts";
+import { throwIfNull } from "../argument-guards.ts";
 
 /**
  * Serializes through either spec kind: an object contract walks its
@@ -74,6 +76,9 @@ function deserializeTextWithInfo<T>(
   spec: JsonTypeInfo<T>,
   converters?: readonly JsonConverter[],
 ): T | null {
+  throwIfNull(text, "json");
+  throwIfNull(spec, "jsonTypeInfo");
+
   const leaves = specNumberTextLeaves(spec);
   const readsExactTree = leaves !== undefined && mayHoldNumberTextLeaf(text, leaves);
 
@@ -82,6 +87,21 @@ function deserializeTextWithInfo<T>(
   }
 
   return deserializeWithInfo(parseJsonText(text), spec, converters);
+}
+
+/**
+ * Writes JSON text as System.Text.Json's `Serialize(value, JsonTypeInfo<T>)`
+ * does (#741): the tree `serialize` builds, written by `writeJsonText`
+ * (STJ's escaping and number text, not `JSON.stringify`'s).
+ */
+function serializeTextWithInfo<T>(
+  value: T | null,
+  spec: JsonTypeInfo<T>,
+  converters?: readonly JsonConverter[],
+): string {
+  throwIfNull(spec, "jsonTypeInfo");
+
+  return writeJsonText(serializeWithInfo(value, spec, converters));
 }
 
 /**
@@ -99,6 +119,11 @@ export class BoundSerializer {
   serialize<T>(value: T, spec: ValueSpec<T>): unknown;
   serialize<T>(value: T | null, spec: JsonTypeInfo<T>): unknown {
     return serializeWithInfo(value, spec, this.context.converters);
+  }
+
+  /** Serialize a value to JSON text, as System.Text.Json writes it. */
+  serializeText<T>(value: T | null, spec: JsonTypeInfo<T>): string {
+    return serializeTextWithInfo(value, spec, this.context.converters);
   }
 
   /**
@@ -186,6 +211,22 @@ export class JsonSerializer {
     converters?: readonly JsonConverter[],
   ): unknown {
     return serializeWithInfo(value, spec, converters);
+  }
+
+  /**
+   * Serialize a value to JSON text using the given spec, as System.Text.Json's
+   * `Serialize(value, JsonTypeInfo<T>)` writes it: no whitespace, strings
+   * escaped by its default encoder (`<` is `\u003C`, `é` is `\u00E9`),
+   * numbers in .NET's round-trip text (`1E+20`), `decimal` and 64-bit
+   * integers with their exact digits, `null` as `null`. NaN and the
+   * infinities throw `ArgumentException`, as STJ throws for them.
+   */
+  static serializeText<T>(
+    value: T | null,
+    spec: JsonTypeInfo<T>,
+    converters?: readonly JsonConverter[],
+  ): string {
+    return serializeTextWithInfo(value, spec, converters);
   }
 
   /**

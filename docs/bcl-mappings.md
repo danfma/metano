@@ -1239,6 +1239,18 @@ which extends `Error`, so `instanceof Error` holds for all of them.
   dictionary key and several `string` / LINQ argument checks throw nothing or a JavaScript
   error (spec 011 FR-016 lists them). Dart keeps its native exception types.
 
+## `System.Text.Json` serializer calls (#741)
+
+| C# | TypeScript |
+|---|---|
+| `JsonSerializer.Serialize(value, JsonTypeInfo<T>)`, `Serialize(object?, JsonTypeInfo)` | `JsonSerializer.serializeText(value, spec)` — STJ's default text (escapes, number text, exact `decimal` / `long`) |
+| `JsonSerializer.Deserialize(string, JsonTypeInfo<T>)`, `Deserialize(string, JsonTypeInfo)` | `JsonSerializer.deserializeText(text, spec)` |
+| `MyContext.Default` (a `JsonSerializerContext`) | `MyContext.default` |
+
+TS-only. The other overloads (options, `Type`, streams, writers, spans, `JsonElement`) report
+`MS0001`. Details and the measured semantics are in
+[serialization.md](serialization.md#serializing-from-transpiled-c-741).
+
 ## Console
 
 | C# | TypeScript |

@@ -1,4 +1,4 @@
-import { bigIntegerFromDecimal, bigIntegerFromDouble, decimalTextFromBigInteger, doubleFromBigInteger, int32FromBigInteger, int64FromBigInteger, narrowFromBigInteger, uint32FromBigInteger } from "metano-runtime";
+import { bigIntegerFromDecimal, bigIntegerFromDouble, decimalTextFromBigInteger, doubleFromBigInteger, int32FromBigInteger, int64FromBigInteger, narrowFromBigInteger, throwError, uint32FromBigInteger } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
@@ -58,8 +58,6 @@ export class Big {
   }
 
   unwrapped(b: bigint | null): number {
-    return int32FromBigInteger(b ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })());
+    return int32FromBigInteger(b ?? throwError(new InvalidOperationException("Nullable object must have a value.")));
   }
 }

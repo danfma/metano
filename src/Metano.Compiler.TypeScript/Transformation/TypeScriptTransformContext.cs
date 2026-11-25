@@ -128,6 +128,33 @@ public sealed class TypeScriptTransformContext(
     internal NestedTypeHoisting NestedTypes =>
         field ??= new NestedTypeHoisting(AssemblyWideTranspile, CurrentAssembly);
 
+    /// <summary>
+    /// The TypeScript shape of every C# 15 <c>closed</c> family the transform meets
+    /// (spec 010 FR-C5), decided once per family root.
+    /// </summary>
+    internal Bridge.ClosedFamilyLowering ClosedFamilies =>
+        field ??= new Bridge.ClosedFamilyLowering(ResolveOwnTsName);
+
+    /// <summary>
+    /// Whether the closed type <paramref name="type"/> names lowers to the union
+    /// (<see cref="ClosedFamilies"/>); a reference the compilation cannot resolve
+    /// counts as lowered, the shape a closed family takes unless suppressed.
+    /// </summary>
+    internal bool IsLoweredClosedType(IrNamedTypeRef type)
+    {
+        var segments = type.Name.Split('.');
+        var arity = type.TypeArguments?.Count ?? 0;
+        var last = arity > 0 ? $"{segments[^1]}`{arity}" : segments[^1];
+        var nested = string.Join('+', [.. segments[..^1], last]);
+
+        var metadataName = string.IsNullOrEmpty(type.Namespace)
+            ? nested
+            : $"{type.Namespace}.{nested}";
+
+        return Compilation.GetTypeByMetadataName(metadataName) is not { } symbol
+            || ClosedFamilies.IsLowered(symbol);
+    }
+
     private IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildExtensionHelperFunctions()
     {
         var map = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
@@ -481,17 +508,34 @@ public sealed class TypeScriptTransformContext(
     public bool TryResolveGuardImport(
         string candidate,
         [NotNullWhen(true)] out IrTranspilableTypeRef? guarded
+    ) => TryResolveGuardImport(candidate, TranspilableTypes.GetValueOrDefault, out guarded);
+
+    /// <summary>
+    /// <see cref="TryResolveGuardImport(string, out IrTranspilableTypeRef?)"/> with the
+    /// guarded type's name resolved by <paramref name="projectTypeNamed"/>: a file that
+    /// binds a name two project types share resolves it to the one it names (#743).
+    /// </summary>
+    public bool TryResolveGuardImport(
+        string candidate,
+        Func<string, IrTranspilableTypeRef?> projectTypeNamed,
+        [NotNullWhen(true)] out IrTranspilableTypeRef? guarded
     )
     {
         guarded = null;
+
         if (!candidate.StartsWith("is", StringComparison.Ordinal) || candidate.Length <= 2)
             return false;
+
         var guessedTsName = candidate[2..];
-        if (!TranspilableTypes.TryGetValue(guessedTsName, out var resolved))
+
+        if (projectTypeNamed(guessedTsName) is not { } resolved)
             return false;
+
         if (!GuardableTypeKeys.Contains(resolved.Key))
             return false;
+
         guarded = resolved;
+
         return true;
     }
 

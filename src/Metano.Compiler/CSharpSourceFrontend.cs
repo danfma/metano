@@ -531,25 +531,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         void Register(INamedTypeSymbol type)
         {
             var tsName = SymbolHelper.GetNameOverride(type, target) ?? type.Name;
-            var ns = type.ContainingNamespace.IsGlobalNamespace
-                ? ""
-                : type.ContainingNamespace.ToDisplayString();
-            var emitInFile = SymbolHelper.GetEmitInFile(type);
-            var fileBase = emitInFile is { Length: > 0 } ? emitInFile : tsName;
-            var fileName = SymbolHelper.ToKebabCase(fileBase);
-            var entry = new IrTranspilableTypeRef(
-                Key: type.GetCrossAssemblyOriginKey(),
-                TsName: tsName,
-                Namespace: ns,
-                FileName: fileName,
-                IsStringEnum: SymbolHelper.HasStringEnum(type)
-            );
+            var entry = TranspilableTypeProjection.Of(type, tsName);
             // Last-wins on bare-identifier collision — matches the legacy
             // `_transpilableTypeMap[...] = ...` assignments the target side
             // ran inline. Two top-level types in different namespaces with
             // the same simple name, or an alias that shadows another type's
             // source name, stay resolvable (to whichever registered last)
-            // instead of silently dropping the second entry.
+            // instead of silently dropping the second entry. A target that
+            // needs the exact type resolves the symbol instead (#743).
             map[type.Name] = entry;
             if (tsName != type.Name)
                 map[tsName] = entry;

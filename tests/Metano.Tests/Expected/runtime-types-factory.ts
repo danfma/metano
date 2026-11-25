@@ -82,26 +82,13 @@ export class Program {
   constructor() { }
 
   static describe(kind: string): string {
+    let $s;
     const s = Shapes.create(kind);
     const n = getRuntimeType(s).name;
     const same = getRuntimeType(s) === Circle.$runtimeType;
     const a = isType(s, IHasArea$runtimeType);
     const c = s instanceof Circle ? s : null;
-    const k = (($s) => {
-      if ($s instanceof Circle) {
-        const c1 = $s;
-
-        return 1;
-      }
-
-      if ($s instanceof Square) {
-        const s1 = $s;
-
-        return 2;
-      }
-
-      return 0;
-    })(s);
+    const k = ($s = s, $s instanceof Circle ? 1 : $s instanceof Square ? 2 : 0);
 
     return `${n ?? ""} ${formatBoolean(same)} ${formatBoolean(a)} ${formatBoolean(c != null)} ${k}`;
   }

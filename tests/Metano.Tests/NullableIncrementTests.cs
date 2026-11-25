@@ -135,9 +135,12 @@ public class NullableIncrementTests
             """
         );
 
-        await Assert.That(output).Contains("return (a == null ? null : (a + 1) | 0) ?? (() => {");
+        await Assert
+            .That(output)
+            .Contains("return (a == null ? null : (a + 1) | 0) ?? throwError(");
+
         await Assert.That(output).Contains("Nullable object must have a value.");
-        await Assert.That(output).Contains("return BigInt(a ?? (() => {");
+        await Assert.That(output).Contains("return BigInt(a ?? throwError(");
     }
 
     [Test]

@@ -146,7 +146,8 @@ public static class IrToTsRecordSynthesisBridge
     internal static IReadOnlyList<TsClassMember> Generate(
         IrClassDeclaration ir,
         TsClassMemberTable userMembers,
-        PerClassBackingFieldScope? storage = null
+        PerClassBackingFieldScope? storage = null,
+        ClosedSelfLowering? closedSelf = null
     )
     {
         // Value equality reads the storage directly, as C# compares each declaring
@@ -162,7 +163,7 @@ public static class IrToTsRecordSynthesisBridge
         var unclaimedNames = SynthesizedMemberNames(ir, userMembers);
 
         var with = unclaimedNames.Contains(WithMethodName)
-            ? [GenerateWith(ir)]
+            ? [GenerateWith(ir, closedSelf)]
             : Array.Empty<TsMethodMember>();
 
         TsMethodMember[] members =
@@ -422,13 +423,22 @@ public static class IrToTsRecordSynthesisBridge
     private static TsExpressionStatement AddToHash(TsExpression value) =>
         new(new TsCallExpression(new TsPropertyAccess(new TsIdentifier("hc"), "add"), [value]));
 
-    private static TsMethodMember GenerateWith(IrClassDeclaration ir)
+    /// <summary>
+    /// The synthesized <c>with</c>. Inside a closed type lowered to a union (spec 010
+    /// FR-C5) <c>this</c> is the runtime class, not the union the signature names, so it
+    /// is asserted to the union (<see cref="ClosedSelfLowering.AssertFamily"/>).
+    /// </summary>
+    private static TsMethodMember GenerateWith(
+        IrClassDeclaration ir,
+        ClosedSelfLowering? closedSelf = null
+    )
     {
         var selfType = MakeSelfType(ir);
+        TsExpression self = new TsIdentifier("this");
 
         var copy = new TsCallExpression(
             new TsRuntimeHelperReference("copyRecordWith"),
-            [new TsIdentifier("this"), new TsIdentifier("overrides")],
+            [closedSelf?.AssertFamily(self) ?? self, new TsIdentifier("overrides")],
             TypeArguments: [selfType]
         );
 

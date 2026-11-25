@@ -37,6 +37,22 @@ public static class IrToTsStatementBridge
         IrToTsBridgeContext context
     ) => TsTemporaries.Around(context, scoped => body.Select(stmt => Map(stmt, scoped)).ToList());
 
+    /// <summary>
+    /// Maps the statements of a <c>switch</c> section. Every <c>case</c>
+    /// clause of a JS <c>switch</c> shares one scope, so a section declares no
+    /// temporaries of its own: they go to the head of the statement list that
+    /// encloses the <c>switch</c> (two sections each declaring <c>let $s</c>
+    /// would redeclare it, #735). Outside a statement list the section opens
+    /// its own scope, as before.
+    /// </summary>
+    internal static IReadOnlyList<TsStatement> MapSectionBody(
+        IReadOnlyList<IrStatement> body,
+        IrToTsBridgeContext context
+    ) =>
+        context.Temporaries is null
+            ? MapBody(body, context)
+            : body.Select(statement => Map(statement, context)).ToList();
+
     private static TsStatement MapForEach(IrForEachStatement fe, IrToTsBridgeContext context)
     {
         if (!fe.IsAwait && fe.CollectionType is IrCollectionTypeRef { Kind: IrCollectionKind.List })

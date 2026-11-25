@@ -143,12 +143,41 @@ public static class IrClassExtractor
             BaseTypeArguments = baseTypeArguments,
             HasParameterlessCtor = context.ReifiedTypeAnalysis.HasParameterlessCtor(type),
             Printing = IrRecordPrintingExtractor.Extract(type, semantics, context),
+            ClosedCases = ExtractClosedCases(type, originResolver, target),
             ContainerTypeParameters = IrTypeParameterExtractor.ExtractAll(
                 GenericContainers.TypeParametersOf(type),
                 originResolver,
                 target
             ),
         };
+    }
+
+    /// <summary>
+    /// The direct cases of a closed class (spec 010 FR-C5), each written with the
+    /// closed class's type parameters when it maps onto them; <c>null</c> for any
+    /// other type.
+    /// </summary>
+    private static IReadOnlyList<IrClosedCase>? ExtractClosedCases(
+        INamedTypeSymbol type,
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
+    )
+    {
+        if (!type.IsClosed)
+            return null;
+
+        return ClosedHierarchy
+            .CasesOf(type)
+            .Cases.Select(closedCase => new IrClosedCase(
+                IrTypeRefMapper.Map(closedCase.AsSeenFromClosedType, originResolver, target),
+                closedCase.Shape,
+                closedCase
+                    .FixedTypeArguments.Select(argument =>
+                        IrTypeRefMapper.Map(argument, originResolver, target)
+                    )
+                    .ToList()
+            ))
+            .ToList();
     }
 
     private static T ExtractWithCaptureContext<T>(
@@ -360,6 +389,7 @@ public static class IrClassExtractor
         )
         {
             ValueEquality = ValueEqualityShapes.Of(type, context.GroupingPolicy),
+            IsClosed = type.IsClosed,
         };
     }
 
@@ -455,7 +485,7 @@ public static class IrClassExtractor
         // System.Text.Json.SourceGeneration emits partial files whose syntax-tree order
         // can vary between compilations; sort members by kind and ordinal name so every
         // target receives a deterministic declaration list (#576, #689).
-        if (IsJsonSerializerContext(type))
+        if (SymbolHelper.IsJsonSerializerContext(type))
         {
             result.Sort(
                 static (left, right) =>
@@ -470,17 +500,6 @@ public static class IrClassExtractor
         }
 
         return result;
-    }
-
-    private static bool IsJsonSerializerContext(INamedTypeSymbol type)
-    {
-        for (var current = type.BaseType; current is not null; current = current.BaseType)
-        {
-            if (current.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializerContext")
-                return true;
-        }
-
-        return false;
     }
 
     private static int MemberSortRank(IrMemberDeclaration member) =>

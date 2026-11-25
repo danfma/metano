@@ -172,6 +172,12 @@ public sealed record IrMemberOrigin(
     /// <summary>The bound member's result type, including inferred generic arguments.</summary>
     public IrTypeRef? ResultType { get; init; }
 
+    /// <summary>
+    /// The member is declared <c>protected</c> (or <c>protected internal</c> /
+    /// <c>private protected</c>): reachable only from its declaring type's family.
+    /// </summary>
+    public bool IsProtected { get; init; }
+
     /// <summary>The access reads a positional element (<see cref="TupleElement"/> is set).</summary>
     public bool IsTupleElement => TupleElement is not IrTupleElementKind.None;
 

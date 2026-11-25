@@ -48,4 +48,11 @@ public sealed record IrTypeSemantics(
     /// FR-045); <see cref="IrValueEqualityShape.None"/> for a type with none.
     /// </summary>
     public IrValueEqualityShape ValueEquality { get; init; } = IrValueEqualityShape.None;
+
+    /// <summary>
+    /// The type is a C# 15 <c>closed</c> class: implicitly abstract
+    /// (<see cref="IsAbstract"/> is also set), with every direct case known
+    /// (<see cref="IrClassDeclaration.ClosedCases"/>).
+    /// </summary>
+    public bool IsClosed { get; init; }
 }

@@ -15,6 +15,8 @@ internal sealed class TsTemporaries
 {
     private readonly List<string> _names = [];
 
+    private readonly List<TsVariableDeclaration> _typed = [];
+
     private readonly System.Collections.Immutable.ImmutableHashSet<string> _reserved;
 
     private readonly Dictionary<string, int> _usesByStem = new(StringComparer.Ordinal);
@@ -34,7 +36,7 @@ internal sealed class TsTemporaries
         var temporaries = new TsTemporaries(context.ReservedLocals);
         var mapped = map(context with { Temporaries = temporaries });
 
-        return temporaries._names.Count == 0 ? mapped : [temporaries.Declaration(), .. mapped];
+        return [.. temporaries.Declarations(), .. mapped];
     }
 
     /// <summary>
@@ -55,10 +57,40 @@ internal sealed class TsTemporaries
         return names;
     }
 
-    /// <summary>A new temporary named after <paramref name="stem"/> (<c>$r</c>, <c>$r1</c>, …).</summary>
-    public TsIdentifier Declare(string stem)
+    /// <summary>
+    /// A new temporary named after <paramref name="stem"/> (<c>$r</c>, <c>$r1</c>, …),
+    /// declared untyped. A name in <paramref name="alsoReserved"/> (the locals
+    /// the lowered loops around the use site reserve) is skipped too.
+    /// </summary>
+    public TsIdentifier Declare(string stem, IReadOnlySet<string>? alsoReserved = null)
     {
-        var name = FreeName(stem, _reserved, _usesByStem.GetValueOrDefault(stem));
+        var name = Allocate(stem, alsoReserved);
+
+        _names.Add(name);
+
+        return new TsIdentifier(name);
+    }
+
+    /// <summary>
+    /// A new temporary named after <paramref name="stem"/>, declared with
+    /// <paramref name="type"/> (<c>let $c: Circle;</c>) so a closure may read it.
+    /// </summary>
+    public TsIdentifier DeclareTyped(
+        string stem,
+        TsType type,
+        IReadOnlySet<string>? alsoReserved = null
+    )
+    {
+        var name = Allocate(stem, alsoReserved);
+
+        _typed.Add(new TsVariableDeclaration(name, Initializer: null, Const: false, Type: type));
+
+        return new TsIdentifier(name);
+    }
+
+    private string Allocate(string stem, IReadOnlySet<string>? alsoReserved)
+    {
+        var name = FreeName(stem, IsTaken(alsoReserved), _usesByStem.GetValueOrDefault(stem));
 
         var suffix =
             name.Length == stem.Length
@@ -66,20 +98,47 @@ internal sealed class TsTemporaries
                 : int.Parse(name[stem.Length..], CultureInfo.InvariantCulture);
 
         _usesByStem[stem] = suffix + 1;
-        _names.Add(name);
 
-        return new TsIdentifier(name);
+        return name;
     }
 
-    private static string FreeName(string stem, IReadOnlySet<string> reserved, int start)
+    /// <summary>
+    /// Whether a name is unavailable: reserved by an enclosing loop or the use
+    /// site, or already declared here under another stem (<c>$s1</c> as the
+    /// second <c>$s</c> and as the temporary of a designator <c>s1</c>).
+    /// </summary>
+    private Func<string, bool> IsTaken(IReadOnlySet<string>? alsoReserved) =>
+        name =>
+            _reserved.Contains(name)
+            || alsoReserved?.Contains(name) == true
+            || _names.Contains(name)
+            || _typed.Exists(declaration => declaration.Name == name);
+
+    private static string FreeName(string stem, IReadOnlySet<string> reserved, int start) =>
+        FreeName(stem, reserved.Contains, start);
+
+    private static string FreeName(string stem, Func<string, bool> isTaken, int start)
     {
         for (var index = start; ; index++)
         {
             var name = index == 0 ? stem : $"{stem}{index}";
 
-            if (!reserved.Contains(name))
+            if (!isTaken(name))
                 return name;
         }
+    }
+
+    /// <summary>
+    /// The head of the statement list: the untyped temporaries in one
+    /// <c>let</c>, then each typed one.
+    /// </summary>
+    private IEnumerable<TsStatement> Declarations()
+    {
+        if (_names.Count > 0)
+            yield return Declaration();
+
+        foreach (var typed in _typed)
+            yield return typed;
     }
 
     private TsRawStatement Declaration() => new($"let {string.Join(", ", _names)};");

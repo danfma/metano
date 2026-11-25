@@ -50,6 +50,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     );
 
     private GroupTransformFacts? _groupFacts;
+
+    /// <summary>
+    /// Per group (<see cref="GroupKey"/>), the project type each name shared by two
+    /// top-level project types binds in that file (#743), resolved before the groups
+    /// transform so the parallel pass only reads it.
+    /// </summary>
+    private IReadOnlyDictionary<
+        string,
+        IReadOnlyDictionary<string, IrTranspilableTypeRef>
+    > _sameNameBindings =
+        new Dictionary<string, IReadOnlyDictionary<string, IrTranspilableTypeRef>>();
+
     private string? _groupCacheFingerprint;
 
     /// <summary>
@@ -274,8 +286,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var parentName = Context.ResolveTsName(parent);
 
+        // A closed type lowered to a union declares its runtime class as
+        // `Name$Base` (spec 010 FR-C5); the namespace still merges with `Name`.
+        var runtimeName = parentName + ClosedFamilyLowering.RuntimeClassSuffix;
+
         var index = statements.FindIndex(statement =>
-            statement is TsClass cls && cls.Name == parentName
+            statement is TsClass cls && (cls.Name == parentName || cls.Name == runtimeName)
         );
 
         if (index < 0)
@@ -306,7 +322,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 new TsNamespaceDeclaration(
                     parentName,
                     Functions: [],
-                    Exported: owner.Exported,
+                    Exported: owner.Exported || owner.Name == runtimeName,
                     Members: TypeAliasesOf(exposed, moduleLocal),
                     Declare: true
                 )
@@ -705,7 +721,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
 
         var jsonPlans = new JsonSerializerContextTransformer(Context).PlanContexts(
-            emittedTypes.Where(IsJsonSerializerContextType)
+            emittedTypes.Where(SymbolHelper.IsJsonSerializerContext)
         );
 
         _context = NewContext(RuntimeTypeReachabilityResult.Empty, jsonPlans);
@@ -892,8 +908,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // file's). Otherwise both stay null and every iteration
             // takes the miss branch.
             var typeGroups = GroupTypesByFile(transpilableTypes);
-            ReportSameNameTypeClashes(typeGroups, transpilableTypes);
             List<TypeFileGroup> groups = [.. typeGroups, .. GuardModuleGroups(typeGroups)];
+
+            _sameNameBindings = ResolveSameNameTypes(
+                groups,
+                new SameNameTypeReferences(compilation, Context, transpilableTypes)
+            );
+
             var cachedGroups = LoadGroupCacheIfValid();
 
             var perGroupClosure =
@@ -1053,6 +1074,27 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
 
     /// <summary>
+    /// Reports the closed-family diagnostics of <paramref name="type"/> (spec 010
+    /// FR-C5, <c>MS0073</c>): at the root of a family, why it keeps the plain
+    /// abstract-class shape (whatever shape the root itself emits as); on a type that
+    /// inherits a tag from another assembly's union, a <c>kind</c> member it declares.
+    /// </summary>
+    private void ReportClosedFamilyDiagnostics(INamedTypeSymbol type)
+    {
+        if (
+            Context.ClosedFamilies.PlanOf(type) is { } plan
+            && SymbolEqualityComparer.Default.Equals(plan.Root, type.OriginalDefinition)
+            && ClosedFamilyLowering.SuppressionDiagnostic(plan) is { } suppressed
+        )
+        {
+            Context.ReportDiagnostic(suppressed);
+        }
+
+        if (Context.ClosedFamilies.InheritedTagConflict(type) is { } conflict)
+            Context.ReportDiagnostic(conflict);
+    }
+
+    /// <summary>
     /// Builds the top-level statements for a single type into <paramref name="sink"/>,
     /// without computing the file path or collecting imports. Returns true if the type
     /// produced any statements (and is therefore part of a file group); false if it's
@@ -1084,6 +1126,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // no declaration, with or without [External]/[Import] (per research D9).
         if (SymbolHelper.HasJsCallable(type))
             return false;
+
+        ReportClosedFamilyDiagnostics(type);
 
         var startCount = sink.Count;
 
@@ -1254,9 +1298,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     private bool TryEmitJsonSerializerContext(INamedTypeSymbol type, List<TsTopLevel> sink)
     {
-        if (!IsJsonSerializerContextType(type))
+        if (!SymbolHelper.IsJsonSerializerContext(type))
             return false;
+
         new JsonSerializerContextTransformer(Context).Transform(type, sink);
+
         return true;
     }
 
@@ -1276,7 +1322,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         return
         [
             .. emittedTypes
-                .Where(IsJsonSerializerContextType)
+                .Where(SymbolHelper.IsJsonSerializerContext)
                 .SelectMany(contextTransformer.CollectionTypesOf),
         ];
     }
@@ -1293,7 +1339,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var contextTransformer = new JsonSerializerContextTransformer(Context);
 
         return emittedTypes
-            .Where(IsJsonSerializerContextType)
+            .Where(SymbolHelper.IsJsonSerializerContext)
             .ToDictionary(
                 context => context,
                 context =>
@@ -1436,7 +1482,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var produced = TransformGroup(
             group,
-            IrToTsBridgeContext.ForGroup(Context.DeclarativeMappings, casts, Context.RuntimeTypes)
+            IrToTsBridgeContext.ForGroup(
+                Context.DeclarativeMappings,
+                casts,
+                Context.RuntimeTypes
+            ) with
+            {
+                IsUnionFamily = Context.IsLoweredClosedType,
+            }
         );
 
         outcomes.Files[index] = produced;
@@ -1524,10 +1577,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // imported canonical name.
             var primaryType = group.Types[0];
             var irRequirements = ScanIrRuntimeRequirements(group.Types, irCache);
-            var collected = new ImportCollector(Context, irRequirements).Collect(
-                primaryType,
-                statements
-            );
+
+            var collected = new ImportCollector(
+                Context,
+                irRequirements,
+                _sameNameBindings.GetValueOrDefault(GroupKey(group))
+            ).Collect(primaryType, statements);
+
             statements.InsertRange(0, collected.Imports);
 
             var isJsx = ContainsJsx(statements);
@@ -1563,11 +1619,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             new TypeGuardBuilder(Context).GenerateStrictGuard(strictBase)
         );
 
-        var collected = new ImportCollector(Context, irRuntimeRequirements: null).Collect(
-            strictBase,
-            statements,
-            fileName: group.FileName
-        );
+        var collected = new ImportCollector(
+            Context,
+            irRuntimeRequirements: null,
+            _sameNameBindings.GetValueOrDefault(GroupKey(group))
+        ).Collect(strictBase, statements, fileName: group.FileName);
 
         statements.InsertRange(0, collected.Imports);
 
@@ -1635,6 +1691,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TsReturnStatement { Expression: { } expr } => ContainsJsxInExpression(expr),
             TsExpressionStatement exprStmt => ContainsJsxInExpression(exprStmt.Expression),
             TsThrowStatement throwStmt => ContainsJsxInExpression(throwStmt.Expression),
+            TsYieldStatement yieldStmt => ContainsJsxInExpression(yieldStmt.Expression),
             TsVariableDeclaration { Initializer: { } initializer } => ContainsJsxInExpression(
                 initializer
             ),
@@ -1806,7 +1863,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             foreach (var req in IrRuntimeRequirementScanner.Scan(typeIr))
                 acc.Add(req);
 
-        if (IsJsonSerializerContextType(type))
+        if (SymbolHelper.IsJsonSerializerContext(type))
             acc.UnionWith(
                 new JsonSerializerContextTransformer(Context).RuntimeRequirementsOf(type)
             );
@@ -1828,7 +1885,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IDictionary<INamedTypeSymbol, IrTypeDeclaration> irCache
     )
     {
-        if (!IsJsonSerializerContextType(type))
+        if (!SymbolHelper.IsJsonSerializerContext(type))
             return GetOrExtractIr(type, irCache);
 
         using var muted = ExtractionDiagnostics.Suppress();
@@ -1993,21 +2050,47 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     );
 
     /// <summary>
-    /// Runs over every group, including the ones the per-group cache reuses, so a
-    /// cache hit still reports (#504).
+    /// Reports the MS0070 clashes of every group (#504) and returns, per group, the
+    /// project type each shared name binds (#743). Runs over every group, the groups the
+    /// per-group cache reuses included, so a cache hit still reports; a guard module
+    /// binds only the types it declares.
     /// </summary>
-    private void ReportSameNameTypeClashes(
-        IEnumerable<TypeFileGroup> groups,
-        IReadOnlyList<INamedTypeSymbol> transpilableTypes
-    )
+    private Dictionary<
+        string,
+        IReadOnlyDictionary<string, IrTranspilableTypeRef>
+    > ResolveSameNameTypes(IEnumerable<TypeFileGroup> groups, SameNameTypeReferences references)
     {
-        var validator = new SameNameTypeClashValidator(compilation, Context, transpilableTypes);
+        var bindings = new Dictionary<string, IReadOnlyDictionary<string, IrTranspilableTypeRef>>(
+            StringComparer.Ordinal
+        );
+
+        if (references.IsEmpty)
+            return bindings;
+
+        var validator = new SameNameTypeClashValidator(Context);
 
         foreach (var group in groups)
         {
-            foreach (var finding in validator.Validate(group.FileName, group.Types))
+            // A guard module refers only to the base and the variants it declares, never
+            // to what their bodies reference: no clash to report, only declared bindings.
+            if (group.GuardModuleOf is not null)
+            {
+                bindings[GroupKey(group)] = references.BindingsIn(group.Types, []);
+
+                continue;
+            }
+
+            var groupReferences = references.In(group.Types);
+
+            foreach (
+                var finding in validator.Validate(group.FileName, group.Types, groupReferences)
+            )
                 ReportDiagnostic(finding);
+
+            bindings[GroupKey(group)] = references.BindingsIn(group.Types, groupReferences);
         }
+
+        return bindings;
     }
 
     private static string GroupKey(TypeFileGroup group) => $"{group.Namespace}/{group.FileName}";
@@ -3020,6 +3103,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IndexerDiagnostics.Report(type, ir, ReportDiagnostic);
         PlainObjectOverloads.ReportCollisions(type, ir, ReportDiagnostic);
 
+        if (IrConstructorExtractor.ObjectArgsProblem(type) is { } objectArgsProblem)
+            ReportUnsupportedBody(type, objectArgsProblem);
+
         return IrToTsPlainObjectBridge.Convert(ir, sink, lowering);
     }
 
@@ -3147,19 +3233,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         while (current is not null)
         {
             if (current.ToDisplayString() == "System.Exception")
-                return true;
-            current = current.BaseType;
-        }
-
-        return false;
-    }
-
-    internal static bool IsJsonSerializerContextType(INamedTypeSymbol type)
-    {
-        var current = type.BaseType;
-        while (current is not null)
-        {
-            if (current.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializerContext")
                 return true;
             current = current.BaseType;
         }

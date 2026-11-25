@@ -185,6 +185,197 @@ public static class IrConstructorExtractor
         AllExplicitConstructors(type).Count > 1;
 
     /// <summary>
+    /// Whether <paramref name="constructor"/> takes its arguments as one object
+    /// (the <c>create({...})</c> factory, #739): it carries <c>[ObjectArgs]</c>
+    /// itself (also through <c>[method: ObjectArgs]</c> on a positional record
+    /// or primary constructor), or the type carries it and the constructor is
+    /// the type's only one, and nothing in <see cref="ObjectArgsProblem"/>
+    /// keeps the factory from being emitted. A constructor with a problem keeps
+    /// its positional call sites.
+    /// </summary>
+    public static bool HasObjectArgsSurface(IMethodSymbol constructor)
+    {
+        var type = constructor.ContainingType.OriginalDefinition;
+
+        return RequestsObjectArgs(constructor, type) && ObjectArgsProblem(type) is null;
+    }
+
+    /// <summary>
+    /// The reason <paramref name="type"/> cannot honour the <c>[ObjectArgs]</c>
+    /// it asks for (the diagnostic text), or <c>null</c> when it asks for none or
+    /// the factory can be emitted. A type-level attribute needs exactly one
+    /// constructor; a constructor attribute cannot combine with overloading; an
+    /// abstract type has nothing to construct; <c>[PlainObject]</c> already
+    /// lowers to an object literal; a user <c>static Create</c> would collide
+    /// with the factory; and a base type's factory must stay overridable.
+    /// </summary>
+    public static string? ObjectArgsProblem(INamedTypeSymbol type)
+    {
+        var constructors = AllExplicitConstructors(type);
+        var typeLevel = type.HasObjectArgs();
+
+        if (!typeLevel && !constructors.Any(c => c.HasObjectArgs()))
+            return ShadowsInheritedFactory(type);
+
+        if (typeLevel && constructors.Count == 0)
+        {
+            return $"[ObjectArgs] on type '{type.Name}' has no constructor to lower (a static "
+                + "class, or a type with only the implicit one); [ObjectArgs] applies to a "
+                + "method or a constructor, so put it there.";
+        }
+
+        if (typeLevel && constructors.Count > 1)
+        {
+            return $"[ObjectArgs] on type '{type.Name}' needs exactly one constructor, but it "
+                + $"declares {constructors.Count}; the create({{...}}) factory was not emitted. "
+                + "Put [ObjectArgs] on the constructor instead.";
+        }
+
+        if (constructors.Count > 1)
+        {
+            return $"Constructor on '{type.Name}' combines [ObjectArgs] with overloading, "
+                + "which the transpiler does not yet support; the create({...}) "
+                + "factory was not emitted.";
+        }
+
+        if (type.IsAbstract)
+        {
+            return $"[ObjectArgs] on abstract type '{type.Name}': an abstract type cannot be "
+                + "constructed, so no create({...}) factory was emitted.";
+        }
+
+        if (SymbolHelper.HasPlainObject(type))
+        {
+            return $"[ObjectArgs] on [PlainObject] type '{type.Name}': a [PlainObject] already "
+                + "constructs as an object literal, so [ObjectArgs] was ignored; remove it.";
+        }
+
+        if (DeclaresStaticCreate(type))
+        {
+            return $"Type '{type.Name}' declares a static member named 'create', which collides "
+                + "with the [ObjectArgs] create({...}) factory; the factory was not emitted.";
+        }
+
+        return OverrideProblem(type, constructors[0]);
+    }
+
+    private static bool RequestsObjectArgs(IMethodSymbol constructor, INamedTypeSymbol type) =>
+        constructor.HasObjectArgs()
+        || (
+            type.HasObjectArgs()
+            && AllExplicitConstructors(type).Count == 1
+            && DeclarationOrdinalOf(constructor) is not null
+        );
+
+    private static bool DeclaresStaticCreate(INamedTypeSymbol type)
+    {
+        for (var current = type; current is { SpecialType: not SpecialType.System_Object }; )
+        {
+            if (DeclaresOwnStaticCreate(current))
+                return true;
+
+            current = current.BaseType;
+        }
+
+        return false;
+    }
+
+    private static bool DeclaresOwnStaticCreate(INamedTypeSymbol type) =>
+        type.GetMembers()
+            .Any(m =>
+                m.IsStatic
+                && m is not IMethodSymbol { MethodKind: MethodKind.StaticConstructor }
+                && string.Equals(m.Name, "create", StringComparison.OrdinalIgnoreCase)
+            );
+
+    /// <summary>
+    /// A type that asks for no <c>[ObjectArgs]</c> but declares its own static
+    /// <c>create</c> under a base type that emits the factory would clash with
+    /// the inherited one (TS2417 / TS4114).
+    /// </summary>
+    private static string? ShadowsInheritedFactory(INamedTypeSymbol type) =>
+        DeclaresOwnStaticCreate(type) && NearestObjectArgsAncestor(type) is { } ancestor
+            ? $"Type '{type.Name}' declares a static member named 'create', which collides with "
+                + $"the [ObjectArgs] create({{...}}) factory it inherits from '{ancestor.Type.Name}'."
+            : null;
+
+    /// <summary>
+    /// A derived type's <c>static create</c> must override the nearest base
+    /// factory (TS4114) and stay assignable to it (TS2417). That is guaranteed
+    /// only when the base is not generic and every base key appears in the
+    /// derived arguments with the same type and requiredness.
+    /// </summary>
+    private static string? OverrideProblem(INamedTypeSymbol type, IMethodSymbol constructor)
+    {
+        if (NearestObjectArgsAncestor(type) is not { } ancestor)
+            return null;
+
+        var reason = IncompatibleWith(ancestor, constructor);
+
+        return reason is null
+            ? null
+            : $"The [ObjectArgs] create({{...}}) factory of '{type.Name}' cannot override the one "
+                + $"of '{ancestor.Type.Name}' ({reason}); the factory was not emitted and "
+                + "constructions stay positional.";
+    }
+
+    /// <summary>
+    /// The nearest base type that emits a <c>create({...})</c> factory, with its
+    /// constructor, or <c>null</c> when none does.
+    /// </summary>
+    public static (INamedTypeSymbol Type, IMethodSymbol Constructor)? NearestObjectArgsAncestor(
+        INamedTypeSymbol type
+    )
+    {
+        for (var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            var definition = baseType.OriginalDefinition;
+            var constructors = AllExplicitConstructors(definition);
+
+            if (constructors.Count == 1 && HasObjectArgsSurface(constructors[0]))
+                return (definition, constructors[0]);
+        }
+
+        return null;
+    }
+
+    private static string? IncompatibleWith(
+        (INamedTypeSymbol Type, IMethodSymbol Constructor) ancestor,
+        IMethodSymbol derived
+    )
+    {
+        if (ancestor.Type.TypeParameters.Length > 0)
+            return "the base type is generic";
+
+        foreach (var baseParameter in ancestor.Constructor.Parameters)
+        {
+            var match = derived.Parameters.FirstOrDefault(p =>
+                WireKey(p.Name) == WireKey(baseParameter.Name)
+            );
+
+            if (match is null)
+                return $"the base key '{WireKey(baseParameter.Name)}' is missing";
+
+            if (
+                !SymbolEqualityComparer.Default.Equals(match.Type, baseParameter.Type)
+                || match.NullableAnnotation != baseParameter.NullableAnnotation
+                || IsRequired(match) != IsRequired(baseParameter)
+            )
+                return $"the key '{WireKey(baseParameter.Name)}' differs in type or requiredness";
+        }
+
+        return null;
+    }
+
+    private static bool IsRequired(IParameterSymbol parameter) =>
+        !parameter.HasExplicitDefaultValue && !parameter.IsParams;
+
+    private static string WireKey(string parameterName) =>
+        parameterName.Length == 0
+            ? parameterName
+            : char.ToLowerInvariant(parameterName[0]) + parameterName[1..];
+
+    /// <summary>
     /// The constructors <see cref="Extract"/> models for
     /// <paramref name="type"/> (the main one plus its overloads), whatever
     /// their accessibility, in declaration order: every declared instance

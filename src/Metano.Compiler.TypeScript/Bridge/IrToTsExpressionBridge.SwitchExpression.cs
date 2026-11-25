@@ -7,7 +7,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// Switch-expression lowering: a nested ternary chain for the simple shape,
-/// a self-invoking arrow for everything else.
+/// a conditional chain over temporaries for everything else (see
+/// <c>IrToTsExpressionBridge.SwitchExpressionChain.cs</c>), and a
+/// self-invoking arrow where no statement list can declare them.
 /// </summary>
 public static partial class IrToTsExpressionBridge
 {
@@ -24,16 +26,26 @@ public static partial class IrToTsExpressionBridge
     /// arm has a pattern that can lower to a plain boolean test, and the
     /// scrutinee is safe to read once per arm, we emit a nested ternary
     /// chain. Everything else — designator bindings, non-exhaustive matches,
-    /// a scrutinee with side effects — lowers to a self-invoking arrow (see
-    /// <see cref="LowerSwitchAsIife"/>), which evaluates the scrutinee once.
+    /// a scrutinee with side effects — lowers to a conditional chain over
+    /// temporaries of the enclosing statement list (see
+    /// <see cref="LowerSwitchAsChain"/>). A self-invoking arrow (see
+    /// <see cref="LowerSwitchAsIife"/>) remains where no statement list
+    /// encloses the switch (a field initializer) and where a closure in an arm
+    /// captures a designator (see <see cref="ClosureCapturesADesignator"/>).
+    /// Both evaluate the scrutinee once.
     /// </summary>
     private static TsExpression MapSwitchExpression(
         IrSwitchExpression sw,
         IrToTsBridgeContext context
-    ) =>
-        CanLowerSwitchAsTernary(sw)
-            ? LowerSwitchAsTernary(sw, context)
+    )
+    {
+        if (CanLowerSwitchAsTernary(sw))
+            return LowerSwitchAsTernary(sw, context);
+
+        return context.Temporaries is { } temporaries && !ClosureCapturesADesignator(sw)
+            ? LowerSwitchAsChain(sw, temporaries, context)
             : LowerSwitchAsIife(sw, context);
+    }
 
     /// <summary>
     /// <c>return value switch { ... };</c> without a closure (#735): when the
@@ -44,8 +56,9 @@ public static partial class IrToTsExpressionBridge
     /// scope. <c>$s</c> is a <c>let</c>, which widens a literal type the way
     /// the arrow's parameter did (a <c>const</c> bound to a C# <c>const</c>
     /// keeps the literal type <c>2</c>, and TypeScript then rejects the
-    /// <c>$s === 1</c> arm as a comparison with no overlap). <c>null</c> when
-    /// the switch lowers as an expression.
+    /// <c>$s === 1</c> arm as a comparison with no overlap). The arms see
+    /// <c>$s</c> reserved, so a switch nested in one binds another name.
+    /// <c>null</c> when the switch lowers as an expression.
     /// </summary>
     internal static TsStatement? TryMapSwitchReturn(
         IrSwitchExpression sw,
@@ -55,15 +68,11 @@ public static partial class IrToTsExpressionBridge
         if (CanLowerSwitchAsTernary(sw))
             return null;
 
-        var scrutinee = new TsIdentifier(ScrutineeParameterName);
+        var name = TsTemporaries.Reserve(context, [ScrutineeParameterName], out var armsContext)[0];
 
         return new TsBlockStatement([
-            new TsVariableDeclaration(
-                ScrutineeParameterName,
-                Map(sw.Scrutinee, context),
-                Const: false
-            ),
-            .. BuildSwitchArmStatements(sw, scrutinee, context),
+            new TsVariableDeclaration(name, Map(sw.Scrutinee, context), Const: false),
+            .. BuildSwitchArmStatements(sw, new TsIdentifier(name), armsContext),
         ]);
     }
 
@@ -79,7 +88,7 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var scrutinee = Map(sw.Scrutinee, context);
-        var fallback = Map(sw.Arms[^1].Result, context);
+        var fallback = LowerChainArmValue(sw.Arms[^1].Result, context);
 
         return sw
             .Arms.Take(sw.Arms.Count - 1)
@@ -87,7 +96,7 @@ public static partial class IrToTsExpressionBridge
             .Aggregate(fallback, (otherwise, arm) =>
                 new TsConditionalExpression(
                     BuildArmCondition(scrutinee, arm, context),
-                    Map(arm.Result, context),
+                    LowerChainArmValue(arm.Result, context),
                     otherwise
                 )
             );

@@ -34,10 +34,11 @@ public static partial class IrToTsExpressionBridge
                 "&&",
                 AssignDesignator(
                     designator,
-                    UnboxedBindingValue(value, typePattern, context.RuntimeTypes.BoxingEnabled)
+                    UnboxedBindingValue(value, typePattern, context),
+                    context
                 )
             ),
-            IrVarPattern varPattern => AssignDesignator(varPattern.Designator, value),
+            IrVarPattern varPattern => AssignDesignator(varPattern.Designator, value, context),
             IrPropertyPattern property => BuildBindingPropertyPatternTest(value, property, context),
             IrPositionalPattern positional => BuildBindingPositionalPatternTest(
                 value,
@@ -68,7 +69,7 @@ public static partial class IrToTsExpressionBridge
     )
     {
         var rightValue = left is IrVarPattern capture
-            ? new TsIdentifier(IrToTsNamingPolicy.ToLocalName(capture.Designator.Name))
+            ? DesignatorReference(capture.Designator, context)
             : ConjunctionRightValue(value, left, context.RuntimeTypes.BoxingEnabled);
 
         return new TsBinaryExpression(
@@ -98,12 +99,8 @@ public static partial class IrToTsExpressionBridge
             typeTest,
             .. OwnDesignatorAssignment(
                 pattern.Designator,
-                UnboxedBindingValue(
-                    value,
-                    pattern.Type,
-                    pattern.InputType,
-                    context.RuntimeTypes.BoxingEnabled
-                )
+                UnboxedBindingValue(value, pattern.Type, pattern.InputType, context),
+                context
             ),
             .. memberTests.OfType<TsExpression>(),
         ]);
@@ -125,7 +122,7 @@ public static partial class IrToTsExpressionBridge
         );
 
         var tests = new[] { PositionalTypeTest(value, pattern, context) }
-            .Concat(OwnDesignatorAssignment(pattern.Designator, value))
+            .Concat(OwnDesignatorAssignment(pattern.Designator, value, context))
             .Concat(elementTests)
             .OfType<TsExpression>()
             .ToList();
@@ -149,7 +146,7 @@ public static partial class IrToTsExpressionBridge
         );
 
         var sliceAssignment = pattern.SlicePattern is IrVarPattern rest
-            ? [AssignDesignator(rest.Designator, ListSliceAccess(value, pattern))]
+            ? [AssignDesignator(rest.Designator, ListSliceAccess(value, pattern), context)]
             : Array.Empty<TsExpression>();
 
         return JoinWithAnd([
@@ -171,8 +168,9 @@ public static partial class IrToTsExpressionBridge
 
     private static IEnumerable<TsExpression> OwnDesignatorAssignment(
         IrPatternDesignator? designator,
-        TsExpression value
-    ) => designator is null ? [] : [AssignDesignator(designator, value)];
+        TsExpression value,
+        IrToTsBridgeContext context
+    ) => designator is null ? [] : [AssignDesignator(designator, value, context)];
 
     /// <summary>
     /// <c>(name = value), true</c>: assigns the designator and lets the
@@ -183,20 +181,33 @@ public static partial class IrToTsExpressionBridge
     /// read stands for an out-of-range read, which C# would have thrown on
     /// (a list pattern's length check rules it out).
     /// </summary>
-    private static TsExpression AssignDesignator(IrPatternDesignator designator, TsExpression value)
+    private static TsExpression AssignDesignator(
+        IrPatternDesignator designator,
+        TsExpression value,
+        IrToTsBridgeContext context
+    )
     {
         var assigned = value is TsElementAccess ? new TsPostfixUnaryExpression(value, "!") : value;
 
         return new TsBinaryExpression(
-            new TsBinaryExpression(
-                new TsIdentifier(IrToTsNamingPolicy.ToLocalName(designator.Name)),
-                "=",
-                assigned
-            ),
+            new TsBinaryExpression(DesignatorReference(designator, context), "=", assigned),
             ",",
             new TsLiteral("true")
         );
     }
+
+    /// <summary>
+    /// The local a designator lowers to: the temporary a switch-expression
+    /// arm bound it to (see <see cref="WithDesignatorTemporaries"/>), or the
+    /// local of its own name that extraction declared.
+    /// </summary>
+    private static TsExpression DesignatorReference(
+        IrPatternDesignator designator,
+        IrToTsBridgeContext context
+    ) =>
+        context.BoundElements.TryGetValue(designator.Name, out var temporary)
+            ? temporary
+            : new TsIdentifier(IrToTsNamingPolicy.ToLocalName(designator.Name));
 
     /// <summary>
     /// The test of one pattern label of a <c>switch</c> statement lowered to

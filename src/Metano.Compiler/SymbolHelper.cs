@@ -1656,6 +1656,21 @@ public static class SymbolHelper
     }
 
     /// <summary>
+    /// Whether <paramref name="type"/> derives from System.Text.Json's
+    /// <c>JsonSerializerContext</c>: a source-generated serializer context.
+    /// </summary>
+    public static bool IsJsonSerializerContext(INamedTypeSymbol type)
+    {
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (current.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializerContext")
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Whether the toolchain names <paramref name="type"/>'s members — so a
     /// reference to one must use the name the backend declares it with: a
     /// type of <paramref name="currentAssembly"/> or of a transpiled package

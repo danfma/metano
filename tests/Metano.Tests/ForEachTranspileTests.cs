@@ -188,7 +188,7 @@ public class ForEachTranspileTests
 
         var output = result["app/sum.ts"];
 
-        await Assert.That(output).Contains("const x = int32FromDouble(x$element ?? (() => {");
+        await Assert.That(output).Contains("const x = int32FromDouble(x$element ?? throwError(");
         await Assert.That(output).Contains("Nullable object must have a value.");
         await Assert.That(output).DoesNotContain("x$element == null ? null :");
     }
@@ -225,7 +225,7 @@ public class ForEachTranspileTests
 
         var output = result["app/sum.ts"];
 
-        await Assert.That(output).Contains("const x = x$element ?? (() => {");
+        await Assert.That(output).Contains("const x = x$element ?? throwError(");
         await Assert.That(output).Contains("Nullable object must have a value.");
     }
 
@@ -299,6 +299,7 @@ public class ForEachTranspileTests
             .Contains(
                 "int x = ((x$element ?? (throw InvalidOperationException('Nullable object must have a value.'))) as double).toInt().toSigned(32);"
             );
+
         await Assert.That(dart).DoesNotContain("? null :");
     }
 
@@ -336,6 +337,7 @@ public class ForEachTranspileTests
             .Contains(
                 "int x = (x$element ?? (throw InvalidOperationException('Nullable object must have a value.'))) as int;"
             );
+
         await Assert.That(dart).DoesNotContain("? null :");
     }
 

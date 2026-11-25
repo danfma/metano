@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Metano.Annotations;
 using Metano.Compiler.Analysis;
@@ -117,6 +118,13 @@ public sealed partial class IrExpressionExtractor
     /// receiver is never re-extracted.
     /// </summary>
     private ExpressionSyntax? _conditionalReceiverSyntax;
+
+    /// <summary>
+    /// Whether the target lowers a construction through the <c>create({...})</c>
+    /// factory (#739): TypeScript only, since Dart has no object-literal expression.
+    /// </summary>
+    private bool HonorsObjectArgsConstructors =>
+        _target is null or Metano.Annotations.TargetLanguage.TypeScript;
 
     private string NextReceiverTempName() => _temporaries.Next("receiver$temp$");
 
@@ -3803,23 +3811,46 @@ public sealed partial class IrExpressionExtractor
     {
         if (_semantic.GetOperation(inv) is not IInvocationOperation op)
             return null;
+
+        return new List<IrArgument>
+        {
+            new(new IrObjectLiteral(ObjectArgsPropertiesFromOperation(op.Arguments))),
+        };
+    }
+
+    /// <summary>
+    /// The <c>[ObjectArgs]</c> properties of a call or construction, one per
+    /// argument Roslyn bound, in the order the source evaluates them (a named
+    /// argument keeps its written position). A <c>params</c> expansion folds into
+    /// one array literal, default-filled slots and explicit values equal to the
+    /// parameter's default are skipped.
+    /// </summary>
+    private List<(string Name, IrExpression Value)> ObjectArgsPropertiesFromOperation(
+        ImmutableArray<IArgumentOperation> arguments
+    )
+    {
         var properties = new List<(string Name, IrExpression Value)>();
-        foreach (var arg in op.Arguments)
+
+        foreach (var arg in arguments)
         {
             if (arg.Parameter is null)
                 continue;
+
             if (arg.ArgumentKind == ArgumentKind.DefaultValue)
                 continue;
 
             IrExpression value;
+
             if (
                 arg.ArgumentKind == ArgumentKind.ParamArray
                 && arg.Value is IArrayCreationOperation arrayOp
             )
             {
                 var elements = arrayOp.Initializer?.ElementValues ?? default;
+
                 if (elements.IsDefaultOrEmpty)
                     continue;
+
                 value = new IrArrayLiteral(
                     elements
                         .Select(e =>
@@ -3832,6 +3863,9 @@ public sealed partial class IrExpressionExtractor
             }
             else if (arg.Value.Syntax is ExpressionSyntax valueSyntax)
             {
+                if (arg.Parameter.IsParams && IsConstantNull(valueSyntax))
+                    continue;
+
                 value = Extract(valueSyntax);
             }
             else
@@ -3848,7 +3882,8 @@ public sealed partial class IrExpressionExtractor
 
             properties.Add((arg.Parameter.Name, value));
         }
-        return new List<IrArgument> { new(new IrObjectLiteral(properties)) };
+
+        return properties;
     }
 
     private List<IrArgument> WrapInObjectArgsFromArgs(
@@ -4048,6 +4083,11 @@ public sealed partial class IrExpressionExtractor
                 IFieldSymbol result => MapElementType(result.Type),
                 _ => null,
             },
+            IsProtected =
+                symbol.DeclaredAccessibility
+                    is Accessibility.Protected
+                        or Accessibility.ProtectedOrInternal
+                        or Accessibility.ProtectedAndInternal,
         };
     }
 
@@ -4055,12 +4095,16 @@ public sealed partial class IrExpressionExtractor
     /// A field or property, other than an enum member or an indexer, whose
     /// declaring type the toolchain declares (see
     /// <see cref="IrMemberOrigin.IsTranspiledDataMember"/> and
-    /// <see cref="SymbolHelper.IsToolchainDeclared"/>).
+    /// <see cref="SymbolHelper.IsToolchainDeclared"/>). A serializer context's
+    /// members (its <c>Default</c> instance, its <c>JsonTypeInfo</c> properties)
+    /// are the generated JSON surface, not data members the class emitter
+    /// declares: they keep their unescaped names (#741).
     /// </summary>
     private bool IsTranspiledDataMember(ISymbol? symbol) =>
         symbol is not null
         && IsDataMember(symbol)
-        && SymbolHelper.IsToolchainDeclared(symbol.ContainingType, _semantic.Compilation.Assembly);
+        && SymbolHelper.IsToolchainDeclared(symbol.ContainingType, _semantic.Compilation.Assembly)
+        && !SymbolHelper.IsJsonSerializerContext(symbol.ContainingType);
 
     private static bool IsDataMember(ISymbol symbol) =>
         symbol
@@ -5407,6 +5451,9 @@ public sealed partial class IrExpressionExtractor
         );
     }
 
+    private bool IsConstantNull(ExpressionSyntax syntax) =>
+        _semantic.GetConstantValue(syntax) is { HasValue: true, Value: null };
+
     /// <summary>
     /// A <c>params</c> array passed as a constant <c>null</c> (<c>f(null)</c>,
     /// <c>f((T[]?)null)</c>, <c>f(default)</c>) becomes the plain null literal, so a
@@ -5621,9 +5668,16 @@ public sealed partial class IrExpressionExtractor
 
         var initializer = InitializerOf(creationSyntax);
 
-        if (ctor is not null && SymbolHelper.HasObjectArgs(ctor))
+        if (
+            HonorsObjectArgsConstructors
+            && ctor is not null
+            && IrConstructorExtractor.HasObjectArgsSurface(ctor)
+        )
         {
-            var properties = BuildObjectArgsProperties(ctor, args);
+            var properties = _semantic.GetOperation(creationSyntax) is IObjectCreationOperation op
+                ? ObjectArgsPropertiesFromOperation(op.Arguments)
+                : BuildObjectArgsProperties(ctor, args);
+
             var objectArgsCreation = new IrNewExpression(
                 type,
                 [new IrArgument(new IrObjectLiteral(properties))],

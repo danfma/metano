@@ -1,3 +1,4 @@
+import { throwError } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Money {
@@ -12,9 +13,7 @@ export class Money {
   }
 
   static __implicitFromInt64OrNull(c: bigint | null): Money | null {
-    return c == null ? null : new Money(Number(BigInt.asIntN(32, c ?? (() => {
-      throw new InvalidOperationException("Nullable object must have a value.");
-    })())));
+    return c == null ? null : new Money(Number(BigInt.asIntN(32, c ?? throwError(new InvalidOperationException("Nullable object must have a value.")))));
   }
 
   static __implicitToString(m: Money): string {

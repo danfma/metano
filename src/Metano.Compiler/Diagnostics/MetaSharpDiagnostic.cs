@@ -629,4 +629,16 @@ public static class DiagnosticCodes
     /// instead of emitting a contract no .NET peer can use. An error at the second
     /// property (spec 009, #442).</summary>
     public const string JsonPropertyNameCollision = "MS0072";
+
+    /// <summary>MS0073 — a C# 15 <c>closed</c> family keeps the plain abstract-class
+    /// TypeScript shape instead of the union type with a read-only <c>kind</c>
+    /// discriminant (spec 010 FR-C5, #738): a family member already emits a
+    /// <c>kind</c> member, two cases share a tag, a family type is <c>[NoEmit]</c> or
+    /// <c>[PlainObject]</c>, a case's generic shape cannot be written as a union
+    /// member, the case set is incomplete, a nested type takes the runtime class's
+    /// name, or the family sits inside an open case of another closed family. A
+    /// warning at the closed root; the family still works, without the narrowing
+    /// union. An error, with the same code, at a type of another assembly that inherits a
+    /// lowered family's tag accessor and declares its own <c>kind</c> member.</summary>
+    public const string ClosedFamilyTagSuppressed = "MS0073";
 }

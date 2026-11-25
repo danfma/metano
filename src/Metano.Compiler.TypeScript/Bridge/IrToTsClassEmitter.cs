@@ -76,17 +76,26 @@ internal sealed class IrToTsClassEmitter(
         // class emission.
         var keepsBaseMessage = IrToTsExceptionConstructionBridge.OverridesMessage(ir);
 
+        var typeName = _context.ResolveTsName(type);
+
+        var closedSelf = IrToTsClosedFamilyBridge.SelfOf(
+            type,
+            ir,
+            typeName,
+            _context.ClosedFamilies
+        );
+
         var backingFields = PerClassBackingFields.For(type);
         var lowering = _groupLowering with
         {
             ClassFields = backingFields.ScopeFor(ir),
             TypeOverrides = BclOverrides,
             KeepsBaseMessage = keepsBaseMessage,
+            ClosedSelf = closedSelf,
         };
 
         var extendsType = IrToTsClassBridge.BuildExtends(ir);
         var claims = ClaimAndReport(type, ir);
-        var typeName = _context.ResolveTsName(type);
 
         var hasSlot = ir.TypeArgumentSlot is { } typeArgSlot && ir.TypeParameters is { Count: > 0 };
         var classTypeParamNames = hasSlot ? ir.TypeParameters!.Select(tp => tp.Name).ToList() : [];
@@ -250,6 +259,14 @@ internal sealed class IrToTsClassEmitter(
         EmitSynthesizedMembers(type, ir, explicitCtors, classMembers, instanceLowering);
 
         if (
+            IrToTsClosedFamilyBridge.KindMember(type, closedSelf, _context.ClosedFamilies) is
+            { } kindMember
+        )
+        {
+            classMembers.Insert(0, kindMember);
+        }
+
+        if (
             ir.Semantics.IsValueType
             && (hasSlot || _context.RuntimeTypes.Reaches(RuntimeTypeReachability.KeyOf(type)))
         )
@@ -277,15 +294,23 @@ internal sealed class IrToTsClassEmitter(
 
         statements.Add(
             new TsClass(
-                typeName,
+                closedSelf?.RuntimeClassName ?? typeName,
                 body.Constructor,
                 body.Members,
+                Exported: closedSelf is null,
                 Extends: extendsType,
                 Implements: IrToTsClassBridge.BuildImplements(ir),
                 TypeParameters: IrToTsClassBridge.BuildTypeParameters(ir),
                 Abstract: ir.Semantics.IsAbstract
             )
         );
+
+        if (closedSelf is not null)
+        {
+            statements.AddRange(
+                IrToTsClosedFamilyBridge.FamilyDeclarations(type, ir, closedSelf, BclOverrides)
+            );
+        }
     }
 
     /// <summary>
@@ -705,7 +730,8 @@ internal sealed class IrToTsClassEmitter(
                 IrToTsRecordSynthesisBridge.Generate(
                     ir,
                     userMembers,
-                    PerClassBackingFields.For(type).ScopeFor(ir)
+                    PerClassBackingFields.For(type).ScopeFor(ir),
+                    lowering.ClosedSelf
                 )
             );
 
@@ -742,8 +768,7 @@ internal sealed class IrToTsClassEmitter(
     /// builds the static <c>create({...})</c> factory so call sites collapse
     /// to the object-literal shape while the runtime constructor stays
     /// positional. Surfaces a diagnostic and returns <c>null</c> when the
-    /// attribute mixes with constructor overloading, which Stage 3 does not
-    /// yet model.
+    /// attribute cannot be honoured (<see cref="IrConstructorExtractor.ObjectArgsProblem"/>).
     /// </summary>
     private TsMethodMember? TryBuildObjectArgsCreateFactory(
         INamedTypeSymbol type,
@@ -752,26 +777,22 @@ internal sealed class IrToTsClassEmitter(
         IrToTsBridgeContext lowering
     )
     {
-        var ctorsWithObjectArgs = explicitCtors.Where(SymbolHelper.HasObjectArgs).ToList();
-        if (ctorsWithObjectArgs.Count == 0)
-            return null;
-
-        if (IrConstructorExtractor.IsDispatchedSet(type))
+        if (IrConstructorExtractor.ObjectArgsProblem(type) is { } problem)
         {
-            _context.ReportUnsupportedBody(
-                type,
-                $"Constructor on '{type.Name}' combines [ObjectArgs] with overloading, "
-                    + "which the transpiler does not yet support; the create({...}) "
-                    + "factory was not emitted."
-            );
+            _context.ReportUnsupportedBody(type, problem);
+
             return null;
         }
+
+        if (!explicitCtors.Any(IrConstructorExtractor.HasObjectArgsSurface))
+            return null;
 
         return IrToTsClassBridge.BuildObjectArgsCreateFactory(
             ir.Constructor,
             _context.ResolveTsName(type),
             IrToTsClassBridge.BuildTypeParameters(ir),
-            lowering
+            lowering,
+            overridesBaseFactory: IrConstructorExtractor.NearestObjectArgsAncestor(type) is not null
         );
     }
 
