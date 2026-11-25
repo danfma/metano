@@ -609,7 +609,7 @@ public sealed class ImportCollector(
             // and `isCurrency` ends up with a single `import { Currency, isCurrency }`
             // line instead of two.
             if (
-                _context.TryResolveGuardImport(typeName, out var guarded)
+                _context.TryResolveGuardImport(typeName, ProjectTypeNamed, out var guarded)
                 && importedNames.Add(typeName)
             )
             {

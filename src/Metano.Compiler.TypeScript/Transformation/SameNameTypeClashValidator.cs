@@ -8,23 +8,23 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// one name (#504): <c>Na.R23</c> and <c>Nb.R23</c> both print as the bare <c>R23</c>,
 /// so the one import line the file can hold binds a single module and the other
 /// reference silently constructs or tests the wrong class. The second reference reports
-/// MS0070 at its C# location; rename one of the two with <c>[Name]</c>.
+/// MS0070 at its C# location; rename one of the two with <c>[Name]</c>. A <c>using</c>
+/// alias prints under its own name, so a reference through one never clashes.
 /// </summary>
-internal sealed class SameNameTypeClashValidator(
-    TypeScriptTransformContext context,
-    SameNameTypeReferences references
-)
+internal sealed class SameNameTypeClashValidator(TypeScriptTransformContext context)
 {
     /// <summary>
     /// The MS0070 findings of one emitted file: <paramref name="fileTypes"/> are the
-    /// types it declares, whose bodies and signatures are the references it holds.
+    /// types it declares, and <paramref name="references"/> the references their bodies
+    /// and signatures hold (<see cref="SameNameTypeReferences.In"/>).
     /// </summary>
     public IEnumerable<MetanoDiagnostic> Validate(
         string fileName,
-        IReadOnlyList<INamedTypeSymbol> fileTypes
+        IReadOnlyList<INamedTypeSymbol> fileTypes,
+        IReadOnlyList<SameNameReference> references
     )
     {
-        if (references.IsEmpty)
+        if (references.Count == 0)
             yield break;
 
         var bound = new Dictionary<string, INamedTypeSymbol>(StringComparer.Ordinal);
@@ -32,7 +32,7 @@ internal sealed class SameNameTypeClashValidator(
         foreach (var type in fileTypes)
             bound[context.ResolveTsName(type)] = type;
 
-        foreach (var reference in references.In(fileTypes))
+        foreach (var reference in references.Where(reference => !reference.IsAlias))
         {
             var name = context.ResolveTsName(reference.Type);
 
@@ -48,7 +48,7 @@ internal sealed class SameNameTypeClashValidator(
         string name,
         string fileName,
         INamedTypeSymbol first,
-        (INamedTypeSymbol Type, Location Location) second
+        SameNameReference second
     ) =>
         new(
             MetanoDiagnosticSeverity.Error,

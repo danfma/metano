@@ -223,4 +223,131 @@ public class SameNameTypeClashTests
             .That(clash.Message)
             .Contains("'Node' names both 'App.Node<T>' and 'App.Cyc.Node'");
     }
+
+    private const string RenamedAndTwoNodes = """
+        namespace App.Renamed
+        {
+            [Transpile, Name("Node")]
+            public class Tree
+            {
+                public string Who() => "Tree";
+            }
+        }
+
+        namespace App.Cyc
+        {
+            [Transpile]
+            public class Node
+            {
+                public string Who() => "Cyc";
+            }
+        }
+
+        namespace App.Zed
+        {
+            [Transpile]
+            public class Node
+            {
+                public string Who() => "Zed";
+            }
+        }
+
+        """;
+
+    [Test]
+    public async Task NameRenamedType_SpelledByItsCSharpName_ImportsItsOwnModule()
+    {
+        // #743 review M3: a reference to `Tree` (emitted as `Node`) was resolved by
+        // the emitted name, so it imported the last registered `Node`.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            RenamedAndTwoNodes
+                + """
+                [Transpile]
+                public static class UsesRenamed
+                {
+                    public static string Run() => new App.Renamed.Tree().Who();
+                }
+                """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
+            .IsEmpty();
+
+        await Assert
+            .That(files["uses-renamed.ts"])
+            .Contains("import { Node } from \"./app/renamed/node.js\";");
+    }
+
+    [Test]
+    public async Task UsingAlias_ImportsTheAliasTarget()
+    {
+        // #743 review M4: `using CNode = App.Cyc.Node;` imported `Node as CNode`
+        // from the last registered `Node`.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            RenamedAndTwoNodes
+                + """
+                namespace Consumer
+                {
+                    using CNode = App.Cyc.Node;
+
+                    [Transpile]
+                    public static class UsesAlias
+                    {
+                        public static string Run() => new CNode().Who();
+                    }
+                }
+                """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
+            .IsEmpty();
+
+        await Assert
+            .That(files["consumer/uses-alias.ts"])
+            .Contains("import { Node as CNode } from \"../app/cyc/node.js\";");
+    }
+
+    [Test]
+    public async Task StrictUnionGuardModule_ImportsItsOwnVariants()
+    {
+        // #743 review M2: the guard module had no bindings, so `isShape` imported
+        // the variant guard of the unrelated `Shapes.Zed.Circle`.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations.TypeScript;
+
+            namespace Shapes
+            {
+                [Transpile, StringEnum, EmitInFile("shape")]
+                public enum ShapeKind { Circle, Square }
+
+                [Transpile, GenerateGuard, StrictUnionGuard, Discriminator("Kind")]
+                public abstract record Shape(ShapeKind Kind);
+
+                [Transpile, GenerateGuard]
+                public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+                [Transpile, GenerateGuard]
+                public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            }
+
+            namespace Shapes.Zed
+            {
+                [Transpile, GenerateGuard]
+                public sealed record Circle(string Name);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
+            .IsEmpty();
+
+        var guard = files["shapes/shape.guard.ts"];
+
+        await Assert.That(guard).DoesNotContain("./zed/circle.js");
+        await Assert.That(guard).Contains("from \"./circle.js\";");
+    }
 }

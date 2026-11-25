@@ -481,17 +481,34 @@ public sealed class TypeScriptTransformContext(
     public bool TryResolveGuardImport(
         string candidate,
         [NotNullWhen(true)] out IrTranspilableTypeRef? guarded
+    ) => TryResolveGuardImport(candidate, TranspilableTypes.GetValueOrDefault, out guarded);
+
+    /// <summary>
+    /// <see cref="TryResolveGuardImport(string, out IrTranspilableTypeRef?)"/> with the
+    /// guarded type's name resolved by <paramref name="projectTypeNamed"/>: a file that
+    /// binds a name two project types share resolves it to the one it names (#743).
+    /// </summary>
+    public bool TryResolveGuardImport(
+        string candidate,
+        Func<string, IrTranspilableTypeRef?> projectTypeNamed,
+        [NotNullWhen(true)] out IrTranspilableTypeRef? guarded
     )
     {
         guarded = null;
+
         if (!candidate.StartsWith("is", StringComparison.Ordinal) || candidate.Length <= 2)
             return false;
+
         var guessedTsName = candidate[2..];
-        if (!TranspilableTypes.TryGetValue(guessedTsName, out var resolved))
+
+        if (projectTypeNamed(guessedTsName) is not { } resolved)
             return false;
+
         if (!GuardableTypeKeys.Contains(resolved.Key))
             return false;
+
         guarded = resolved;
+
         return true;
     }
 

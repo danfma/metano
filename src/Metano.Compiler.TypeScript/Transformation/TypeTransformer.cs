@@ -904,16 +904,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // file's). Otherwise both stay null and every iteration
             // takes the miss branch.
             var typeGroups = GroupTypesByFile(transpilableTypes);
+            List<TypeFileGroup> groups = [.. typeGroups, .. GuardModuleGroups(typeGroups)];
 
-            var sameNameReferences = new SameNameTypeReferences(
-                compilation,
-                Context,
-                transpilableTypes
+            _sameNameBindings = ResolveSameNameTypes(
+                groups,
+                new SameNameTypeReferences(compilation, Context, transpilableTypes)
             );
 
-            ReportSameNameTypeClashes(typeGroups, sameNameReferences);
-            _sameNameBindings = SameNameBindings(typeGroups, sameNameReferences);
-            List<TypeFileGroup> groups = [.. typeGroups, .. GuardModuleGroups(typeGroups)];
             var cachedGroups = LoadGroupCacheIfValid();
 
             var perGroupClosure =
@@ -1588,11 +1585,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             new TypeGuardBuilder(Context).GenerateStrictGuard(strictBase)
         );
 
-        var collected = new ImportCollector(Context, irRuntimeRequirements: null).Collect(
-            strictBase,
-            statements,
-            fileName: group.FileName
-        );
+        var collected = new ImportCollector(
+            Context,
+            irRuntimeRequirements: null,
+            _sameNameBindings.GetValueOrDefault(GroupKey(group))
+        ).Collect(strictBase, statements, fileName: group.FileName);
 
         statements.InsertRange(0, collected.Imports);
 
@@ -2019,30 +2016,38 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     );
 
     /// <summary>
-    /// Runs over every group, including the ones the per-group cache reuses, so a
-    /// cache hit still reports (#504).
+    /// Reports the MS0070 clashes of every group (#504) and returns, per group, the
+    /// project type each shared name binds (#743). Runs over every group, guard modules
+    /// and the groups the per-group cache reuses included, so a cache hit still reports.
     /// </summary>
-    private void ReportSameNameTypeClashes(
-        IEnumerable<TypeFileGroup> groups,
-        SameNameTypeReferences references
-    )
+    private Dictionary<
+        string,
+        IReadOnlyDictionary<string, IrTranspilableTypeRef>
+    > ResolveSameNameTypes(IEnumerable<TypeFileGroup> groups, SameNameTypeReferences references)
     {
-        var validator = new SameNameTypeClashValidator(Context, references);
+        var bindings = new Dictionary<string, IReadOnlyDictionary<string, IrTranspilableTypeRef>>(
+            StringComparer.Ordinal
+        );
+
+        if (references.IsEmpty)
+            return bindings;
+
+        var validator = new SameNameTypeClashValidator(Context);
 
         foreach (var group in groups)
         {
-            foreach (var finding in validator.Validate(group.FileName, group.Types))
-                ReportDiagnostic(finding);
-        }
-    }
+            var groupReferences = references.In(group.Types);
 
-    private static Dictionary<
-        string,
-        IReadOnlyDictionary<string, IrTranspilableTypeRef>
-    > SameNameBindings(IEnumerable<TypeFileGroup> groups, SameNameTypeReferences references) =>
-        references.IsEmpty
-            ? []
-            : groups.ToDictionary(GroupKey, group => references.BindingsIn(group.Types));
+            foreach (
+                var finding in validator.Validate(group.FileName, group.Types, groupReferences)
+            )
+                ReportDiagnostic(finding);
+
+            bindings[GroupKey(group)] = references.BindingsIn(group.Types, groupReferences);
+        }
+
+        return bindings;
+    }
 
     private static string GroupKey(TypeFileGroup group) => $"{group.Namespace}/{group.FileName}";
 

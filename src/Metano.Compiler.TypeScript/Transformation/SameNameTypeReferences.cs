@@ -8,11 +8,12 @@ namespace Metano.Compiler.TypeScript.Transformation;
 /// <summary>
 /// The references an emitted file holds to project types whose emitted name another
 /// top-level project type prints under too (<c>App.Node&lt;T&gt;</c> and
-/// <c>App.Cyc.Node</c> both print as <c>Node</c>), each resolved to its symbol. The
-/// bare name alone cannot say which module to import: the clash check (#504) reports a
-/// file that names both, and the import collector binds the name to the one type the
-/// file names (#743). A <c>using</c> alias prints under its own name and is not a
-/// reference to the bare name.
+/// <c>App.Cyc.Node</c> both print as <c>Node</c>, and so does a <c>[Name("Node")]</c>
+/// type), each resolved to its symbol. The bare name alone cannot say which module to
+/// import: the clash check (#504) reports a file that names two of them, and the import
+/// collector binds the name to the one type the file names (#743). A reference may
+/// spell the type's C# name or a <c>using</c> alias of it; an alias prints under its own
+/// name, so only the spelled references can clash, but both bind the import.
 /// </summary>
 internal sealed class SameNameTypeReferences(
     Compilation compilation,
@@ -22,36 +23,59 @@ internal sealed class SameNameTypeReferences(
 {
     private readonly Dictionary<SyntaxTree, SemanticModel> _models = [];
 
-    private readonly Lazy<IReadOnlySet<string>> _ambiguousNames = new(() =>
-        AmbiguousNames(transpilableTypes, context)
+    private readonly Lazy<IReadOnlyList<INamedTypeSymbol>> _ambiguousTypes = new(() =>
+        AmbiguousTypes(transpilableTypes, context)
     );
 
+    private HashSet<string>? _referenceSpellings;
+
     /// <summary>Whether no two top-level project types print under one name.</summary>
-    public bool IsEmpty => _ambiguousNames.Value.Count == 0;
+    public bool IsEmpty => _ambiguousTypes.Value.Count == 0;
 
     /// <summary>
-    /// The references <paramref name="fileTypes"/> (the types one file declares) spell
-    /// to an ambiguous name, in source order, with the type each one binds.
+    /// Every spelling a reference to an ambiguous type can take: the types' C# names
+    /// (a <c>[Name]</c>-renamed type is spelled by its C# name) and the names of the
+    /// <c>using</c> aliases that name one of them.
     /// </summary>
-    public IEnumerable<(INamedTypeSymbol Type, Location Location)> In(
-        IEnumerable<INamedTypeSymbol> fileTypes
-    ) =>
+    private IReadOnlySet<string> ReferenceSpellings =>
+        _referenceSpellings ??= [
+            .. _ambiguousTypes.Value.Select(type => type.Name),
+            .. compilation
+                .SyntaxTrees.SelectMany(tree =>
+                    tree.GetRoot().DescendantNodes().OfType<UsingDirectiveSyntax>()
+                )
+                .Where(directive => directive.Alias is not null && NamesAmbiguousType(directive))
+                .Select(directive => directive.Alias!.Name.Identifier.ValueText),
+        ];
+
+    /// <summary>
+    /// The references <paramref name="fileTypes"/> (the types one file declares) hold to
+    /// a type whose emitted name is ambiguous, in source order.
+    /// </summary>
+    public IReadOnlyList<SameNameReference> In(IEnumerable<INamedTypeSymbol> fileTypes) =>
         IsEmpty
             ? []
-            : fileTypes
-                .SelectMany(type => type.DeclaringSyntaxReferences)
-                .Select(reference => reference.GetSyntax())
-                .SelectMany(syntax => syntax.DescendantNodesAndSelf().OfType<SimpleNameSyntax>())
-                .Where(name => _ambiguousNames.Value.Contains(name.Identifier.ValueText))
-                .Select(ReferencedType)
-                .OfType<(INamedTypeSymbol, Location)>();
+            :
+            [
+                .. fileTypes
+                    .SelectMany(type => type.DeclaringSyntaxReferences)
+                    .Select(reference => reference.GetSyntax())
+                    .SelectMany(syntax =>
+                        syntax.DescendantNodesAndSelf().OfType<SimpleNameSyntax>()
+                    )
+                    .Where(name => ReferenceSpellings.Contains(name.Identifier.ValueText))
+                    .Select(ReferencedType)
+                    .OfType<SameNameReference>(),
+            ];
 
     /// <summary>
     /// The project type each ambiguous name of one file binds: a type the file declares,
-    /// else the first one it names. Empty when the project has no ambiguous name.
+    /// else the first one its <paramref name="references"/> name. Empty when the
+    /// project has no ambiguous name.
     /// </summary>
     public IReadOnlyDictionary<string, IrTranspilableTypeRef> BindingsIn(
-        IReadOnlyList<INamedTypeSymbol> fileTypes
+        IReadOnlyList<INamedTypeSymbol> fileTypes,
+        IReadOnlyList<SameNameReference> references
     )
     {
         var bindings = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
@@ -59,17 +83,25 @@ internal sealed class SameNameTypeReferences(
         if (IsEmpty)
             return bindings;
 
-        var declared = fileTypes.Where(type => _ambiguousNames.Value.Contains(Emitted(type)));
+        var declared = fileTypes.Where(IsAmbiguous);
 
-        foreach (var type in declared.Concat(In(fileTypes).Select(reference => reference.Type)))
+        foreach (var type in declared.Concat(references.Select(reference => reference.Type)))
             bindings.TryAdd(Emitted(type), TranspilableTypeProjection.Of(type, Emitted(type)));
 
         return bindings;
     }
 
+    private bool NamesAmbiguousType(UsingDirectiveSyntax directive) =>
+        (ModelFor(directive.SyntaxTree).GetDeclaredSymbol(directive) as IAliasSymbol)?.Target
+            is INamedTypeSymbol target
+        && IsAmbiguous(target.OriginalDefinition);
+
+    private bool IsAmbiguous(INamedTypeSymbol type) =>
+        _ambiguousTypes.Value.Contains(type, SymbolEqualityComparer.Default);
+
     private string Emitted(INamedTypeSymbol type) => context.ResolveTsName(type);
 
-    private (INamedTypeSymbol Type, Location Location)? ReferencedType(SimpleNameSyntax node)
+    private SameNameReference? ReferencedType(SimpleNameSyntax node)
     {
         var symbol = ModelFor(node.SyntaxTree).GetSymbolInfo(node).Symbol;
 
@@ -81,29 +113,31 @@ internal sealed class SameNameTypeReferences(
             _ => null,
         };
 
-        // Only a type spelled by its own name: a `using` alias prints under the alias.
-        return
-            type is { ContainingType: null } own
-            && own.Name == node.Identifier.ValueText
-            && context.TranspilableTypes.ContainsKey(Emitted(own))
-            ? (own.OriginalDefinition, node.GetLocation())
-            : null;
+        if (type?.OriginalDefinition is not { } definition || !IsAmbiguous(definition))
+            return null;
+
+        return new SameNameReference(
+            definition,
+            node.GetLocation(),
+            IsAlias: definition.Name != node.Identifier.ValueText
+        );
     }
 
     /// <summary>
-    /// The emitted names more than one top-level project type prints under: the only
-    /// names that can clash, so a project without any skips every lookup.
+    /// The top-level project types whose emitted name another one prints under too: the
+    /// only types whose references can clash, so a project without any skips every lookup.
     /// </summary>
-    private static IReadOnlySet<string> AmbiguousNames(
+    private static IReadOnlyList<INamedTypeSymbol> AmbiguousTypes(
         IEnumerable<INamedTypeSymbol> types,
         TypeScriptTransformContext context
     ) =>
-        types
-            .Where(type => type.ContainingType is null)
-            .GroupBy(type => context.ResolveTsName(type), StringComparer.Ordinal)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .ToHashSet(StringComparer.Ordinal);
+        [
+            .. types
+                .Where(type => type.ContainingType is null)
+                .GroupBy(type => context.ResolveTsName(type), StringComparer.Ordinal)
+                .Where(group => group.Count() > 1)
+                .SelectMany(group => group),
+        ];
 
     private SemanticModel ModelFor(SyntaxTree tree)
     {
@@ -116,3 +150,9 @@ internal sealed class SameNameTypeReferences(
         return model;
     }
 }
+
+/// <summary>
+/// One reference to a type whose emitted name is ambiguous: the type, where the file
+/// names it, and whether it names it through a <c>using</c> alias.
+/// </summary>
+internal sealed record SameNameReference(INamedTypeSymbol Type, Location Location, bool IsAlias);
