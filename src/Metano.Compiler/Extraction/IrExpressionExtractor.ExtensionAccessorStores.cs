@@ -225,6 +225,17 @@ public sealed partial class IrExpressionExtractor
         var current = read();
 
         return ExtensionCompoundValue(
+        if (IsDelegateCompound(assign, property))
+        {
+            DroppedCodeDiagnostics.Report(
+                $"'{assign}' is not supported: a delegate '+=' / '-=' through the extension "
+                    + $"accessor '{property.ToDisplayString()}' is not lowered.",
+                assign.GetLocation()
+            );
+
+            return new IrUnsupportedExpression(assign.Kind().ToString());
+        }
+
             assign,
             property,
             current,
@@ -235,6 +246,21 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// <c>write(value)</c>, followed by the stored value when the store's
+    /// <summary>
+    /// Whether <paramref name="assign"/> combines or removes a delegate
+    /// (<c>+=</c> / <c>-=</c> on a delegate-typed accessor), which has no
+    /// lowering through accessor helpers and is reported instead of emitted
+    /// as the JS <c>+</c>.
+    /// </summary>
+    private static bool IsDelegateCompound(
+        AssignmentExpressionSyntax assign,
+        IPropertySymbol property
+    ) =>
+        property.Type.TypeKind == TypeKind.Delegate
+        && assign.Kind()
+            is SyntaxKind.AddAssignmentExpression
+                or SyntaxKind.SubtractAssignmentExpression;
+
     /// value is used: the setter helper returns nothing, so
     /// <c>(write(v), v)</c> yields what C# yields.
     /// </summary>
