@@ -545,6 +545,7 @@ public class JsonValueRootTests
     [Arguments("CreateSpec", "context member 'createSpec'")]
     [Arguments("CreateValueSpec", "context member 'createValueSpec'")]
     [Arguments("ReadOptions", "context member 'readOptions'")]
+    [Arguments("WriteOptions", "context member 'writeOptions'")]
     [Arguments("Registry", "context field '_registry'")]
     public async Task ReservedMemberName_IsAnError(string typeName, string member)
     {

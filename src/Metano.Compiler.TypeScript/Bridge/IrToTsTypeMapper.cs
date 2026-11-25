@@ -166,17 +166,15 @@ public static class IrToTsTypeMapper
     }
 
     /// <summary>
-    /// Returns the alias for <paramref name="canonicalName"/> if one is
-    /// active for the current emitted file, otherwise the canonical name
-    /// itself. Used at every emit site that produces a type-name token —
-    /// declarations, body-position identifiers, and static-member access
-    /// roots — so the alias replaces the canonical consistently.
+    /// Returns the alias the type <paramref name="canonicalName"/> of
+    /// <paramref name="namespace"/> prints as in the current emitted file, otherwise
+    /// the canonical name itself (<see cref="UsingAliasScope.AliasOf"/>). Used at every
+    /// emit site that produces a type-name token — declarations, body-position
+    /// identifiers, and static-member access roots — so the alias replaces the
+    /// canonical consistently.
     /// </summary>
-    public static string ResolveAliasedName(string canonicalName) =>
-        UsingAliases is { } scope
-        && scope.CanonicalToAlias.TryGetValue(canonicalName, out var alias)
-            ? alias
-            : canonicalName;
+    public static string ResolveAliasedName(string canonicalName, string? @namespace) =>
+        UsingAliases?.AliasOf(canonicalName, @namespace) ?? canonicalName;
 
     private static bool IsSystemType(IrNamedTypeRef named) =>
         named is { Name: "Type", Namespace: "System", Origin: null }
@@ -207,16 +205,29 @@ public static class IrToTsTypeMapper
                 arguments.Select(argument => Map(argument, overrides)).ToList()
             );
 
+        // `ILookup<K, T>` is the runtime `Lookup` class `ToLookup` returns (#747).
+        if (
+            named is
+            {
+                Namespace: "System.Linq",
+                Name: "ILookup",
+                Origin: null,
+                TypeArguments: { Count: 2 } lookupArguments,
+            }
+        )
+            return RuntimeClassType(
+                "Lookup",
+                lookupArguments.Select(argument => Map(argument, overrides)).ToList()
+            );
+
         var name = ModuleLocalNaming.Flatten(named.Name, named.PrivateNestedSegments);
 
         if (NamedTypeRenames is { } renames && renames.TryGetValue(name, out var renamed))
             name = renamed;
 
         string? originalName = null;
-        if (
-            UsingAliases is { } aliasScope
-            && aliasScope.CanonicalToAlias.TryGetValue(name, out var aliasName)
-        )
+
+        if (UsingAliases?.AliasOf(name, named.Namespace) is { } aliasName)
         {
             originalName = name;
             name = aliasName;

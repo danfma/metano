@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { ArgumentException } from "#/system/exceptions/argument-exception.ts";
 import { ArgumentNullException } from "#/system/exceptions/argument-null-exception.ts";
-import { JsonSerializer, type TypeSpec } from "#/system/json/index.ts";
+import {
+  JsonSerializer,
+  SerializerContext,
+  type JsonWriteOptions,
+  type TypeSpec,
+} from "#/system/json/index.ts";
 import { writeJsonText } from "#/system/json/json-text-writer.ts";
 
 class Bag {
@@ -80,5 +85,105 @@ describe("JsonSerializer.serializeText", () => {
     expect(() => JsonSerializer.deserializeText(missingText, bagSpec)).toThrow(
       ArgumentNullException,
     );
+  });
+});
+
+// Expected texts measured on .NET 10 (`JsonSerializer.Serialize(tree, options)` with
+// `WriteIndented = true`), #752.
+describe("writeJsonText with indentation", () => {
+  const tree = {
+    a: 1,
+    list: [1, [], {}, [[2]], "x"],
+    empty: [],
+    obj: { k: null, n: { z: true } },
+    e2: {},
+  };
+
+  const rows: readonly { name: string; options: JsonWriteOptions; text: string }[] = [
+    {
+      name: "two spaces by default",
+      options: { writeIndented: true },
+      text: [
+        "{",
+        '  "a": 1,',
+        '  "list": [',
+        "    1,",
+        "    [],",
+        "    {},",
+        "    [",
+        "      [",
+        "        2",
+        "      ]",
+        "    ],",
+        '    "x"',
+        "  ],",
+        '  "empty": [],',
+        '  "obj": {',
+        '    "k": null,',
+        '    "n": {',
+        '      "z": true',
+        "    }",
+        "  },",
+        '  "e2": {}',
+        "}",
+      ].join("\n"),
+    },
+    {
+      name: "one tab per level",
+      options: { writeIndented: true, indentCharacter: "\t", indentSize: 1 },
+      text: '{\n\t"a": 1,\n\t"list": [\n\t\t1,\n\t\t[],\n\t\t{},\n\t\t[\n\t\t\t[\n\t\t\t\t2\n\t\t\t]\n\t\t],\n\t\t"x"\n\t],\n\t"empty": [],\n\t"obj": {\n\t\t"k": null,\n\t\t"n": {\n\t\t\t"z": true\n\t\t}\n\t},\n\t"e2": {}\n}',
+    },
+    {
+      name: "size zero keeps the line breaks",
+      options: { writeIndented: true, indentSize: 0 },
+      text: '{\n"a": 1,\n"list": [\n1,\n[],\n{},\n[\n[\n2\n]\n],\n"x"\n],\n"empty": [],\n"obj": {\n"k": null,\n"n": {\n"z": true\n}\n},\n"e2": {}\n}',
+    },
+    {
+      name: "four spaces and CRLF",
+      options: { writeIndented: true, indentSize: 4, newLine: "\r\n" },
+      text: '{\r\n    "a": 1,\r\n    "list": [\r\n        1,\r\n        [],\r\n        {},\r\n        [\r\n            [\r\n                2\r\n            ]\r\n        ],\r\n        "x"\r\n    ],\r\n    "empty": [],\r\n    "obj": {\r\n        "k": null,\r\n        "n": {\r\n            "z": true\r\n        }\r\n    },\r\n    "e2": {}\r\n}',
+    },
+  ];
+
+  for (const row of rows) {
+    test(`writes ${row.name}`, () => {
+      expect(writeJsonText(tree, row.options)).toBe(row.text);
+    });
+  }
+
+  test("writes empty and scalar roots without line breaks", () => {
+    const options = { writeIndented: true } as const;
+
+    expect(writeJsonText([], options)).toBe("[]");
+    expect(writeJsonText({}, options)).toBe("{}");
+    expect(writeJsonText(5, options)).toBe("5");
+    expect(writeJsonText({ gone: undefined }, options)).toBe("{}");
+  });
+
+  test("ignores the indent members when the text is not indented", () => {
+    expect(writeJsonText({ a: [1] }, { indentSize: 4, newLine: "\r\n" })).toBe('{"a":[1]}');
+  });
+});
+
+describe("JsonSerializer.serializeText with a context's write options", () => {
+  class IndentedContext extends SerializerContext {
+    protected override get writeOptions(): JsonWriteOptions {
+      return { writeIndented: true, indentSize: 4 };
+    }
+
+    get bag(): TypeSpec<Bag> {
+      return this.createSpec(bagSpec);
+    }
+  }
+
+  test("writes the indented text of the spec's context", () => {
+    const context = new IndentedContext();
+    const text = JsonSerializer.serializeText(new Bag("x", 1), context.bag);
+
+    expect(text).toBe('{\n    "S": "x",\n    "D": 1\n}');
+  });
+
+  test("a spec of a default context stays compact", () => {
+    expect(JsonSerializer.serializeText(new Bag("x", 1), bagSpec)).toBe('{"S":"x","D":1}');
   });
 });

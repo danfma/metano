@@ -311,11 +311,11 @@ public class ClosedHierarchyTests
         await Assert
             .That(dart)
             .Contains(
-                "Circle => 'circle', Square => 'square', "
+                "Circle() => 'circle', Square() => 'square', "
                     + "_ => throw StateError('Non-exhaustive switch expression') }"
             );
 
-        await Assert.That(dart).Contains("Finished => 'finished', _ => throw StateError(");
+        await Assert.That(dart).Contains("Finished() => 'finished', _ => throw StateError(");
     }
 
     [Test]

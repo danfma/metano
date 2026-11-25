@@ -50,6 +50,14 @@
       MetanoSkipToolCheck    (optional)  true to skip the pre-flight check that the `metano-typescript` .NET tool is installed (default: false). The check only runs when the transpile target is out of date and not in dev mode (MetanoCompilerProject unset); when the tool is missing the build fails with METANOBUILD001 and the install instructions instead of the generic `dotnet-metano-typescript does not exist` message.
       MetanoCompilerProject  (optional)  Dev mode: path of the compiler .csproj, run with `dotnet run - -project` instead of the installed tool (no tool probe).
 
+    Warning policy (#785): the project's own TreatWarningsAsErrors, WarningsAsErrors,
+    WarningsNotAsErrors and NoWarn (and MSBuild's MSBuild* spellings) govern the Metano
+    warnings (MS0001, ...) too. The build passes them to the CLI, which fails the build on an
+    escalated warning and then writes no up-to-date stamp, so the next build fails again
+    instead of skipping the transpile. A project with TreatWarningsAsErrors that already
+    reports Metano warnings starts failing; fix the warning, or list its code in
+    WarningsNotAsErrors or NoWarn.
+
     Tool requirement:
 
       This package does NOT bundle the compiler: the target language is the
@@ -236,6 +244,22 @@
       <_MetanoTsProbeTool
         Condition="'$(_MetanoTsCompilerProject)' == '' and '$(_MetanoTsSkipToolCheck)' != 'true'"
         >true</_MetanoTsProbeTool>
+
+      <!-- Warning policy (#785): the project's warning settings reach the CLI, which applies
+           them to the Metano diagnostics it reports (the Exec below cannot be governed by
+           csc's switches). MSBuild's own spellings count too. Lists are normalized to commas:
+           a semicolon would split the item below, and only Metano codes (MS and four digits)
+           are kept, so editing a compiler NoWarn does not change the arguments or rerun the
+           transpile. -->
+      <_MetanoTsWarnAsError
+        Condition="'$(TreatWarningsAsErrors)' == 'true' or '$(MSBuildTreatWarningsAsErrors)' == 'true'"
+        >true</_MetanoTsWarnAsError>
+      <_MetanoTsRawWarningsAsErrors>,$([System.Text.RegularExpressions.Regex]::Replace('$(WarningsAsErrors);$(MSBuildWarningsAsErrors)', '[;\s]+', ',')),</_MetanoTsRawWarningsAsErrors>
+      <_MetanoTsWarningsAsErrors>$([System.Text.RegularExpressions.Regex]::Replace('$(_MetanoTsRawWarningsAsErrors)', '(?i),(?!MS[0-9]{4},)[^,]*(?=,)', '').Trim(','))</_MetanoTsWarningsAsErrors>
+      <_MetanoTsRawWarningsNotAsErrors>,$([System.Text.RegularExpressions.Regex]::Replace('$(WarningsNotAsErrors);$(MSBuildWarningsNotAsErrors)', '[;\s]+', ',')),</_MetanoTsRawWarningsNotAsErrors>
+      <_MetanoTsWarningsNotAsErrors>$([System.Text.RegularExpressions.Regex]::Replace('$(_MetanoTsRawWarningsNotAsErrors)', '(?i),(?!MS[0-9]{4},)[^,]*(?=,)', '').Trim(','))</_MetanoTsWarningsNotAsErrors>
+      <_MetanoTsRawNoWarn>,$([System.Text.RegularExpressions.Regex]::Replace('$(NoWarn);$(MSBuildWarningsAsMessages)', '[;\s]+', ',')),</_MetanoTsRawNoWarn>
+      <_MetanoTsNoWarn>$([System.Text.RegularExpressions.Regex]::Replace('$(_MetanoTsRawNoWarn)', '(?i),(?!MS[0-9]{4},)[^,]*(?=,)', '').Trim(','))</_MetanoTsNoWarn>
     </PropertyGroup>
 
     <!-- Compose once before the key write and incremental check, then pass this exact line to
@@ -249,6 +273,19 @@
       <_MetanoTsArg Include="-o &quot;$(_MetanoTsOutputDir)&quot;" />
       <_MetanoTsArg Include="--clean" Condition="'$(_MetanoTsClean)' == 'true'" />
       <_MetanoTsArg Include="--time" Condition="'$(_MetanoTsShowTimings)' == 'true'" />
+      <_MetanoTsArg Include="--warn-as-error" Condition="'$(_MetanoTsWarnAsError)' == 'true'" />
+      <_MetanoTsArg
+        Include="--warnings-as-errors &quot;$(_MetanoTsWarningsAsErrors)&quot;"
+        Condition="'$(_MetanoTsWarningsAsErrors)' != ''"
+      />
+      <_MetanoTsArg
+        Include="--warnings-not-as-errors &quot;$(_MetanoTsWarningsNotAsErrors)&quot;"
+        Condition="'$(_MetanoTsWarningsNotAsErrors)' != ''"
+      />
+      <_MetanoTsArg
+        Include="--no-warn &quot;$(_MetanoTsNoWarn)&quot;"
+        Condition="'$(_MetanoTsNoWarn)' != ''"
+      />
       <_MetanoTsArg
         Include="--dist &quot;$(_MetanoTsDist)&quot;"
         Condition="'$(_MetanoTsDist)' != ''"
@@ -312,10 +349,45 @@
     Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath);$(_MetanoTsToolchainKeyFile)"
     Outputs="$(_MetanoTsOutputDir)/.metano-stamp"
   >
+    <!-- Marks that the transpile really ran. Neither a PropertyGroup nor CreateProperty can:
+         MSBuild still evaluates both when it skips the target as up to date. Any other task
+         output only exists when the target body runs. -->
+    <ConvertToAbsolutePath Paths="$(_MetanoTsOutputDir)">
+      <Output TaskParameter="AbsolutePaths" PropertyName="_MetanoTsWorkerRan" />
+    </ConvertToAbsolutePath>
+
     <MSBuild
       Projects="$(MSBuildProjectFullPath)"
       Targets="_MetanoTranspileWorker"
       Properties="_MetanoWorkerOutputDir=$([MSBuild]::Escape('$(_MetanoTsOutputDir)'));_MetanoWorkerCommand=$([MSBuild]::Escape('$(_MetanoTsCommand)'));_MetanoWorkerArguments=$([MSBuild]::Escape('$(_MetanoTsArgs)'));_MetanoWorkerProbeTool=$(_MetanoTsProbeTool);_MetanoWorkerToolDescription=The Metano TypeScript compiler tool (metano-typescript);_MetanoWorkerToolInstallHint=$([MSBuild]::Escape('$(_MetanoTsToolInstallHint)'))"
+    />
+  </Target>
+
+  <!-- #785: a build that skips the transpile as up to date still reports the warnings of the
+       run that produced the output. The CLI keeps them beside the stamp, one canonical
+       `file(line,col): warning MSxxxx: text` line each; printing the file through Exec makes
+       MSBuild log them as warnings, exactly as the run's own output did, and the project's
+       warning settings (which changed the arguments, so rerun the transpile when edited) apply
+       to them the same way. -->
+  <Target
+    Name="_MetanoReplayTsDiagnostics"
+    AfterTargets="MetanoTranspile;MetanoTranspileTs"
+    Condition="'$(_MetanoTsActive)' == 'true' and '$(_MetanoTsWorkerRan)' == '' and Exists('$(_MetanoTsOutputDir)/.metano-diagnostics')"
+  >
+    <PropertyGroup>
+      <_MetanoTsReplayFile>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(_MetanoTsOutputDir)', '.metano-diagnostics'))</_MetanoTsReplayFile>
+      <_MetanoTsReplayCommand Condition="$([MSBuild]::IsOSPlatform('Windows'))"
+        >type "$(_MetanoTsReplayFile)"</_MetanoTsReplayCommand>
+      <_MetanoTsReplayCommand Condition="!$([MSBuild]::IsOSPlatform('Windows'))"
+        >cat "$(_MetanoTsReplayFile)"</_MetanoTsReplayCommand>
+    </PropertyGroup>
+
+    <Exec
+      Command="$(_MetanoTsReplayCommand)"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      EchoOff="true"
+      IgnoreExitCode="true"
+      StandardOutputImportance="low"
     />
   </Target>
 </Project>

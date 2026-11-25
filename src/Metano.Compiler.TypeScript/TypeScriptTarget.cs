@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript;
@@ -227,8 +228,18 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         IReadOnlyList<TsSourceFile> sourceFiles,
         IReadOnlyDictionary<string, string> crossPackageDependencies,
         IReadOnlyList<GeneratedFile> generatedFiles
-    ) =>
-        new(
+    )
+    {
+        var explicitVersion = SymbolHelper
+            .GetEmitPackageInfo(compilation.Assembly, (int)EmitTarget.JavaScript)
+            ?.Version;
+
+        var packageVersion = RoslynTypeQueries.ResolveOwnPackageVersion(
+            compilation.Assembly,
+            explicitVersion
+        );
+
+        return new PackageManifestInputs(
             sourceFiles,
             // Prefer the frontend-populated package name; the underlying Roslyn read
             // remains as a defensive fallback while every consumer migrates onto IR.
@@ -240,8 +251,40 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             SubpathRoot: ir.PackageSubpathRoot,
             CrossPackageDependencies: crossPackageDependencies,
             IsExecutable: compilation.Options.OutputKind == OutputKind.ConsoleApplication,
-            RuntimePeerSpecifier: RuntimePeerDependency.PeerSpecifierFor(generatedFiles)
+            RuntimePeerSpecifier: RuntimePeerDependency.PeerSpecifierFor(generatedFiles),
+            PackageVersion: packageVersion,
+            PackageVersionDiagnostics: UnrepresentedVersionDiagnostics(
+                explicitVersion,
+                packageVersion
+            )
         );
+    }
+
+    /// <summary>
+    /// A warning when <c>[EmitPackage(Version)]</c> is a range whose base version is unknown
+    /// (<c>&lt;2.0.0</c>, a compound range): the package's own <c>version</c> then falls back to
+    /// the assembly version, which may not satisfy it. A protocol (<c>workspace:*</c>) is
+    /// satisfied by any version, so it is silent.
+    /// </summary>
+    private static IReadOnlyList<MetanoDiagnostic> UnrepresentedVersionDiagnostics(
+        string? explicitVersion,
+        string writtenVersion
+    ) =>
+        string.IsNullOrWhiteSpace(explicitVersion)
+        || explicitVersion.Contains(':')
+        || RoslynTypeQueries.TryParseExplicitVersion(explicitVersion, out _)
+            ? []
+            :
+            [
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.CrossPackageResolution,
+                    $"[EmitPackage(Version = \"{explicitVersion}\")] names no concrete version, so "
+                        + $"package.json#version was set to the assembly version '{writtenVersion}', "
+                        + "which may not satisfy that range. Use an exact version, or a ^, ~ or "
+                        + ">= range, so the version Metano writes satisfies the range consumers get."
+                ),
+            ];
 
     private static Compilation RequireRoslynCompilation(Compilation? compilation) =>
         compilation

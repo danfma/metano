@@ -11,10 +11,10 @@ import { describe, expect, test } from "bun:test";
 
 import { JobCompleted } from "#/sample-json-contracts/job-completed";
 import { JobError } from "#/sample-json-contracts/job-error";
-import { JobFinished } from "#/sample-json-contracts/job-finished";
+import { isJobFinished, JobFinished } from "#/sample-json-contracts/job-finished";
 import { JobQueued } from "#/sample-json-contracts/job-queued";
-import { JobRunning } from "#/sample-json-contracts/job-running";
-import { JobStatus } from "#/sample-json-contracts/job-status";
+import { isJobRunning, JobRunning } from "#/sample-json-contracts/job-running";
+import { assertJobStatus, isJobStatus, JobStatus } from "#/sample-json-contracts/job-status";
 import { JobStatuses } from "#/sample-json-contracts/job-statuses";
 
 const label = (status: JobStatus): string => {
@@ -96,5 +96,45 @@ describe("closed family union (FR-C5)", () => {
     expect(JobStatuses.asFinished(new JobQueued())).toBeNull();
     expect(JobStatuses.describe(new JobRunning(5))).toBe("running 5");
     expect(new JobQueued().self()).toBeInstanceOf(JobQueued);
+  });
+
+  test("instanceof the family narrows to the union (#758)", () => {
+    const read = (value: unknown): string => {
+      if (value instanceof JobFinished) {
+        return finishedLabel(value);
+      }
+
+      if (value instanceof JobStatus) {
+        return label(value);
+      }
+
+      return "none";
+    };
+
+    const running = (status: JobStatus): number =>
+      status instanceof JobRunning ? status.percent : -1;
+
+    expect(statuses.map(read)).toEqual(["queued", "40%", "3s", "disk"]);
+    expect(read({ percent: 40 })).toBe("none");
+    expect(statuses.map(running)).toEqual([-1, 40, -1, -1]);
+  });
+
+  test("guards admit instances only (#757)", () => {
+    const plain: unknown = { percent: 40 };
+
+    expect(isJobStatus(plain)).toBe(false);
+    expect(isJobRunning(plain)).toBe(false);
+    expect(isJobFinished({ seconds: 3 })).toBe(false);
+    expect(() => assertJobStatus(plain)).toThrow(TypeError);
+
+    const value: unknown = new JobRunning(40);
+
+    expect(isJobRunning(value)).toBe(true);
+    expect(isJobFinished(value)).toBe(false);
+    expect(isJobFinished(new JobError("e"))).toBe(true);
+
+    if (isJobStatus(value)) {
+      expect(label(value)).toBe("40%");
+    }
   });
 });

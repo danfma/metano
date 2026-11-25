@@ -78,4 +78,11 @@ public sealed record IrModuleFunction(
     /// it; a target decides what it exposes beyond the module.
     /// </summary>
     public IrVisibility Visibility { get; init; } = IrVisibility.Public;
+
+    /// <summary>
+    /// The receiver type of the C# 14 <c>extension</c> block that declares the
+    /// operator this function lowers (#761), which a target may name the
+    /// function after; <c>null</c> for any other function.
+    /// </summary>
+    public IrTypeRef? OperatorReceiver { get; init; }
 }

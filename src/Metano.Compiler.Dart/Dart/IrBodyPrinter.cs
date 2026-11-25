@@ -29,7 +29,11 @@ public static class IrBodyPrinter
         bool allowArrow = true
     )
     {
+        // An expression body prints its one statement without visiting it.
+        using var location = body is [var only] ? DroppedCodeDiagnostics.At(only) : null;
+
         var indent = new string(' ', indentLevel * 2);
+
         // Expression-bodied optimization: single return of an expression → `=> expr;`
         if (allowArrow && body.Count == 1 && body[0] is IrReturnStatement { Value: { } returned })
         {
@@ -56,6 +60,8 @@ public static class IrBodyPrinter
 
     private static void PrintStatement(StringBuilder sb, IrStatement stmt, int indentLevel)
     {
+        using var location = DroppedCodeDiagnostics.At(stmt);
+
         var indent = new string(' ', indentLevel * 2);
 
         switch (stmt)
@@ -88,6 +94,12 @@ public static class IrBodyPrinter
                     sb.Append(" = ");
                     PrintExpression(sb, vd.Initializer);
                 }
+                sb.AppendLine(";");
+                break;
+
+            case IrTupleDeconstruction td when DartRecordPattern.Of(td) is { } pattern:
+                sb.Append(indent).Append("var ").Append(pattern).Append(" = ");
+                PrintExpression(sb, td.Initializer);
                 sb.AppendLine(";");
                 break;
 
@@ -128,16 +140,16 @@ public static class IrBodyPrinter
                 sb.Append(indent).AppendLine("rethrow;");
                 break;
 
-            case IrBreakStatement:
-                sb.Append(indent).AppendLine("break;");
+            case IrBreakStatement jump:
+                sb.Append(indent).AppendLine(Jump("break", jump.Label));
                 break;
 
-            case IrContinueStatement:
-                sb.Append(indent).AppendLine("continue;");
+            case IrContinueStatement jump:
+                sb.Append(indent).AppendLine(Jump("continue", jump.Label));
                 break;
 
             case IrForEachStatement fe:
-                sb.Append(indent).Append("for (");
+                sb.Append(indent).Append(LabelOf(fe)).Append("for (");
                 if (fe.VariableType is not null)
                     sb.Append(FormatType(fe.VariableType)).Append(' ');
                 else
@@ -151,7 +163,7 @@ public static class IrBodyPrinter
                 break;
 
             case IrWhileStatement ws:
-                sb.Append(indent).Append("while (");
+                sb.Append(indent).Append(LabelOf(ws)).Append("while (");
                 PrintExpression(sb, ws.Condition);
                 sb.AppendLine(") {");
                 foreach (var s in ws.Body)
@@ -160,7 +172,7 @@ public static class IrBodyPrinter
                 break;
 
             case IrDoWhileStatement dw:
-                sb.Append(indent).AppendLine("do {");
+                sb.Append(indent).Append(LabelOf(dw)).AppendLine("do {");
                 foreach (var s in dw.Body)
                     PrintStatement(sb, s, indentLevel + 1);
                 sb.Append(indent).Append("} while (");
@@ -207,7 +219,7 @@ public static class IrBodyPrinter
                 break;
 
             case IrSwitchStatement sw:
-                sb.Append(indent).Append("switch (");
+                sb.Append(indent).Append(LabelOf(sw)).Append("switch (");
                 PrintExpression(sb, sw.Expression);
                 sb.AppendLine(") {");
                 foreach (var c in sw.Cases)
@@ -221,12 +233,56 @@ public static class IrBodyPrinter
                 sb.Append(indent).AppendLine("}");
                 break;
 
-            default:
+            // Already reported where it was extracted.
+            case IrUnsupportedStatement unsupported:
                 sb.Append(indent)
                     .Append("// TODO: unsupported IR statement ")
-                    .AppendLine(stmt.GetType().Name);
+                    .AppendLine(unsupported.Kind);
+
+                break;
+
+            default:
+                sb.Append(indent);
+
+                AppendDropped(
+                    sb,
+                    $"// TODO: unsupported IR statement {stmt.GetType().Name}\n",
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(stmt)}"
+                );
+
                 break;
         }
+    }
+
+    /// <summary>
+    /// The Dart label a loop or <c>switch</c> starts with (<c>outer: </c>), the
+    /// target of a labeled <c>break</c> / <c>continue</c> (#772), spelled as C#
+    /// names it so two labels C# tells apart stay apart; empty when it has none.
+    /// </summary>
+    private static string LabelOf(IrBreakableStatement target) =>
+        target.Label is { } label ? $"{label}: " : string.Empty;
+
+    /// <summary><c>break;</c> / <c>continue;</c>, naming the label it targets, if any.</summary>
+    private static string Jump(string keyword, string? label) =>
+        label is null ? $"{keyword};" : $"{keyword} {label};";
+
+    /// <summary>
+    /// A non-null assertion the IR inserted from C# flow analysis (#775) that
+    /// Dart leaves out: a local or parameter read after <c>x!</c>, which Dart
+    /// promotes itself. A member read keeps it: Dart never promotes a
+    /// non-final field (its <c>!</c> may then throw where a call changed the
+    /// field, which C# does not track; FR-101).
+    /// </summary>
+    private static bool IsLeftOutOnDart(IrUnaryExpression unary) =>
+        unary.FlowProof is IrFlowNonNullProof.ForgivenLocalRead;
+
+    /// <summary>
+    /// Appends a placeholder that drops code, reporting it (W9-13 / W9-13a).
+    /// </summary>
+    private static void AppendDropped(StringBuilder sb, string placeholder, string construct)
+    {
+        DroppedCodeDiagnostics.Report($"{construct} is not supported by the Dart target.");
+        sb.Append(placeholder);
     }
 
     // ── Expressions ───────────────────────────────────────────────────────
@@ -351,6 +407,9 @@ public static class IrBodyPrinter
                 PrintOperand(sb, bin.Left, DartBinaryOperandGrouping.NeedsLeftParentheses(bin));
                 sb.Append(' ').Append(FormatBinaryOp(bin.Operator)).Append(' ');
                 PrintOperand(sb, bin.Right, DartBinaryOperandGrouping.NeedsRightParentheses(bin));
+                break;
+            case IrUnaryExpression flow when IsLeftOutOnDart(flow):
+                PrintExpression(sb, flow.Operand);
                 break;
             case IrUnaryExpression un:
                 if (un.IsPrefix)
@@ -481,9 +540,12 @@ public static class IrBodyPrinter
                 // marker — real usage should gate [Emit] methods with
                 // `[Ignore(TargetLanguage.Dart)]` or provide a Dart-
                 // specific implementation.
-                sb.Append("/* TODO: [Emit] template ‘")
-                    .Append(tpl.Template)
-                    .Append("’ has no Dart mapping */ null");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: [Emit] template ‘{tpl.Template}’ has no Dart mapping */ null",
+                    $"The [Emit] template '{tpl.Template}'"
+                );
+
                 break;
             case IrNullConditionalAccess access:
                 PrintNullConditionalAccess(sb, access);
@@ -504,7 +566,12 @@ public static class IrBodyPrinter
                     .Append("'))");
                 break;
             default:
-                sb.Append("/* TODO: ").Append(expr.GetType().Name).Append(" */");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: {expr.GetType().Name} */",
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(expr)}"
+                );
+
                 break;
         }
     }
@@ -603,9 +670,12 @@ public static class IrBodyPrinter
                 PrintSubPatternAsBooleanExpression(sb, node.Expression, node.Pattern);
                 break;
             default:
-                sb.Append("/* TODO: unsupported is-pattern ")
-                    .Append(node.Pattern.GetType().Name)
-                    .Append(" */");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: unsupported is-pattern {node.Pattern.GetType().Name} */",
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(node.Pattern)} in an 'is' expression"
+                );
+
                 break;
         }
     }
@@ -696,12 +766,20 @@ public static class IrBodyPrinter
                 // List / positional patterns in an `is` expression need a
                 // destructuring binding to reach the sub-pattern values,
                 // which Dart only offers inside switch arms — emit a TODO.
-                sb.Append("/* TODO: Dart list/positional pattern outside switch */ false");
+                AppendDropped(
+                    sb,
+                    "/* TODO: Dart list/positional pattern outside switch */ false",
+                    "The C# list or positional pattern outside a switch"
+                );
+
                 break;
             default:
-                sb.Append("/* TODO: unsupported pattern ")
-                    .Append(pattern.GetType().Name)
-                    .Append(" */");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: unsupported pattern {pattern.GetType().Name} */",
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(pattern)}"
+                );
+
                 break;
         }
     }
@@ -809,6 +887,26 @@ public static class IrBodyPrinter
             PrintSwitchPattern(sb, slicePattern);
     }
 
+    /// <summary>
+    /// A bound type pattern prints as the typed variable pattern <c>Circle c</c>. A
+    /// bare <c>Circle</c> would be a constant pattern that matches the <c>Type</c>
+    /// object and never an instance, so it prints as the object pattern
+    /// <c>Circle()</c>; a nullable, record or function type has no object-pattern
+    /// form and prints as the typed wildcard (<c>Circle? _</c>, <c>(int, String) _</c>).
+    /// </summary>
+    private static void PrintTypePattern(StringBuilder sb, IrTypePattern typePat)
+    {
+        var type = IrToDartTypeMapper.Map(typePat.Type);
+        sb.Append(DartTypeFormatter.Format(type));
+
+        if (typePat.Designator is not null)
+            sb.Append(' ').Append(IrToDartNamingPolicy.ToParameterName(typePat.Designator.Name));
+        else if (type is DartNamedType)
+            sb.Append("()");
+        else
+            sb.Append(" _");
+    }
+
     private static void PrintSwitchPattern(StringBuilder sb, IrPattern pattern)
     {
         switch (pattern)
@@ -817,12 +915,7 @@ public static class IrBodyPrinter
                 PrintExpression(sb, constant.Value);
                 break;
             case IrTypePattern typePat:
-                sb.Append(FormatType(typePat.Type));
-
-                if (typePat.Designator is not null)
-                    sb.Append(' ')
-                        .Append(IrToDartNamingPolicy.ToParameterName(typePat.Designator.Name));
-
+                PrintTypePattern(sb, typePat);
                 break;
             case IrVarPattern varPat:
                 sb.Append("var ")
@@ -884,7 +977,12 @@ public static class IrBodyPrinter
                 // through a best-effort wildcard + negated test by lowering to
                 // a `_` pattern with a TODO marker for callers that should
                 // rewrite into a when-guard.
-                sb.Append("/* TODO: Dart lacks `not` patterns — rewrite as when-guard */ _");
+                AppendDropped(
+                    sb,
+                    "/* TODO: Dart lacks `not` patterns — rewrite as when-guard */ _",
+                    "The C# 'not' pattern in a switch"
+                );
+
                 break;
             case IrLogicalPattern log:
                 PrintSwitchPattern(sb, log.Left);
@@ -947,9 +1045,12 @@ public static class IrBodyPrinter
 
                 break;
             default:
-                sb.Append("/* TODO: unsupported pattern ")
-                    .Append(pattern.GetType().Name)
-                    .Append(" */");
+                AppendDropped(
+                    sb,
+                    $"/* TODO: unsupported pattern {pattern.GetType().Name} */",
+                    $"The C# {DroppedCodeDiagnostics.ConstructName(pattern)}"
+                );
+
                 break;
         }
     }

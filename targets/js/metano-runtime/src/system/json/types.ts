@@ -311,6 +311,8 @@ export interface TypeSpec<T = unknown> {
   readonly typeName?: string;
   /** The context's read behavior; absent when it is System.Text.Json's default. */
   readonly readOptions?: JsonReadOptions;
+  /** The context's text formatting; absent when it writes compact text (the default). */
+  readonly writeOptions?: JsonWriteOptions;
   /**
    * TS names of this contract's properties (its base chain's included) that
    * a read sets after construction, and only when the payload carries their
@@ -387,6 +389,23 @@ export interface JsonReadOptions {
   readonly allowOutOfOrderMetadataProperties?: boolean;
 }
 
+/**
+ * Context-level text formatting mirrored from `[JsonSourceGenerationOptions]`
+ * (`WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`); only
+ * `serializeText` reads it. Every member is optional; an absent member is
+ * System.Text.Json's default.
+ */
+export interface JsonWriteOptions {
+  /** Write each element and property on its own line. */
+  readonly writeIndented?: boolean;
+  /** The indent character, a space (the default) or a tab. */
+  readonly indentCharacter?: " " | "\t";
+  /** The indent characters per nesting level, 0 to 127; 2 by default. */
+  readonly indentSize?: number;
+  /** The line break; `"\n"` by default (System.Text.Json's is the platform's). */
+  readonly newLine?: "\n" | "\r\n";
+}
+
 // ─── Value Spec ──────────────────────────────────────────────────────────────
 
 /**
@@ -417,6 +436,8 @@ export interface ValueSpec<T = unknown> {
   readonly typeName?: string;
   /** The context's read behavior; absent when it is System.Text.Json's default. */
   readonly readOptions?: JsonReadOptions;
+  /** The context's text formatting; absent when it writes compact text (the default). */
+  readonly writeOptions?: JsonWriteOptions;
 }
 
 /** Any spec the generated context exposes: an object contract or a value root. */

@@ -992,6 +992,9 @@ public static class IrTypeRefMapper
         if (SymbolHelper.HasIgnore(named, target))
             return false;
 
+        if (Frontend.Roslyn.InternalTypeReachability.IsReached(named))
+            return true;
+
         if (
             named.DeclaredAccessibility != Accessibility.Public
             && !IsNestedInTranspilableContainer(named, target)
@@ -1130,6 +1133,12 @@ public static class IrTypeRefMapper
 
         return path;
     }
+
+    /// <summary>
+    /// The C# namespace an <see cref="IrNamedTypeRef"/> of <paramref name="type"/>
+    /// carries: <c>null</c> for the global one.
+    /// </summary>
+    internal static string? NamespaceOf(INamedTypeSymbol type) => GetNamespace(type);
 
     private static string? GetNamespace(INamedTypeSymbol type)
     {

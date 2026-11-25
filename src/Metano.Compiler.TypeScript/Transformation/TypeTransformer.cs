@@ -40,6 +40,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private readonly object _diagnosticsLock = new();
 
+    /// <summary>
+    /// How many diagnostics the group being transformed on this thread reported, deduplicated
+    /// ones included. A group transforms on one thread, so the count tells whether its output
+    /// must not be reused: a reused group does not run, and its diagnostics would vanish (#785).
+    /// The count is attributed to the group whose transform runs on the reporting thread, not
+    /// to the type the diagnostic names, so a diagnostic about another type counts for the
+    /// group that triggered it.
+    /// </summary>
+    [ThreadStatic]
+    private static int t_groupDiagnosticCount;
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<
         string,
         string
@@ -61,6 +72,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IReadOnlyDictionary<string, IrTranspilableTypeRef>
     > _sameNameBindings =
         new Dictionary<string, IReadOnlyDictionary<string, IrTranspilableTypeRef>>();
+
+    /// <summary>
+    /// The compilation's <c>global using</c> aliases, read once before the groups
+    /// transform (<see cref="UsingAliasResolver.GlobalAliases"/>).
+    /// </summary>
+    private IReadOnlyList<UsingAlias>? _globalAliases;
 
     private string? _groupCacheFingerprint;
 
@@ -182,6 +199,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
     {
+        t_groupDiagnosticCount++;
+
         lock (_diagnosticsLock)
         {
             if (!_diagnostics.Contains(diagnostic))
@@ -569,6 +588,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // mean two distinct monitors over one non-thread-safe list.
         using var extractionDiagnosticSink = ExtractionDiagnostics.Open(ReportDiagnostic);
 
+        // A placeholder that drops code is an error on this target (W9-13).
+        using var droppedCodePolicy = DroppedCodeDiagnostics.Use(
+            new DroppedCodePolicy(MetanoDiagnosticSeverity.Error, "JavaScript")
+        );
+
         _currentAssembly = compilation.Assembly;
 
         // The frontend already detects [assembly: TranspileAssembly] (semantic model
@@ -909,6 +933,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // takes the miss branch.
             var typeGroups = GroupTypesByFile(transpilableTypes);
             List<TypeFileGroup> groups = [.. typeGroups, .. GuardModuleGroups(typeGroups)];
+
+            _globalAliases = UsingAliasResolver.GlobalAliases(compilation);
+
+            ReportAliasConflicts(groups);
 
             _sameNameBindings = ResolveSameNameTypes(
                 groups,
@@ -1480,17 +1508,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         using var dependencies = Context.TypeMapping!.CrossPackageDependencies.BeginGroup();
         var casts = new GroupCasts(assertedCasts);
 
+        t_groupDiagnosticCount = 0;
+
         var produced = TransformGroup(
             group,
-            IrToTsBridgeContext.ForGroup(
-                Context.DeclarativeMappings,
-                casts,
-                Context.RuntimeTypes
-            ) with
-            {
-                IsUnionFamily = Context.IsLoweredClosedType,
-            }
+            IrToTsBridgeContext.ForGroup(Context.DeclarativeMappings, casts, Context.RuntimeTypes)
         );
+
+        var reportedDiagnostics = t_groupDiagnosticCount > 0;
 
         outcomes.Files[index] = produced;
         outcomes.CheckedCasts[index] = casts.Checked;
@@ -1511,10 +1536,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         // A group whose casts were asserted for the import graph of this run
         // is not cached: the next run recomputes the decision from its graph.
+        // Neither is a group that reported a diagnostic, so the next run reports it again.
         outcomes.Emissions[index] = new GroupEmission(
             [FileMetadataExtractor.Extract(produced, printedContent)],
             dependencies.SnapshotDependencies(),
-            IsCacheable: assertedCasts.Count == 0
+            IsCacheable: assertedCasts.Count == 0 && !reportedDiagnostics
         );
     }
 
@@ -1598,6 +1624,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 HasModuleSideEffects = statements.Any(statement =>
                     statement is TsTopLevelStatement { RunsOnImport: true }
                 ),
+                IsPackageInternal = group.Types.All(SymbolHelper.IsReachedInternalType),
             };
         }
         finally
@@ -1769,16 +1796,52 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IReadOnlyList<INamedTypeSymbol> groupTypes
     )
     {
-        var layerA = UsingAliasResolver.ResolveForTree(
-            primarySyntaxTree,
-            Context.Compilation,
-            type => DeclaresType(groupTypes, type)
-        );
+        var layerA = UsingAliasesOf(groupTypes);
 
         var filePath = primarySyntaxTree?.FilePath ?? string.Empty;
         Context.SynthesizedAliasesByFile.TryGetValue(filePath, out var synthesized);
         Context.ImportAliasOverrides.TryGetValue(filePath, out var layerB);
         return ImportAliasResolver.Merge(layerA, synthesized, layerB);
+    }
+
+    /// <summary>The <c>using</c> aliases in scope of one emitted file.</summary>
+    private IReadOnlyList<UsingAlias> UsingAliasesOf(IReadOnlyList<INamedTypeSymbol> groupTypes)
+    {
+        _globalAliases ??= UsingAliasResolver.GlobalAliases(Context.Compilation);
+
+        return UsingAliasResolver.ResolveForGroup(
+            Context.Compilation,
+            _globalAliases,
+            groupTypes,
+            type => DeclaresType(groupTypes, type)
+        );
+    }
+
+    /// <summary>
+    /// Reports MS0070 for an emitted file whose files declare one alias name for two
+    /// types (two files of an <c>[EmitInFile]</c> group or a partial type): the module
+    /// binds the name to one of them, so the other uses would silently read it.
+    /// </summary>
+    private void ReportAliasConflicts(IEnumerable<TypeFileGroup> groups)
+    {
+        foreach (var group in groups.Where(group => group.GuardModuleOf is null))
+        {
+            foreach (
+                var (first, second) in UsingAliasResolver.Conflicts(UsingAliasesOf(group.Types))
+            )
+            {
+                ReportDiagnostic(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.ImportedNameClash,
+                        $"The alias '{second.Alias}' names both '{first.Symbol.ToDisplayString()}' "
+                            + $"and '{second.Symbol.ToDisplayString()}' in '{group.FileName}'; the "
+                            + "emitted module binds it to one of them. Rename one of the aliases.",
+                        second.Location
+                    )
+                );
+            }
+        }
     }
 
     /// <summary>
@@ -2080,7 +2143,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 continue;
             }
 
-            var groupReferences = references.In(group.Types);
+            var primaryTree = group.Types[0].DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
+
+            var groupReferences = references.In(
+                group.Types,
+                MergeAliasesForGroup(primaryTree, group.Types)
+            );
 
             foreach (
                 var finding in validator.Validate(group.FileName, group.Types, groupReferences)
@@ -2850,6 +2918,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 type,
                 key.Member,
                 group.Select(FunctionOverloadShape.Of).ToList()
+            );
+
+            ShadowedOverloadReporter.ReportFunctions(
+                type,
+                group,
+                Context.ModuleFunctionClaims,
+                lowering,
+                Context.ReportDiagnostic
             );
 
             IrToTsModuleBridge.ConvertDispatchedGroup(
@@ -3673,8 +3749,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var factoryFilePath = factoryTree?.FilePath ?? string.Empty;
 
         if (
-            UsingAliasResolver.ResolveForTree(factoryTree, compilation) is { } scope
-            && scope.CanonicalToAlias.ContainsKey(factoryName)
+            UsingAliasResolver
+                .ResolveForTree(factoryTree, compilation, fileTypes: [factory.ContainingType])
+                .Any(alias => alias.Target.Name == factoryName)
         )
             return false;
 

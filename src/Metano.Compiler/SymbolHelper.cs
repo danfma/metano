@@ -890,10 +890,16 @@ public static class SymbolHelper
         && Extraction.IrTypeRefMapper.IsTranspilableType(type, target)
         && type.HasExtensionMembers();
 
+    /// <summary>
+    /// A classic extension method, or a C# 14 extension block: the block's
+    /// type for a type read from metadata (#761), its syntax for a source
+    /// type.
+    /// </summary>
     private static bool DeclaresExtensionMembers(INamedTypeSymbol type) =>
         type.GetMembers()
             .OfType<IMethodSymbol>()
             .Any(method => method is { IsExtensionMethod: true, MethodKind: MethodKind.Ordinary })
+        || type.GetTypeMembers().Any(member => member.TypeKind == TypeKind.Extension)
         || type.DeclaringSyntaxReferences.Any(reference =>
             reference
                 .GetSyntax()
@@ -1535,12 +1541,43 @@ public static class SymbolHelper
     ///    it's an ambient declaration over an external library shape.
     /// 3. [Transpile] → always included.
     /// 4. assemblyWideTranspile + public, or nested (any accessibility) in an
-    ///    opted-in container → included (see <see cref="IsAssemblyWideOptIn"/>).
+    ///    opted-in container, or reached from emitted code → included (see
+    ///    <see cref="IsAssemblyWideOptIn"/>).
     /// </summary>
     public static bool IsTranspilable(
         ISymbol symbol,
         bool assemblyWideTranspile = false,
         IAssemblySymbol? currentAssembly = null
+    ) => IsTranspilable(symbol, assemblyWideTranspile, currentAssembly, includeReached: true);
+
+    /// <summary>
+    /// <see cref="IsTranspilable(ISymbol, bool, IAssemblySymbol?)"/> without the types that
+    /// are transpiled only because emitted code reaches them: the roots
+    /// <see cref="Frontend.Roslyn.InternalTypeReachability"/> walks from.
+    /// </summary>
+    internal static bool IsTranspilableAsDeclared(
+        ISymbol symbol,
+        IAssemblySymbol currentAssembly
+    ) =>
+        IsTranspilable(symbol, assemblyWideTranspile: true, currentAssembly, includeReached: false);
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is transpiled only because emitted code reaches it
+    /// (#770): a non-public type of an <c>[assembly: TranspileAssembly]</c> assembly that a
+    /// transpiled member's signature or body references. A target keeps it off the
+    /// package's public surface (barrels, exports).
+    /// </summary>
+    public static bool IsReachedInternalType(INamedTypeSymbol type) =>
+        type.ContainingAssembly is { } assembly
+        && assembly.HasTranspileAssembly()
+        && !IsTranspilable(type, assemblyWideTranspile: true, assembly, includeReached: false)
+        && IsTranspilable(type, assemblyWideTranspile: true, assembly, includeReached: true);
+
+    private static bool IsTranspilable(
+        ISymbol symbol,
+        bool assemblyWideTranspile,
+        IAssemblySymbol? currentAssembly,
+        bool includeReached
     )
     {
         if (HasIgnore(symbol))
@@ -1571,7 +1608,8 @@ public static class SymbolHelper
         if (HasTranspile(symbol))
             return true;
 
-        return assemblyWideTranspile && IsAssemblyWideOptIn(symbol, currentAssembly);
+        return assemblyWideTranspile
+            && IsAssemblyWideOptIn(symbol, currentAssembly, includeReached);
     }
 
     /// <summary>
@@ -1594,9 +1632,15 @@ public static class SymbolHelper
     /// of its emitted container's surface — the container's members reference it, so it
     /// must be emitted alongside the container (#264); where a target declares it
     /// (companion namespace or module-local) is its own policy (#412).
-    /// <c>[Ignore]</c> on a nested type opts it out.
+    /// <c>[Ignore]</c> on a nested type opts it out. With <paramref name="includeReached"/>,
+    /// a non-public type that emitted code reaches is included too (#770, see
+    /// <see cref="Frontend.Roslyn.InternalTypeReachability"/>).
     /// </summary>
-    private static bool IsAssemblyWideOptIn(ISymbol symbol, IAssemblySymbol? currentAssembly)
+    private static bool IsAssemblyWideOptIn(
+        ISymbol symbol,
+        IAssemblySymbol? currentAssembly,
+        bool includeReached
+    )
     {
         var inCurrentAssembly =
             currentAssembly is null
@@ -1608,7 +1652,12 @@ public static class SymbolHelper
         if (symbol.DeclaredAccessibility == Accessibility.Public)
             return true;
 
-        return IsNestedInOptedInContainer(symbol, currentAssembly);
+        if (IsNestedInOptedInContainer(symbol, currentAssembly, includeReached))
+            return true;
+
+        return includeReached
+            && symbol is INamedTypeSymbol type
+            && Frontend.Roslyn.InternalTypeReachability.IsReached(type);
     }
 
     /// <summary>
@@ -1618,12 +1667,17 @@ public static class SymbolHelper
     /// </summary>
     private static bool IsNestedInOptedInContainer(
         ISymbol symbol,
-        IAssemblySymbol? currentAssembly
+        IAssemblySymbol? currentAssembly,
+        bool includeReached
     ) =>
         symbol is INamedTypeSymbol { ContainingType: { } container } nested
         && !string.IsNullOrEmpty(nested.Name)
         && !nested.IsImplicitlyDeclared
-        && IsDeclaredTranspilable(container, assemblyWideTranspile: true, currentAssembly);
+        && !HasIgnore(container)
+        && (
+            HasTranspile(container)
+            || IsAssemblyWideOptIn(container, currentAssembly, includeReached)
+        );
 
     /// <summary>
     /// "Author opted this type into transpilation" — it carries
@@ -1652,7 +1706,8 @@ public static class SymbolHelper
         if (HasTranspile(symbol))
             return true;
 
-        return assemblyWideTranspile && IsAssemblyWideOptIn(symbol, currentAssembly);
+        return assemblyWideTranspile
+            && IsAssemblyWideOptIn(symbol, currentAssembly, includeReached: true);
     }
 
     /// <summary>

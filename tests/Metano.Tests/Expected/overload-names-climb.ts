@@ -16,14 +16,9 @@ export class Climbs {
   }
 
   k(d: Decimal): number;
-  k(d: Decimal): number;
   k(...args: unknown[]): number {
     if (args.length === 1 && args[0] instanceof Decimal) {
       return this.kNumericsDecimal(args[0] as Decimal);
-    }
-
-    if (args.length === 1 && args[0] instanceof Decimal) {
-      return this.kOtherDecimal(args[0] as Decimal);
     }
 
     throw new Error("No matching overload for k");
@@ -38,14 +33,9 @@ export class Climbs {
   }
 
   j(d: Decimal, n: number): number;
-  j(d: Decimal, n: number): number;
   j(...args: unknown[]): number {
     if (args.length === 2 && args[0] instanceof Decimal && isInt32(args[1])) {
       return this.jNumericsDecimalInt32(args[0] as Decimal, args[1] as number);
-    }
-
-    if (args.length === 2 && args[0] instanceof Decimal && isInt32(args[1])) {
-      return this.jOtherDecimalInt32(args[0] as Decimal, args[1] as number);
     }
 
     throw new Error("No matching overload for j");
@@ -60,14 +50,9 @@ export class Climbs {
   }
 
   m(ids: List<A.Id>): number;
-  m(ids: List<B.Id>): number;
   m(...args: unknown[]): number {
     if (args.length === 1 && args[0] instanceof List) {
       return this.mListOfAId(args[0] as List<A.Id>);
-    }
-
-    if (args.length === 1 && args[0] instanceof List) {
-      return this.mListOfBId(args[0] as List<B.Id>);
     }
 
     throw new Error("No matching overload for m");

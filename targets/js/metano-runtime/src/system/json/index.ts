@@ -22,6 +22,7 @@ export type {
   DerivedTypeSpec,
   PolymorphismSpec,
   JsonReadOptions,
+  JsonWriteOptions,
   NumberTypeName,
   JsonConverter,
   SerializerContextOptions,

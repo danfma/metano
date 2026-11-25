@@ -111,6 +111,10 @@ public static class BarrelFileGenerator
 
             foreach (var file in ExportOrder(files, hoists))
             {
+                // A module of reached internal types is imported, never re-exported (#770).
+                if (file.IsPackageInternal)
+                    continue;
+
                 var module = new TsLocalModule(ModulePath.Of(file.FileName));
 
                 // Collect all exported names from this file. If a name has BOTH a value and a

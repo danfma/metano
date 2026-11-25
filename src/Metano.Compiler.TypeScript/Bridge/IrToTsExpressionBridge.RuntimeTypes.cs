@@ -39,19 +39,9 @@ public static partial class IrToTsExpressionBridge
             ? AsTypeCall(Map(AsOperandOf(asCast)!, context), descriptor)
             : new TsConditionalExpression(
                 Map(asCast.Condition, context),
-                ClosedFamilyNarrowing.Bind(
-                    Map(asCast.WhenTrue, context),
-                    asCast.AsTarget,
-                    AsInputTypeOf(asCast),
-                    context
-                ),
+                Map(asCast.WhenTrue, context),
                 Map(asCast.WhenFalse, context)
             );
-
-    private static IrTypeRef? AsInputTypeOf(IrConditionalExpression asCast) =>
-        asCast.Condition is IrIsPatternExpression { Pattern: IrTypePattern pattern }
-            ? pattern.InputType
-            : null;
 
     /// <summary>
     /// An <c>as</c> whose operand extraction bound once

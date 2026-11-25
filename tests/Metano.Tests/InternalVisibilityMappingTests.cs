@@ -727,12 +727,12 @@ public class InternalVisibilityMappingTests
         var square = result["app/square.ts"];
         var triangle = result["app/triangle.ts"];
 
-        await Assert.That(square).Contains("  sides(): number {");
-        await Assert.That(square).Contains("  get size(): number {");
-        await Assert.That(square).Contains("  set size(value: number) {");
+        await Assert.That(square).Contains("  override sides(): number {");
+        await Assert.That(square).Contains("  override get size(): number {");
+        await Assert.That(square).Contains("  override set size(value: number) {");
         await Assert.That(square).DoesNotContain("protected ");
         await Assert.That(square).DoesNotContain("@internal");
-        await Assert.That(triangle).Contains("  corners(): number {");
+        await Assert.That(triangle).Contains("  override corners(): number {");
         await Assert.That(triangle).DoesNotContain("protected ");
         await Assert.That(triangle).DoesNotContain("@internal");
     }

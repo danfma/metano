@@ -2,6 +2,7 @@ using Metano.Compiler.Analysis;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -40,27 +41,42 @@ internal static class IrToTsSwitchStatementBridge
     internal static TsStatement Map(IrSwitchStatement sw, IrToTsBridgeContext context)
     {
         var subject = IrToTsExpressionBridge.Map(sw.Expression, context);
-
-        if (!NeedsBooleanCaseTests(sw))
-        {
-            return new TsSwitchStatement(
-                subject,
-                [.. sw.Cases.SelectMany(section => MapConstantSection(section, context))]
-            );
-        }
-
         var (sharedLocals, hoistedSwitch) = SwitchSharedLocals.Hoist(sw);
-
-        var subjectAndTests = SubjectAndCaseTests(hoistedSwitch, subject, context);
-        var needsEnclosingBlock = sharedLocals.Count > 0 || subjectAndTests.Count > 1;
+        var switchStatements = SwitchStatements(hoistedSwitch, subject, context);
+        var needsEnclosingBlock = sharedLocals.Count > 0 || switchStatements.Count > 1;
 
         if (!needsEnclosingBlock)
-            return subjectAndTests[0];
+            return switchStatements[0];
 
         return new TsBlockStatement([
             .. sharedLocals.Select(local => IrToTsStatementBridge.Map(local, context)),
-            .. subjectAndTests,
+            .. switchStatements,
         ]);
+    }
+
+    /// <summary>
+    /// A JS <c>switch</c> on the subject when every label is a plain
+    /// constant; otherwise the boolean case tests.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> SwitchStatements(
+        IrSwitchStatement sw,
+        TsExpression subject,
+        IrToTsBridgeContext context
+    )
+    {
+        if (NeedsBooleanCaseTests(sw))
+            return SubjectAndCaseTests(sw, subject, context);
+
+        return
+        [
+            new TsSwitchStatement(
+                subject,
+                [.. sw.Cases.SelectMany(section => MapConstantSection(section, context))]
+            )
+            {
+                Label = LabelOf(sw),
+            },
+        ];
     }
 
     /// <summary>
@@ -146,7 +162,7 @@ internal static class IrToTsSwitchStatementBridge
             MapTestedSection(section, subject, promoteCatchAllToDefault, context)
         );
 
-        return new TsSwitchStatement(new TsLiteral("true"), [.. cases]);
+        return new TsSwitchStatement(new TsLiteral("true"), [.. cases]) { Label = LabelOf(sw) };
     }
 
     private static bool IsDefaultLabel(IrCaseLabel label) => label is IrDefaultCaseLabel;
@@ -250,4 +266,8 @@ internal static class IrToTsSwitchStatementBridge
             (test, i) => new TsSwitchCase(test, i == labelTests.Count - 1 ? body : [])
         );
     }
+
+    /// <summary>The JavaScript label of a labeled <c>switch</c> (#772), spelled as C# names it.</summary>
+    private static string? LabelOf(IrSwitchStatement sw) =>
+        sw.Label is { } label ? TypeScriptNaming.ToLabel(label) : null;
 }

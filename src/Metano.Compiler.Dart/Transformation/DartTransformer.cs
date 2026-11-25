@@ -191,7 +191,7 @@ public sealed class DartTransformer
                     var classIr = IrClassExtractor.Extract(type, Extraction);
                     var classClaims = ClaimsOf(type);
 
-                    ReportUnnamedOverloads(classIr, type.Name, classClaims.Shape);
+                    ReportUnnamedOverloads(type, classIr, type.Name, classClaims.Shape);
                     ReportMultiplyConstructedInterfaces(type);
                     ReportStaticConstructor(type, classIr);
                     ReportCollectionBaseType(type, classIr);
@@ -394,6 +394,7 @@ public sealed class DartTransformer
     /// silently dropping the others would hide a real semantic mismatch.
     /// </summary>
     private void ReportUnnamedOverloads(
+        INamedTypeSymbol type,
         IrClassDeclaration classIr,
         string typeName,
         DartOverloadShape shape
@@ -417,7 +418,8 @@ public sealed class DartTransformer
                         + $"{method.Overloads!.Count + 1} overloads but Dart doesn't "
                         + "support overloading it. Emitting the primary signature "
                         + "only; rename the other overloads via [Name(\"...\")] or merge "
-                        + "them into a single method with optional parameters."
+                        + "them into a single method with optional parameters.",
+                    type.GetMembers(method.Name).FirstOrDefault()?.Locations.FirstOrDefault()
                 )
             );
         }

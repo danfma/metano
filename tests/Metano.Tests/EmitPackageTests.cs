@@ -391,15 +391,11 @@ public class EmitPackageTests
     }
 
     [Test]
-    public async Task Imports_ExistingAliasesPreservedAcrossRegenerations()
+    public async Task Imports_OwnUnaliasedEntriesPrunedAndCustomAliasesKept()
     {
-        // Write-if-missing rule (per #136): both transpiler-shaped
-        // aliases (`#`, `#/*`) and user-defined ones survive across
-        // regenerations once they exist on disk. The transpiler
-        // only seeds new keys when the field is empty or missing
-        // an alias entirely. Removing the obsolete `#` when its
-        // barrel disappears would clobber a consumer who left the
-        // alias pointing at a hand-curated bundle output.
+        // The bare `#` and `#/*` keys an earlier version seeded are rejected by Node 24
+        // and Bun; an entry that still holds exactly the writer's mapping is pruned (#765),
+        // while a user-defined alias such as `#custom/*` survives.
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
@@ -431,8 +427,8 @@ public class EmitPackageTests
         var imports = pkg["imports"] as JsonObject;
 
         await Assert.That(imports).IsNotNull();
-        await Assert.That(imports!.ContainsKey("#")).IsTrue();
-        await Assert.That(imports.ContainsKey("#/*")).IsTrue();
+        await Assert.That(imports!.ContainsKey("#")).IsFalse();
+        await Assert.That(imports.ContainsKey("#/*")).IsFalse();
         await Assert.That(imports.ContainsKey("#custom/*")).IsTrue();
     }
 
@@ -1056,7 +1052,7 @@ public class EmitPackageTests
     }
 
     [Test]
-    public async Task Imports_WithoutAlias_KeepsEntriesAnEarlierVersionWrote()
+    public async Task Imports_WithoutAlias_PrunesEntriesAnEarlierVersionWrote()
     {
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
@@ -1078,9 +1074,7 @@ public class EmitPackageTests
             authoritativePackageName: "pkg"
         );
 
-        var imports = ReadJson(tempDir)["imports"]!.ToJsonString();
-
-        await Assert.That(imports).IsEqualTo(JsonNode.Parse(legacyImports)!.ToJsonString());
+        await Assert.That(ReadJson(tempDir).ContainsKey("imports")).IsFalse();
     }
 
     [Test]

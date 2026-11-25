@@ -230,7 +230,8 @@ public class SideEffectsManifestTests
             new CachedTargetOutput(
                 output.Files,
                 output.PackageDependencies,
-                output.ModuleSideEffectFiles
+                output.ModuleSideEffectFiles,
+                []
             )
         );
 

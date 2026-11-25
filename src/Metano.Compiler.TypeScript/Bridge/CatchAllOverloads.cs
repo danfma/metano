@@ -75,11 +75,7 @@ internal static class CatchAllOverloads
         && parameters.All(p => !IrTypeCheckBuilder.HasCheck(p.ParamsElementType ?? p.Type, scope));
 
     private static bool Overlaps(OverloadArgumentShape first, OverloadArgumentShape second) =>
-        Math.Max(first.RequiredCount, second.RequiredCount)
-        <= Math.Min(MaximumCountOf(first), MaximumCountOf(second));
-
-    private static int MaximumCountOf(OverloadArgumentShape arguments) =>
-        arguments.Rest is null ? arguments.FixedCount : int.MaxValue;
+        first.OverlapsCounts(second);
 
     private sealed record DispatchedOverload<TOverload>(
         TOverload Overload,

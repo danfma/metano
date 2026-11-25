@@ -82,7 +82,7 @@ public sealed partial class IrExpressionExtractor
             return null;
 
         return InlineCodePartsOf(call) is { } parts
-            ? new IrInlineCodeStatement(parts, LanguageOf(call), SpanOf(call))
+            ? new IrInlineCodeStatement(parts, LanguageOf(call)) { Span = SpanOf(call) }
             : new IrExpressionStatement(new IrUnsupportedExpression(InvalidInlineCodeKind));
     }
 

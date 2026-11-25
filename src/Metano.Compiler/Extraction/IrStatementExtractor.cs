@@ -107,8 +107,14 @@ public sealed class IrStatementExtractor(
 
         if (arrow is not null)
         {
-            var statement = _expressions.InlineCodeStatementOf(arrow.Expression)
-                ?? ArrowStatement(_expressions.Extract(arrow.Expression), isVoid);
+            if (isVoid && _expressions.TryLowerDeconstruction(arrow.Expression) is { } lowered)
+                return new ExtractedBody(PromoteEffectiveConsts(lowered), localNames);
+
+            var statement = IrStatementSpans.WithSpanOf(
+                arrow.Expression,
+                _expressions.InlineCodeStatementOf(arrow.Expression)
+                    ?? ArrowStatement(_expressions.Extract(arrow.Expression), isVoid)
+            );
 
             return new ExtractedBody(_expressions.LowerExpressionVariables(statement), localNames);
         }
@@ -170,7 +176,10 @@ public sealed class IrStatementExtractor(
         return extracted
             .SelectMany(
                 (stmt, index) =>
-                    _expressions.ExpressionVariables.Lower(stmt, extracted[(index + 1)..])
+                    IrStatementSpans.Inherit(
+                        stmt,
+                        _expressions.ExpressionVariables.Lower(stmt, extracted[(index + 1)..])
+                    )
             )
             .ToList();
     }
@@ -223,9 +232,7 @@ public sealed class IrStatementExtractor(
                 {
                     IsConst = true,
                 },
-            IrTupleDeconstruction td
-                when !td.IsConst
-                    && !td.Elements.Any(e => e.Name is { } name && reassigned.Contains(name)) =>
+            IrTupleDeconstruction td when !td.IsConst && !td.BoundNames.Any(reassigned.Contains) =>
                 td with
                 {
                     IsConst = true,
@@ -287,18 +294,70 @@ public sealed class IrStatementExtractor(
     /// <summary>
     /// The statements one C# statement of a scope extracts to: a local
     /// declaration contributes one declaration per declarator
-    /// (<c>int a = 1, b = 2;</c>), every other statement exactly one. A
-    /// declaration statement only appears directly in a scope — C# rejects it
-    /// as an embedded statement — so it never needs a single-statement form.
+    /// (<c>int a = 1, b = 2;</c>), a deconstruction the statements that bind
+    /// and write its parts, an empty statement (<c>;</c>) none, every other
+    /// statement exactly one. A declaration statement only appears directly in
+    /// a scope — C# rejects it as an embedded statement — so it never needs a
+    /// single-statement form.
     /// </summary>
     private IEnumerable<IrStatement> ExtractStatementInScope(StatementSyntax statement) =>
-        statement is LocalDeclarationStatementSyntax local
-            ? ExtractDeclarators(local.Declaration, local.IsConst)
-            : [ExtractStatement(statement)];
+        statement switch
+        {
+            LocalDeclarationStatementSyntax local => ExtractLocalDeclaration(local),
+            EmptyStatementSyntax => [],
+            LocalFunctionStatementSyntax function => ExtractLocalFunction(function),
+            ExpressionStatementSyntax expression
+                when _expressions.TryLowerDeconstruction(expression.Expression) is { } lowered =>
+                lowered,
+            _ => [ExtractStatement(statement)],
+        };
+
+    /// <summary>
+    /// A local function declaration emits nothing: no target lowers local
+    /// functions yet. An unused one drops nothing that runs, so it reports
+    /// nothing; one referenced from outside its own body (a call, a method
+    /// group, an event handler, but not <c>nameof</c>) reports the dropped
+    /// declaration (W9-13) — each reference also reports where it is used.
+    /// </summary>
+    private List<IrStatement> ExtractLocalFunction(LocalFunctionStatementSyntax function)
+    {
+        if (LocalFunctionReferences.IsReferenced(_semantic, function))
+        {
+            DroppedCodeDiagnostics.Report(
+                $"The C# local function '{function.Identifier.ValueText}' is not supported by "
+                    + "the transpiler, and the code references it.",
+                function.Identifier.GetLocation()
+            );
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// The declarators of a local declaration. A <c>using</c> declaration
+    /// (<c>using var x = r;</c>) disposes its value at the end of the scope,
+    /// which no target emits yet, so it reports the dropped call.
+    /// </summary>
+    private List<IrStatement> ExtractLocalDeclaration(LocalDeclarationStatementSyntax local)
+    {
+        if (local.UsingKeyword.IsKind(SyntaxKind.UsingKeyword))
+        {
+            DroppedCodeDiagnostics.Report(
+                "The C# using declaration is not supported by the transpiler: its value would "
+                    + "never be disposed at the end of the scope.",
+                local.GetLocation()
+            );
+        }
+
+        return ExtractDeclarators(local.Declaration, local.IsConst);
+    }
 
     private IrStatement ExtractStatement(StatementSyntax statement) =>
-        InlineCodeStatementOf(statement)
-        ?? ReportedIfAsyncIterator(statement, ExtractOrdinaryStatement(statement));
+        IrStatementSpans.WithSpanOf(
+            statement,
+            InlineCodeStatementOf(statement)
+                ?? ReportedIfAsyncIterator(statement, ExtractOrdinaryStatement(statement))
+        );
 
     /// <summary>A <c>Js.Code</c> call as an expression statement keeps its statement form (spec 011 FR-031).</summary>
     private IrStatement? InlineCodeStatementOf(StatementSyntax statement) =>
@@ -310,19 +369,13 @@ public sealed class IrStatementExtractor(
         statement switch
         {
             BlockSyntax block => new IrBlockStatement(ExtractStatementSequence(block.Statements)),
+            EmptyStatementSyntax => new IrBlockStatement([]),
             // `checked { }` / `unchecked { }`: Roslyn folds the context into the
             // IsChecked flag of every operation inside, so the statement lowers
             // to its block.
             CheckedStatementSyntax context => new IrBlockStatement(
                 ExtractStatementSequence(context.Block.Statements)
             ),
-            // `var (a, b) = expr;` parses as an ExpressionStatement wrapping a
-            // SimpleAssignment whose Left is a DeclarationExpression with a
-            // parenthesized variable designation. Intercept it BEFORE the generic
-            // ExpressionStatement arm so it does not fall through to the
-            // single-variable DeclarationExpression path (or IrUnsupportedStatement).
-            ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assign }
-                when TryExtractTupleDeconstruction(assign) is { } deconstruction => deconstruction,
             ExpressionStatementSyntax expr => new IrExpressionStatement(
                 _expressions.Extract(expr.Expression)
             ),
@@ -332,6 +385,7 @@ public sealed class IrStatementExtractor(
             IfStatementSyntax ifs => ExtractIf(ifs),
             ThrowStatementSyntax th => ExtractThrow(th),
             ForEachStatementSyntax fe => ExtractForEach(fe),
+            ForEachVariableStatementSyntax fe => ExtractForEachVariable(fe),
             ForStatementSyntax fs => ExtractFor(fs),
             WhileStatementSyntax wh => new IrWhileStatement(
                 _expressions.Extract(wh.Condition),
@@ -343,8 +397,11 @@ public sealed class IrStatementExtractor(
             ),
             TryStatementSyntax ts => ExtractTry(ts),
             SwitchStatementSyntax sw => ExtractSwitch(sw),
-            BreakStatementSyntax => new IrBreakStatement(),
-            ContinueStatementSyntax => new IrContinueStatement(),
+            BreakStatementSyntax jump => new IrBreakStatement(jump.Name?.Identifier.ValueText),
+            ContinueStatementSyntax jump => new IrContinueStatement(
+                jump.Name?.Identifier.ValueText
+            ),
+            LabeledStatementSyntax labeled => ExtractLabeled(labeled),
             YieldStatementSyntax ys
                 when ys.IsKind(SyntaxKind.YieldReturnStatement) && ys.Expression is not null =>
                 new IrExpressionStatement(
@@ -352,7 +409,21 @@ public sealed class IrStatementExtractor(
                 ),
             YieldStatementSyntax ys when ys.IsKind(SyntaxKind.YieldBreakStatement) =>
                 new IrYieldBreakStatement(),
-            _ => new IrUnsupportedStatement(statement.Kind().ToString()),
+            _ => DroppedCodeDiagnostics.UnsupportedStatement(statement),
+        };
+
+    /// <summary>
+    /// A labeled statement (#772). A loop or <c>switch</c> keeps its label,
+    /// which the labeled <c>break</c> / <c>continue</c> of C# 15 target. Any
+    /// other statement can only be reached through its label by a
+    /// <c>goto</c>, which reports where it jumps, so it is extracted without
+    /// one.
+    /// </summary>
+    private IrStatement ExtractLabeled(LabeledStatementSyntax labeled) =>
+        ExtractStatement(labeled.Statement) switch
+        {
+            IrBreakableStatement target => target with { Label = labeled.Identifier.ValueText },
+            var statement => statement,
         };
 
     /// <summary>
@@ -443,6 +514,30 @@ public sealed class IrStatementExtractor(
         {
             CollectionType = collectionType,
             IsAwait = isAwait,
+        };
+    }
+
+    /// <summary>
+    /// <c>foreach (var (k, v) in pairs)</c>: iterates a temporary element and
+    /// deconstructs it at the head of the body, as C# does.
+    /// </summary>
+    private IrStatement ExtractForEachVariable(ForEachVariableStatementSyntax fe)
+    {
+        var element = _expressions.NextLoopElementName();
+        var deconstruction = _expressions.LowerLoopDeconstruction(fe, new IrIdentifier(element));
+
+        if (deconstruction is null)
+            return new IrUnsupportedStatement(fe.Kind().ToString());
+
+        return new IrForEachStatement(
+            element,
+            VariableType: null,
+            _expressions.Extract(fe.Expression),
+            [.. deconstruction, .. ExtractEmbedded(fe.Statement)]
+        )
+        {
+            CollectionType = CollectionTypeOf(fe.Expression),
+            IsAwait = fe.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword),
         };
     }
 
@@ -671,7 +766,10 @@ public sealed class IrStatementExtractor(
     ) =>
         declaration
             .Variables.Select(variable =>
-                (IrStatement)ExtractDeclarator(declaration, variable, isConst)
+                IrStatementSpans.WithSpanOf(
+                    variable,
+                    ExtractDeclarator(declaration, variable, isConst)
+                )
             )
             .ToList();
 
@@ -720,97 +818,6 @@ public sealed class IrStatementExtractor(
             ?? _semantic.GetTypeInfo(declaration.Type).Type;
 
         return typeSymbol is null ? null : IrTypeRefMapper.Map(typeSymbol, _originResolver);
-    }
-
-    /// <summary>
-    /// Recognizes a deconstructing variable declaration — <c>var (a, b) = expr;</c>
-    /// — and lowers it to an <see cref="IrTupleDeconstruction"/>. Such a statement
-    /// is a <see cref="SimpleAssignmentExpression"/> whose <c>Left</c> is a
-    /// <see cref="DeclarationExpressionSyntax"/> (type <c>var</c>) carrying a
-    /// <see cref="ParenthesizedVariableDesignationSyntax"/>; each inner designation
-    /// is either a <see cref="SingleVariableDesignationSyntax"/> (bound name) or a
-    /// <see cref="DiscardDesignationSyntax"/> (discard → null element).
-    /// <para>
-    /// The match is gated on a <em>semantic</em> guard: the right-hand side's
-    /// type must be the one shape that actually IS a JS array — an array type or
-    /// a <c>[JsTuple]</c> record. A user type with a custom <c>Deconstruct</c>
-    /// method, or a native C# <c>ValueTuple</c> (deferred — research D7), would
-    /// also parse as this syntax but is NOT a JS array; array-destructuring it
-    /// would read <c>undefined</c> at runtime. For those, this method returns
-    /// null so the statement surfaces as <see cref="IrUnsupportedStatement"/>
-    /// (loud, per Constitution V) rather than mis-lowering silently.
-    /// </para>
-    /// Returns null for any other assignment shape too, so the caller falls back
-    /// to the ordinary expression-statement path. The
-    /// <see cref="IrTupleDeconstruction.IsConst"/> flag starts false and is
-    /// promoted by <see cref="PromoteEffectiveConsts"/> exactly like a normal
-    /// local (const unless a bound name is reassigned).
-    /// </summary>
-    private IrTupleDeconstruction? TryExtractTupleDeconstruction(AssignmentExpressionSyntax assign)
-    {
-        if (!assign.IsKind(SyntaxKind.SimpleAssignmentExpression))
-            return null;
-        if (assign.Left is not DeclarationExpressionSyntax declaration)
-            return null;
-        if (declaration.Designation is not ParenthesizedVariableDesignationSyntax parenthesized)
-            return null;
-        if (!IsJsArrayTupleInitializer(assign.Right))
-            return null;
-
-        var elements = new List<IrDeconstructionElement>(parenthesized.Variables.Count);
-        foreach (var variable in parenthesized.Variables)
-        {
-            switch (variable)
-            {
-                case SingleVariableDesignationSyntax single:
-                    elements.Add(
-                        new IrDeconstructionElement(
-                            LocalIrName(
-                                _semantic.GetDeclaredSymbol(single),
-                                single.Identifier.ValueText
-                            )
-                        )
-                    );
-                    break;
-                case DiscardDesignationSyntax:
-                    elements.Add(new IrDeconstructionElement(Name: null));
-                    break;
-                default:
-                    // Nested deconstruction (`(a, (b, c))`) is out of scope — bail
-                    // so the statement surfaces as unsupported rather than dropping
-                    // a malformed binding.
-                    return null;
-            }
-        }
-
-        var initializer = _expressions.Extract(assign.Right);
-        // Default to let; PromoteEffectiveConsts upgrades to const when no bound
-        // name is reassigned, mirroring IrVariableDeclaration handling.
-        return new IrTupleDeconstruction(elements, initializer, IsConst: false);
-    }
-
-    /// <summary>
-    /// True when <paramref name="initializer"/>'s semantic type is one of the two
-    /// shapes that ARE a JS array — an array type or a <c>[JsTuple]</c> record —
-    /// the only receivers for which TS array-destructuring (<c>const [a, b] =
-    /// …</c>) is sound. A user type exposing a <c>Deconstruct</c> method and a
-    /// native C# <c>ValueTuple</c> both parse as the deconstruction syntax yet
-    /// are not JS arrays at runtime; gating here keeps the interception off them
-    /// so they fall through to <see cref="IrUnsupportedStatement"/> (native
-    /// ValueTuple deconstruction is out of scope — research D7). Uses the
-    /// converted type so an implicit conversion to an array-shaped target is
-    /// honored, falling back to the expression's own type.
-    /// </summary>
-    private bool IsJsArrayTupleInitializer(ExpressionSyntax initializer)
-    {
-        var typeInfo = _semantic.GetTypeInfo(initializer);
-        var type = typeInfo.Type ?? typeInfo.ConvertedType;
-        return type switch
-        {
-            IArrayTypeSymbol => true,
-            INamedTypeSymbol named => named.HasJsTuple(),
-            _ => false,
-        };
     }
 
     private IrStatement ExtractIf(IfStatementSyntax ifs)

@@ -1490,7 +1490,9 @@ public class DartOverloadNamingTests
             """
         );
 
-        await Assert.That(diagnostics).IsEmpty();
+        await Assert
+            .That(DartTranspileHelper.ExceptPrinterGap(diagnostics, "The C# tuple deconstruction"))
+            .IsEmpty();
     }
 
     [Test]

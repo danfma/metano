@@ -135,26 +135,6 @@ public sealed class TypeScriptTransformContext(
     internal Bridge.ClosedFamilyLowering ClosedFamilies =>
         field ??= new Bridge.ClosedFamilyLowering(ResolveOwnTsName);
 
-    /// <summary>
-    /// Whether the closed type <paramref name="type"/> names lowers to the union
-    /// (<see cref="ClosedFamilies"/>); a reference the compilation cannot resolve
-    /// counts as lowered, the shape a closed family takes unless suppressed.
-    /// </summary>
-    internal bool IsLoweredClosedType(IrNamedTypeRef type)
-    {
-        var segments = type.Name.Split('.');
-        var arity = type.TypeArguments?.Count ?? 0;
-        var last = arity > 0 ? $"{segments[^1]}`{arity}" : segments[^1];
-        var nested = string.Join('+', [.. segments[..^1], last]);
-
-        var metadataName = string.IsNullOrEmpty(type.Namespace)
-            ? nested
-            : $"{type.Namespace}.{nested}";
-
-        return Compilation.GetTypeByMetadataName(metadataName) is not { } symbol
-            || ClosedFamilies.IsLowered(symbol);
-    }
-
     private IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildExtensionHelperFunctions()
     {
         var map = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
@@ -279,6 +259,14 @@ public sealed class TypeScriptTransformContext(
                 );
                 break;
 
+            // An extension operator's module function (#761, decision W9-8):
+            // registered like the block's methods, so two classes exporting
+            // one name report MS0021 at the declaration.
+            case IMethodSymbol { MethodKind: MethodKind.UserDefinedOperator } op
+                when ExtensionOperatorFunctionNameOf(op) is { } operatorName:
+                Register(operatorName, op, ownerRef, map, firstClaim, reportDiagnostic);
+                break;
+
             case IPropertySymbol prop
                 when prop.DeclaredAccessibility == Accessibility.Public && !prop.IsIndexer:
                 Register(
@@ -334,6 +322,26 @@ public sealed class TypeScriptTransformContext(
         }
     }
 
+    /// <summary>
+    /// The static class a registered member belongs to, named for a
+    /// diagnostic: an extension-block member's block is unnamed, so it is
+    /// named by the class that holds the block.
+    /// </summary>
+    private static string OwnerNameOf(ISymbol member) =>
+        member.IsExtensionBlockMember()
+            ? member.ContainingType.ContainingType.Name
+            : member.ContainingType?.Name ?? "<global>";
+
+    /// <summary>
+    /// The module function name of an extension operator the TypeScript
+    /// target lowers; <c>null</c> for one it reports as unsupported.
+    /// </summary>
+    private static string? ExtensionOperatorFunctionNameOf(IMethodSymbol op) =>
+        ExtensionOperators.ContainerOf(op) is { } container
+        && ExtensionOperators.UnsupportedReasonOf(op, container, TargetLanguage.TypeScript) is null
+            ? Bridge.TsOperatorNaming.ExtensionOperatorFunctionName(op)
+            : null;
+
     private static string ResolvePropertyHelperName(IPropertySymbol property) =>
         (
             SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
@@ -372,8 +380,8 @@ public sealed class TypeScriptTransformContext(
             // the static class. Same source — collapse to one registration.
             if (AreSameLogicalExtensionMember(prior, member))
                 return;
-            var priorOwner = prior.ContainingType?.Name ?? "<global>";
-            var newOwner = member.ContainingType?.Name ?? "<global>";
+            var priorOwner = OwnerNameOf(prior);
+            var newOwner = OwnerNameOf(member);
             reportDiagnostic(
                 new MetanoDiagnostic(
                     MetanoDiagnosticSeverity.Error,
@@ -387,6 +395,7 @@ public sealed class TypeScriptTransformContext(
             );
             return;
         }
+
         map[helperName] = ownerRef;
         firstClaim[helperName] = member;
     }

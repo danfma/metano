@@ -1,16 +1,9 @@
 {
   "name": "sample-runtime-types",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
   "sideEffects": false,
-  "imports": {
-    "#/*": {
-      "source": "./src/*.ts",
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "default": "./src/*.ts"
-    }
-  },
   "dependencies": {
     "metano-runtime": "workspace:*"
   },

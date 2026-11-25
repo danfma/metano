@@ -4,13 +4,17 @@ import type {
   SerializerContextOptions,
   JsonConverter,
   JsonReadOptions,
+  JsonWriteOptions,
 } from "./types.ts";
 
 /** System.Text.Json's default read behavior: no option set. */
 const DEFAULT_READ_OPTIONS: JsonReadOptions = /* @__PURE__ */ Object.freeze({});
 
-function hasNoOptions(readOptions: JsonReadOptions): boolean {
-  return Object.keys(readOptions).length === 0;
+/** System.Text.Json's default text formatting: compact text. */
+const DEFAULT_WRITE_OPTIONS: JsonWriteOptions = /* @__PURE__ */ Object.freeze({});
+
+function hasNoOptions(options: JsonReadOptions | JsonWriteOptions): boolean {
+  return Object.keys(options).length === 0;
 }
 
 /**
@@ -43,8 +47,17 @@ export abstract class SerializerContext {
   }
 
   /**
+   * The text formatting of every spec this context creates, mirrored from the
+   * C# context's `[JsonSourceGenerationOptions]` (`WriteIndented` and friends,
+   * #752). Generated contexts override it only for an indented context.
+   */
+  protected get writeOptions(): JsonWriteOptions {
+    return DEFAULT_WRITE_OPTIONS;
+  }
+
+  /**
    * Registers a spec in the internal registry and returns it, with the
-   * context's read options attached. Intended to be called from lazy getters
+   * context's read and write options attached. Intended to be called from lazy getters
    * in generated subclasses:
    *
    * ```ts
@@ -54,7 +67,7 @@ export abstract class SerializerContext {
    * ```
    */
   protected createSpec<T>(spec: TypeSpec<T>): TypeSpec<T> {
-    const attached = this.withReadOptions(spec);
+    const attached = this.withContextOptions(spec);
 
     // Only register class-backed types (those with a constructor reference).
     // [PlainObject] specs have no `type` field — they're accessed via their
@@ -78,21 +91,25 @@ export abstract class SerializerContext {
    * ```
    *
    * Nothing is registered: a value spec has no constructor to resolve. The
-   * context's read options are attached, as by `createSpec`.
+   * context's read and write options are attached, as by `createSpec`.
    */
   protected createValueSpec<T>(spec: ValueSpec<T>): ValueSpec<T> {
-    return this.withReadOptions(spec);
+    return this.withContextOptions(spec);
   }
 
   /**
-   * `spec` with the context's read options, under any the spec declares
-   * itself. A spec stays as given when neither has one, so default contexts
-   * keep their specs unchanged.
+   * `spec` with the context's read and write options, under any the spec
+   * declares itself. A spec stays as given when neither has one, so default
+   * contexts keep their specs unchanged.
    */
-  private withReadOptions<S extends { readonly readOptions?: JsonReadOptions }>(spec: S): S {
+  private withContextOptions<
+    S extends { readonly readOptions?: JsonReadOptions; readonly writeOptions?: JsonWriteOptions },
+  >(spec: S): S {
     const readOptions = { ...this.readOptions, ...spec.readOptions };
+    const writeOptions = { ...this.writeOptions, ...spec.writeOptions };
+    const withReads = hasNoOptions(readOptions) ? spec : { ...spec, readOptions };
 
-    return hasNoOptions(readOptions) ? spec : { ...spec, readOptions };
+    return hasNoOptions(writeOptions) ? withReads : { ...withReads, writeOptions };
   }
 
   /**

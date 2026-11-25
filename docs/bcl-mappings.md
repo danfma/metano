@@ -129,6 +129,13 @@ if you're sure about the shape), and cast back to plain `string` with `uuid as s
 Metano uses the [Temporal API](https://tc39.es/proposal-temporal/docs/) via the
 `@js-temporal/polyfill` package.
 
+**TypeScript 7.** `@js-temporal/polyfill` 0.5.1 declares an `Intl.DateTimeFormat` that clashes with
+the built-in `Temporal`/`Intl` types of TypeScript 7 under `lib: esnext`, so a package that imports
+`metano-runtime` or a generated Temporal type fails `tsgo --strict` with TS2430 inside
+`node_modules/@js-temporal/polyfill/index.d.ts` unless it sets `"skipLibCheck": true` or a `lib`
+without `esnext.temporal` (for example `es2024`). TypeScript 5.9 is not affected (baseline
+FR-107, #786).
+
 | C# | TypeScript |
 |----|----|
 | `DateTime` | `Temporal.PlainDateTime` |
@@ -155,6 +162,18 @@ unmapped (MS0001). `DateTimeOffset` takes an offset in whole minutes within four
 (`ArgumentException` / `ArgumentOutOfRangeException` otherwise) and a UTC time inside years 1 to
 9999; a `DateTime` argument carries no kind in TypeScript, so the UTC-kind offset check is
 skipped.
+
+### `DateTime` with a `DateTimeKind` (#753)
+
+| C# | TypeScript |
+|----|----|
+| `new DateTime(y, mo, d, h, mi, s, kind)` / `(…, ms, kind)` | `plainDateTime(y, mo, d, h, mi, s)` / `plainDateTime(…, ms)` |
+| `new DateTime(ticks, kind)` | `plainDateTimeFromTicks(ticks)` |
+
+A `Temporal.PlainDateTime` carries no kind, so the `kind` argument is dropped: the value keeps
+its wall time, but a `Utc` value serialized to JSON writes `2024-03-05T10:20:30` where .NET
+writes `2024-03-05T10:20:30Z`. `DateTime.Kind`, `ToUniversalTime()`, `ToLocalTime()` and
+`DateTime.SpecifyKind(...)` have no counterpart and report MS0001.
 
 The `@js-temporal/polyfill` dependency is added to your `package.json`
 automatically whenever any Temporal mapping is used.
@@ -223,9 +242,10 @@ and a decimal compare by value, and a class without `Equals` by reference.
 | `xs.GroupBy(k[, comparer])` | `linq(xs, groupBy(k[, comparer]))`: groups and elements in first-seen order |
 | `xs.SequenceEqual(ys[, comparer])` | `linq(xs, sequenceEqual(ys[, comparer]))` |
 | `xs.ToLookup(k[, e][, comparer])` | `linq(xs, toLookup(k[, e][, comparer]))`: a runtime `Lookup` (`count`, `get`, `contains`, iteration) |
+| `ILookup<K, T>`, `lookup[key]`, `lookup.Count`, `lookup.Contains(key)` | `Lookup<K, T>`, `lookup.get(key)` (an empty sequence for a missing key, as .NET), `lookup.count`, `lookup.contains(key)` |
 | `xs.Join(ys, ok, ik, result[, comparer])` | `linq(xs, join(ys, ok, ik, result[, comparer]))`: a `null` key matches nothing |
 
-Not mapped, reported with `MS0001`: the `lookup[key]` indexer of an `ILookup`, `GroupJoin`, and the
+Not mapped, reported with `MS0001`: `GroupJoin`, and the
 `GroupBy` overloads with an element or result selector.
 
 Not mapped, reported with `MS0001`: `ElementAt(Index)`, `Array.IndexOf(a, v, start, count)`,
@@ -470,6 +490,15 @@ built-in only does reference equality, which would lose C# semantics.
 | `KeyValuePair<K, V>` | `[K, V]` |
 | `KeyValuePair.Create(k, v)` | `[k, v] as [K, V]` |
 
+Tuples are plain JS arrays, which the runtime collections compare by reference (a C# array
+also lowers to an array, and C# compares those by reference too). A tuple used as a
+`HashSet` element or `Dictionary` key, in `List` lookups (`Contains`, `IndexOf`, `Remove`) or
+as the element or key of a LINQ operator that compares by default (`Distinct`, `DistinctBy`,
+`GroupBy`, `Except`, `Intersect`, `Union`, `ToHashSet`, `ToDictionary`, `ToLookup`, `Join`,
+`GroupJoin`, `SequenceEqual`, `Contains`; nullable tuples included) reports MS0001, because two
+equal tuples built separately are not found (#746). Pass an `IEqualityComparer` or use a
+record as the element or key.
+
 ### IGrouping and other LINQ shapes
 
 | C# | TypeScript |
@@ -668,7 +697,7 @@ enum as a position. Each helper reads its arguments once and throws what .NET th
 (`ArgumentOutOfRangeException` and `ArgumentNullException`, with .NET's messages and parameter
 names), checked against real .NET by `tests/BclReference` (bun and Node). Comparisons are
 ordinal: the culture-sensitive `StringComparison` members behave as their ordinal
-counterparts, and the ignore-case ones fold each UTF-16 code unit to upper case, as
+counterparts, and the ignore-case ones fold each code point to its ordinal uppercase, as
 `OrdinalIgnoreCase` does. `StringComparison` and `StringSplitOptions` lower to runtime
 mirrors of the enums. `Trim()`, `Split(char)`, `IndexOf(t)` and the other forms of the same
 names that agree with JavaScript keep the plain method (`Trim()` trims U+0085, which .NET
@@ -690,8 +719,52 @@ removal. `isNullOrWhiteSpace` tests .NET's white-space set, which differs from J
 on U+0085 and U+FEFF. Both null checks are type predicates, so a `false` result narrows
 the argument to `string`.
 
-A static member of a BCL type with no mapping (`string.CompareOrdinal(a, b)`) reports an
+A static member of a BCL type with no mapping (`string.Compare(a, i, b, j, n)`) reports an
 `MS0001` warning: the call is emitted by name and nothing declares it on the JS side.
+
+### String equality and ordering
+
+`string.Equals` and `string.Compare` lower to `metano-runtime` helpers (#769):
+
+| C# | TypeScript |
+|----|----|
+| `string.Equals(a, b, comparison)` | `stringEquals(a, b, comparison)` |
+| `a.Equals(b, comparison)` / `a.Equals(b)` | `stringInstanceEquals(a, b, comparison)` / `stringInstanceEquals(a, b, StringComparison.Ordinal)` |
+| `string.Equals(a, b)` | `(a === b)` |
+| `string.Compare(a, b, comparison)` | `stringCompare(a, b, comparison)` |
+| `string.Compare(a, b)` | `stringCompare(a, b, StringComparison.CurrentCulture)` |
+| `string.Compare(a, b, ignoreCase)` | `stringCompare(a, b, ignoreCase ? StringComparison.CurrentCultureIgnoreCase : StringComparison.CurrentCulture)` |
+| `string.CompareOrdinal(a, b)` | `stringCompare(a, b, StringComparison.Ordinal)` |
+| `a.CompareTo(b)` (`string` or `object` argument) | `stringCompareTo(a, b)` |
+| `a.GetHashCode(comparison)` | `stringHashCode(a, comparison)` |
+| `IComparable<T>.CompareTo` / `IComparable.CompareTo` through the interface or a type parameter | `comparableCompareTo(a, b)` |
+
+`Ordinal` compares UTF-16 code units. `OrdinalIgnoreCase` compares the ordinal uppercase of
+each code point, .NET's invariant simple case mapping (the rule `StringComparer.OrdinalIgnoreCase`
+and the case-insensitive searches above share): `ß` never equals `SS`, `ı` and `ſ` never equal
+`I` and `S`, a surrogate pair folds as one code point, and Greek letters with iota subscript
+map to their prosgegrammeni form. The culture members compare with `Intl.Collator`:
+`CurrentCulture` with the engine's default locale, `InvariantCulture` with the root locale, at
+`sensitivity: "variant"`. The ignore-case members ignore case only, as .NET does on ICU: width
+and kana type still count (`"Ａ"` never equals `"a"`, `"ｶ"` sorts after `"カ"`), while
+compatibility forms and case variants are equal (`ß` / `ẞ`, `ﬀ` / `FF`, `ς` / `Σ`, `"Ａ"` /
+`"ａ"`, U+3000 / space). Five exotic pairs differ from .NET on ICU (known gaps): `İ` / `i̇`,
+`ｶﾞ` / `ｶ゙` and U+FFE8 / `│` are equal in .NET and not in the runtime, and small against
+full-size kana (`ｱ` / `ｧ`, `ア` / `ァ`) sort the other way. This
+matches .NET running on ICU (the default on Linux and macOS); a .NET process with
+`InvariantGlobalization` compares the culture members ordinally instead. `null` equals only
+`null` and sorts first; the instance forms throw `NullReferenceException` for a `null`
+receiver, and `CompareTo(object)` throws `ArgumentException` for an argument that is not a
+string; an undefined `StringComparison` value throws `ArgumentException`. A `Compare` result
+has .NET's sign; the ordinal forms return the difference of the first differing code units
+(or of the lengths), since .NET does not specify the magnitude. `GetHashCode(comparison)`
+hashes as the ordinal `StringComparer` does; a culture comparison throws
+`NotSupportedException` (JavaScript has no culture sort key). `comparableCompareTo` compares a
+string receiver as `string.CompareTo` does and any other value in `Comparer<T>.Default`'s
+order, which calls an object's own `compareTo`; a `null` argument answers `1` without calling
+it (the `IComparable` contract), so a user `CompareTo(null)` that breaks the contract is not
+reproduced. The substring overload
+`Compare(a, i, b, j, n, comparison)` is not mapped (`MS0001`).
 
 ## Math
 
@@ -721,6 +794,22 @@ rounds to `267.5`) and the sign of a zero result. Parity is pinned to the .NET 1
 algorithm: .NET 11 rounds the exact binary value instead (`Math.Round(2.675, 2)` is `2.67`
 there). `MidpointRounding` maps to
 the runtime `MidpointRounding` object, which keeps the .NET member names and values.
+
+### `Math.Clamp` and `HashCode` (#749, #750)
+
+| C# | TypeScript |
+|----|----|
+| `Math.Clamp(v, lo, hi)` / `int.Clamp` / `double.Clamp` (every `number`-backed overload) | `clampNumber(v, lo, hi)` (runtime) |
+| `Math.Clamp` / `decimal.Clamp` on `decimal` | `clampDecimal(v, lo, hi)` (runtime; keeps the `Decimal`) |
+| `Math.Clamp` / `long.Clamp` on `long`, `ulong` | `clampInt64` / `clampUInt64` (runtime) |
+| `HashCode.Combine(v1 … v8)` | `HashCode.combine(v1, …)` (runtime, variadic) |
+| `new HashCode()`, `Add(v)`, `ToHashCode()` | `new HashCode()`, `add(v)`, `toHashCode()` |
+
+JavaScript has no `Math.clamp`. Every clamp throws .NET's `ArgumentException` when `lo > hi`
+(`'5' cannot be greater than 2.`, bounds formatted as .NET formats them). `HashCode` hashes by
+the runtime's rules and is deterministic across runs, where .NET seeds it per process, so
+compare hashes only for equality. `HashCode` lowers to a class, so copying one (`var b = a;`)
+shares state (#762). `Add(value, comparer)` and `AddBytes` report MS0001.
 
 ## Default text of `bool`, `double` and `float`
 

@@ -1,5 +1,6 @@
 {
   "name": "sample-operator-overloading",
+  "version": "1.0.0",
   "type": "module",
   "module": "./dist/program.js",
   "private": true,
@@ -7,19 +8,6 @@
     "./dist/program.js",
     "./src/program.ts"
   ],
-  "imports": {
-    "#/*": {
-      "source": "./src/*.ts",
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "default": "./src/*.ts"
-    },
-    "#": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./src/index.ts"
-    }
-  },
   "dependencies": {
     "metano-runtime": "workspace:*",
     "decimal.js": "^10.6.0"

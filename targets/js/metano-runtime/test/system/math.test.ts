@@ -7,6 +7,8 @@ import {
 
 import {
   absInt32,
+  clampDecimal,
+  clampNumber,
   type DecimalRoundable,
   MidpointRounding,
   roundDecimal,
@@ -211,5 +213,55 @@ describe("absInt32", () => {
     expect(() => absInt32(-2147483648)).toThrow(
       new OverflowException("Negating the minimum value of a twos complement number is invalid."),
     );
+  });
+});
+
+describe("clampNumber", () => {
+  test("keeps a value in range and clamps either side", () => {
+    expect(clampNumber(5, 0, 10)).toBe(5);
+    expect(clampNumber(-5, 0, 10)).toBe(0);
+    expect(clampNumber(15, 0, 10)).toBe(10);
+    expect(clampNumber(1.5, 0, 1)).toBe(1);
+  });
+
+  test("a NaN value stays NaN", () => {
+    expect(clampNumber(Number.NaN, 0, 1)).toBeNaN();
+  });
+
+  test("throws .NET's ArgumentException when min is greater than max", () => {
+    expect(() => clampNumber(1, 5, 2)).toThrow(ArgumentException);
+    expect(() => clampNumber(1, 5, 2)).toThrow("'5' cannot be greater than 2.");
+  });
+});
+
+describe("clampDecimal", () => {
+  test("clamps a Decimal and keeps its kind", async () => {
+    const { Decimal } = await import("#/system/decimal.ts");
+    const clamped = clampDecimal(new Decimal("1.5"), new Decimal("0"), new Decimal("1"));
+
+    expect(clamped).toBeInstanceOf(Decimal);
+    expect(clamped.toString()).toBe("1");
+    expect(clampDecimal(new Decimal("0.25"), new Decimal("0"), new Decimal("1")).toString()).toBe(
+      "0.25",
+    );
+  });
+
+  test("throws .NET's ArgumentException when min is greater than max", async () => {
+    const { Decimal } = await import("#/system/decimal.ts");
+
+    expect(() => clampDecimal(new Decimal("1"), new Decimal("5"), new Decimal("2"))).toThrow(
+      "'5' cannot be greater than 2.",
+    );
+  });
+});
+
+describe("clamp messages", () => {
+  test("format the bounds as .NET does", async () => {
+    const { Decimal } = await import("#/system/decimal.ts");
+
+    expect(() => clampDecimal(new Decimal(0), new Decimal("0.0000001"), new Decimal("0.00000001"))).toThrow(
+      "'0.0000001' cannot be greater than 0.00000001.",
+    );
+    expect(() => clampNumber(0, 1.5, 0.5)).toThrow("'1.5' cannot be greater than 0.5.");
   });
 });

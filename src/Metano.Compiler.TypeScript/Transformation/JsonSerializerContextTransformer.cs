@@ -63,6 +63,9 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         if (JsonReadOptionsGetterBuilder.Build(plan.ReadOptions) is { } readOptions)
             members.Add(readOptions);
 
+        if (JsonWriteOptionsGetterBuilder.Build(plan.WriteOptions) is { } writeOptions)
+            members.Add(writeOptions);
+
         foreach (var entry in plan.Entries)
             members.AddRange(specs.BuildEntryMembers(entry));
 
@@ -288,7 +291,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             properties,
             names.Claim(contract),
             contract.Polymorphisms,
-            JsonOptionsReader.ReadOptionsOf(contextType)
+            JsonOptionsReader.ReadOptionsOf(contextType),
+            JsonOptionsReader.WriteOptionsOf(contextType)
         );
     }
 

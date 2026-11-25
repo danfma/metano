@@ -154,9 +154,21 @@ const back = JsonSerializer.deserializeText(json, JsonContext.default.todoItem);
 A `null` text or type info throws `ArgumentNullException` (parameter `json` /
 `jsonTypeInfo`), as .NET does. The overloads that take `JsonSerializerOptions`,
 a `Type`, a stream, a `Utf8JsonWriter`, a span or a `JsonElement` stay unmapped
-(`MS0001`). `serializeText` always writes compact text: it ignores the context's
-`WriteIndented`, `IndentCharacter`, `IndentSize` and `NewLine` options, so a context
-with `WriteIndented = true` still gets the text without whitespace.
+(`MS0001`). `serializeText` writes the text layout of the context's
+`[JsonSourceGenerationOptions]`: compact by default, and with `WriteIndented = true`
+each element and property on its own line, `IndentCharacter` (a space or a tab) repeated
+`IndentSize` times per level (2 spaces by default), `NewLine` between lines (`"\n"` or
+`"\r\n"`), `": "` after a property name and `[]` / `{}` for an empty container, as
+.NET 10 writes them. An unset `NewLine` writes `"\n"`, the .NET default on Linux and macOS
+(it is `Environment.NewLine`, so `"\r\n"` on Windows). The options travel with the spec
+the context creates, as `ctx.T.Options` does in .NET; the tree `serialize` returns is not
+text and is unaffected. A value System.Text.Json rejects (an indent character other than a
+space or a tab, a size above 127, another `NewLine`) warns `MS0037`. Options passed to the
+context's constructor at runtime are invisible, as for every other option.
+
+> **Behavior change since 3.1.0.** In 3.1.0 `serializeText` always wrote compact text. A context
+> with `WriteIndented = true` now produces indented text; call sites that relied on the compact
+> text of such a context must set `WriteIndented = false` (as .NET itself would).
 
 ## What the transpiler does
 
@@ -287,7 +299,7 @@ generic types that use it as an argument. Type arguments use the same rule, so
 - `MS0036` reports two types that map to one getter (a warning that drops an
   unreferenced root, an error when the losing type is referenced by another
   spec), a getter that would shadow a `SerializerContext` member (`options`,
-  `converters`, `createSpec`, `createValueSpec`, `readOptions`, `resolve`,
+  `converters`, `createSpec`, `createValueSpec`, `readOptions`, `writeOptions`, `resolve`,
   `_registry`, `constructor`), and a type listed twice with different `TypeInfoPropertyName`
   values (a warning; the first one is kept). Use `TypeInfoPropertyName` to
   resolve a collision.
@@ -483,7 +495,7 @@ your own `JsonConverter`.
 | `[JsonExtensionData]` | ⚠️ | Left out of the spec, `MS0037`; bound to a constructor parameter (STJ throws `InvalidOperationException`), the factory passes `null` |
 | `[JsonNumberHandling]`, `[JsonObjectCreationHandling(Populate)]`, `[JsonUnmappedMemberHandling(Disallow)]` | ⚠️ | Not mirrored, `MS0037` |
 | `[JsonConstructor]` | ✅ / ⚠️ | A class with two or more constructors is built through the factory of the marked overload (`factory: (p) => Money.fromAmountCurrency(…)`, spec 013 FR-035). Any other type is built through the constructor the factory calls (the primary one, else the one with the most parameters); the attribute on another constructor (a `[PlainObject]` secondary one, a type read from a DLL or package) reports `MS0037` |
-| Any other `[JsonSourceGenerationOptions]` option | ⚠️ | `MS0037` when set to a value other than System.Text.Json's default; formatting options (`WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`) and `DefaultBufferSize` / `GenerationMode` are never reported ([details](#member-selection)) |
+| Any other `[JsonSourceGenerationOptions]` option | ⚠️ | `MS0037` when set to a value other than System.Text.Json's default; `DefaultBufferSize` / `GenerationMode` are never reported, and the text options (`WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`) are mirrored by `serializeText` and reported only for a value System.Text.Json rejects ([details](#member-selection)) |
 | `[JsonDerivedType]` / `[JsonPolymorphic]` on a class or record | ✅ | Emits the base's `polymorphism` descriptor and a spec for every registered type ([details](#polymorphism)) |
 | `[JsonDerivedType]` on an interface or a `[PlainObject]` type | ✅ | Interface bases dispatch class variants by constructor; `[PlainObject]` variants are selected by synthesized guards ([details](#interface-and-plainobject-hierarchies)) |
 

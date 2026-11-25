@@ -3,7 +3,20 @@ namespace Metano.Compiler.IR;
 /// <summary>
 /// A semantic statement in the IR.
 /// </summary>
-public abstract record IrStatement;
+public abstract record IrStatement
+{
+    /// <summary>
+    /// Where the statement came from in the C# source, for a target that
+    /// reports a diagnostic while it renders the statement; <c>null</c> for a
+    /// statement the core synthesized. Not part of the statement's equality.
+    /// </summary>
+    public IrSourceSpan? Span { get; init; }
+
+    public virtual bool Equals(IrStatement? other) =>
+        other is not null && EqualityContract == other.EqualityContract;
+
+    public override int GetHashCode() => EqualityContract.GetHashCode();
+}
 
 /// <summary>
 /// An expression used as a statement.
@@ -36,30 +49,82 @@ public sealed record IrVariableDeclaration(
 ) : IrStatement;
 
 /// <summary>
-/// A deconstructing variable declaration — <c>var (a, b) = expr;</c>. Lowers to
-/// a JS array-destructuring binding (<c>const [a, b] = expr</c>). Each element is
-/// a bound name or a discard (<see cref="IrDeconstructionElement.Name"/> null).
-/// Target-agnostic: a Dart target could consume the same shape as record-pattern
-/// destructuring.
+/// A deconstructing variable declaration — <c>var (a, b) = expr;</c>. Each
+/// element is a bound name, a discard (<see cref="IrDeconstructionElement.Name"/>
+/// null) or a nested deconstruction of its part
+/// (<see cref="IrDeconstructionElement.Nested"/>). The parts are read by
+/// position (a tuple, an array, a <c>[JsTuple]</c> record, the multi-value
+/// result of an <see cref="IrOutArgumentCall"/>) unless <see cref="Members"/>
+/// names the member each one reads (a record's synthesized
+/// <c>Deconstruct</c>). A JS target lowers it to a destructuring binding
+/// (<c>const [a, b] = expr</c>, <c>const { x: a, y: b } = expr</c>).
 /// </summary>
-/// <param name="Elements">The positional binding slots, in declaration order.</param>
-/// <param name="Initializer">The right-hand side that produces the tuple value.</param>
+/// <param name="Elements">The binding slots, in declaration order.</param>
+/// <param name="Initializer">The right-hand side that produces the deconstructed value.</param>
 /// <param name="IsConst">True when no bound local is reassigned (mirrors
 /// <see cref="IrVariableDeclaration.IsConst"/>); false promotes the binding to <c>let</c>.</param>
+/// <param name="IsAssignment">True when the named locals are declared earlier
+/// (a switch-section local hoisted ahead of its switch, #755), so the
+/// statement stores into them (<c>[a, b] = expr</c>) instead of declaring
+/// them.</param>
 public sealed record IrTupleDeconstruction(
     IReadOnlyList<IrDeconstructionElement> Elements,
     IrExpression Initializer,
-    bool IsConst = true
-) : IrStatement;
+    bool IsConst = true,
+    bool IsAssignment = false
+) : IrStatement
+{
+    /// <summary>
+    /// The member each element reads, in element order, or <c>null</c> to
+    /// read the elements by position.
+    /// </summary>
+    public IReadOnlyList<IrPositionalElementMember>? Members { get; init; }
+
+    /// <summary>
+    /// The type of the deconstructed value when the extractor resolved it,
+    /// so a target whose tuples are not arrays (a Dart record) can tell how
+    /// to take it apart; <c>null</c> when unknown.
+    /// </summary>
+    public IrTypeRef? ValueType { get; init; }
+
+    /// <summary>The locals the declaration binds, nested ones included.</summary>
+    public IEnumerable<string> BoundNames => IrDeconstructionElement.BoundNamesOf(Elements);
+}
 
 /// <summary>
 /// One slot of an <see cref="IrTupleDeconstruction"/>. A null
 /// <paramref name="Name"/> denotes a discard (<c>_</c>) — an empty hole in the
-/// emitted array pattern that binds nothing.
+/// emitted pattern that binds nothing — or, with <see cref="Nested"/> set, a
+/// part taken apart in turn.
 /// </summary>
-/// <param name="Name">The bound local name, or null for a discard.</param>
+/// <param name="Name">The bound local name, or null for a discard or a nested part.</param>
 /// <param name="Type">The optional declared element type (usually null for <c>var</c>).</param>
-public sealed record IrDeconstructionElement(string? Name, IrTypeRef? Type = null);
+public sealed record IrDeconstructionElement(string? Name, IrTypeRef? Type = null)
+{
+    /// <summary>
+    /// The deconstruction of this slot's part (<c>var (a, (b, c)) = …</c>),
+    /// or <c>null</c> for a bound name or a discard.
+    /// </summary>
+    public IrNestedDeconstruction? Nested { get; init; }
+
+    /// <summary>The locals <paramref name="elements"/> bind, nested ones included.</summary>
+    public static IEnumerable<string> BoundNamesOf(IEnumerable<IrDeconstructionElement> elements) =>
+        elements.SelectMany(element =>
+            element.Nested is { } nested ? BoundNamesOf(nested.Elements)
+            : element.Name is { } name ? [name]
+            : []
+        );
+}
+
+/// <summary>
+/// The nested deconstruction of one part of an
+/// <see cref="IrTupleDeconstruction"/>, with the same reading rules: by
+/// position, or by the member <see cref="Members"/> names for each element.
+/// </summary>
+public sealed record IrNestedDeconstruction(
+    IReadOnlyList<IrDeconstructionElement> Elements,
+    IReadOnlyList<IrPositionalElementMember>? Members = null
+);
 
 /// <summary>
 /// An <c>if</c> statement with optional <c>else</c> branch.
@@ -74,7 +139,7 @@ public sealed record IrIfStatement(
 /// A <c>switch</c> statement.
 /// </summary>
 public sealed record IrSwitchStatement(IrExpression Expression, IReadOnlyList<IrSwitchCase> Cases)
-    : IrStatement;
+    : IrBreakableStatement;
 
 /// <summary>
 /// A section of a <c>switch</c> statement: one or more labels sharing a body.
@@ -107,7 +172,7 @@ public sealed record IrForEachStatement(
     IrTypeRef? VariableType,
     IrExpression Collection,
     IReadOnlyList<IrStatement> Body
-) : IrStatement
+) : IrBreakableStatement
 {
     /// <summary>
     /// The static type of the enumerated expression, <c>null</c> when
@@ -142,19 +207,19 @@ public sealed record IrForStatement(
     IrExpression? Condition,
     IReadOnlyList<IrExpression> Incrementors,
     IReadOnlyList<IrStatement> Body
-) : IrStatement;
+) : IrBreakableStatement;
 
 /// <summary>
 /// A <c>while</c> loop.
 /// </summary>
 public sealed record IrWhileStatement(IrExpression Condition, IReadOnlyList<IrStatement> Body)
-    : IrStatement;
+    : IrBreakableStatement;
 
 /// <summary>
 /// A <c>do..while</c> loop.
 /// </summary>
 public sealed record IrDoWhileStatement(IReadOnlyList<IrStatement> Body, IrExpression Condition)
-    : IrStatement;
+    : IrBreakableStatement;
 
 /// <summary>
 /// A <c>try..catch..finally</c> statement.
@@ -211,14 +276,30 @@ public sealed record IrCatchClause(
 }
 
 /// <summary>
+/// A statement a <c>break</c> leaves: a loop or a <c>switch</c>. C# 15 lets a
+/// label name it (<c>outer: for (…)</c>) so a nested <c>break outer;</c> /
+/// <c>continue outer;</c> targets it; every target has a native equivalent
+/// (a JavaScript or Dart label on the same statement).
+/// </summary>
+public abstract record IrBreakableStatement : IrStatement
+{
+    /// <summary>The C# label on the statement, or <c>null</c> when it has none.</summary>
+    public string? Label { get; init; }
+}
+
+/// <summary>
 /// A <c>break</c> statement.
 /// </summary>
-public sealed record IrBreakStatement() : IrStatement;
+/// <param name="Label">The label of the statement it leaves (<c>break outer;</c>),
+/// or <c>null</c> for the innermost one.</param>
+public sealed record IrBreakStatement(string? Label = null) : IrStatement;
 
 /// <summary>
 /// A <c>continue</c> statement.
 /// </summary>
-public sealed record IrContinueStatement() : IrStatement;
+/// <param name="Label">The label of the loop it continues (<c>continue outer;</c>),
+/// or <c>null</c> for the innermost one.</param>
+public sealed record IrContinueStatement(string? Label = null) : IrStatement;
 
 /// <summary>
 /// A <c>yield break</c> statement (terminates an iterator).

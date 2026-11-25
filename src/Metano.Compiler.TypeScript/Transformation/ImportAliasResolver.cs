@@ -70,35 +70,18 @@ public static class ImportAliasResolver
         );
     }
 
+    /// <summary>
+    /// The scope of one emitted file: the <paramref name="usings"/> over the
+    /// <paramref name="autoSynthesized"/> fallbacks, and the <c>[ImportAlias]</c>
+    /// pins of <paramref name="layerB"/> over both. A <c>using</c> alias a pin
+    /// displaces still spells its type in value positions, so the scope keeps it
+    /// resolvable (<see cref="UsingAliasScope.AliasToCanonical"/>).
+    /// </summary>
     public static UsingAliasScope? Merge(
-        UsingAliasScope? layerA,
+        IReadOnlyList<UsingAlias> usings,
         IReadOnlyDictionary<string, string>? autoSynthesized,
         IReadOnlyDictionary<string, string>? layerB
-    )
-    {
-        if (
-            layerA is null
-            && (autoSynthesized is null || autoSynthesized.Count == 0)
-            && (layerB is null || layerB.Count == 0)
-        )
-            return null;
-
-        var merged = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (autoSynthesized is not null)
-            foreach (var (canonical, alias) in autoSynthesized)
-                merged[canonical] = alias;
-        if (layerA is not null)
-            foreach (var (canonical, alias) in layerA.CanonicalToAlias)
-                merged[canonical] = alias;
-        if (layerB is not null)
-            foreach (var (canonical, alias) in layerB)
-                merged[canonical] = alias;
-
-        // A `using` alias the merged map displaces (an [ImportAlias] pin replaces the
-        // printed alias of its type) still spells that type in value positions, so it
-        // stays resolvable: the scope keeps it as a further alias.
-        return UsingAliasScope.Create(merged, layerA?.AliasToCanonical);
-    }
+    ) => UsingAliasScope.Create(autoSynthesized, usings, layerB);
 
     private static IEnumerable<INamedTypeSymbol> EnumerateFileLocalCarriers(INamespaceSymbol root)
     {

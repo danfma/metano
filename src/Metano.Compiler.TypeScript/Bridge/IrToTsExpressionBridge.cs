@@ -237,8 +237,24 @@ public static partial class IrToTsExpressionBridge
             IrBoxExpression box => IrToTsBoxingBridge.MapBox(box, context),
             IrUnboxExpression unbox => IrToTsBoxingBridge.MapUnbox(unbox, context),
             IrTextValue text => IrToTsBoxingBridge.MapTextValue(text, context),
-            _ => new TsIdentifier($"/* TODO: {expression.GetType().Name} */"),
+            _ => DroppedExpression(expression),
         };
+    }
+
+    /// <summary>
+    /// A node the bridge has no lowering for: its placeholder drops the
+    /// expression, so it reports an error (W9-13).
+    /// </summary>
+    private static TsExpression DroppedExpression(IrExpression expression)
+    {
+        var kind = expression.GetType().Name;
+
+        DroppedCodeDiagnostics.Report(
+            $"The C# {DroppedCodeDiagnostics.ConstructName(expression)} is not supported by "
+                + "the TypeScript target."
+        );
+
+        return new TsIdentifier($"/* TODO: {kind} */");
     }
 
     /// <summary>
@@ -977,7 +993,7 @@ public static partial class IrToTsExpressionBridge
     /// member the toolchain declares, otherwise the <c>[Name]</c> override or
     /// the unescaped camelCase name the foreign declaration carries.
     /// </summary>
-    private static string ReadDataMemberName(
+    internal static string ReadDataMemberName(
         string memberName,
         string? emittedName,
         bool isTranspiledDataMember
@@ -997,7 +1013,8 @@ public static partial class IrToTsExpressionBridge
     {
         var segments = IrToTsTypeMapper
             .ResolveAliasedName(
-                ModuleLocalNaming.Flatten(reference.Name, reference.PrivateNestedSegments)
+                ModuleLocalNaming.Flatten(reference.Name, reference.PrivateNestedSegments),
+                reference.Namespace
             )
             .Split('.');
 
@@ -1498,7 +1515,7 @@ public static partial class IrToTsExpressionBridge
     /// imported like any type reference. A <c>private</c> nested owner is declared
     /// module-local, and its exports with it (#412), so they are reached bare.
     /// </summary>
-    private static TsExpression ModuleExportReference(string exportName, IrTypeReference? owner)
+    internal static TsExpression ModuleExportReference(string exportName, IrTypeReference? owner)
     {
         if (owner is null)
             return new TsIdentifier(exportName);

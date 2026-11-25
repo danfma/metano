@@ -55,3 +55,13 @@ export class JobRunning extends JobStatus {
     return `JobRunning { ${this.$printMembers()} }`;
   }
 }
+
+export function isJobRunning(value: unknown): value is JobRunning {
+  return value instanceof JobRunning;
+}
+
+export function assertJobRunning(value: unknown, message?: string): asserts value is JobRunning {
+  if (!isJobRunning(value)) {
+    throw new TypeError(message ?? "Value is not a JobRunning");
+  }
+}

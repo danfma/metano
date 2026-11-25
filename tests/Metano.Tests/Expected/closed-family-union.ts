@@ -58,7 +58,7 @@ abstract class Command$Base {
 
 export type Command = Play | Halt | Seek | Custom;
 
-export const Command: typeof Command$Base = Command$Base;
+export const Command = Command$Base as { [Symbol.hasInstance]: <$P>(this: { prototype: $P }, value: unknown) => value is Command$Base extends $P ? Command : $P } & typeof Command$Base;
 
 // fam/seek.ts
 import { HashCode, copyRecordWith } from "metano-runtime";
@@ -101,7 +101,7 @@ abstract class Seek$Base extends Command {
 
 export type Seek = SeekTo | SeekBy;
 
-export const Seek: typeof Seek$Base = Seek$Base;
+export const Seek = Seek$Base as { [Symbol.hasInstance]: <$P>(this: { prototype: $P }, value: unknown) => value is Seek$Base extends $P ? Seek : $P } & typeof Seek$Base;
 
 // fam/seek-by.ts
 import { HashCode, copyRecordWith } from "metano-runtime";
@@ -330,7 +330,7 @@ abstract class Tree$Base<T> {
 
 export type Tree<T> = Leaf<T> | Node<T> | ([T] extends [number] ? IntLeaf : never);
 
-export const Tree: typeof Tree$Base = Tree$Base;
+export const Tree = Tree$Base as { [Symbol.hasInstance]: <$P>(this: { prototype: $P }, value: unknown) => value is Tree$Base<any> extends $P ? Tree<any> : $P } & typeof Tree$Base;
 
 // fam/int-leaf.ts
 import { HashCode, copyRecordWith } from "metano-runtime";
@@ -421,7 +421,7 @@ export declare namespace Take {
 
 export type Take = Take$Fresh | Take$Reused;
 
-export const Take: typeof Take$Base = Take$Base;
+export const Take = Take$Base as { [Symbol.hasInstance]: <$P>(this: { prototype: $P }, value: unknown) => value is Take$Base extends $P ? Take : $P } & typeof Take$Base;
 
 class Take$Fresh extends Take {
   constructor() {
@@ -544,18 +544,18 @@ export class Reader {
   static seekOf(value: Object): number {
     let seek: Seek;
 
-    return value instanceof Seek && (seek = value as unknown as Seek, true) ? Reader.name(seek).length : -1;
+    return value instanceof Seek && (seek = value, true) ? Reader.name(seek).length : -1;
   }
 
   static asSeek(value: Object): Seek | null {
-    return value instanceof Seek ? value as unknown as Seek : null;
+    return value instanceof Seek ? value : null;
   }
 
   static statement(value: Object): string {
     switch (true) {
       case value instanceof Seek:
         {
-          const seek = value as unknown as Seek;
+          const seek = value;
 
           return Reader.name(seek);
         }

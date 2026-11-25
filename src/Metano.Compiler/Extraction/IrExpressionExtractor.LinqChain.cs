@@ -82,6 +82,8 @@ public sealed partial class IrExpressionExtractor
         if (unsupportedStages.Count > 0)
             return ReportUnsupportedLinqStages(unsupportedStages);
 
+        ReportTupleValueLookupsInInnerStages(sites, outermost);
+
         var stages = sites.Select(ExtractLinqStage).ToList();
 
         var misplacedTrees = sites

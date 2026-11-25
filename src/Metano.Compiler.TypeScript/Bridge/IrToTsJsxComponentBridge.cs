@@ -300,14 +300,16 @@ public static class IrToTsJsxComponentBridge
                     .ToList(),
                 Body = RewriteList(fs.Body, propNames, referenced),
             },
-            IrWhileStatement ws => new IrWhileStatement(
-                Rewrite(ws.Condition, propNames, referenced),
-                RewriteList(ws.Body, propNames, referenced)
-            ),
-            IrDoWhileStatement dw => new IrDoWhileStatement(
-                RewriteList(dw.Body, propNames, referenced),
-                Rewrite(dw.Condition, propNames, referenced)
-            ),
+            IrWhileStatement ws => ws with
+            {
+                Condition = Rewrite(ws.Condition, propNames, referenced),
+                Body = RewriteList(ws.Body, propNames, referenced),
+            },
+            IrDoWhileStatement dw => dw with
+            {
+                Body = RewriteList(dw.Body, propNames, referenced),
+                Condition = Rewrite(dw.Condition, propNames, referenced),
+            },
             IrBlockStatement block => new IrBlockStatement(
                 RewriteList(block.Statements, propNames, referenced)
             ),

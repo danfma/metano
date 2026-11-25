@@ -83,8 +83,8 @@ Edit the generated `.csproj`:
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Metano" Version="3.0.*" />
-    <PackageReference Include="Metano.Build.TypeScript" Version="3.0.*" />
+    <PackageReference Include="Metano" Version="3.*" />
+    <PackageReference Include="Metano.Build.TypeScript" Version="3.*" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -142,6 +142,21 @@ incremental cache is keyed on the compiler release. A tool installed with
 `--tool-path` is not tracked; after updating one, delete
 `<MetanoOutputDir>/.metano-stamp` (`dotnet build --no-incremental` does not
 remove it).
+
+**Warnings and the build.** Metano warnings (`MS0001`, ...) follow the project's own warning
+settings: `TreatWarningsAsErrors`, `WarningsAsErrors`, `WarningsNotAsErrors` and `NoWarn`
+(and MSBuild's `MSBuild*` spellings) are passed to the compiler, so a project that treats
+warnings as errors fails on a Metano warning, and `NoWarn` silences one. A run that fails
+leaves no up-to-date stamp, so the next build fails again, and a build that skips the
+transpile as up to date prints the warnings of the run that produced the output again.
+Projects with `TreatWarningsAsErrors` that already report Metano warnings start failing when
+they upgrade: fix the warning, or list its code in `WarningsNotAsErrors` or `NoWarn`.
+
+The output directory also holds build state, the `.metano-*` files (`.metano-stamp`,
+`.metano-cache*.json`, `.metano-diagnostics`). Add `.metano-*` to your `.gitignore`, and keep
+them out of a published package (list only the files you ship in the package's `files`, or
+add them to `.npmignore`). Codes in `MSBuildWarningsAsMessages` are treated like `NoWarn`:
+suppressed, not turned into messages.
 
 Every `Metano*` property can be overridden for the TypeScript target alone
 with its `MetanoTs*` form (`MetanoTsOutputDir`, `MetanoTsImportAlias`, ...);

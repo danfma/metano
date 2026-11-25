@@ -239,7 +239,8 @@ The isolated alias of this spec moved the problem but did not remove it.
   barrel exists; never a bare `#` or `#/*`), and MUST list a `bun` condition that targets
   the `.ts` sources before `import`. Order: the source condition, `types`, `bun`,
   `import`, `default`. Existing entries stay write-if-missing; entries an earlier run
-  wrote are never deleted.
+  wrote are never deleted, except a bare `#` or `#/*` entry that still holds exactly the writer's
+  own mapping and no condition of the consumer's, which is removed (spec 001 FR-098).
 - **FR-015**: A cross-package consumer MUST resolve both the types (`nodenext`) and the
   runtime (Node) of a producer's built output. Cross-package (`[EmitPackage]`) and BCL
   imports keep their package-name specifiers and resolve through the producer's

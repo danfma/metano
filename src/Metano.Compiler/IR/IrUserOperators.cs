@@ -18,13 +18,20 @@ namespace Metano.Compiler.IR;
 /// target, which renames it whole; <c>null</c> when none.</param>
 /// <param name="ConversionName">The conversion's name candidate
 /// (<see cref="IrConversionName"/>); <c>null</c> for an operator.</param>
+/// <param name="ExtensionReceiver">The receiver type of the C# 14
+/// <c>extension</c> block that declares the operator (#761); <c>null</c> for
+/// an operator of a class or struct. When set, <see cref="DeclaringType"/> is
+/// the static class holding the block, which a target emits as a module of
+/// functions, so the operator is a function of that module, which a target
+/// may name after the receiver.</param>
 public sealed record IrUserOperator(
     IrTypeReference DeclaringType,
     string MetadataName,
     IrOperatorKind Kind,
     IrOverloadRef? Overload,
     string? Pin,
-    IrConversionName? ConversionName
+    IrConversionName? ConversionName,
+    IrTypeRef? ExtensionReceiver = null
 );
 
 /// <summary>

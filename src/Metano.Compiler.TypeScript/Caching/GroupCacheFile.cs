@@ -41,8 +41,10 @@ public sealed record GroupCacheFile(
     // `Enum` export kind: a numeric enum is a const object since spec 011
     // FR-044, and a v6 file naming it would not deserialize. v8 records
     // whether an import names a generated file (`fromLocalFile`, #573):
-    // a v7 import read without it would lose its local-graph edge.
-    public const int CurrentFormatVersion = 8;
+    // a v7 import read without it would lose its local-graph edge. v9 records
+    // whether a file holds only reached internal types (`isPackageInternal`, #770):
+    // a v8 file read without it would be re-exported from its barrel.
+    public const int CurrentFormatVersion = 9;
     public const string FileName = ".metano-cache-groups-typescript.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()

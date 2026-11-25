@@ -92,7 +92,8 @@ function deserializeTextWithInfo<T>(
 /**
  * Writes JSON text as System.Text.Json's `Serialize(value, JsonTypeInfo<T>)`
  * does (#741): the tree `serialize` builds, written by `writeJsonText`
- * (STJ's escaping and number text, not `JSON.stringify`'s).
+ * (STJ's escaping and number text, not `JSON.stringify`'s), laid out as the spec's
+ * `writeOptions` say (`WriteIndented` and friends, #752).
  */
 function serializeTextWithInfo<T>(
   value: T | null,
@@ -101,7 +102,7 @@ function serializeTextWithInfo<T>(
 ): string {
   throwIfNull(spec, "jsonTypeInfo");
 
-  return writeJsonText(serializeWithInfo(value, spec, converters));
+  return writeJsonText(serializeWithInfo(value, spec, converters), spec.writeOptions);
 }
 
 /**

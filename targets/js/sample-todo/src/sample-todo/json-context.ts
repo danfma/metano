@@ -1,6 +1,10 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { ClassType } from "metano-runtime";
-import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
+import {
+  SerializerContext,
+  type JsonWriteOptions,
+  type TypeSpec,
+} from "metano-runtime/system/json";
 import { Priority } from "./priority.js";
 import { TodoItem } from "./todo-item.js";
 
@@ -28,6 +32,10 @@ export class JsonContext extends SerializerContext {
 
   static get default(): JsonContext {
     return JsonContext._default;
+  }
+
+  protected override get writeOptions(): JsonWriteOptions {
+    return { writeIndented: true };
   }
 
   get todoItem(): TypeSpec<TodoItem> {

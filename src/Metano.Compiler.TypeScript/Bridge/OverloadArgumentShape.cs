@@ -66,6 +66,9 @@ internal sealed class OverloadArgumentShape
     /// <summary>Whether a call may omit some argument.</summary>
     public bool HasOptionalArguments => RequiredCount < FixedCount;
 
+    /// <summary>The most arguments the overload accepts.</summary>
+    private int MaximumCount => Rest is null ? FixedCount : int.MaxValue;
+
     /// <summary>
     /// The overload's arguments as its selector form passes them, after the
     /// selector symbol at <c>args[0]</c>.
@@ -84,7 +87,14 @@ internal sealed class OverloadArgumentShape
     {
         var fixedChecks = _parameters
             .Take(_declaredFixedCount)
-            .Select((parameter, index) => FixedArgumentCheck(parameter, ArgumentFor(index), scope));
+            .Select(
+                (parameter, index) =>
+                    FixedArgumentCheck(
+                        parameter,
+                        ArgumentFor(index),
+                        ScopeForArgument(index, parameter.Type, scope)
+                    )
+            );
 
         IReadOnlyList<TsExpression?> clauses =
         [
@@ -95,6 +105,51 @@ internal sealed class OverloadArgumentShape
 
         return IrTypeCheckBuilder.AllOf(clauses) ?? new TsLiteral("true");
     }
+
+    /// <summary>
+    /// The scope that checks the argument at <paramref name="index"/>: a
+    /// delegate takes the length range that tells it from the delegates the
+    /// overloads whose argument counts overlap this one's take there.
+    /// </summary>
+    private TypeCheckScope ScopeForArgument(int index, IrTypeRef type, TypeCheckScope scope)
+    {
+        if (
+            DelegateArityRange.ArityOf(type) is not { } arity
+            || scope.DispatchedParameterLists is not { } peers
+        )
+            return scope;
+
+        var arities = peers
+            .Select(parameters => new OverloadArgumentShape(parameters))
+            .Where(OverlapsCounts)
+            .Select(peer => peer.ArgumentTypeAt(index))
+            .OfType<IrTypeRef>()
+            .Select(DelegateArityRange.ArityOf)
+            .OfType<int>();
+
+        return scope with
+        {
+            DelegateArity = DelegateArityRange.Of(arity, arities),
+        };
+    }
+
+    /// <summary>
+    /// The type an argument at <paramref name="index"/> binds to: the declared
+    /// parameter's type, or the element type of the <c>params</c> parameter for
+    /// an index at or past it (a <c>params</c> delegate array takes delegates
+    /// there, so its arity counts against the peers').
+    /// </summary>
+    private IrTypeRef? ArgumentTypeAt(int index) =>
+        Rest is not null && index >= FixedCount
+            ? Rest.ParamsElementType
+            : _parameters.ElementAtOrDefault(index)?.Type;
+
+    /// <summary>
+    /// Whether some argument count both this overload and
+    /// <paramref name="other"/> accept.
+    /// </summary>
+    public bool OverlapsCounts(OverloadArgumentShape other) =>
+        Math.Max(RequiredCount, other.RequiredCount) <= Math.Min(MaximumCount, other.MaximumCount);
 
     /// <summary>
     /// The argument bound to the parameter at <paramref name="index"/>:
@@ -137,7 +192,9 @@ internal sealed class OverloadArgumentShape
 
         var element = new TsIdentifier("value");
 
-        if (IrTypeCheckBuilder.Generate(elementType, element, scope) is not { } check)
+        var elementScope = ScopeForArgument(FixedCount, elementType, scope);
+
+        if (IrTypeCheckBuilder.Generate(elementType, element, elementScope) is not { } check)
             return null;
 
         var elementCheck = new TsArrowFunction(

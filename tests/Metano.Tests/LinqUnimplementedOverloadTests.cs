@@ -304,26 +304,20 @@ public class LinqUnimplementedOverloadTests
     }
 
     /// <summary>
-    /// The runtime <c>Lookup</c> has no bracket access: reading <c>lookup[key]</c>
-    /// reports instead of reading a property of the object.
+    /// The runtime <c>Lookup</c> has no bracket access: <c>lookup[key]</c> lowers to its
+    /// <c>get</c> (an empty sequence for a missing key, #747).
     /// </summary>
     [Test]
-    public async Task LookupIndexer_ReportsInsteadOfAPropertyRead()
+    public async Task LookupIndexer_LowersToGet()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             Body("xs.ToLookup(x => x % 2)[1]")
         );
 
-        var report = UnsupportedFeatures(diagnostics).Single();
+        var emitted = "linq(xs, toLookup((x: number) => x % 2)).get(1)";
 
-        await Assert
-            .That(report.Message)
-            .IsEqualTo(
-                "The indexer of 'ILookup<TKey, TElement>' is not supported; the call throws at run time."
-            );
-
-        await Assert.That(LocatedSource.TextOf(report)).IsEqualTo("xs.ToLookup(x => x % 2)[1]");
-        await Assert.That(files["calls.ts"]).Contains(Placeholder("UnsupportedLookupIndexer"));
+        await Assert.That(UnsupportedFeatures(diagnostics)).IsEmpty();
+        await Assert.That(files["calls.ts"]).Contains(emitted);
     }
 
     [Test]

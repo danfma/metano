@@ -99,11 +99,18 @@ public sealed record IrIdentifier(string Name) : IrExpression;
 /// how many leading segments of the dotted <see cref="Name"/> lead to a <c>private</c>
 /// nested declaration (<c>0</c> when none is private).
 /// </para>
+/// <para>
+/// <see cref="Namespace"/> is the referenced type's C# namespace, as
+/// <see cref="IrNamedTypeRef.Namespace"/> carries it, so a backend can tell two
+/// same-named types apart (a <c>using</c> alias names one of them, #754). Null for
+/// a type of the global namespace and for synthesized references.
+/// </para>
 /// </summary>
 public sealed record IrTypeReference(
     string Name,
     IrTypeOrigin? Origin = null,
-    int PrivateNestedSegments = 0
+    int PrivateNestedSegments = 0,
+    string? Namespace = null
 ) : IrExpression;
 
 /// <summary>
@@ -723,6 +730,37 @@ public sealed record IrUnaryExpression(
     /// other operator.
     /// </summary>
     public IrTypeRef? EnumResultType { get; init; }
+
+    /// <summary>
+    /// For a <see cref="IrUnaryOp.NonNullAssertion"/> the source did not write:
+    /// why C# flow analysis proves the read non-null (#775); <c>null</c> for an
+    /// assertion the source wrote and every other operator.
+    /// </summary>
+    public IrFlowNonNullProof? FlowProof { get; init; }
+}
+
+/// <summary>
+/// Why C# flow analysis proves a nullable-declared read non-null where the IR
+/// asserts it (#775), so a target can tell which assertions its own checker
+/// needs and which are safe at run time.
+/// </summary>
+public enum IrFlowNonNullProof
+{
+    /// <summary>A local or parameter after an earlier <c>x!</c> of it.</summary>
+    ForgivenLocalRead,
+
+    /// <summary>
+    /// A local or parameter after a call whose nullable attributes prove it
+    /// (<c>ThrowIfNull(x)</c>, <c>string.IsNullOrEmpty(s)</c> false).
+    /// </summary>
+    AttributedLocalRead,
+
+    /// <summary>
+    /// A field or property: C# keeps its state across calls that may change
+    /// it, so an assertion that checks at run time may throw where C# lets the
+    /// <c>null</c> through.
+    /// </summary>
+    MemberRead,
 }
 
 /// <summary>

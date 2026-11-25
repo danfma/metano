@@ -57,7 +57,7 @@ internal static class IrTypeCheckBuilder
                         ? new TsTypeReference(exported.Name, origin)
                         : new TsIdentifier(exported.Name)
                 ),
-            IrFunctionTypeRef func => FunctionCheck(func, value),
+            IrFunctionTypeRef => FunctionCheck(value, scope.DelegateArity),
             IrCollectionTypeRef collection => IrToTsRuntimeTestBridge.DispatchCollectionTest(
                 value,
                 collection
@@ -192,23 +192,37 @@ internal static class IrTypeCheckBuilder
             );
 
     /// <summary>
-    /// A delegate parameter: any function of the delegate's arity, which tells
-    /// delegate overloads of different arities apart.
+    /// A delegate parameter: any function, or, when the dispatcher tells
+    /// delegates of different arities apart at this position, a function whose
+    /// <c>length</c> falls in <paramref name="arity"/>'s range
+    /// (<see cref="DelegateArityRange"/>). <c>Function.length</c> leaves out
+    /// ignored, defaulted and rest parameters, so it is never an exact test,
+    /// and delegates of one arity share the same test (#778,
+    /// <see cref="ShadowedDispatchOverloads"/>).
     /// </summary>
-    private static TsExpression FunctionCheck(IrFunctionTypeRef func, TsExpression value)
+    private static TsExpression FunctionCheck(TsExpression value, DelegateArityRange? arity)
     {
-        var arityCheck = new TsBinaryExpression(
-            new TsPropertyAccess(value, "length"),
-            "===",
-            new TsLiteral(func.Parameters.Count.ToString())
-        );
+        TsExpression check = IrToTsRuntimeTestBridge.TypeofTest(value, "function");
 
-        return new TsBinaryExpression(
-            IrToTsRuntimeTestBridge.TypeofTest(value, "function"),
-            "&&",
-            arityCheck
-        );
+        if (arity?.AtLeast is { } atLeast)
+            check = new TsBinaryExpression(check, "&&", LengthCheck(value, ">=", atLeast));
+
+        if (arity?.Below is { } below)
+            check = new TsBinaryExpression(check, "&&", LengthCheck(value, "<", below));
+
+        return check;
     }
+
+    private static TsBinaryExpression LengthCheck(
+        TsExpression value,
+        string comparison,
+        int count
+    ) =>
+        new(
+            new TsPropertyAccess(value, "length"),
+            comparison,
+            new TsLiteral(count.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        );
 
     private static TsExpression TypeofObject(TsExpression value) =>
         IrToTsRuntimeTestBridge.TypeofTest(value, "object");

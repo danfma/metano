@@ -11,11 +11,11 @@ export class CounterApp extends StatefulWidget<Counter> {
     super();
   }
 
-  initial(): Counter {
+  override initial(): Counter {
     return Counter.zero;
   }
 
-  protected build(ctx: BuildContext<Counter>): Widget {
+  protected override build(ctx: BuildContext<Counter>): Widget {
     return Column({
       gap: 12,
       children: [

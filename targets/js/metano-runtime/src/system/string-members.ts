@@ -8,15 +8,17 @@
  * JavaScript clamps or swaps. The compiler maps each member here declaratively
  * (`Metano/Runtime/Strings.cs`); every helper reads its arguments once.
  *
- * Comparisons are ordinal. The culture-sensitive `StringComparison` members behave as
- * their ordinal counterparts (JavaScript has no culture-aware comparison), and a
- * case-insensitive comparison folds each UTF-16 code unit by its invariant upper-case
- * form, as `OrdinalIgnoreCase` does.
+ * Searches are ordinal. The culture-sensitive `StringComparison` members behave as
+ * their ordinal counterparts (JavaScript has no culture-aware substring search), and a
+ * case-insensitive search folds each code point by its ordinal uppercase, as
+ * `OrdinalIgnoreCase` does (`ordinalUppercaseOf`, shared with `StringComparer`).
+ * `Equals` and `Compare` with a comparison live in `string-comparison.ts`.
  */
 
 import { ArgumentException } from "./exceptions/argument-exception.ts";
 import { ArgumentNullException } from "./exceptions/argument-null-exception.ts";
 import { ArgumentOutOfRangeException } from "./exceptions/argument-out-of-range-exception.ts";
+import { ordinalUppercaseOf } from "./json/ordinal-ignore-case.ts";
 import { isDotNetWhiteSpace } from "./strings.ts";
 
 /**
@@ -70,18 +72,17 @@ function ignoresCase(comparison: StringComparison | undefined): boolean {
 }
 
 /**
- * `value` with each UTF-16 code unit replaced by its invariant upper-case form when that
- * form is a single unit, so the result has the length of `value` and an index into one
- * is an index into the other.
+ * `value` with each code point replaced by its ordinal uppercase when that has the same
+ * UTF-16 length, so the result has the length of `value` and an index into one is an
+ * index into the other.
  */
 function foldCase(value: string): string {
   let folded = "";
 
-  for (let index = 0; index < value.length; index++) {
-    const unit = value[index] as string;
-    const upper = unit.toUpperCase();
+  for (const character of value) {
+    const upper = ordinalUppercaseOf(character);
 
-    folded += upper.length === 1 ? upper : unit;
+    folded += upper.length === character.length ? upper : character;
   }
 
   return folded;

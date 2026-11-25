@@ -166,10 +166,11 @@ public class CheckedContextTests
 
         var messages = UnsupportedFeatures(diagnostics).Select(d => d.Message).ToList();
 
+        // The used declaration reports, and so does its reference (FR-099).
         await Assert.That(messages).Count().IsEqualTo(2);
 
         await Assert
-            .That(messages.Count(message => message.Contains("LocalFunctionStatement")))
+            .That(messages.Count(message => message.Contains("local function 'G'")))
             .IsEqualTo(1);
 
         await Assert

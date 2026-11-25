@@ -1497,7 +1497,7 @@ Product requirements added after the migration (normative; each one is traced by
      compound assignments). A `switch` statement's sections are not statement lists of their
      own: every `case` clause of a JS `switch` shares one scope, so the temporaries of a
      section go to the head of the list that encloses the `switch` statement, and sections
-     are not wrapped in blocks. (A user local declared in one section and assigned in a later one is not yet hoisted, so it hits the `let` temporal dead zone when only the later section runs; tracked in #755.)
+     are not wrapped in blocks. A user local declared in one section and used in another is declared ahead of the switch statement (an uninitialized typed `let`, or the `const` with its initializer), in a block that encloses the declaration and the `switch`, and its declaration in the section becomes an assignment, so a later section that runs alone never meets it in the temporal dead zone (#755). This is the one rule for user locals shared by sections, for a `switch` on constants and a `switch (true)` alike.
      Each arm designator the arm reads becomes its own typed `let` named after it with a `$`
      prefix (`Circle c` → `let $c: Circle;`), assigned by the arm's test right after the check
      that narrows the subject (`$s instanceof Circle && ($c = $s, guard)`), and every read or
@@ -1549,6 +1549,223 @@ Product requirements added after the migration (normative; each one is traced by
   `static override create` only when the base is not generic and every base key appears in the
   derived arguments with the same type and requiredness. A type-level attribute on a type with
   no constructor (a static class) reports that there is no constructor to lower.
+
+- **FR-097** (C# 14 extension operators, #761, decisions W9-3 and W9-8, extends FR-077 / FR-078
+  to the extension-member model of #156): An operator declared in a C# 14 `extension` block
+  (`static class SigOps { extension(Sig) { public static Sig operator +(Sig a, Sig b) … } }`)
+  MUST run at every application C# binds to it, never as the native JS operator. The TypeScript
+  target emits it as an exported function of the extension class's module (the file of
+  `SigOps`, beside its extension methods and properties), named `__` + FR-078's operator name +
+  `$` + the block receiver's emitted type name without type arguments (`__add$Sig`,
+  `__negate$Sig`, `__checkedMultiply$Sig`; `extension<T>(Box<T>)` → `__add$Box<T>(a: Box<T>, b:
+  Box<T>): Box<T>`, a primitive receiver its TypeScript keyword, `__add$number`). A `[Name]` on
+  the operator replaces the operator name (`[Name("plus")]` → `__plus$Sig`). The function takes
+  the operator's parameters and the block's and the operator's type parameters. Each application
+  is FR-077's `IrUserOperatorApplication`, whose `BoundOperator` names the extension class as
+  its declaring type and carries the block's receiver type (`ExtensionReceiver`), so binary,
+  unary, relational, equality (lifted included), `++` / `--`, compound assignment and `checked`
+  applications keep FR-077's evaluation rules and call the module function (`__add$Sig(a, b)`,
+  `c = __increment$Sig(c)`). The consumer imports it from the class's module, or from its package
+  for a referenced one. Each function name is registered in the project-wide extension-helper
+  registry, so two classes exporting the same name (the same operator for the same receiver)
+  report `MS0021` (error) at the declaration, and no barrel exports a name twice. Not lowered,
+  reporting `MS0001` (warning) at each application with the throwing placeholder, and at the
+  declaration where one is emitted: an instance (compound-assignment or increment) extension
+  operator; a `true` / `false` extension operator; two or more extension operators of one class
+  with the same metadata name and the same receiver type (same or another block), unless each one
+  carries its own `[Name]`; an `[Ignore]`d extension operator (no function, `MS0001` only at the
+  applications); and an extension operator whose class is not emitted (an `[Ignore]`d class, or a
+  class of a library that is not transpiled). Dart output is unchanged: Dart keeps user operators
+  as the source wrote them.
+- **FR-098** (workspace roots and one package version, #764, #765, decisions W9-6, W9-7):
+  *Workspace roots.* Package-root inference (baseline FR-030) MUST treat a `package.json` that
+  declares `workspaces`, or that sits beside a `pnpm-workspace.yaml`, as a workspace boundary and
+  never adopt it: the walk stops below it, and the documented fallback (the parent of the output
+  directory) applies. A fallback that is itself a workspace root MUST be refused with `MS0044`
+  (the message names the workspace root), so a workspace root's `package.json` is never written
+  and `MS0007` is not raised against it, unless its `name` equals the `[EmitPackage]` name (a
+  single-repo library that declares `workspaces` for its examples), in which case it is adopted. An explicit package root still wins as given.
+  *One version.* The generated `package.json` MUST always carry `version`, from the same source as
+  the range a cross-package consumer writes for the package: `[EmitPackage(Version)]` when set
+  (an exact version, or the base version of a `^`, `~`, `>=` or `=` range; `<`, `>`, compound
+  ranges and protocols such as `workspace:*` name none and fall back, with a warning unless it is a
+  protocol), else the assembly's informational version without build metadata, else
+  `Major.Minor.Build`. The range keeps its style (the explicit value verbatim; `^` plus the
+  version when derived; `workspace:*` for an unversioned assembly), so the package's `version`
+  satisfies every range written for it. Metano owns the field and replaces a hand-written value
+  (reported as an informational message); MSBuild `Version` is the intended source; no
+  `workspace:` protocol is introduced. Without an import alias, the bare `#` and `#/*`
+  `imports` entries an earlier version seeded are removed while they still hold exactly the
+  writer's own mapping and no condition of the consumer's; a retargeted, extended or
+  host-authored entry stays (this amends spec 004 FR-014). Traced by
+  `PackageWorkspaceTests` and `EmitPackageTests`.
+- **FR-102** (internal types reached from emitted code, #770, decision W9-9, amends the
+  `[assembly: TranspileAssembly]` selection rule): under `[assembly: TranspileAssembly]`, a
+  non-public type of the assembly that emitted code reaches MUST be transpiled, so the output
+  never names a symbol it does not declare. A type is reached when the signature or body of a
+  transpiled type references it (base list, members, initializers, parameter defaults, bodies,
+  extension-method calls), directly or through another reached type; a reached nested type
+  brings its outermost container, which carries it. A reached type is emitted as its own
+  module and imported where used, but it stays off the package's public surface: no namespace
+  barrel re-exports it, so `package.json#exports` (built from the barrels) does not expose it,
+  and a referencing package never imports it. `[Ignore]` keeps winning (a reference stays
+  `MS0013`), and `[External]` / `[JsCallable]` types stay ambient. A reference from emitted code
+  to a type of the assembly that is still not emitted (a `file`-local type) MUST report
+  `MS0002` (warning) at the reference site instead of producing a silent `ReferenceError`. So MUST a reference from a referencing package to a non-public type of a
+  Metano package (reached through `[InternalsVisibleTo]`), which it cannot import. The
+  explicit `[Transpile]` mode is unchanged: an internal type with `[Transpile]` keeps its barrel
+  entry, and only `[TranspileAssembly]` assemblies reach types automatically.
+- **FR-106** (Metano warnings honour the project's warning settings, #785, **behaviour change**):
+  The build target MUST pass the project's `TreatWarningsAsErrors`, `WarningsAsErrors`,
+  `WarningsNotAsErrors` and `NoWarn` (and MSBuild's `MSBuildTreatWarningsAsErrors`,
+  `MSBuildWarningsAsErrors`, `MSBuildWarningsNotAsErrors`, `MSBuildWarningsAsMessages`) to the
+  compiler CLI as `--warn-as-error`, `--warnings-as-errors`, `--warnings-not-as-errors` and
+  `--no-warn` (comma-separated lists; entries other than a Metano code, `MS` and four digits,
+  are ignored). The CLI applies them to every Metano diagnostic of the run: a warning in
+  `NoWarn` is dropped; otherwise a warning becomes an error when it is not in
+  `WarningsNotAsErrors` and either `TreatWarningsAsErrors` is set or it is in
+  `WarningsAsErrors` (`NoWarn` wins over escalation, `WarningsNotAsErrors` over both
+  escalating settings). A run that reports an error, escalated warnings included, MUST write
+  neither the `.metano-stamp` nor the incremental cache, and MUST remove an existing stamp, so
+  the next build runs the transpile and fails again. The incremental cache (format 6) MUST
+  store the non-error diagnostics of the target and emit stage, and a run served from it MUST
+  report them again, together with the frontend's, through the same policy; a group of the
+  per-group cache that reported a diagnostic MUST NOT be reused, so its diagnostic is
+  reported again. The CLI keeps the warnings of a successful run in
+  `<output>/.metano-diagnostics` (one canonical line each) and the build target prints it
+  when it skips the transpile as up to date, so a warning is reported by every build. A
+  project that sets `TreatWarningsAsErrors` and already reports Metano warnings starts
+  failing; the warning is fixed, or its code is listed in `WarningsNotAsErrors` or `NoWarn`.
+  Changing a warning setting changes the CLI arguments, which reruns the transpile.
+  Codes in `MSBuildWarningsAsMessages` are suppressed (as `NoWarn`), not demoted to messages.
+  Only Metano codes are passed, so editing a compiler-only `NoWarn` does not rerun the
+  transpile. Warnings of the package.json stage are appended to `.metano-diagnostics` and a
+  failed load removes the stamp. `.metano-*` files are build state: they are not committed and
+  not published.
+
+- **FR-107** (TypeScript 7 and the Temporal polyfill types, #786): `metano-runtime`'s
+  declarations of the Temporal-typed API reference `@js-temporal/polyfill`, and so do the
+  generated files that use a mapped BCL date/time type. The polyfill 0.5.1 declarations clash
+  with the built-in `Temporal` and `Intl` types of TypeScript 7 under `lib: esnext`
+  (TS2430), which `skipLibCheck: true` or a `lib` without `esnext.temporal` (for example
+  `es2024`) avoids. This is a documented limitation of the pair of versions, not of the
+  runtime; removing it needs the polyfill, or a design that changes the Temporal-typed
+  public API (see the issue).
+- **FR-099** (placeholder severity, wave 9 decisions W9-13 / W9-13a): An unsupported construct
+  whose emission replaces executable code with a placeholder — a `/* TODO … */` marker, a dropped
+  statement or expression, a read that yields nothing instead of the value — MUST report `MS0001`
+  with the severity of the target: an **error** on TypeScript (the output is known to be wrong),
+  a **warning** on the Dart prototype, which does not render every body yet (revisit when it
+  leaves prototype status). `MS0001` stays a **warning** on every target where the emitted code
+  still preserves the .NET behaviour or fails loudly at run time (the expression placeholder that
+  throws when reached). Each report names the C# construct (`The C# for statement is not
+  supported by the Dart target.`) and carries the C# source location: the core records each
+  statement's span on the IR (`IrStatement.Span`, not part of its equality) and a target that
+  renders the IR later reports at the statement it is rendering. The rule lives at the
+  placeholder emission points, in one place (`Extraction/DroppedCodeDiagnostics.cs`, with the
+  target's `DroppedCodePolicy`): a statement no target models (core, at the statement: `lock`,
+  `goto` / `goto case` / `goto default`, …), a `using` declaration (`using var x = r;`, whose
+  `Dispose` would never run), a positional pattern element no member answers (core), a node the
+  TypeScript bridge has no lowering for (statement and expression fallbacks), and each Dart
+  body-printer placeholder (a statement or expression it has no Dart form for, an `[Emit]`
+  template, an `is` pattern, a list or positional pattern outside a `switch`, a `not` pattern in
+  a `switch`, an unsupported pattern); the Dart static-constructor drop and the Dart overloads
+  that keep only the primary signature stay warnings at their declaration. Not placeholders: an
+  empty statement (`;`) emits nothing, and so does a local function declaration, which no target
+  lowers yet: an unused one (or one only its own body or a `nameof` names) drops nothing that
+  runs and reports nothing, while one referenced from elsewhere (matched by symbol: a call, a
+  method group, an event handler, a call before the declaration) reports the dropped declaration
+  at its name, besides the warning each reference reports (its placeholder throws). Tests: `tests/Metano.Tests/DiagnosticsTests.cs`.
+
+- **FR-100** (labeled statements, #772, decision W9-12): A C# label on a loop (`while`, `do`,
+  `for`, `foreach`) or a `switch` statement MUST be kept, and the labeled `break label;` /
+  `continue label;` of C# 15 MUST lower to the native label and jumps of the target: in
+  TypeScript `outer: for (…) { … continue outer; }` and `dispatch: switch (…) { … break
+  dispatch; }`, on the loop itself when a lowering wraps it in a block (the indexed
+  `List<T>` / `string` `foreach`) and on the `switch` inside the block that holds a hoisted
+  subject; in Dart the same label syntax. A labeled `continue` from a nested loop counts as a
+  `continue` of the loop it names, so a lowering that moves a `for` increment into the body does
+  not skip it. A label on any other statement can only be a `goto` target; it is emitted without
+  the label, and the `goto` (also `goto case` / `goto default`), which has no JavaScript
+  equivalent, reports `MS0001` (FR-099). A label keeps its C# spelling, so two labels C# tells
+  apart stay apart (`Outer` and `outer`); a JavaScript reserved word is prefixed with `$`
+  (`$function:`), which no C# identifier holds. Tests:
+  `tests/Metano.Tests/LabeledStatementTests.cs`; conformance `LabeledJumpProbes`.
+
+- **FR-101** (null state proved by a forgiving construct, #775): Where C# flow analysis
+  (`NullableFlowState`) proves a variable, parameter, field or property declared with a nullable
+  reference type non-null by a construct a static type checker does not follow — a
+  null-forgiving `x!` earlier in the flow (`stack!.Value` then `stack.Prev`), or a call whose
+  nullable attributes prove it (`ArgumentNullException.ThrowIfNull(x)`, `string.IsNullOrEmpty`
+  false, a `[MemberNotNull]` method) — the read MUST be asserted non-null (`stack!.prev`) where
+  it is used as non-null: the receiver of a member access, an invocation or an indexer, and an
+  argument to a parameter declared non-nullable. The IR carries the assertion as the existing
+  `NonNullAssertion` unary; it has no runtime effect in TypeScript. A read whose state comes from
+  an assignment, a local's initializer or a null test of the same variable is left unasserted,
+  since checkers narrow on those; the origin is the last such event before the read in the
+  member's source. Nullable-disabled code has no flow state and is unchanged. The IR records why
+  the read is proven (`IrFlowNonNullProof`): the Dart target leaves out the assertion of a local
+  or parameter read after `x!`, which Dart promotes itself, and keeps the others; TypeScript
+  keeps every one (erased, type-only). Known Dart divergence: a field or property keeps its `!`
+  (Dart never promotes a non-final field), and since C# does not reset a field's state across a
+  call that may change it, Dart's run-time `!` throws where .NET lets such a `null` through (a
+  `null` stored in a slot C# proves non-null). Tests:
+  `tests/Metano.Tests/ForgivenNullStateTests.cs` (output type-checked with `tsgo --strict`).
+- **FR-103** (deconstruction, #779, Group U): Every deconstruction C# accepts in statement
+  position MUST lower without a closure and keep .NET's evaluation order: the receivers and
+  indices of the existing variables written are evaluated first, left to right, then the right
+  side in full — every element of a tuple literal first, then every `Deconstruct` call, depth
+  first — then the writes, left to right. Each written receiver and index, a local included
+  (the right side or a closure may reassign it), is read once into a `const` before the right
+  side; each part converts to its variable as an implicit tuple-element conversion does
+  (`(long l, decimal d) = IntPair()`). This covers
+  `var (a, b) = e`, `(var a, var b) = e`, `(T a, U b) = e`, a mix of declarations and existing
+  variables (`(x, var y) = e`), nesting (`(a, (b, c))`), discards, `foreach (var (k, v) in e)`,
+  and the expression body of a `void` member or lambda (`void Swap() => (a, b) = (b, a);`).
+  1. *Parts.* A value that lowers to a JS array (a `ValueTuple`, an array, a `KeyValuePair`, a
+     `Tuple`, a `[JsTuple]` record) is read by position (`const [a, b] = e`); a record's
+     synthesized `Deconstruct` reads its positional members (`const { x, y } = p`); a user
+     instance `Deconstruct` of a transpiled type is called and its multi-value result read by
+     position (`const [a, b] = p.deconstruct()`, the overload's own name when `Deconstruct` is
+     overloaded). A nested part taken apart by a `Deconstruct` call is bound to a temporary and
+     deconstructed after the enclosing binding.
+  2. *Tuple literals.* A tuple literal on the right side is taken apart element by element
+     (`var (n, s) = (1, "x")` → `const n = 1; const s = "x";`), so no array is allocated only
+     to be read back; a discarded element is still evaluated for its effects.
+  3. *Existing variables.* A local, field, property or array element is written after
+     everything else is evaluated, from a `$partN` temporary (a constant is written as is):
+     `(x, y) = (y, x)` → `const $part0 = y; const $part1 = x; x = $part0; y = $part1;`.
+  4. *Not supported* (MS0001, the unsupported placeholder): an extension or BCL
+     `Deconstruct` (`DateOnly`), a write through a collection indexer or an extension member,
+     and a deconstruction whose value is used (`var t = (x, y) = …`, a `for` incrementor).
+  5. *Dart.* A deconstruction of a tuple (a Dart record) prints as a record pattern
+     (`var (a, (b, _)) = e;`), a tuple literal as one declaration per element; every other
+     shape keeps the unsupported placeholder.
+
+- **FR-104** (indistinguishable dispatcher branches, #778, Group U): A TypeScript overload
+  dispatcher (a constructor, a class method group, or the function group of an
+  `[ExportedAsModule]` / `[NoContainer]` class or an extension container) MUST NOT keep a branch
+  whose runtime test is the same JavaScript as the test of a branch tried before it
+  (`Func<Action, T>` and `Action<Action>` are both a one-parameter function; `JsArray<T>` and
+  `T[]`, `int[]` and `double[]` are both an array): the branch and its overload signature are
+  dropped, the overload's fast path (a constructor's factory) stays, and `MS0063` is reported at
+  the overload, naming the overload that takes its calls and the function hand-written TypeScript
+  must call (`Reactivity.rootActionOfAction`). C# call sites already bind to the fast path
+  (spec 013 FR-018) and are unchanged. `Function.length` is never an exact test (it leaves out
+  ignored, defaulted and rest parameters: `Probes.run(() => 42)` must not throw "No matching
+  overload"): at a parameter position where the overloads' delegates have one arity, the test is
+  `typeof === "function"` alone, so they share it and the dispatcher keeps the overload whose
+  delegate returns a value (`Func<Action, T>` over `Action<Action>`). Where the arities of the
+  overloads whose argument counts overlap differ, each takes a non-overlapping `length` range
+  (arities {0, 2, 3} test `< 2`, `>= 2 && < 3`, `>= 3`), so the dispatch order does not matter
+  and the smallest, with no lower bound, takes a callback that ignores its arguments; overloads
+  of disjoint argument counts test no arity. Limits of `Function.length`: a defaulted or rest
+  parameter shortens it, so `(a, b = 0) => {}` reaches the one-parameter overload; a same-arity
+  value/`void` pair exposes only the value-returning signature to TypeScript, and `MS0063` names
+  the other's fast path (a constructor's factory). A pair that differs only by a branded 64-bit
+  type keeps its existing once-per-group `MS0063`.
+  Dispatchers that also dispatch to a synthesized member and the static groups of a branded
+  companion object apply the delegate test but drop nothing.
 
 ### Key Entities
 

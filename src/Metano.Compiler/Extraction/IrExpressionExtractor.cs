@@ -233,7 +233,28 @@ public sealed partial class IrExpressionExtractor
         LocalNames.NameOf(symbol, identifier);
 
     public IrExpression Extract(ExpressionSyntax expression) =>
-        WithImplicitTupleConversion(expression, ExtractWithoutTupleConversion(expression));
+        WithForgivenNullStateAssertion(
+            expression,
+            WithImplicitTupleConversion(expression, ExtractWithoutTupleConversion(expression))
+        );
+
+    /// <summary>
+    /// <paramref name="value"/> asserted non-null where C# flow analysis proves
+    /// the read non-null by a construct a static checker does not follow
+    /// (<c>stack!.Value</c> earlier in the flow, #775), and the read is used as
+    /// non-null; see <see cref="ForgivenNullStateReads"/>.
+    /// </summary>
+    private IrExpression WithForgivenNullStateAssertion(
+        ExpressionSyntax expression,
+        IrExpression value
+    ) =>
+        value is not IrUnaryExpression { Operator: IrUnaryOp.NonNullAssertion }
+        && ForgivenNullStateReads.ProofOf(_semantic, expression) is { } proof
+            ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, value, IsPrefix: false)
+            {
+                FlowProof = proof,
+            }
+            : value;
 
     /// <summary>
     /// <paramref name="expression"/> with its scalar conversions, but not
@@ -311,6 +332,9 @@ public sealed partial class IrExpressionExtractor
                 when !assign.IsKind(SyntaxKind.SimpleAssignmentExpression) => WithEnumResultType(
                 assign,
                 ExtractAssignment(assign)
+            ),
+            AssignmentExpressionSyntax assign when IsDiscardAssignment(assign) => Extract(
+                assign.Right
             ),
             AssignmentExpressionSyntax assign => ExtractAssignment(assign),
             MemberAccessExpressionSyntax member => ExtractMemberAccess(
@@ -1365,7 +1389,7 @@ public sealed partial class IrExpressionExtractor
     ///   <item>A user-written <c>Deconstruct</c> may compute its outputs.</item>
     /// </list>
     /// Every element left unresolved (<c>null</c> entry) is reported as an
-    /// MS0001 warning, never dropped silently.
+    /// MS0001 error (the element would read nothing), never dropped silently.
     /// </summary>
     private IReadOnlyList<IrPositionalElementMember?>? ResolvePositionalElementMembers(
         RecursivePatternSyntax recursive,
@@ -1454,14 +1478,10 @@ public sealed partial class IrExpressionExtractor
         RecursivePatternSyntax recursive,
         IMethodSymbol deconstruct
     ) =>
-        ExtractionDiagnostics.Report(
-            new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Warning,
-                DiagnosticCodes.UnsupportedFeature,
-                $"Positional pattern over '{deconstruct.ContainingType.Name}.Deconstruct' is not "
-                    + "supported: some of its outputs cannot be mapped to members.",
-                recursive.GetLocation()
-            )
+        DroppedCodeDiagnostics.Report(
+            $"Positional pattern over '{deconstruct.ContainingType.Name}.Deconstruct' is not "
+                + "supported: some of its outputs cannot be mapped to members.",
+            recursive.GetLocation()
         );
 
     private IrPositionalElementMember? ToPositionalElementMember(ITypeSymbol record, string name) =>
@@ -1868,7 +1888,8 @@ public sealed partial class IrExpressionExtractor
         new(
             QualifiedNestedName(type) ?? EmittedTopLevelName(type, type.Name),
             CrossAssemblyOriginOf(type),
-            IrTypeRefMapper.PrivateNestedSegmentCount(type)
+            IrTypeRefMapper.PrivateNestedSegmentCount(type),
+            IrTypeRefMapper.NamespaceOf(type)
         );
 
     /// <summary>
@@ -1884,7 +1905,8 @@ public sealed partial class IrExpressionExtractor
         return new(
             QualifiedNestedName(type) ?? EmittedTopLevelName(type, spelling),
             CrossAssemblyOriginOf(type),
-            IrTypeRefMapper.PrivateNestedSegmentCount(type)
+            IrTypeRefMapper.PrivateNestedSegmentCount(type),
+            IrTypeRefMapper.NamespaceOf(type)
         );
     }
 
@@ -2764,6 +2786,8 @@ public sealed partial class IrExpressionExtractor
         // BclMapper behavior. Similarly `decimal.Parse(s)` rewrites to
         // `new Decimal(s)`.
         var symbol = _semantic.GetSymbolInfo(member.Node).Symbol;
+        ReportUnmodeledBclMember(member.Node, symbol as IPropertySymbol);
+
         if (symbol is IFieldSymbol { IsStatic: true } field)
         {
             var displayName = field.ContainingType?.ToDisplayString();
@@ -3289,6 +3313,7 @@ public sealed partial class IrExpressionExtractor
 
         var symbol = _semantic.GetSymbolInfo(inv).Symbol as IMethodSymbol;
         ReportTupleValueLookup(inv, symbol);
+        ReportUnmodeledBclMember(inv, symbol);
 
         if (TryExtractGetType(inv, symbol) is { } getType)
             return getType;
@@ -4163,7 +4188,7 @@ public sealed partial class IrExpressionExtractor
         if (TryExtractIndexOrRangeAccess(node, receiverSyntax, arguments) is { } indexOrRangeAccess)
             return indexOrRangeAccess;
 
-        if (RewriteLookupIndexer(node, receiverSyntax) is { } lookupIndexer)
+        if (RewriteLookupIndexer(receiverSyntax, arguments) is { } lookupIndexer)
             return lookupIndexer;
 
         var target = Extract(receiverSyntax);
@@ -4263,7 +4288,7 @@ public sealed partial class IrExpressionExtractor
     {
         var receiverType = ResolveLambdaReceiverType(lambda);
         var parameter = BuildLambdaParameter(lambda.Parameter);
-        var body = ExtractLambdaBody(lambda.Body);
+        var body = ExtractLambdaBody(lambda);
         var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
             WithTargetParams(lambda, [parameter]),
@@ -4284,7 +4309,7 @@ public sealed partial class IrExpressionExtractor
     {
         var receiverType = ResolveLambdaReceiverType(lambda);
         var parameters = lambda.ParameterList.Parameters.Select(BuildLambdaParameter).ToList();
-        var body = ExtractLambdaBody(lambda.Body);
+        var body = ExtractLambdaBody(lambda);
         var lambdaSymbol = _semantic.GetSymbolInfo(lambda).Symbol as IMethodSymbol;
         return new IrLambdaExpression(
             WithTargetParams(lambda, parameters),
@@ -4358,8 +4383,8 @@ public sealed partial class IrExpressionExtractor
     /// (<c>x => { ... return x + 1; }</c>). We normalize to a list of
     /// <see cref="IrStatement"/> so the IR carries a single uniform shape.
     /// </summary>
-    private IReadOnlyList<IrStatement> ExtractLambdaBody(CSharpSyntaxNode body) =>
-        body switch
+    private IReadOnlyList<IrStatement> ExtractLambdaBody(LambdaExpressionSyntax lambda) =>
+        lambda.Body switch
         {
             // The lambda's block inherits the member's local-binding renames
             // (#398): the member-level walk already covers the lambda's own
@@ -4372,11 +4397,41 @@ public sealed partial class IrExpressionExtractor
             )
                 .ExtractBody(block, arrow: null, isVoid: false)
                 .Statements,
+            // A `void` lambda discards its body's value, so a deconstruction
+            // body lowers like the statement it stands for.
+            ExpressionSyntax expr
+                when VoidReturnTypeOf(lambda) is not null
+                    && TryLowerDeconstruction(expr) is { } deconstruction =>
+                IrStatementExtractor.PromoteEffectiveConsts(deconstruction),
             ExpressionSyntax expr => LowerExpressionVariables(
-                InlineCodeStatementOf(expr) ?? new IrReturnStatement(Extract(expr))
+                IrStatementSpans.WithSpanOf(
+                    expr,
+                    InlineCodeStatementOf(expr) ?? LambdaExpressionBodyStatement(expr)
+                )
             ),
-            _ => [new IrUnsupportedStatement(body.Kind().ToString())],
+            var body => [DroppedCodeDiagnostics.UnsupportedStatement(body)],
         };
+
+    /// <summary>
+    /// The statement an expression-bodied lambda runs: it returns the value,
+    /// except a discard assignment in a lambda that returns nothing
+    /// (<c>() =&gt; _ = writer.Value</c>), which only evaluates it (#773).
+    /// </summary>
+    private IrStatement LambdaExpressionBodyStatement(ExpressionSyntax body) =>
+        body is AssignmentExpressionSyntax assign
+        && IsDiscardAssignment(assign)
+        && _semantic.GetSymbolInfo(body.Parent!).Symbol is IMethodSymbol { ReturnsVoid: true }
+            ? new IrExpressionStatement(Extract(assign.Right))
+            : new IrReturnStatement(Extract(body));
+
+    /// <summary>
+    /// <c>_ = expr</c> where <c>_</c> is a discard, not a local named
+    /// <c>_</c>: C# evaluates <c>expr</c> and drops the value, so it lowers to
+    /// <c>expr</c> alone (#773). Its value, where used, is <c>expr</c>'s.
+    /// </summary>
+    private bool IsDiscardAssignment(AssignmentExpressionSyntax assign) =>
+        assign.IsKind(SyntaxKind.SimpleAssignmentExpression)
+        && _semantic.GetSymbolInfo(assign.Left).Symbol is IDiscardSymbol;
 
     // ── String interpolation ─────────────────────────────────────────────
 

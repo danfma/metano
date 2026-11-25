@@ -57,8 +57,6 @@ IndexProbes.outOfRange THROWS TypeError: Cannot read properties of undefined (re
 IndexProbes.outOfRangeNullable = wasnull
 IndexProbes.refArgs = 1,7
 IndexProbes.structElems THROWS Error: Unsupported expression: ArrayCreationExpression
-IndexProbes.swap THROWS Error: Unsupported expression: tuple deconstruction
-IndexProbes.tupleElems THROWS Error: Unsupported expression: DeclarationExpression
 InteropProbes.inlineCodeExpression = 42
 InteropProbes.inlineCodeHoles = 42
 InteropProbes.inlineCodeStatement = 5
@@ -100,11 +98,11 @@ StageHInterfaceTestProbes.immutableAsIListAs THROWS Error: Unsupported expressio
 StageHInterfaceTestProbes.immutableAsIListBinding THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
 StageHInterfaceTestProbes.immutableAsIListSwitch THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
 StageHRoundTwoProbes.crossTypeEmptyFactories = True,True,True
+StringComparisonProbes.cultureCompareSigns = -1,-1,-1,-1,-1|-1,-1,-1,-1,-1|-1,-1,-1,-1,-1|1,1,1,1,1|1,1,1,1,1|-1,-1,-1,-1,-1|1,1,1,1,1|1,1,1,1,1|-1,0,-1,0,-1|
+StringComparisonProbes.cultureIgnoreCaseWidthPairs = TT0|TT0|
 StringProbes.cases = ABC|abc|ABC|abc|SS|2
 StringProbes.chars THROWS TypeError: String.concat is not a function
-StringProbes.compare THROWS TypeError: String.compare is not a function
 StringProbes.emptyAndNullArgs = False
-StringProbes.equalsCalls THROWS TypeError: s.equals is not a function
 StringProbes.formatting THROWS TypeError: String.format is not a function
 StringProbes.lengthAndIndex THROWS TypeError: Cannot read properties of undefined (reading 'toString')
 StringProbes.trimSpecial = [x][1]
@@ -116,4 +114,8 @@ UnmodeledCollectionProbes.throwsSortedSet = throws
 UnmodeledCollectionProbes.throwsStack = throws
 UnmodeledCollectionProbes.throwsUserAdd = throws
 W6DelegateProbes.invokeGroupAcrossParamsShapesIsLoud = threw threw
+W9N1Probes.tupleDictionary THROWS KeyNotFoundException: The given key '1,a' was not present in the dictionary.
+W9N1Probes.tupleHashSet = 3,False,False
+W9N1Probes.tupleLinq = 3,3,False
+W9N1Probes.tupleListIndexOf = -1,False
 Wave5Fix1Probes.undescribableReifiedArgumentsThrow = NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException

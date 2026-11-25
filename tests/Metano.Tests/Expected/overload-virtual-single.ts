@@ -11,9 +11,9 @@ export abstract class StatefulWidget extends Widget {
     super();
   }
 
-  protected abstract build(context: number): Widget;
+  protected abstract override build(context: number): Widget;
 
-  build(): string {
+  override build(): string {
     return "ok";
   }
 }

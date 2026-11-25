@@ -192,6 +192,7 @@ internal sealed class IrToTsClassEmitter(
         var ctorFieldInitializers = new List<TsStatement>();
 
         IndexerDiagnostics.Report(type, ir, _context.ReportDiagnostic);
+        EventDiagnostics.Report(type, _context.ReportDiagnostic);
 
         EmitClassMembers(
             ir,
@@ -237,6 +238,7 @@ internal sealed class IrToTsClassEmitter(
             constructor = constructor with { Body = updatedBody };
         }
 
+        MarkInheritedOverrides(classMembers, dataMembersStart, claims);
         userMembers.UnionWith(classMembers.Skip(dataMembersStart));
 
         if (emitsSelectorsAndFactories)
@@ -314,6 +316,58 @@ internal sealed class IrToTsClassEmitter(
     }
 
     /// <summary>
+    /// Marks <c>override</c> on the user fields, accessors and methods from
+    /// <paramref name="start"/> whose name an emitted base already declares on
+    /// the same side (<see cref="WithInheritedOverride"/>). Runs before the
+    /// members join the user-member set, which compares references.
+    /// </summary>
+    private static void MarkInheritedOverrides(
+        List<TsClassMember> classMembers,
+        int start,
+        TsOverloadClaims claims
+    )
+    {
+        for (var i = start; i < classMembers.Count; i++)
+            classMembers[i] = WithInheritedOverride(classMembers[i], claims);
+    }
+
+    /// <summary>
+    /// <paramref name="member"/> marked <c>override</c> when an emitted base
+    /// already declares its name on the same side, so a package compiled with
+    /// <c>noImplicitOverride</c> accepts it (TS4114/TS4116) whatever its
+    /// accessibility (#759). The members of an overload group are not passed
+    /// here: the claim pass decides which of them override.
+    /// </summary>
+    private static TsClassMember WithInheritedOverride(
+        TsClassMember member,
+        TsOverloadClaims claims
+    ) =>
+        member switch
+        {
+            TsMethodMember { Override: false } method
+                when claims.InheritsMember(method.Name, method.Static) => method with
+            {
+                Override = true,
+            },
+            TsGetterMember { Override: false } getter
+                when claims.InheritsMember(getter.Name, getter.Static) => getter with
+            {
+                Override = true,
+            },
+            TsSetterMember { Override: false } setter
+                when claims.InheritsMember(setter.Name, setter.Static) => setter with
+            {
+                Override = true,
+            },
+            TsFieldMember { Override: false, Accessibility: not TsAccessibility.Private } field
+                when claims.InheritsMember(field.Name, field.Static) => field with
+            {
+                Override = true,
+            },
+            _ => member,
+        };
+
+    /// <summary>
     /// The class's claim results (spec 013 FR-004), reporting their
     /// diagnostics and the interfaces the class makes multiply constructed
     /// (<c>MS0069</c>, FR-036): the class's own emission is the one place that
@@ -375,6 +429,16 @@ internal sealed class IrToTsClassEmitter(
                     {
                         RuntimeTypes = RuntimeTypeReachabilityResult.Unchecked,
                     }
+                );
+
+                ShadowedOverloadReporter.ReportConstructors(
+                    type,
+                    constructor,
+                    ir.TypeParameters ?? [],
+                    ir.TypeArgumentSlot,
+                    selectors.Claims,
+                    lowering,
+                    _context.ReportDiagnostic
                 );
             }
 
@@ -903,10 +967,6 @@ internal sealed class IrToTsClassEmitter(
         IrToTsBridgeContext lowering
     )
     {
-        if (irMethod.Body is { } body)
-            foreach (var stmt in body)
-                ReportUnsupportedInBody(stmt, type);
-
         if (irMethod.OverloadName is not null)
         {
             var overloads = irMethod.Overloads ?? [];
@@ -934,6 +994,15 @@ internal sealed class IrToTsClassEmitter(
                 }
             );
 
+            ShadowedOverloadReporter.ReportMethods(
+                type,
+                irMethod,
+                ir.TypeParameters ?? [],
+                claims,
+                lowering,
+                _context.ReportDiagnostic
+            );
+
             var dispatcher = TryBuildOverloadDispatcherFromIr(
                 irMethod,
                 type.Name,
@@ -956,32 +1025,24 @@ internal sealed class IrToTsClassEmitter(
 
         var (parameters, returnType, typeParameters) = LowerMethodSignature(irMethod, ir, lowering);
 
-        if (
+        var method =
             !irMethod.Semantics.IsAbstract
             && IrToTsObjectArgsBridge.HasObjectArgs(irMethod.Attributes)
-        )
-        {
-            return
-            [
-                IrToTsClassBridge.BuildObjectArgsMethod(
+                ? IrToTsClassBridge.BuildObjectArgsMethod(
                     irMethod,
                     returnType,
                     typeParameters,
                     lowering
-                ),
-            ];
-        }
+                )
+                : IrToTsClassBridge.BuildMethod(
+                    irMethod,
+                    parameters,
+                    returnType,
+                    typeParameters,
+                    lowering
+                );
 
-        return
-        [
-            IrToTsClassBridge.BuildMethod(
-                irMethod,
-                parameters,
-                returnType,
-                typeParameters,
-                lowering
-            ),
-        ];
+        return [WithInheritedOverride(method, claims)];
     }
 
     /// <summary>
@@ -1657,34 +1718,6 @@ internal sealed class IrToTsClassEmitter(
         method.Body is { } body
             ? IrBodyCoverageProbe.IsFullyCovered(body)
             : method.Semantics.IsAbstract || method.SynthesizedKind is not null;
-
-    /// <summary>
-    /// Reports MS0001 (UnsupportedFeature) when the IR statement extractor
-    /// produced an <see cref="IrUnsupportedStatement"/> for a method body —
-    /// the bridge would emit a "Not implemented" stub for the same node, so
-    /// surfacing the diagnostic alongside keeps the build noisy about gaps.
-    /// The IR doesn't carry per-statement source locations, so the diagnostic
-    /// points at the containing type — granular enough for the user to find
-    /// the offending member. Nested statements are reported too, so a block
-    /// (a lowered <c>checked { }</c>, a branch, a loop body) never hides one.
-    /// </summary>
-    private void ReportUnsupportedInBody(IrStatement stmt, INamedTypeSymbol type)
-    {
-        if (stmt is IrUnsupportedStatement u)
-        {
-            _context.ReportDiagnostic(
-                new MetanoDiagnostic(
-                    MetanoDiagnosticSeverity.Warning,
-                    DiagnosticCodes.UnsupportedFeature,
-                    $"Statement '{u.Kind}' is not supported by the transpiler.",
-                    type.Locations.FirstOrDefault()
-                )
-            );
-        }
-
-        foreach (var nested in IrNodeChildren.StatementsOf(stmt))
-            ReportUnsupportedInBody(nested, type);
-    }
 
     // ─── Constructor helpers ────────────────────────────────────
 

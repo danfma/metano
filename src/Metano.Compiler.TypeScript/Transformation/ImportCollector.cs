@@ -1,5 +1,6 @@
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
 using Metano.Compiler.TypeScript.Bridge;
@@ -183,13 +184,37 @@ public sealed class ImportCollector(
         // W2`), each with its own type-only flag. The canonical name binds plainly
         // only when the text names it too (a value position keeps the source
         // spelling), which `spelledCanonically` records before the substitution.
+        //
+        // A `using` alias of a project type binds its import by the symbol it names
+        // (#754): two aliases may name two same-named types, which the canonical name
+        // cannot tell apart.
         var spelledCanonically = referencedTypes.ToHashSet(Ordinal);
         var aliasBindings = new Dictionary<string, List<(string Alias, bool IsValue)>>(Ordinal);
+        var symbolAliases = new List<SymbolAliasImport>();
+        var externalAliases = new List<ExternalAliasImport>();
 
         if (IrToTsTypeMapper.UsingAliases is { } activeScope)
         {
             foreach (var name in referencedTypes.ToList())
             {
+                if (ExternalTypeAliasedBy(activeScope, name) is { } external)
+                {
+                    var isValue = valueTypes.Remove(name);
+
+                    externalAliases.Add(new ExternalAliasImport(name, external, isValue));
+                    referencedTypes.Remove(name);
+
+                    continue;
+                }
+
+                if (ProjectTypeAliasedBy(activeScope, name) is { } target)
+                {
+                    symbolAliases.Add(new SymbolAliasImport(name, target, valueTypes.Remove(name)));
+                    referencedTypes.Remove(name);
+
+                    continue;
+                }
+
                 if (!activeScope.AliasToCanonical.TryGetValue(name, out var canonical))
                     continue;
 
@@ -258,20 +283,30 @@ public sealed class ImportCollector(
         foreach (var name in imp.Names)
             runtimeImported.Add(name);
 
-        // `Grouping<K,T>` is shipped from `metano-runtime/system/linq` (the pipe
-        // runtime) and re-exported from the root `metano-runtime` barrel.
-        // Pull it in as a type-only import when the consumer file references
+        // `Grouping<K,T>` and `Lookup<K,T>` are shipped from `metano-runtime/system/linq`
+        // (the pipe runtime) and re-exported from the root `metano-runtime` barrel.
+        // Pull each in as a type-only import when the consumer file references
         // it — from a signature's plain name or a helper-bound type — but
         // didn't go through the LINQ-pipe import path.
-        if (
-            (
-                referencedTypes.Contains("Grouping")
-                || sink.RuntimeHelperTypeReferences.Contains("Grouping")
-            ) && !runtimeImported.Contains("Grouping")
+        // A user type may be named `Lookup`, so only a helper-bound reference counts for it.
+        var needsGrouping =
+            referencedTypes.Contains("Grouping")
+            || sink.RuntimeHelperTypeReferences.Contains("Grouping");
+
+        var needsLookup = sink.RuntimeHelperTypeReferences.Contains("Lookup");
+
+        foreach (
+            var linqType in new[]
+            {
+                needsGrouping ? "Grouping" : null,
+                needsLookup ? "Lookup" : null,
+            }
         )
         {
-            imports.Add(new TsImport(["Grouping"], RuntimeModule, TypeOnly: true));
-            runtimeImported.Add("Grouping");
+            if (linqType is null || !runtimeImported.Add(linqType))
+                continue;
+
+            imports.Add(new TsImport([linqType], RuntimeModule, TypeOnly: true));
         }
 
         // The runtime type descriptor types (spec 011 FR-017) are types only:
@@ -730,6 +765,27 @@ public sealed class ImportCollector(
             AddLocalType(importPath, typeName, referencedRef.TsName, typeOnly);
         }
 
+        foreach (var externalAlias in externalAliases)
+            imports.Add(ExternalAliasImportOf(externalAlias));
+
+        foreach (var symbolAlias in symbolAliases)
+        {
+            var target = symbolAlias.Target;
+
+            if (target.Namespace == currentNs && target.FileName == currentFileName)
+                continue;
+
+            var aliasPath = _context.PathNaming.LocalModule(target.Namespace, target.FileName);
+
+            if (!localByPath.TryGetValue(aliasPath, out var aliasBucket))
+            {
+                aliasBucket = new ImportBindings();
+                localByPath[aliasPath] = aliasBucket;
+            }
+
+            aliasBucket.Add(target.TsName, symbolAlias.Alias, typeOnly: !symbolAlias.IsValue);
+        }
+
         AddModuleExportImports(
             ownersByModuleExport,
             currentNs,
@@ -1159,7 +1215,7 @@ public sealed class ImportCollector(
             ],
             TsTopLevelStatement topLevel
                 when topLevel.Inner is TsDestructuringDeclaration destructuring =>
-                destructuring.Names.OfType<string>(),
+                destructuring.BoundNames,
             _ => [],
         };
 
@@ -1443,6 +1499,8 @@ public sealed class ImportCollector(
                     CollectFromStatements(func.Body, sink);
                 });
 
+                CollectFromOverloads(func.Overloads, sink);
+
                 break;
             case TsConstObject constObj:
                 foreach (var entry in constObj.Entries)
@@ -1484,6 +1542,10 @@ public sealed class ImportCollector(
                     CollectFromParameters(Signature(cls.Constructor.Parameters), sink, () =>
                         CollectFromStatements(cls.Constructor.Body, sink)
                     );
+
+                    foreach (var overload in cls.Constructor.Overloads ?? [])
+                    foreach (var parameter in overload.Parameters)
+                        CollectFromType(parameter.Type, sink);
                 }
 
                 foreach (var member in cls.Members)
@@ -1499,18 +1561,24 @@ public sealed class ImportCollector(
                                 CollectFromStatements(m.Body, sink);
                             });
 
-                            // Collect from overload signatures too
-                            if (m.Overloads is not null)
-                                foreach (var overload in m.Overloads)
-                                {
-                                    foreach (var p in overload.Parameters)
-                                        CollectFromType(p.Type, sink);
-                                    CollectFromType(overload.ReturnType, sink);
-                                }
+                            CollectFromOverloads(m.Overloads, sink);
+
+                            if (m.ComputedKey is not null)
+                                CollectFromExpression(m.ComputedKey, sink);
+
                             break;
                         case TsGetterMember g:
                             CollectFromType(g.ReturnType, sink);
                             CollectFromStatements(g.Body, sink);
+                            break;
+                        case TsSetterMember s:
+                            // #768: setter and init accessor bodies (static or instance,
+                            // block or expression bodied) reference names like any other
+                            // member body; the value parameter is bound over the body.
+                            CollectFromParameters(Signature([s.ValueParam]), sink, () =>
+                                CollectFromStatements(s.Body, sink)
+                            );
+
                             break;
                         case TsFieldMember f:
                             CollectFromType(f.Type, sink);
@@ -1532,6 +1600,27 @@ public sealed class ImportCollector(
                 // `export default name;` / `export { name };` references a binding that
                 // already exists locally — no external import to collect.
                 break;
+        }
+    }
+
+    /// <summary>
+    /// The overload signatures of a function or method: their parameter, return and
+    /// type-parameter constraint types are references even when the implementation
+    /// signature erases them (<c>...args: unknown[]</c>).
+    /// </summary>
+    private void CollectFromOverloads(
+        IReadOnlyList<TsMethodOverload>? overloads,
+        ImportCollectionSink sink
+    )
+    {
+        foreach (var overload in overloads ?? [])
+        {
+            CollectFromTypeParameters(overload.TypeParameters, sink);
+
+            foreach (var parameter in overload.Parameters)
+                CollectFromType(parameter.Type, sink);
+
+            CollectFromType(overload.ReturnType, sink);
         }
     }
 
@@ -1670,7 +1759,7 @@ public sealed class ImportCollector(
         statement switch
         {
             TsVariableDeclaration declaration => [declaration.Name],
-            TsDestructuringDeclaration destructuring => destructuring.Names.OfType<string>(),
+            TsDestructuringDeclaration destructuring => destructuring.BoundNames,
             _ => [],
         };
 
@@ -1789,15 +1878,89 @@ public sealed class ImportCollector(
                 // template (e.g. `const [count, setCount] = createSignal(0)`),
                 // so its external imports must be collected the same way a
                 // plain variable initializer's are.
-                foreach (var element in destructuring.Names)
-                {
-                    if (element is not null)
-                        sink.ShadowingNames.Add(element);
-                }
+                foreach (var name in destructuring.BoundNames)
+                    sink.ShadowingNames.Add(name);
+
                 CollectFromExpression(destructuring.Initializer, sink);
                 break;
         }
     }
+
+    /// <summary>
+    /// The project type the <c>using</c> alias <paramref name="name"/> names, resolved
+    /// by its symbol; <c>null</c> when the name is no such alias, or names a type the
+    /// project does not emit, which keeps resolving by its canonical name.
+    /// </summary>
+    private IrTranspilableTypeRef? ProjectTypeAliasedBy(UsingAliasScope scope, string name)
+    {
+        if (scope.UsingTargetOf(name) is not { } target || !IsOwnTopLevelType(target))
+            return null;
+
+        return TranspilableTypeProjection.Of(target, _context.ResolveTsName(target));
+    }
+
+    /// <summary>
+    /// The <c>[Import]</c> declaration of the type the <c>using</c> alias
+    /// <paramref name="name"/> names: such a type lives in its external module, which
+    /// the alias imports from under its own name. <c>null</c> for any other name.
+    /// </summary>
+    private IrExternalImport? ExternalTypeAliasedBy(UsingAliasScope scope, string name) =>
+        scope.UsingTargetOf(name) is { } target && SymbolHelper.HasImport(target)
+            ? _context.ExternalImportMap.GetValueOrDefault(target.Name)
+            : null;
+
+    /// <summary>
+    /// <c>import { External as Alias } from "module"</c>, or the default import bound
+    /// to the alias; records the declared package version.
+    /// </summary>
+    private TsImport ExternalAliasImportOf(ExternalAliasImport alias)
+    {
+        var external = alias.External;
+
+        if (external.Version is { Length: > 0 } version)
+            _typeMappingContext.CrossPackageDependencies.Record(external.From, version);
+
+        if (external.IsDefault)
+            return new TsImport([alias.Alias], new TsPackageModule(external.From), IsDefault: true);
+
+        return new TsImport(
+            [external.Name],
+            new TsPackageModule(external.From),
+            TypeOnly: !alias.IsValue,
+            Aliases: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [external.Name] = alias.Alias,
+            }
+        );
+    }
+
+    /// <summary>A <c>using</c> alias the file spells for an <c>[Import]</c> type.</summary>
+    private sealed record ExternalAliasImport(
+        string Alias,
+        IrExternalImport External,
+        bool IsValue
+    );
+
+    /// <summary>A top-level type of the project being transpiled that it emits.</summary>
+    private bool IsOwnTopLevelType(INamedTypeSymbol type) =>
+        !SymbolHelper.HasImport(type)
+        && type.ContainingType is null
+        && SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _context.CurrentAssembly)
+        && SymbolHelper.IsTranspilable(
+            type,
+            _context.AssemblyWideTranspile,
+            _context.CurrentAssembly
+        );
+
+    /// <summary>
+    /// A <c>using</c> alias the file spells for a project type, imported as
+    /// <c>{ TsName as Alias }</c> from the type's module.
+    /// </summary>
+    private sealed record SymbolAliasImport(
+        string Alias,
+        IrTranspilableTypeRef Target,
+        bool IsValue
+    );
 
     /// <summary>
     /// The project type a bare type name in this file refers to: the symbol-resolved

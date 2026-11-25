@@ -1,5 +1,6 @@
 using ConsoleAppFramework;
 using Metano.Compiler;
+using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Watch;
 
 namespace Metano.Compiler.Dart;
@@ -18,6 +19,10 @@ public class Commands
     /// <param name="noCache">Disable the incremental cache. Forces a full transpilation even when sources, references, and outputs are byte-identical to the previous run.</param>
     /// <param name="watch">Stay running and re-transpile every time a .cs / .csproj / .props / .targets file under the project directory changes.</param>
     /// <param name="asset">Static asset to copy into the output directory alongside generated files. Repeat the flag for multiple assets. Each value is either an absolute path or `absolutePath=relativeDestination` (destination relative to --output, no rooted paths, no `..` segments). When the destination is omitted, the path relative to the project directory is mirrored under the output tree. Wired from `&lt;MetanoAsset Include="..." OutputPath="..." Language="dart" /&gt;` by the MSBuild target.</param>
+    /// <param name="warnAsError">Treat every Metano warning as an error, except the codes in --warnings-not-as-errors. Wired from MSBuild's `TreatWarningsAsErrors` by the build target. A run that reports an error writes no up-to-date stamp, so the next build runs the transpile again.</param>
+    /// <param name="warningsAsErrors">Metano codes treated as errors even without --warn-as-error, separated by commas, semicolons or white space (e.g. `MS0001,MS0003`); other codes are ignored. Wired from MSBuild's `WarningsAsErrors`.</param>
+    /// <param name="warningsNotAsErrors">Metano codes that stay warnings under --warn-as-error; wins over --warnings-as-errors. Wired from MSBuild's `WarningsNotAsErrors`.</param>
+    /// <param name="noWarn">Metano codes whose warnings are suppressed; wins over every escalation. Wired from MSBuild's `NoWarn`.</param>
     [Command("")]
     public async Task Transpile(
         string project,
@@ -28,10 +33,21 @@ public class Commands
         bool dryRun = false,
         bool noCache = false,
         bool watch = false,
+        bool warnAsError = false,
+        string? warningsAsErrors = null,
+        string? warningsNotAsErrors = null,
+        string? noWarn = null,
         string[]? asset = null
     )
     {
         var target = new DartTarget();
+
+        var policy = DiagnosticPolicy.FromCommandLine(
+            warnAsError,
+            warningsAsErrors,
+            warningsNotAsErrors,
+            noWarn
+        );
 
         var options = new TranspileOptions(
             ProjectPath: project,
@@ -41,7 +57,8 @@ public class Commands
             FilePrefix: filePrefix,
             DryRun: dryRun,
             NoCache: noCache,
-            Assets: AssetFlagParser.Parse(asset)
+            Assets: AssetFlagParser.Parse(asset),
+            DiagnosticPolicy: policy
         );
 
         async Task RunOnce()
