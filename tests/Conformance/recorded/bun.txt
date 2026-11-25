@@ -116,4 +116,8 @@ UnmodeledCollectionProbes.throwsSortedSet = throws
 UnmodeledCollectionProbes.throwsStack = throws
 UnmodeledCollectionProbes.throwsUserAdd = throws
 W6DelegateProbes.invokeGroupAcrossParamsShapesIsLoud = threw threw
+W9N1Probes.tupleDictionary THROWS KeyNotFoundException: The given key '1,a' was not present in the dictionary.
+W9N1Probes.tupleHashSet = 3,False,False
+W9N1Probes.tupleLinq = 3,3,False
+W9N1Probes.tupleListIndexOf = -1,False
 Wave5Fix1Probes.undescribableReifiedArgumentsThrow = NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException|NotSupportedException
