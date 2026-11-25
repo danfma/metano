@@ -123,3 +123,4 @@ UnmodeledCollectionProbes.throwsHiddenAdd none  W6-K #581: a user subclass that 
 CharIntGapProbes.genericMath           none  W7-A #695 (needs design): generic math through a type parameter (`x + x` on T : INumber<T>) cannot wrap an int it does not know is an int (.NET: -2)
 CharIntGapProbes.refDecimal            none  W7-A #695 (needs design): a ref parameter is passed by value, as IndexProbes.refArgs (.NET: 2)
 StringComparisonProbes.cultureCompareSigns  none  the .NET recording runs with InvariantGlobalization (culture comparisons are ordinal); the runtime uses ICU collation, as .NET with ICU does (a < A < B)
+StringComparisonProbes.cultureIgnoreCaseWidthPairs  none  the .NET recording runs with InvariantGlobalization (U+3000 vs space is ordinal-unequal); the runtime answers as .NET with ICU does (TT0|TT0|)

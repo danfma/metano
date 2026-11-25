@@ -122,6 +122,46 @@ public static class StringComparisonProbes
         return text;
     }
 
+    private static string IgnoreCaseEqualities(string[][] pairs)
+    {
+        var text = "";
+
+        foreach (var pair in pairs)
+        {
+            text += Flag(
+                string.Equals(pair[0], pair[1], StringComparison.InvariantCultureIgnoreCase)
+            );
+            text += Flag(
+                string.Equals(pair[0], pair[1], StringComparison.CurrentCultureIgnoreCase)
+            );
+            text += Math.Sign(string.Compare(pair[0], pair[1], true));
+            text += "|";
+        }
+
+        return text;
+    }
+
+    // A width form folds its case but keeps its width; U+3000 equals a space ignoring case
+    // (.NET on ICU: TT0|TT0|). The recording runs with InvariantGlobalization (ordinal).
+    public static string CultureIgnoreCaseWidthPairs() =>
+        IgnoreCaseEqualities([
+            ["\uFF21", "\uFF41"],
+            ["\u3000", " "],
+        ]);
+
+    // Known gaps against .NET on ICU, which answers TT0 for the first three pairs and
+    // FF-1 for the small kana (the runtime: FF1 throughout). The recording runs with
+    // InvariantGlobalization, where .NET also answers FF1, so the row records the
+    // runtime's answer rather than the ICU divergence (pinned in string-comparison.test.ts).
+    public static string CultureIgnoreCaseExoticPairs() =>
+        IgnoreCaseEqualities([
+            ["\u0130", "i\u0307"],
+            ["\uFF76\uFF9E", "\uFF76\u3099"],
+            ["\uFFE8", "\u2502"],
+            ["\uFF71", "\uFF67"],
+            ["\u30A2", "\u30A1"],
+        ]);
+
     public static string CompareNulls()
     {
         string? none = null;

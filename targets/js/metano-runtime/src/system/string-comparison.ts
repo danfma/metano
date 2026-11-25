@@ -12,8 +12,10 @@
  *   sensitivity. The ignore-case members ignore case only, as .NET does on ICU: the
  *   strings first compare at `accent` sensitivity (which also ignores width and kana),
  *   and strings equal there are told apart by width and kana alone
- *   (`caseInsensitiveKey`), so `"Ａ"` never equals `"a"` while `ß` equals `ẞ` and
- *   `ﬀ` equals `FF`.
+ *   (`caseInsensitiveKey`), so `"Ａ"` never equals `"a"` while `"Ａ"` equals `"ａ"`,
+ *   `ß` equals `ẞ` and `ﬀ` equals `FF`. Measured against .NET 10 on ICU, five exotic
+ *   pairs still differ (known gaps): `İ` / `i̇` and `ｶﾞ` / `ｶ゙` and U+FFE8 / `│` (.NET
+ *   equal), and small against full-size kana (`ｱ` / `ｧ`, `ア` / `ァ`: the sign).
  *
  * The instance forms (`a.Equals(b, comparison)`, `a.Equals(b)`, `a.CompareTo(b)`) throw
  * `NullReferenceException` for a `null` receiver, as .NET does; `CompareTo(object)`
@@ -156,15 +158,16 @@ function compareCultureIgnoringCase(
 /**
  * `value` with every difference .NET's culture `IgnoreCase` ignores removed: each code
  * point outside the halfwidth and fullwidth forms is replaced by its compatibility
- * decomposition (`ﬀ` → `ff`, `①` → `1`) in a single case (simple uppercase, then simple
- * lowercase: `ς` and `Σ` → `σ`, `ẞ` → `ß`). Width forms stay as they are.
+ * decomposition (`ﬀ` → `ff`, `①` → `1`, U+3000 → space) in a single case (simple
+ * uppercase, then simple lowercase: `ς` and `Σ` → `σ`, `ẞ` → `ß`). A width form keeps
+ * its width and only folds its case (`Ａ` → `ａ`).
  */
 function caseInsensitiveKey(value: string): string {
   let key = "";
 
   for (const character of value) {
     if (isWidthForm(character.codePointAt(0) as number)) {
-      key += character;
+      key += singleCase(character);
       continue;
     }
 
@@ -176,9 +179,9 @@ function caseInsensitiveKey(value: string): string {
   return key;
 }
 
-/** U+3000 (ideographic space) and the Halfwidth and Fullwidth Forms block. */
+/** The Halfwidth and Fullwidth Forms block. */
 function isWidthForm(codePoint: number): boolean {
-  return codePoint === 0x3000 || (codePoint >= 0xff00 && codePoint <= 0xffef);
+  return codePoint >= 0xff00 && codePoint <= 0xffef;
 }
 
 function singleCase(character: string): string {

@@ -718,7 +718,10 @@ map to their prosgegrammeni form. The culture members compare with `Intl.Collato
 `CurrentCulture` with the engine's default locale, `InvariantCulture` with the root locale, at
 `sensitivity: "variant"`. The ignore-case members ignore case only, as .NET does on ICU: width
 and kana type still count (`"Ａ"` never equals `"a"`, `"ｶ"` sorts after `"カ"`), while
-compatibility forms and case variants are equal (`ß` / `ẞ`, `ﬀ` / `FF`, `ς` / `Σ`). This
+compatibility forms and case variants are equal (`ß` / `ẞ`, `ﬀ` / `FF`, `ς` / `Σ`, `"Ａ"` /
+`"ａ"`, U+3000 / space). Five exotic pairs differ from .NET on ICU (known gaps): `İ` / `i̇`,
+`ｶﾞ` / `ｶ゙` and U+FFE8 / `│` are equal in .NET and not in the runtime, and small against
+full-size kana (`ｱ` / `ｧ`, `ア` / `ァ`) sort the other way. This
 matches .NET running on ICU (the default on Linux and macOS); a .NET process with
 `InvariantGlobalization` compares the culture members ordinally instead. `null` equals only
 `null` and sorts first; the instance forms throw `NullReferenceException` for a `null`
@@ -729,7 +732,9 @@ has .NET's sign; the ordinal forms return the difference of the first differing 
 hashes as the ordinal `StringComparer` does; a culture comparison throws
 `NotSupportedException` (JavaScript has no culture sort key). `comparableCompareTo` compares a
 string receiver as `string.CompareTo` does and any other value in `Comparer<T>.Default`'s
-order, which calls an object's own `compareTo`. The substring overload
+order, which calls an object's own `compareTo`; a `null` argument answers `1` without calling
+it (the `IComparable` contract), so a user `CompareTo(null)` that breaks the contract is not
+reproduced. The substring overload
 `Compare(a, i, b, j, n, comparison)` is not mapped (`MS0001`).
 
 ## Math

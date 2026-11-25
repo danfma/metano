@@ -4,7 +4,9 @@
  * `T : IComparable<T>`): the receiver may be a string or a number, which have no
  * `compareTo` method in JavaScript (#769). A string compares culture-sensitively, as
  * `string.CompareTo` does; any other value goes through `Comparer<T>.Default`'s order
- * (`defaultCompare`), which calls the receiver's own `compareTo` for an object.
+ * (`defaultCompare`), which calls the receiver's own `compareTo` for an object. A `null`
+ * `other` answers `1` without calling it, as the `IComparable` contract requires: a user
+ * `CompareTo(null)` that returns anything else is not reproduced.
  */
 
 import { defaultCompare } from "./collections/default-comparer.ts";

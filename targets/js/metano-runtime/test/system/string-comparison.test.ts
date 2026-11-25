@@ -62,6 +62,8 @@ const dotnetCultureSigns: [string, string, number, number, number][] = [
   ["\uFF76\uFF9E", "\uFF76", 1, 1, 1],
   ["\u30A2\u30A4", "\uFF71\uFF72", -1, -1, -1],
   ["x\u0301", "X\u0301", 0, 0, -1],
+  ["\uFF21", "\uFF41", 0, 0, 1],
+  ["\u3000", " ", 0, 0, 1],
 ];
 
 /** `string.Equals(left, right, OrdinalIgnoreCase)` on .NET 10. */
@@ -169,6 +171,26 @@ describe("culture comparisons", () => {
       expect(Math.sign(stringCompare(left, right, InvariantCulture))).toBe(invariant);
     },
   );
+
+  test("a width form folds its case but keeps its width", () => {
+    expect(stringEquals("\uFF21", "\uFF41", InvariantCultureIgnoreCase)).toBe(true);
+    expect(stringEquals("\u3000", " ", CurrentCultureIgnoreCase)).toBe(true);
+  });
+
+  test("known gaps against .NET on ICU stay as recorded", () => {
+    // .NET on ICU: equal for the first three pairs, -1 for the small kana.
+    const residues: [string, string][] = [
+      ["\u0130", "i\u0307"],
+      ["\uFF76\uFF9E", "\uFF76\u3099"],
+      ["\uFFE8", "\u2502"],
+      ["\uFF71", "\uFF67"],
+      ["\u30A2", "\u30A1"],
+    ];
+
+    for (const [left, right] of residues) {
+      expect(Math.sign(stringCompare(left, right, InvariantCultureIgnoreCase))).toBe(1);
+    }
+  });
 
   test("width never compares equal ignoring case", () => {
     expect(stringEquals("\uFF21", "a", InvariantCultureIgnoreCase)).toBe(false);

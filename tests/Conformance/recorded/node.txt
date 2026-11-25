@@ -101,6 +101,7 @@ StageHInterfaceTestProbes.immutableAsIListBinding THROWS Error: Unsupported expr
 StageHInterfaceTestProbes.immutableAsIListSwitch THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
 StageHRoundTwoProbes.crossTypeEmptyFactories = True,True,True
 StringComparisonProbes.cultureCompareSigns = -1,-1,-1,-1,-1|-1,-1,-1,-1,-1|-1,-1,-1,-1,-1|1,1,1,1,1|1,1,1,1,1|-1,-1,-1,-1,-1|1,1,1,1,1|1,1,1,1,1|-1,0,-1,0,-1|
+StringComparisonProbes.cultureIgnoreCaseWidthPairs = TT0|TT0|
 StringProbes.cases = ABC|abc|ABC|abc|SS|2
 StringProbes.chars THROWS TypeError: String.concat is not a function
 StringProbes.emptyAndNullArgs = False
