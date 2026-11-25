@@ -98,4 +98,85 @@ public class StrictModeReservedWordTests
         await Assert.That(output).Contains("var with_ = final_ + var_;");
         await Assert.That(output).Contains("assert_");
     }
+
+    [Test]
+    public async Task EscapedFunctions_AreImportedByAnotherFile_AndThroughTheBarrel()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, ExportedAsModule]
+            public static class Words
+            {
+                public static string Package(string @let) => @let + "!";
+                public static string Static(this string s) => s + "?";
+            }
+
+            [Transpile]
+            public static class Caller
+            {
+                public static string Run() => Words.Package("k") + "k".Static();
+            }
+            """
+        );
+
+        await Assert
+            .That(files["caller.ts"])
+            .Contains("import { package_, static_ } from \"./words.js\";");
+
+        await Assert.That(files["caller.ts"]).Contains("package_(\"k\")");
+        await Assert.That(files["index.ts"]).Contains("package_");
+    }
+
+    [Test]
+    public async Task EscapedLocal_AndEscapedFunctionOfTheSameWord_DoNotCollide()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, ExportedAsModule]
+            public static class Words
+            {
+                public static string Package(string s) => s + "!";
+                public static string Helper(string s) => s + "!";
+            }
+
+            [Transpile]
+            public static class Caller
+            {
+                public static string Run()
+                {
+                    var helper = "v";
+                    var @package = "v";
+
+                    return helper + Words.Helper("k") + @package + Words.Package("k");
+                }
+            }
+            """
+        );
+
+        await Assert.That(files["caller.ts"]).DoesNotContain("const package_ =");
+    }
+
+    [Test]
+    public async Task ClassNamedLikeAStrictModeWord_IsEscapedEverywhere()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class @implements { public int V = 1; }
+
+            [Transpile]
+            public static class Use
+            {
+                public static int Run() => new @implements().V;
+            }
+            """
+        );
+
+        var all = string.Join("\n", files.Values);
+
+        await Assert.That(all).Contains("class implements_");
+        await Assert.That(all).Contains("new implements_()");
+        await Assert.That(all).DoesNotContain("class implements ");
+        await Assert.That(files["use.ts"]).Contains("import { implements_ } from");
+    }
 }

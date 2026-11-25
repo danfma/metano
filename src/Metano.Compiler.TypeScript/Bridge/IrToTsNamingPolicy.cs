@@ -214,7 +214,7 @@ public static class IrToTsNamingPolicy
     /// </summary>
     public static string ToFunctionName(IMethodSymbol method) =>
         OverloadEmittedName.NameOverrideOf(method, TsGroupingPolicy.Instance)
-        ?? TypeScriptNaming.ToCamelCase(method.Name);
+        ?? ToFunctionIdentifier(method.Name);
 
     /// <summary>
     /// The <c>[Name]</c> that renames a declaration: none for an overload of
@@ -231,7 +231,7 @@ public static class IrToTsNamingPolicy
         string name,
         IReadOnlyList<IrAttribute>? attributes,
         IrOverloadName? overloadName
-    ) => FindMemberNameOverride(attributes, overloadName) ?? TypeScriptNaming.ToCamelCase(name);
+    ) => FindMemberNameOverride(attributes, overloadName) ?? ToFunctionIdentifier(name);
 
     /// <summary>
     /// Class method name: honors <c>[Name]</c> verbatim when present,
