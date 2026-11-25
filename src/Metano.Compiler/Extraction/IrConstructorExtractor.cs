@@ -185,6 +185,29 @@ public static class IrConstructorExtractor
         AllExplicitConstructors(type).Count > 1;
 
     /// <summary>
+    /// Whether <paramref name="constructor"/> takes its arguments as one object
+    /// (the <c>create({...})</c> factory, #739): it carries <c>[ObjectArgs]</c>
+    /// itself (also through <c>[method: ObjectArgs]</c> on a positional record
+    /// or primary constructor), or the type carries it and the constructor is
+    /// the type's only one. A type-level attribute on a type with several
+    /// constructors is not honoured (<see cref="IsUnhonouredTypeLevelObjectArgs"/>).
+    /// </summary>
+    public static bool HasObjectArgsSurface(IMethodSymbol constructor) =>
+        constructor.HasObjectArgs()
+        || (
+            constructor.ContainingType.HasObjectArgs()
+            && AllExplicitConstructors(constructor.ContainingType.OriginalDefinition).Count == 1
+            && DeclarationOrdinalOf(constructor) is not null
+        );
+
+    /// <summary>
+    /// Whether <paramref name="type"/> carries a type-level <c>[ObjectArgs]</c>
+    /// that no constructor can honour: it declares several constructors, or none.
+    /// </summary>
+    public static bool IsUnhonouredTypeLevelObjectArgs(INamedTypeSymbol type) =>
+        type.HasObjectArgs() && AllExplicitConstructors(type).Count != 1;
+
+    /// <summary>
     /// The constructors <see cref="Extract"/> models for
     /// <paramref name="type"/> (the main one plus its overloads), whatever
     /// their accessibility, in declaration order: every declared instance

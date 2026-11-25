@@ -752,7 +752,22 @@ internal sealed class IrToTsClassEmitter(
         IrToTsBridgeContext lowering
     )
     {
-        var ctorsWithObjectArgs = explicitCtors.Where(SymbolHelper.HasObjectArgs).ToList();
+        if (IrConstructorExtractor.IsUnhonouredTypeLevelObjectArgs(type))
+        {
+            _context.ReportUnsupportedBody(
+                type,
+                $"[ObjectArgs] on type '{type.Name}' needs exactly one constructor, "
+                    + $"but it declares {explicitCtors.Count}; the create({{...}}) factory "
+                    + "was not emitted. Put [ObjectArgs] on the constructor instead."
+            );
+
+            return null;
+        }
+
+        var ctorsWithObjectArgs = explicitCtors
+            .Where(IrConstructorExtractor.HasObjectArgsSurface)
+            .ToList();
+
         if (ctorsWithObjectArgs.Count == 0)
             return null;
 
@@ -771,8 +786,32 @@ internal sealed class IrToTsClassEmitter(
             ir.Constructor,
             _context.ResolveTsName(type),
             IrToTsClassBridge.BuildTypeParameters(ir),
-            lowering
+            lowering,
+            overridesBaseFactory: AncestorEmitsObjectArgsFactory(type)
         );
+    }
+
+    /// <summary>
+    /// Whether a base type of <paramref name="type"/> declares its own
+    /// <c>create({...})</c> factory, so the derived one needs <c>override</c>
+    /// (TS4114 under <c>noImplicitOverride</c>, static side included).
+    /// </summary>
+    private static bool AncestorEmitsObjectArgsFactory(INamedTypeSymbol type)
+    {
+        for (var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            var constructors = IrConstructorExtractor.AllExplicitConstructors(
+                baseType.OriginalDefinition
+            );
+
+            if (
+                constructors.Count == 1
+                && IrConstructorExtractor.HasObjectArgsSurface(constructors[0])
+            )
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

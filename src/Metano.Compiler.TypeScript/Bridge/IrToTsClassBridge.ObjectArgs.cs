@@ -66,7 +66,8 @@ internal static partial class IrToTsClassBridge
         IrConstructorDeclaration? ctor,
         string typeName,
         IReadOnlyList<TsTypeParameter>? typeParameters,
-        IrToTsBridgeContext context
+        IrToTsBridgeContext context,
+        bool overridesBaseFactory = false
     )
     {
         if (ctor is null)
@@ -99,7 +100,8 @@ internal static partial class IrToTsClassBridge
             body,
             Static: true,
             Accessibility: TsAccessibility.Public,
-            TypeParameters: typeParameters
+            TypeParameters: typeParameters,
+            Override: overridesBaseFactory
         );
     }
 }

@@ -1481,6 +1481,26 @@ Product requirements added after the migration (normative; each one is traced by
      A record used as a key that the runtime turns into text (a `ConcurrentDictionary` key's
      `toJSON`) now prints the record text instead of `[object Object]`.
 
+- **FR-095** (`[ObjectArgs]` on primary constructors and positional records, #739, decision W8-1,
+  amends the `[ObjectArgs]` constructor behaviour): `[ObjectArgs]` on a constructor already emits
+  a positional runtime constructor plus `static create(args: {...})` and lowers `new T(...)` to
+  `T.create({...})`. This requirement extends the same lowering, with no new emission strategy,
+  to the constructors that have no declaration to put the attribute on: (a) a primary
+  constructor (a positional record or a C# 12 class), marked with `[method: ObjectArgs]` on the
+  type declaration; (b) a type-level `[ObjectArgs]` on a type that declares exactly one
+  constructor (the primary one, or a sole explicit one), which applies to that constructor. A
+  defaulted parameter becomes an optional property whose C# default the factory applies, so a
+  call site omits it (`new Point(1)` lowers to `Point.create({ x: 1 })`); a parameter is keyed
+  by its camel-cased name (a positional record's `X` is keyed `x`), at the declaration and at
+  every call site, positional or named, in the type's own package and in a referencing one. The
+  runtime constructor stays positional, so record equality, `hashCode`, `with`, `toString`,
+  deconstruction, `super(...)` of a derived record, `[JsonSerializable]` factories and the
+  MS0061 construction paths are unchanged. An `[ObjectArgs]` the lowering cannot honour MUST NOT
+  be ignored: a type-level attribute on a type with several constructors (or none) reports
+  `MS0001` (the existing "not supported" code) and no `create` is emitted, and a constructor
+  `[ObjectArgs]` combined with constructor overloading keeps reporting `MS0001`. The Dart target
+  is unchanged.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

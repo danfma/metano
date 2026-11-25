@@ -5621,7 +5621,7 @@ public sealed partial class IrExpressionExtractor
 
         var initializer = InitializerOf(creationSyntax);
 
-        if (ctor is not null && SymbolHelper.HasObjectArgs(ctor))
+        if (ctor is not null && IrConstructorExtractor.HasObjectArgsSurface(ctor))
         {
             var properties = BuildObjectArgsProperties(ctor, args);
             var objectArgsCreation = new IrNewExpression(

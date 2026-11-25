@@ -325,6 +325,20 @@ A call such as `Column(gap: 12, children: items)` emits as:
 column({ gap: 12, children: items })
 ```
 
+On a constructor, the runtime constructor stays positional and a static
+`create({ ... })` factory takes the object; call sites become `T.create({ ... })`.
+A positional record or primary constructor takes the attribute through
+`[method: ObjectArgs]`; a type-level `[ObjectArgs]` applies to the type's only
+constructor (several constructors report `MS0001`).
+
+```csharp
+[Transpile]
+[method: ObjectArgs]
+public record Point(int X, int Y = 2);
+
+new Point(1); // Point.create({ x: 1 })
+```
+
 ### `[GenerateGuard]`
 
 Generates a TypeScript type guard function `isTypeName(value: unknown): value is TypeName`
