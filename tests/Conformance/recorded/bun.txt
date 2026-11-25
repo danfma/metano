@@ -42,8 +42,6 @@ DefaultProbes.generic = null|null|F|null|null|null|notlow|null|null|null
 DefaultProbes.genericQ = null|null|null
 DefaultProbes.optional THROWS TypeError: undefined is not an object (evaluating 't.year')
 DefaultProbes.optionalGeneric = null|null|null|null
-DefaultProbes.structParam THROWS TypeError: undefined is not an object (evaluating 'r.x')
-DefaultProbes.structs THROWS TypeError: undefined is not an object (evaluating '(void 0).x')
 DynamicProbes.asDynamicRenamedMember = null
 DynamicProbes.integerDivision = 3.5
 DynamicProbes.metanoMemberName = null

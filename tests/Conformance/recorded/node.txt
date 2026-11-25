@@ -42,8 +42,6 @@ DefaultProbes.generic = null|null|F|null|null|null|notlow|null|null|null
 DefaultProbes.genericQ = null|null|null
 DefaultProbes.optional THROWS TypeError: Cannot read properties of undefined (reading 'year')
 DefaultProbes.optionalGeneric = null|null|null|null
-DefaultProbes.structParam THROWS TypeError: Cannot read properties of undefined (reading 'x')
-DefaultProbes.structs THROWS TypeError: Cannot read properties of undefined (reading 'x')
 DynamicProbes.asDynamicRenamedMember = null
 DynamicProbes.integerDivision = 3.5
 DynamicProbes.metanoMemberName = null

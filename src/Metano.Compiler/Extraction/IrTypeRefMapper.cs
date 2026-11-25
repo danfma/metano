@@ -668,6 +668,19 @@ public static class IrTypeRefMapper
         && named.InstanceConstructors.All(ctor => ctor.IsImplicitlyDeclared);
 
     /// <summary>
+    /// Whether <paramref name="named"/> is a struct with a runtime class that declares
+    /// a constructor: its zero value cannot be built by a parameterless construction
+    /// (see <see cref="IsDefaultConstructible"/>), so a <c>default</c> of it reads the
+    /// struct's own zero-value factory (#802).
+    /// </summary>
+    public static bool HasZeroValueFactory(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    ) =>
+        IsStructWithRuntimeClass(named, target)
+        && named.InstanceConstructors.Any(ctor => !ctor.IsImplicitlyDeclared);
+
+    /// <summary>
     /// Whether <paramref name="named"/> is a struct with a runtime class whose
     /// dispatched constructor set leaves C#'s implicit parameterless
     /// constructor in place, which the targets add as one more overload

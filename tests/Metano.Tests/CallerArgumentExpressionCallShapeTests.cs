@@ -203,11 +203,11 @@ public class CallerArgumentExpressionCallShapeTests
 
     /// <summary>
     /// A struct the target emits without a parameterless constructor (a
-    /// declared or primary constructor) has no value that equals its C#
-    /// <c>default</c>: the opaque default stays, as before.
+    /// declared or primary constructor) takes its zero-value factory as the
+    /// C# <c>default</c> (#802).
     /// </summary>
     [Test]
-    public async Task StructWithDeclaredConstructor_KeepsTheOpaqueDefault()
+    public async Task StructWithDeclaredConstructor_DefaultsToTheZeroValueFactory()
     {
         var files = TranspileHelper.Transpile(
             """
@@ -222,7 +222,8 @@ public class CallerArgumentExpressionCallShapeTests
             """
         );
 
-        await Assert.That(files["probe.ts"]).Contains("pair: Pair = undefined");
+        await Assert.That(files["probe.ts"]).Contains("pair: Pair = Pair.$default()");
+        await Assert.That(files["pair.ts"]).Contains("static $default(): Pair");
     }
 
     private static string TranspileUse(string source) =>
