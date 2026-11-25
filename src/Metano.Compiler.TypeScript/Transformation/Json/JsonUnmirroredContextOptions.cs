@@ -19,11 +19,11 @@ namespace Metano.Compiler.TypeScript.Transformation.Json;
 ///     <c>AllowReadingFromString</c> flag of <c>NumberHandling</c> and
 ///     <c>DefaultIgnoreCondition = WhenWritingNull</c> (see
 ///     <see cref="JsonPropertyCollector"/>);</item>
+///   <item>mirrored in the text <c>serializeText</c> writes (FR-050):
+///     <c>WriteIndented</c>, <c>IndentCharacter</c>, <c>IndentSize</c> and
+///     <c>NewLine</c>, reported only for a value System.Text.Json rejects;</item>
 ///   <item>never reported, because they do not change the JSON value:
-///     <c>WriteIndented</c>, <c>IndentCharacter</c>, <c>IndentSize</c>,
-///     <c>NewLine</c> (formatting belongs to the caller's
-///     <c>JSON.stringify</c>), <c>DefaultBufferSize</c> and
-///     <c>GenerationMode</c>;</item>
+///     <c>DefaultBufferSize</c> and <c>GenerationMode</c>;</item>
 ///   <item>reported: every other option (<see cref="UnmirroredDefaults"/>),
 ///     <c>Converters</c> when it lists a converter other than
 ///     <c>ReadOnlyJsArrayJsonConverter&lt;T&gt;</c>, and each other
@@ -106,6 +106,17 @@ internal static class JsonUnmirroredContextOptions
             ConvertersOption => value.Values.All(IsMirroredConverter) ? [] : [option],
             MaxDepthOption => value.Value is 0 or MirroredMaxDepth ? [] : [option],
             JsonOptionNames.DefaultIgnoreCondition => IsMirroredIgnoreCondition(value)
+                ? []
+                : [option],
+            JsonOptionNames.IndentCharacter => value.Value is char character
+            && JsonContextWriteOptions.IsValidIndentCharacter(character)
+                ? []
+                : [option],
+            JsonOptionNames.IndentSize => value.Value is int size
+            && JsonContextWriteOptions.IsValidIndentSize(size)
+                ? []
+                : [option],
+            JsonOptionNames.NewLine => JsonContextWriteOptions.IsValidNewLine(value.Value as string)
                 ? []
                 : [option],
             _ when IsNonDefaultUnmirrored(option, value) => [option],

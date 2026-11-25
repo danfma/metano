@@ -808,9 +808,10 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
      `PreferredObjectCreationHandling`, `RespectNullableAnnotations`,
      `RespectRequiredConstructorParameters` or `MaxDepth` (other than `0` / `64`, the runtime's
      limit), and once per `NumberHandling` flag other than `AllowReadingFromString`
-     (`WriteAsString`, `AllowNamedFloatingPointLiterals`). Formatting and buffering options
-     (`WriteIndented`, `IndentCharacter`, `IndentSize`, `NewLine`, `DefaultBufferSize`,
-     `GenerationMode`) are not reported: `JSON.stringify` formatting belongs to the caller.
+     (`WriteAsString`, `AllowNamedFloatingPointLiterals`). Buffering options
+     (`DefaultBufferSize`, `GenerationMode`) are not reported. The text options (`WriteIndented`,
+     `IndentCharacter`, `IndentSize`, `NewLine`) are mirrored by `serializeText` (FR-050) and
+     reported only for a value System.Text.Json rejects.
      Mirrored: `PropertyNamingPolicy`, `PropertyNameCaseInsensitive`,
      `NumberHandling = AllowReadingFromString`, the `JsonSerializerDefaults.Web` constructor
      argument that sets those three (FR-048), and `AllowOutOfOrderMetadataProperties` (FR-002).
@@ -1015,9 +1016,17 @@ case-insensitive reads and numbers read from strings, plus error rows for the st
   number text, exact `decimal` / 64-bit digits, `null` for a null root, `ArgumentException`
   for NaN and the infinities), and `Deserialize(string, JsonTypeInfo<T>)` /
   `Deserialize(string, JsonTypeInfo)` MUST lower to `deserializeText` (FR-048 item 7). A
-  null text or type info throws `ArgumentNullException`. `serializeText` writes compact text
-  only: it ignores the context's `WriteIndented`, `IndentCharacter`, `IndentSize` and `NewLine`
-  options (a follow-up tracks mirroring them). The declarations are
+  null text or type info throws `ArgumentNullException`. `serializeText` writes the text layout
+  of the context's options (#752): compact unless `WriteIndented = true`, which writes each array
+  element and property on its own line, `IndentCharacter` (a space or a tab; a space by default)
+  repeated `IndentSize` times (0 to 127; 2 by default) per level, `NewLine` (`"\n"` or `"\r\n"`;
+  `"\n"` when unset, the .NET default on Linux and macOS) between lines, `": "` after a property
+  name and `[]` / `{}` for an empty container, as .NET 10 writes them. The generated context
+  overrides a protected `writeOptions` getter (a `JsonWriteOptions` literal with the members that
+  differ from the defaults) only for an indented context; `createSpec` / `createValueSpec`
+  attach it to every spec, and `serializeText` reads it from the spec. A value System.Text.Json
+  rejects (another indent character, a size above 127, another `NewLine`) warns `MS0037` and
+  keeps the default. The declarations are
   `[MapMethod]` entries in `src/Metano/Runtime/Json.cs`; the other overloads stay unmapped
   (MS0001).
 

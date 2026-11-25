@@ -31,6 +31,7 @@ internal sealed class JsonTypeInfoNames
         "createSpec",
         "createValueSpec",
         "readOptions",
+        "writeOptions",
         "resolve",
         "_registry",
         "constructor",

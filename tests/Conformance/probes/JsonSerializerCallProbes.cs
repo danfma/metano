@@ -11,6 +11,25 @@ public sealed record JscFloats(float Single, float? Maybe, List<float> Items);
 [JsonSerializable(typeof(JscFloats))]
 public partial class JscContext : JsonSerializerContext;
 
+public sealed record JscNode(string Name, List<int> Ids, List<JscNode> Children, JscBag? Bag);
+
+[JsonSourceGenerationOptions(WriteIndented = true)]
+[JsonSerializable(typeof(JscNode))]
+public partial class JscIndentedContext : JsonSerializerContext;
+
+[JsonSourceGenerationOptions(
+    WriteIndented = true,
+    IndentCharacter = '\t',
+    IndentSize = 1,
+    NewLine = "\r\n"
+)]
+[JsonSerializable(typeof(JscNode))]
+public partial class JscTabContext : JsonSerializerContext;
+
+[JsonSourceGenerationOptions(WriteIndented = true, IndentSize = 0)]
+[JsonSerializable(typeof(JscNode))]
+public partial class JscNoIndentContext : JsonSerializerContext;
+
 /// <summary>
 /// #741: the static <c>JsonSerializer.Serialize</c> / <c>Deserialize</c> calls over a
 /// source-generated context's <c>JsonTypeInfo</c>, and <c>Context.Default</c>, map to
@@ -84,4 +103,33 @@ public static class JsonSerializerCallProbes
         ReferenceEquals(JscContext.Default, JscContext.Default)
         + "|"
         + (JscContext.Default is not null);
+
+    static JscNode Tree() =>
+        new(
+            "root",
+            [1, 2],
+            [new("leaf", [], [], null), new("mid", [3], [new("deep", [], [], null)], null)],
+            new JscBag("b", 0.5, 1.5m, 7L)
+        );
+
+    static string Visible(string text) => text.Replace("\r", "<CR>").Replace("\t", "<TAB>");
+
+    public static string IndentedWithTwoSpaces() =>
+        JsonSerializer.Serialize(Tree(), JscIndentedContext.Default.JscNode);
+
+    public static string IndentedWithTabAndCrLf() =>
+        Visible(JsonSerializer.Serialize(Tree(), JscTabContext.Default.JscNode));
+
+    public static string IndentedWithSizeZero() =>
+        JsonSerializer.Serialize(Tree(), JscNoIndentContext.Default.JscNode);
+
+    public static string IndentedRoundTripsAndNullRoot() =>
+        JsonSerializer
+            .Deserialize(
+                JsonSerializer.Serialize(Tree(), JscIndentedContext.Default.JscNode),
+                JscIndentedContext.Default.JscNode
+            )!
+            .Children.Count
+        + "|"
+        + JsonSerializer.Serialize((JscNode?)null, JscIndentedContext.Default.JscNode);
 }

@@ -85,6 +85,39 @@ internal static class JsonOptionsReader
         );
     }
 
+    /// <summary>
+    /// The text formatting of <paramref name="contextType"/>: <c>WriteIndented</c>,
+    /// <c>IndentCharacter</c>, <c>IndentSize</c> and <c>NewLine</c>, each
+    /// System.Text.Json's default unless the attribute names it, under General and
+    /// Web alike. A value System.Text.Json rejects keeps the default (it is
+    /// reported as <c>MS0037</c>).
+    /// </summary>
+    public static JsonContextWriteOptions WriteOptionsOf(INamedTypeSymbol contextType)
+    {
+        if (OptionsAttributeOf(contextType) is not { } attribute)
+            return JsonContextWriteOptions.Default;
+
+        var options = NamedOptionsOf(attribute);
+        var defaults = JsonContextWriteOptions.Default;
+
+        return new JsonContextWriteOptions(
+            WriteIndented: BoolOptionOf(options, JsonOptionNames.WriteIndented, false),
+            IndentCharacter: options.GetValueOrDefault(JsonOptionNames.IndentCharacter)
+                is char character
+            && JsonContextWriteOptions.IsValidIndentCharacter(character)
+                ? character
+                : defaults.IndentCharacter,
+            IndentSize: options.GetValueOrDefault(JsonOptionNames.IndentSize) is int size
+            && JsonContextWriteOptions.IsValidIndentSize(size)
+                ? size
+                : defaults.IndentSize,
+            NewLine: options.GetValueOrDefault(JsonOptionNames.NewLine) is string newLine
+            && JsonContextWriteOptions.IsValidNewLine(newLine)
+                ? newLine
+                : defaults.NewLine
+        );
+    }
+
     private static AttributeData? OptionsAttributeOf(INamedTypeSymbol contextType) =>
         contextType
             .GetAttributes()
