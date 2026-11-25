@@ -1497,7 +1497,7 @@ Product requirements added after the migration (normative; each one is traced by
      compound assignments). A `switch` statement's sections are not statement lists of their
      own: every `case` clause of a JS `switch` shares one scope, so the temporaries of a
      section go to the head of the list that encloses the `switch` statement, and sections
-     are not wrapped in blocks. (A user local declared in one section and assigned in a later one is not yet hoisted, so it hits the `let` temporal dead zone when only the later section runs; tracked in #755.)
+     are not wrapped in blocks. A user local declared in one section and used in another is declared ahead of the switch statement (an uninitialized typed `let`, or the `const` with its initializer), in a block that encloses the declaration and the `switch`, and its declaration in the section becomes an assignment, so a later section that runs alone never meets it in the temporal dead zone (#755). This is the one rule for user locals shared by sections, for a `switch` on constants and a `switch (true)` alike.
      Each arm designator the arm reads becomes its own typed `let` named after it with a `$`
      prefix (`Circle c` → `let $c: Circle;`), assigned by the arm's test right after the check
      that narrows the subject (`$s instanceof Circle && ($c = $s, guard)`), and every read or

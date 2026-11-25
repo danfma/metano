@@ -5,10 +5,13 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// C# scopes a local declared directly in a <c>switch</c> section to the whole
-/// switch block, so another section may use it. A section that binds pattern
-/// designators is emitted in a block of its own, which would hide such a local
-/// from the other sections. Each one is therefore declared ahead of the switch
-/// and its declaration in the section becomes a plain assignment.
+/// switch block, so a later section may assign and read it without the
+/// declaring section having run. In JS such a section-level <c>let</c> or
+/// <c>const</c> would hit the temporal dead zone (#755), and a section that
+/// binds pattern designators is emitted in a block of its own, which would
+/// hide the local altogether. Each local another section uses is therefore
+/// declared ahead of the switch and its declaration in the section becomes a
+/// plain assignment.
 /// </summary>
 internal static class SwitchSharedLocals
 {
@@ -22,8 +25,7 @@ internal static class SwitchSharedLocals
     ) Hoist(IrSwitchStatement sw)
     {
         var shared = sw
-            .Cases.Where(BindsDesignators)
-            .SelectMany(section => SharedDeclarations(section, sw))
+            .Cases.SelectMany(section => SharedDeclarations(section, sw))
             .Select(declaration => declaration.Name)
             .ToHashSet();
 
