@@ -50,6 +50,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     );
 
     private GroupTransformFacts? _groupFacts;
+
+    /// <summary>
+    /// Per group (<see cref="GroupKey"/>), the project type each name shared by two
+    /// top-level project types binds in that file (#743), resolved before the groups
+    /// transform so the parallel pass only reads it.
+    /// </summary>
+    private IReadOnlyDictionary<
+        string,
+        IReadOnlyDictionary<string, IrTranspilableTypeRef>
+    > _sameNameBindings =
+        new Dictionary<string, IReadOnlyDictionary<string, IrTranspilableTypeRef>>();
+
     private string? _groupCacheFingerprint;
 
     /// <summary>
@@ -892,7 +904,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // file's). Otherwise both stay null and every iteration
             // takes the miss branch.
             var typeGroups = GroupTypesByFile(transpilableTypes);
-            ReportSameNameTypeClashes(typeGroups, transpilableTypes);
+
+            var sameNameReferences = new SameNameTypeReferences(
+                compilation,
+                Context,
+                transpilableTypes
+            );
+
+            ReportSameNameTypeClashes(typeGroups, sameNameReferences);
+            _sameNameBindings = SameNameBindings(typeGroups, sameNameReferences);
             List<TypeFileGroup> groups = [.. typeGroups, .. GuardModuleGroups(typeGroups)];
             var cachedGroups = LoadGroupCacheIfValid();
 
@@ -1524,10 +1544,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             // imported canonical name.
             var primaryType = group.Types[0];
             var irRequirements = ScanIrRuntimeRequirements(group.Types, irCache);
-            var collected = new ImportCollector(Context, irRequirements).Collect(
-                primaryType,
-                statements
-            );
+
+            var collected = new ImportCollector(
+                Context,
+                irRequirements,
+                _sameNameBindings.GetValueOrDefault(GroupKey(group))
+            ).Collect(primaryType, statements);
+
             statements.InsertRange(0, collected.Imports);
 
             var isJsx = ContainsJsx(statements);
@@ -1999,10 +2022,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private void ReportSameNameTypeClashes(
         IEnumerable<TypeFileGroup> groups,
-        IReadOnlyList<INamedTypeSymbol> transpilableTypes
+        SameNameTypeReferences references
     )
     {
-        var validator = new SameNameTypeClashValidator(compilation, Context, transpilableTypes);
+        var validator = new SameNameTypeClashValidator(Context, references);
 
         foreach (var group in groups)
         {
@@ -2010,6 +2033,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 ReportDiagnostic(finding);
         }
     }
+
+    private static Dictionary<
+        string,
+        IReadOnlyDictionary<string, IrTranspilableTypeRef>
+    > SameNameBindings(IEnumerable<TypeFileGroup> groups, SameNameTypeReferences references) =>
+        references.IsEmpty
+            ? []
+            : groups.ToDictionary(GroupKey, group => references.BindingsIn(group.Types));
 
     private static string GroupKey(TypeFileGroup group) => $"{group.Namespace}/{group.FileName}";
 
