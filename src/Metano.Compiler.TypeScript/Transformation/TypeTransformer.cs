@@ -1635,6 +1635,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TsReturnStatement { Expression: { } expr } => ContainsJsxInExpression(expr),
             TsExpressionStatement exprStmt => ContainsJsxInExpression(exprStmt.Expression),
             TsThrowStatement throwStmt => ContainsJsxInExpression(throwStmt.Expression),
+            TsYieldStatement yieldStmt => ContainsJsxInExpression(yieldStmt.Expression),
             TsVariableDeclaration { Initializer: { } initializer } => ContainsJsxInExpression(
                 initializer
             ),

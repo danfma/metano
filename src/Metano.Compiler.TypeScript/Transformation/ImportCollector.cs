@@ -1702,6 +1702,9 @@ public sealed class ImportCollector(
             case TsThrowStatement thr:
                 CollectFromExpression(thr.Expression, sink);
                 break;
+            case TsYieldStatement yield:
+                CollectFromExpression(yield.Expression, sink);
+                break;
             case TsExpressionStatement expr:
                 CollectFromExpression(expr.Expression, sink);
                 break;
