@@ -316,6 +316,18 @@ First vertical slice of UI-component transpilation — C# renderable record comp
 | Dart | `[ModuleEntryPoint]` body lowering | Dart | Planned (gap) | `src/Metano.Compiler.Dart/` | `tests/Metano.Tests/DartBackendTests.cs` | Body not yet lowered — RT-02. |
 | Dart | JSON serializer context | Dart | Planned (gap) | `src/Metano.Compiler.Dart/Bridge/` | `tests/Metano.Tests/DartBackendTests.cs` | Not yet emitted — RT-02. |
 
+## Emission noise and strict-mode names (wave 10)
+
+FR-109: the TypeScript output type-checks under `--strict` without avoidable noise (#787, #794, #796, #798, #791, #802).
+
+| Area | Feature | Target | Status | Code area | Test | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Emission | Flat `else if` chains, `x != null` for `is not null`, optional `catch {`, `const error = toException(e$)`, string `const` folding, no `?? ""` on a not-null `var` string target, bare nullable array element read (`a[i] as T \| null`) | TS | Implemented | `TypeScript/Printer.cs`, `Bridge/IrToTsCatchChainBridge.cs`, `Extraction/IrFieldExtractor.cs`, `Extraction/ReferenceNullability.cs` | `tests/Metano.Tests/EmissionNoiseTests.cs` | #787 N1, N2, N3, N5, N7, N8. |
+| Nullability | `null!` / `default!` over a non-nullable reference keeps `!`; an explicitly typed local keeps its annotation; a `var` reference local reassigned with a maybe-null value is annotated `T \| null` | TS (Dart drops the `!`) | Implemented | `Extraction/IrExpressionExtractor.cs`, `Extraction/MaybeNullLocalAssignments.cs`, `Bridge/IrToTsStatementBridge.cs` | `tests/Metano.Tests/NullForgivingLiteralTests.cs` | #794, #796. |
+| Nullability | A reassigned local or parameter read inside a lambda or local function keeps the carried `!` (TypeScript never narrows a captured `let`); a null-tested local narrows by itself and takes none | TS (Dart leaves it out) | Implemented | `Extraction/ForgivenNullStateReads.cs` | `tests/Metano.Tests/NullTestNarrowingTests.cs` | #798. |
+| Defaults | `default` / `default(S)` of a struct that declares a constructor is `S.$default()` in every position (the struct is reached so the factory is emitted); a `default` passed to a LINQ `OrDefault` call is that value | TS | Implemented | `Extraction/IrExpressionExtractor.DefaultValues.cs`, `Frontend/Roslyn/RuntimeQuestionScanner.cs`, `Analysis/RuntimeTypeReachability.cs` | `tests/Metano.Tests/StructDefaultTests.cs`, conformance `StructDefaultProbes` | #802. |
+| Naming | Identifier positions (locals, parameters, labels, top-level functions) escape strict-mode words (`static`, `package`, `public`, `interface`, `private`, `protected`, `implements`, `eval`, `arguments`); members keep them (a promoted parameter named so is declared as a field and stored from the escaped parameter). Dart escapes its reserved words (`final`, `var`, `with`, `assert`, ...) the same way | TS, Dart | Implemented | `Transformation/TypeScriptNaming.cs`, `Dart/Bridge/IrToDartNamingPolicy.cs` | `tests/Metano.Tests/StrictModeReservedWordTests.cs` | #791. |
+
 ## Explicit non-guarantees
 
 | Area | Feature | Status |
