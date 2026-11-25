@@ -24,3 +24,4 @@ export * from "./switch-expression-exception.ts";
 export * from "./named-exception.ts";
 export * from "./type-initialization-exception.ts";
 export * from "./to-exception.ts";
+export * from "./throw-error.ts";

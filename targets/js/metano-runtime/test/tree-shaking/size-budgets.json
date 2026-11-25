@@ -362,6 +362,7 @@
     "system/exceptions/switch-expression-exception",
     "system/exceptions/system-exception",
     "system/exceptions/task-canceled-exception",
+    "system/exceptions/throw-error",
     "system/exceptions/timeout-exception",
     "system/exceptions/to-exception",
     "system/exceptions/type-initialization-exception",

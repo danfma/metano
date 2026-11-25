@@ -2,7 +2,8 @@ namespace Metano.Tests;
 
 /// <summary>
 /// A switch expression returned directly lowers to statements, not a
-/// self-invoking arrow (#735). Other positions keep the arrow.
+/// self-invoking arrow (#735). Other positions lower to a conditional chain
+/// (see <see cref="SwitchExpressionChainTests"/>).
 /// </summary>
 public class SwitchReturnLoweringTests
 {
@@ -74,9 +75,13 @@ public class SwitchReturnLoweringTests
     }
 
     [Test]
-    public async Task ReturnedSwitchWithThrowArm_ThrowsFromTheArm()
+    public async Task ReturnedSwitchWithThrowArm_ThrowsThroughTheHelper()
     {
-        await Assert.That(Output()).Contains("throw new InvalidOperationException(\"x\");");
+        await Assert
+            .That(Output())
+            .Contains(
+                "return shape instanceof Circle ? \"circle\" : shape instanceof Square ? \"square\" : throwError(new InvalidOperationException(\"x\"));"
+            );
     }
 
     [Test]
@@ -86,11 +91,15 @@ public class SwitchReturnLoweringTests
     }
 
     [Test]
-    public async Task SwitchOutsideReturn_KeepsTheArrow()
+    public async Task SwitchOutsideReturn_LowersToAConditionalChain()
     {
         var output = Output();
 
-        await Assert.That(output).Contains("1 + (($s) => {");
+        await Assert
+            .That(output)
+            .Contains(
+                "return (1 + ($s = shape, $s instanceof Circle && ($c = $s, true) ? $c.radius : $s instanceof Square && ($s1 = $s, true) ? $s1.side : throwError(new SwitchExpressionException($s)))) | 0;"
+            );
     }
 
     // A `const` would keep the literal type of a C# constant (`2`), and the

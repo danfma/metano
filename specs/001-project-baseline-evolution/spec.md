@@ -1481,6 +1481,35 @@ Product requirements added after the migration (normative; each one is traced by
      A record used as a key that the runtime turns into text (a `ConcurrentDictionary` key's
      `toJSON`) now prints the record text instead of `[object Object]`.
 
+- **FR-095** (switch expressions without closures, #735, decision H-1): The TypeScript target
+  MUST lower a C# `switch` expression without allocating a closure wherever an enclosing
+  statement list exists, keeping .NET's evaluation order: the subject is evaluated exactly once,
+  the arms are tested in source order with their `when` guards, and only the matched arm's
+  result is evaluated.
+  1. *Shapes.* A switch whose subject is side-effect free, whose arms bind nothing and whose
+     last arm is an unguarded `_` stays a nested conditional chain over the subject (unchanged).
+     `return value switch { … };` stays a block of `if`s that return or throw (wave 7, #735).
+     Every other switch expression — a local initializer, an assignment, an argument, an
+     operand, an arm result of another switch — lowers to a conditional chain over a temporary:
+     `($s = subject, test1 ? result1 : test2 ? result2 : tail)`.
+  2. *Temporaries.* `$s` is an untyped `let` declared at the head of the innermost statement
+     list (the temporaries mechanism of spec 011, contracts/runtime-collections.md § Indexer
+     compound assignments). Each arm designator becomes its own typed `let` named after it with
+     a `$` prefix (`Circle c` → `let $c: Circle;`), assigned by the arm's test right after the
+     check that narrows the subject (`$s instanceof Circle && ($c = $s, guard)`), and every read
+     or write of the designator in the arm's guard and result names the temporary. Nested
+     switches take distinct names (`$s1`, `$c1`).
+  3. *Tail.* An unguarded catch-all arm (`_`, `var x`) is the tail; later arms are unreachable.
+     Without one, the tail throws through the runtime helper `throwError(error): never` with the
+     `SwitchExpressionException` the statement form throws
+     (`throwError(new SwitchExpressionException($s))`). An arm whose result is a throw
+     expression (`_ => throw new X()`) throws through the same helper, in the subject-reading
+     chain of item 1 too.
+  4. *Fallback.* Where no statement list encloses the switch (a field or static initializer, a
+     constructor-initializer argument), the self-invoking arrow stays.
+  5. *Scope.* Dart output does not change. A throw expression outside a switch arm keeps its
+     current lowering.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.
