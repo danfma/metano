@@ -809,6 +809,26 @@ public static class IrBodyPrinter
             PrintSwitchPattern(sb, slicePattern);
     }
 
+    /// <summary>
+    /// A bound type pattern prints as the typed variable pattern <c>Circle c</c>. A
+    /// bare <c>Circle</c> would be a constant pattern that matches the <c>Type</c>
+    /// object and never an instance, so it prints as the object pattern
+    /// <c>Circle()</c>; a nullable type has no object-pattern form and prints as
+    /// the typed wildcard <c>Circle? _</c>.
+    /// </summary>
+    private static void PrintTypePattern(StringBuilder sb, IrTypePattern typePat)
+    {
+        var type = FormatType(typePat.Type);
+        sb.Append(type);
+
+        if (typePat.Designator is not null)
+            sb.Append(' ').Append(IrToDartNamingPolicy.ToParameterName(typePat.Designator.Name));
+        else if (type.EndsWith('?'))
+            sb.Append(" _");
+        else
+            sb.Append("()");
+    }
+
     private static void PrintSwitchPattern(StringBuilder sb, IrPattern pattern)
     {
         switch (pattern)
@@ -817,12 +837,7 @@ public static class IrBodyPrinter
                 PrintExpression(sb, constant.Value);
                 break;
             case IrTypePattern typePat:
-                sb.Append(FormatType(typePat.Type));
-
-                if (typePat.Designator is not null)
-                    sb.Append(' ')
-                        .Append(IrToDartNamingPolicy.ToParameterName(typePat.Designator.Name));
-
+                PrintTypePattern(sb, typePat);
                 break;
             case IrVarPattern varPat:
                 sb.Append("var ")

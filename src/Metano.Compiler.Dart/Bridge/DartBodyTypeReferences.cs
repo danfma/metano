@@ -13,8 +13,9 @@ namespace Metano.Compiler.Dart.Bridge;
 /// Covered positions: static-member receivers (<c>DelExt.twice(h.get)</c>, which includes the
 /// type hosting an extension helper), <c>new</c> expressions, casts, type tests and top-level
 /// <c>is Type</c> patterns, local-variable and <c>foreach</c> variable types, and catch
-/// exception types. Types that only appear inside nested patterns (property, positional,
-/// list, logical) or generic type arguments of a call are not collected yet.
+/// exception types, and the types named by switch-expression arm patterns (including nested
+/// property, positional, list and logical patterns). Types only inside nested patterns of an
+/// <c>is</c> expression or generic type arguments of a call are not collected yet.
 /// </para>
 /// </summary>
 public static class DartBodyTypeReferences
@@ -86,6 +87,7 @@ public static class DartBodyTypeReferences
             [
                 IrToDartTypeMapper.Map(pattern.Type),
             ],
+            IrSwitchExpression sw => sw.Arms.SelectMany(arm => TypesNamedBy(arm.Pattern)),
             IrLambdaExpression lambda => lambda
                 .Parameters.Select(p => p.Type)
                 .Where(t => t is not (IrUnknownTypeRef or IrDynamicTypeRef))
@@ -97,6 +99,23 @@ public static class DartBodyTypeReferences
             } => typeArgs.Select(IrToDartTypeMapper.Map),
             _ => [],
         };
+
+    private static IEnumerable<DartType> TypesNamedBy(IrPattern pattern) =>
+        pattern switch
+        {
+            IrTypePattern typePattern => [IrToDartTypeMapper.Map(typePattern.Type)],
+            IrPropertyPattern property => PatternTypeOf(property.Type)
+                .Concat(property.Subpatterns.SelectMany(sub => TypesNamedBy(sub.Pattern))),
+            IrPositionalPattern positional => PatternTypeOf(positional.Type)
+                .Concat(positional.Elements.SelectMany(TypesNamedBy)),
+            IrLogicalPattern logical => TypesNamedBy(logical.Left)
+                .Concat(logical.Right is null ? [] : TypesNamedBy(logical.Right)),
+            IrListPattern list => list.Elements.SelectMany(TypesNamedBy),
+            _ => [],
+        };
+
+    private static IEnumerable<DartType> PatternTypeOf(IrTypeRef? type) =>
+        type is null ? [] : [IrToDartTypeMapper.Map(type)];
 
     private static IrNamedTypeRef NamedTypeOf(IrTypeReference reference) =>
         new(IrToDartNamingPolicy.InnermostTypeSegment(reference.Name), Origin: reference.Origin);
