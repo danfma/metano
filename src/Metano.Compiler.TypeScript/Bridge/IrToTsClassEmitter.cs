@@ -192,6 +192,7 @@ internal sealed class IrToTsClassEmitter(
         var ctorFieldInitializers = new List<TsStatement>();
 
         IndexerDiagnostics.Report(type, ir, _context.ReportDiagnostic);
+        EventDiagnostics.Report(type, _context.ReportDiagnostic);
 
         EmitClassMembers(
             ir,
