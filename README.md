@@ -269,6 +269,7 @@ See the [Dart/Flutter roadmap](docs/roadmap/better-flutter-support.md) and the
 |---|---|
 | [Documentation home](docs/README.md) | Map of the guides and references |
 | [Getting started](docs/getting-started.md) | First TypeScript project, build integration, generated package flow |
+| [Using generated code from TypeScript](docs/guides/typescript-consumers.md) | Consuming generated types, `bigint`, `Decimal`, collections, JSON, exceptions, and boundaries in TS |
 | [Attribute reference](docs/attributes.md) | Every public annotation and when to use it |
 | [BCL mappings](docs/bcl-mappings.md) | How standard C# types lower, with current tables focused on TypeScript |
 | [Cross-project references](docs/cross-package.md) | Multi-project packages and generated imports |
