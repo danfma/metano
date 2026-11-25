@@ -315,7 +315,7 @@ internal sealed class IrToTsClassEmitter(
     }
 
     /// <summary>
-    /// Marks <c>override</c> on the user accessors and methods from
+    /// Marks <c>override</c> on the user fields, accessors and methods from
     /// <paramref name="start"/> whose name an emitted base already declares on
     /// the same side (<see cref="WithInheritedOverride"/>). Runs before the
     /// members join the user-member set, which compares references.
@@ -355,6 +355,11 @@ internal sealed class IrToTsClassEmitter(
             },
             TsSetterMember { Override: false } setter
                 when claims.InheritsMember(setter.Name, setter.Static) => setter with
+            {
+                Override = true,
+            },
+            TsFieldMember { Override: false, Accessibility: not TsAccessibility.Private } field
+                when claims.InheritsMember(field.Name, field.Static) => field with
             {
                 Override = true,
             },

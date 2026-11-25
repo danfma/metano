@@ -24,6 +24,8 @@ public class ImplicitOverrideTests
 
                 public static int Count() => 0;
 
+                public static int Stat { get; set; }
+
                 public string Describe() => Label() + Area() + Sides + Name;
             }
 
@@ -43,6 +45,8 @@ public class ImplicitOverrideTests
                 public override string Name => "square";
 
                 public static new int Count() => 1;
+
+                public static new int Stat { get; set; }
             }
 
             public closed class Op
@@ -80,6 +84,7 @@ public class ImplicitOverrideTests
         await Assert.That(square).Contains("  override get sides(): number {");
         await Assert.That(square).Contains("  override get name(): string {");
         await Assert.That(square).Contains("  static override count(): number {");
+        await Assert.That(square).Contains("  static override stat");
         await Assert.That(result["app/add.ts"]).Contains("  protected override weight(): number {");
     }
 
