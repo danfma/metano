@@ -60,14 +60,67 @@ internal sealed class SameNameTypeReferences(
             [
                 .. fileTypes
                     .SelectMany(type => type.DeclaringSyntaxReferences)
-                    .Select(reference => reference.GetSyntax())
-                    .SelectMany(syntax =>
-                        syntax.DescendantNodesAndSelf().OfType<SimpleNameSyntax>()
-                    )
-                    .Where(name => ReferenceSpellings.Contains(name.Identifier.ValueText))
-                    .Select(ReferencedType)
-                    .OfType<SameNameReference>(),
+                    .SelectMany(reference => ReferencesIn(reference.GetSyntax())),
             ];
+
+    /// <summary>
+    /// The references one declaration holds, in source order: the names it spells and
+    /// the types its inferred lambda parameter annotations print.
+    /// </summary>
+    private IEnumerable<SameNameReference> ReferencesIn(SyntaxNode declaration)
+    {
+        var spelled = declaration
+            .DescendantNodesAndSelf()
+            .OfType<SimpleNameSyntax>()
+            .Where(name => ReferenceSpellings.Contains(name.Identifier.ValueText))
+            .Select(ReferencedType)
+            .OfType<SameNameReference>();
+
+        var inferred = declaration
+            .DescendantNodes()
+            .OfType<ParameterSyntax>()
+            .SelectMany(InferredLambdaReferences);
+
+        return spelled.Concat(inferred).OrderBy(reference => reference.Location.SourceSpan.Start);
+    }
+
+    /// <summary>
+    /// The ambiguous types the inferred type of a lambda parameter written without one
+    /// (<c>n =&gt; n.Value</c>) names: the emitted annotation prints them
+    /// (<c>(n: Node&lt;number&gt;) =&gt; …</c>), so they bind the import like a spelled
+    /// reference (#751).
+    /// </summary>
+    private IEnumerable<SameNameReference> InferredLambdaReferences(ParameterSyntax parameter)
+    {
+        if (parameter.Type is not null)
+            return [];
+
+        if (
+            ModelFor(parameter.SyntaxTree).GetDeclaredSymbol(parameter)
+            is not IParameterSymbol symbol
+        )
+            return [];
+
+        return TypesNamedBy(symbol.Type)
+            .Where(IsAmbiguous)
+            .Select(type => new SameNameReference(type, parameter.GetLocation(), IsAlias: false));
+    }
+
+    /// <summary>
+    /// The type definitions <paramref name="type"/> names: itself, its type arguments
+    /// and its array element types, recursively.
+    /// </summary>
+    private static IEnumerable<INamedTypeSymbol> TypesNamedBy(ITypeSymbol type) =>
+        type switch
+        {
+            IArrayTypeSymbol array => TypesNamedBy(array.ElementType),
+            INamedTypeSymbol named =>
+            [
+                named.OriginalDefinition,
+                .. named.TypeArguments.SelectMany(TypesNamedBy),
+            ],
+            _ => [],
+        };
 
     /// <summary>
     /// The project type each ambiguous name of one file binds: a type the file declares,

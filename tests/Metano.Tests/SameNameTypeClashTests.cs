@@ -458,6 +458,97 @@ public class SameNameTypeClashTests
         await Assert.That(exitCode).IsEqualTo(0);
     }
 
+    /// <summary>
+    /// #751: a type that appears only in an inferred lambda parameter annotation
+    /// (<c>n =&gt; n.Value</c> printed as <c>(n: Node&lt;number&gt;) =&gt; …</c>) binds the
+    /// import by its symbol, as a spelled reference does.
+    /// </summary>
+    [Test]
+    public async Task InferredLambdaParameterType_ImportsItsOwnModule()
+    {
+        var source =
+            AliasNodes
+            + """
+                namespace App
+                {
+                    [Transpile]
+                    public static class Repo
+                    {
+                        public static System.Collections.Generic.List<Node<int>> All() => [];
+                    }
+                }
+
+                namespace Consumer
+                {
+                    using System.Linq;
+
+                    [Transpile]
+                    public static class Values
+                    {
+                        public static System.Collections.Generic.List<int> Of() => App.Repo.All().Select(n => n.Value).ToList();
+                    }
+                }
+                """;
+
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(source);
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.ImportedNameClash))
+            .IsEmpty();
+
+        var output = files["consumer/values.ts"];
+
+        await Assert.That(output).Contains("(n: Node<number>) => n.value");
+        await Assert.That(output).Contains("import type { Node } from \"../app/node.js\";");
+        await Assert.That(output).DoesNotContain("cyc/node.js");
+
+        var (exitCode, tsgo) = await TreeShaking.StrictTypeCheck.Run(
+            files,
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(tsgo).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// #751: a file whose inferred lambda annotation prints one <c>Node</c> while it
+    /// spells the other cannot import both under the bare name, so MS0070 reports it.
+    /// </summary>
+    [Test]
+    public async Task InferredLambdaParameterType_BesideTheOtherSpelledType_ReportsMs0070()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            AliasNodes
+                + """
+                namespace App
+                {
+                    [Transpile]
+                    public static class Repo
+                    {
+                        public static System.Collections.Generic.List<Node<int>> All() => [];
+                    }
+                }
+
+                namespace Consumer
+                {
+                    using System.Linq;
+
+                    [Transpile]
+                    public static class Mixed
+                    {
+                        public static int Of(App.Cyc.Node cyc) =>
+                            App.Repo.All().Select(n => n.Value).Count() + cyc.Size();
+                    }
+                }
+                """
+        );
+
+        await Assert
+            .That(diagnostics.Count(d => d.Code == DiagnosticCodes.ImportedNameClash))
+            .IsEqualTo(1);
+    }
+
     private const string AliasNodes = """
         namespace App
         {
