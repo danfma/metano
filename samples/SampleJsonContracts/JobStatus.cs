@@ -9,8 +9,10 @@ namespace SampleJsonContracts
     /// <summary>
     /// A closed family (spec 010 FR-C5, #738): in TypeScript <c>JobStatus</c> is the
     /// union of its cases, narrowed by the read-only <c>kind</c> discriminant. The
-    /// hand-written consumer is <c>test/closed-family.test.ts</c>.
+    /// hand-written consumer is <c>test/closed-family.test.ts</c>. Its guards admit
+    /// instances only (decision W9-1, #757).
     /// </summary>
+    [Metano.Annotations.GenerateGuard]
     public closed record JobStatus
     {
         public static string Family => "jobs";
@@ -20,8 +22,10 @@ namespace SampleJsonContracts
 
     public sealed record JobQueued : JobStatus;
 
+    [Metano.Annotations.GenerateGuard]
     public sealed record JobRunning(int Percent) : JobStatus;
 
+    [Metano.Annotations.GenerateGuard]
     public closed record JobFinished : JobStatus;
 
     public sealed record JobCompleted(double Seconds) : JobFinished;

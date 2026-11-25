@@ -1074,10 +1074,15 @@ the literal `"OrderCreated"`, so in TypeScript you narrow `IDomainEvent` using
 (or add `[StrictUnionGuard]` on an abstract base class to validate the variant
 shape in `isT`).
 
-A `[GenerateGuard]` on the root of a closed family still accepts a plain object
-through its structural fallback, and a plain object has no `kind` getter. Do not
-switch on `kind` for a value a guard admitted from `unknown`; construct the case
-first (tracked in [#757](https://github.com/danfma/metano/issues/757)).
+A `[GenerateGuard]` on a type of a closed family that takes the union shape admits
+instances only: `isPaymentMethod(value)` is `value instanceof PaymentMethod$Base`
+and `isCardPayment(value)` is `value instanceof CardPayment`, with no structural
+fallback (spec 010 FR-C5, #757). Every case reads `kind` from its class's
+prototype, so a plain object of the same shape is not a case, and a `switch` on
+`kind` after a guard never falls through. To validate parsed JSON against such a
+family, deserialize it with `JsonSerializer` (which constructs the cases) instead
+of guarding the raw object. A family that keeps the class shape (`MS0073` or
+`[Discriminator]`) keeps the structural guard.
 
 ### JSON serialization
 

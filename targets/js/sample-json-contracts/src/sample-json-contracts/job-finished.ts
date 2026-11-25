@@ -58,3 +58,13 @@ abstract class JobFinished$Base extends JobStatus {
 export type JobFinished = JobCompleted | JobError;
 
 export const JobFinished: typeof JobFinished$Base = JobFinished$Base;
+
+export function isJobFinished(value: unknown): value is JobFinished {
+  return value instanceof JobFinished$Base;
+}
+
+export function assertJobFinished(value: unknown, message?: string): asserts value is JobFinished {
+  if (!isJobFinished(value)) {
+    throw new TypeError(message ?? "Value is not a JobFinished");
+  }
+}

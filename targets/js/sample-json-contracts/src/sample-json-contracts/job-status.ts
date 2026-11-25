@@ -62,3 +62,13 @@ abstract class JobStatus$Base {
 export type JobStatus = JobQueued | JobRunning | JobFinished;
 
 export const JobStatus: typeof JobStatus$Base = JobStatus$Base;
+
+export function isJobStatus(value: unknown): value is JobStatus {
+  return value instanceof JobStatus$Base;
+}
+
+export function assertJobStatus(value: unknown, message?: string): asserts value is JobStatus {
+  if (!isJobStatus(value)) {
+    throw new TypeError(message ?? "Value is not a JobStatus");
+  }
+}
