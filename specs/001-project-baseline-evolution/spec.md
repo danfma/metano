@@ -1550,6 +1550,33 @@ Product requirements added after the migration (normative; each one is traced by
   derived arguments with the same type and requiredness. A type-level attribute on a type with
   no constructor (a static class) reports that there is no constructor to lower.
 
+- **FR-102** (deconstruction, #779, Group U): Every deconstruction C# accepts in statement
+  position MUST lower without a closure and keep .NET's evaluation order: the receivers and
+  indices of the existing variables written are evaluated first, left to right, then the right
+  side in full (with every `Deconstruct` call), then the writes, left to right. This covers
+  `var (a, b) = e`, `(var a, var b) = e`, `(T a, U b) = e`, a mix of declarations and existing
+  variables (`(x, var y) = e`), nesting (`(a, (b, c))`), discards, `foreach (var (k, v) in e)`,
+  and the expression body of a `void` member or lambda (`void Swap() => (a, b) = (b, a);`).
+  1. *Parts.* A value that lowers to a JS array (a `ValueTuple`, an array, a `KeyValuePair`, a
+     `Tuple`, a `[JsTuple]` record) is read by position (`const [a, b] = e`); a record's
+     synthesized `Deconstruct` reads its positional members (`const { x, y } = p`); a user
+     instance `Deconstruct` of a transpiled type is called and its multi-value result read by
+     position (`const [a, b] = p.deconstruct()`, the overload's own name when `Deconstruct` is
+     overloaded). A nested part taken apart by a `Deconstruct` call is bound to a temporary and
+     deconstructed after the enclosing binding.
+  2. *Tuple literals.* A tuple literal on the right side is taken apart element by element
+     (`var (n, s) = (1, "x")` → `const n = 1; const s = "x";`), so no array is allocated only
+     to be read back; a discarded element is still evaluated for its effects.
+  3. *Existing variables.* A local, field, property or array element is written after
+     everything else is evaluated, from a `$partN` temporary (a constant is written as is):
+     `(x, y) = (y, x)` → `const $part0 = y; const $part1 = x; x = $part0; y = $part1;`.
+  4. *Not supported* (MS0001, the unsupported placeholder): an extension or BCL
+     `Deconstruct` (`DateOnly`), a write through a collection indexer or an extension member,
+     and a deconstruction whose value is used (`var t = (x, y) = …`, a `for` incrementor).
+  5. *Dart.* A deconstruction of a tuple (a Dart record) prints as a record pattern
+     (`var (a, (b, _)) = e;`), a tuple literal as one declaration per element; every other
+     shape keeps the unsupported placeholder.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

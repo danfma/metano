@@ -977,7 +977,7 @@ public static partial class IrToTsExpressionBridge
     /// member the toolchain declares, otherwise the <c>[Name]</c> override or
     /// the unescaped camelCase name the foreign declaration carries.
     /// </summary>
-    private static string ReadDataMemberName(
+    internal static string ReadDataMemberName(
         string memberName,
         string? emittedName,
         bool isTranspiledDataMember

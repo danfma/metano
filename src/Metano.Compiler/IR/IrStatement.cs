@@ -36,30 +36,77 @@ public sealed record IrVariableDeclaration(
 ) : IrStatement;
 
 /// <summary>
-/// A deconstructing variable declaration — <c>var (a, b) = expr;</c>. Lowers to
-/// a JS array-destructuring binding (<c>const [a, b] = expr</c>). Each element is
-/// a bound name or a discard (<see cref="IrDeconstructionElement.Name"/> null).
-/// Target-agnostic: a Dart target could consume the same shape as record-pattern
-/// destructuring.
+/// A deconstructing variable declaration — <c>var (a, b) = expr;</c>. Each
+/// element is a bound name, a discard (<see cref="IrDeconstructionElement.Name"/>
+/// null) or a nested deconstruction of its part
+/// (<see cref="IrDeconstructionElement.Nested"/>). The parts are read by
+/// position (a tuple, an array, a <c>[JsTuple]</c> record, the multi-value
+/// result of an <see cref="IrOutArgumentCall"/>) unless <see cref="Members"/>
+/// names the member each one reads (a record's synthesized
+/// <c>Deconstruct</c>). A JS target lowers it to a destructuring binding
+/// (<c>const [a, b] = expr</c>, <c>const { x: a, y: b } = expr</c>).
 /// </summary>
-/// <param name="Elements">The positional binding slots, in declaration order.</param>
-/// <param name="Initializer">The right-hand side that produces the tuple value.</param>
+/// <param name="Elements">The binding slots, in declaration order.</param>
+/// <param name="Initializer">The right-hand side that produces the deconstructed value.</param>
 /// <param name="IsConst">True when no bound local is reassigned (mirrors
 /// <see cref="IrVariableDeclaration.IsConst"/>); false promotes the binding to <c>let</c>.</param>
 public sealed record IrTupleDeconstruction(
     IReadOnlyList<IrDeconstructionElement> Elements,
     IrExpression Initializer,
     bool IsConst = true
-) : IrStatement;
+) : IrStatement
+{
+    /// <summary>
+    /// The member each element reads, in element order, or <c>null</c> to
+    /// read the elements by position.
+    /// </summary>
+    public IReadOnlyList<IrPositionalElementMember>? Members { get; init; }
+
+    /// <summary>
+    /// The type of the deconstructed value when the extractor resolved it,
+    /// so a target whose tuples are not arrays (a Dart record) can tell how
+    /// to take it apart; <c>null</c> when unknown.
+    /// </summary>
+    public IrTypeRef? ValueType { get; init; }
+
+    /// <summary>The locals the declaration binds, nested ones included.</summary>
+    public IEnumerable<string> BoundNames => IrDeconstructionElement.BoundNamesOf(Elements);
+}
 
 /// <summary>
 /// One slot of an <see cref="IrTupleDeconstruction"/>. A null
 /// <paramref name="Name"/> denotes a discard (<c>_</c>) — an empty hole in the
-/// emitted array pattern that binds nothing.
+/// emitted pattern that binds nothing — or, with <see cref="Nested"/> set, a
+/// part taken apart in turn.
 /// </summary>
-/// <param name="Name">The bound local name, or null for a discard.</param>
+/// <param name="Name">The bound local name, or null for a discard or a nested part.</param>
 /// <param name="Type">The optional declared element type (usually null for <c>var</c>).</param>
-public sealed record IrDeconstructionElement(string? Name, IrTypeRef? Type = null);
+public sealed record IrDeconstructionElement(string? Name, IrTypeRef? Type = null)
+{
+    /// <summary>
+    /// The deconstruction of this slot's part (<c>var (a, (b, c)) = …</c>),
+    /// or <c>null</c> for a bound name or a discard.
+    /// </summary>
+    public IrNestedDeconstruction? Nested { get; init; }
+
+    /// <summary>The locals <paramref name="elements"/> bind, nested ones included.</summary>
+    public static IEnumerable<string> BoundNamesOf(IEnumerable<IrDeconstructionElement> elements) =>
+        elements.SelectMany(element =>
+            element.Nested is { } nested ? BoundNamesOf(nested.Elements)
+            : element.Name is { } name ? [name]
+            : []
+        );
+}
+
+/// <summary>
+/// The nested deconstruction of one part of an
+/// <see cref="IrTupleDeconstruction"/>, with the same reading rules: by
+/// position, or by the member <see cref="Members"/> names for each element.
+/// </summary>
+public sealed record IrNestedDeconstruction(
+    IReadOnlyList<IrDeconstructionElement> Elements,
+    IReadOnlyList<IrPositionalElementMember>? Members = null
+);
 
 /// <summary>
 /// An <c>if</c> statement with optional <c>else</c> branch.

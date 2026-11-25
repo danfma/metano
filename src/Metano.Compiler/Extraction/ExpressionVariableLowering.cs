@@ -494,7 +494,7 @@ internal sealed partial class ExpressionVariableLowering
     }
 
     private static bool BindsName(IrStatement statement, string name) =>
-        statement is IrTupleDeconstruction td && td.Elements.Any(e => e.Name == name);
+        statement is IrTupleDeconstruction td && td.BoundNames.Contains(name);
 
     /// <summary>A trailing discard needs no hole: <c>[a, ]</c> is <c>[a]</c>.</summary>
     private static void TrimTrailingDiscards(List<IrDeconstructionElement> elements)

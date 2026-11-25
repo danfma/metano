@@ -350,12 +350,6 @@ public static class IrToTsStatementBridge
         return new TsTryStatement(MapBody(ts.Body, context), handler, finallyBody);
     }
 
-    /// <summary>
-    /// The emitted name of a deconstruction element; a discard binds nothing.
-    /// </summary>
-    private static string? LocalElementName(IrDeconstructionElement element) =>
-        element.Name is { } name ? IrToTsNamingPolicy.ToLocalName(name) : null;
-
     private static string WrapLoop(string header, IReadOnlyList<TsStatement> body) =>
         header + "\n" + RenderIndentedBody(body) + "}";
 
@@ -514,13 +508,7 @@ public static class IrToTsStatementBridge
                     : new TsIdentifier("undefined"),
                 Const: vd.IsConst
             ),
-            IrTupleDeconstruction td => new TsDestructuringDeclaration(
-                td.Elements.Select(LocalElementName).ToList(),
-                td.Initializer is IrOutArgumentCall outCall
-                    ? IrToTsExpressionBridge.MapOutArgumentCallValue(outCall, context)
-                    : IrToTsExpressionBridge.Map(td.Initializer, context),
-                Const: td.IsConst
-            ),
+            IrTupleDeconstruction td => IrToTsDeconstructionBridge.Map(td, context),
             IrIfStatement ifs => new TsIfStatement(
                 IrToTsExpressionBridge.Map(ifs.Condition, context),
                 MapBody(ifs.Then, context),

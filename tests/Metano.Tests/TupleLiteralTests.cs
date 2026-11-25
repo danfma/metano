@@ -215,28 +215,6 @@ public class TupleLiteralTests
     }
 
     [Test]
-    public async Task TupleDeconstructionIntoExistingVariables_ReportsUnsupported()
-    {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
-            """
-            [Transpile]
-            public static class Swaps
-            {
-                public static int Swap(int x, int y)
-                {
-                    (x, y) = (y, x);
-                    return x - y;
-                }
-            }
-            """
-        );
-
-        await Assert
-            .That(diagnostics.Count(d => d.Code == DiagnosticCodes.UnsupportedFeature))
-            .IsEqualTo(1);
-    }
-
-    [Test]
     public async Task TupleLiteralWiderThanSevenElements_ReportsUnsupported()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(

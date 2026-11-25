@@ -1300,6 +1300,65 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
 
     // ─── Statements ─────────────────────────────────────────
 
+    /// <summary>
+    /// Prints a destructuring target. A null array element is a hole: the
+    /// comma that follows (or, trailing, the one before) leaves the position
+    /// empty. An object property whose target is the same name prints in its
+    /// shorthand form.
+    /// </summary>
+    private void PrintBindingTarget(TsBindingTarget target)
+    {
+        switch (target)
+        {
+            case TsBindingName name:
+                _sb.Write(name.Name);
+                break;
+
+            case TsArrayBindingPattern array:
+                _sb.Write("[");
+
+                for (var i = 0; i < array.Elements.Count; i++)
+                {
+                    if (i > 0)
+                        _sb.Write(", ");
+
+                    if (array.Elements[i] is { } element)
+                        PrintBindingTarget(element);
+                }
+
+                _sb.Write("]");
+                break;
+
+            case TsObjectBindingPattern obj:
+                _sb.Write("{ ");
+
+                for (var i = 0; i < obj.Properties.Count; i++)
+                {
+                    if (i > 0)
+                        _sb.Write(", ");
+
+                    PrintObjectBindingProperty(obj.Properties[i]);
+                }
+
+                _sb.Write(" }");
+                break;
+        }
+    }
+
+    private void PrintObjectBindingProperty(TsObjectBindingProperty property)
+    {
+        if (property.Value is TsBindingName { Name: var name } && name == property.Key)
+        {
+            _sb.Write(name);
+
+            return;
+        }
+
+        _sb.Write(property.Key);
+        _sb.Write(": ");
+        PrintBindingTarget(property.Value);
+    }
+
     private void PrintStatement(TsStatement stmt)
     {
         switch (stmt)
@@ -1405,19 +1464,8 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
                 if (destructuring.Exported)
                     _sb.Write("export ");
                 _sb.Write(destructuring.Const ? "const " : "let ");
-                _sb.Write("[");
-                for (var i = 0; i < destructuring.Names.Count; i++)
-                {
-                    if (i > 0)
-                        _sb.Write(", ");
-                    // A null name is a discard: emit an empty slot. When the
-                    // discard is trailing the comma above already produced the
-                    // hole; for a leading/middle discard the empty slot is the
-                    // absence of a name between commas.
-                    if (destructuring.Names[i] is { } name)
-                        _sb.Write(name);
-                }
-                _sb.Write("] = ");
+                PrintBindingTarget(destructuring.Pattern);
+                _sb.Write(" = ");
                 PrintExpression(destructuring.Initializer);
                 _sb.Write(";");
                 break;

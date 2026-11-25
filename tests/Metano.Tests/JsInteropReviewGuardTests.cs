@@ -11,14 +11,10 @@ namespace Metano.Tests;
 /// 003-js-interop-primitives. They pin the three semantic gates that were
 /// missing from the first cut:
 /// <list type="number">
-///   <item>Deconstruction is intercepted at extraction only when the right-hand
-///   side is actually a JS array (an array type or a <c>[JsTuple]</c> record). A
-///   native <c>ValueTuple</c> or a user type with a custom <c>Deconstruct</c>
-///   must NOT silently become an <see cref="IrTupleDeconstruction"/> (which
-///   would emit <c>const [a, b] = …</c> array-destructuring a non-array); it
-///   falls through to <see cref="IrUnsupportedStatement"/> (loud, per
-///   Constitution V — native ValueTuple deconstruction is out of scope,
-///   research D7).</item>
+///   <item>Deconstruction reads each part the way the right-hand side
+///   lowers: a JS array (an array, a <c>[JsTuple]</c> record, a
+///   <c>ValueTuple</c>) by position, a user type through its emitted
+///   <c>Deconstruct</c> call (#779).</item>
 ///   <item>A <c>[JsTuple]</c> record must be positional-only: an extra
 ///   instance member raises <c>MS0027</c> instead of being silently dropped and
 ///   mis-accessed on the array.</item>
@@ -31,13 +27,10 @@ public class JsInteropReviewGuardTests
 {
     // ─── Guard 1: deconstruction interception is semantic, not syntactic ───
 
-    // Guard 1a — native ValueTuple deconstruction is OUT OF SCOPE (research D7).
-    // `var (a, b) = (1, 2);` parses as the deconstruction syntax but the RHS is a
-    // ValueTuple, not a JS array — it must NOT be intercepted as an
-    // IrTupleDeconstruction. It surfaces as a non-intercepted statement carrying
-    // an unsupported node (loud — the body coverage probe rejects it).
+    // Guard 1a — a ValueTuple literal is taken apart element by element (#779):
+    // `var (a, b) = (1, 2);` declares each local from its element.
     [Test]
-    public async Task NativeValueTupleDeconstruction_NotInterceptedAndSurfacesUnsupported()
+    public async Task ValueTupleLiteralDeconstruction_DeclaresEachElement()
     {
         var body = ExtractFromMethod(
             """
@@ -48,14 +41,16 @@ public class JsInteropReviewGuardTests
             """
         );
 
-        await Assert.That(body[0]).IsNotTypeOf<IrTupleDeconstruction>();
-        await Assert.That(ContainsUnsupported(body[0])).IsTrue();
+        await Assert.That(body.Count).IsEqualTo(2);
+        await Assert.That(((IrVariableDeclaration)body[0]).Name).IsEqualTo("a");
+        await Assert.That(((IrVariableDeclaration)body[1]).Name).IsEqualTo("b");
     }
 
-    // Guard 1b — a user type exposing a custom Deconstruct is NOT a JS array, so
-    // `var (x, y) = point;` must NOT be intercepted as array destructuring.
+    // Guard 1b — a user type with a custom Deconstruct is NOT a JS array: the
+    // deconstruction reads the multi-value result of its emitted Deconstruct
+    // call (#779), never the receiver itself.
     [Test]
-    public async Task UserDeconstructType_NotInterceptedAndSurfacesUnsupported()
+    public async Task UserDeconstructType_ReadsTheDeconstructCall()
     {
         var body = ExtractFromMethod(
             """
@@ -74,8 +69,10 @@ public class JsInteropReviewGuardTests
             """
         );
 
-        await Assert.That(body[0]).IsNotTypeOf<IrTupleDeconstruction>();
-        await Assert.That(ContainsUnsupported(body[0])).IsTrue();
+        var deconstruction = (IrTupleDeconstruction)body[0];
+
+        await Assert.That(deconstruction.Initializer).IsTypeOf<IrOutArgumentCall>();
+        await Assert.That(deconstruction.BoundNames.ToList()).IsEquivalentTo(["x", "y"]);
     }
 
     // Guard 1c (positive) — a [JsTuple] record RHS IS a JS array, so it is
@@ -194,34 +191,6 @@ public class JsInteropReviewGuardTests
     }
 
     /// <summary>
-    /// True when <paramref name="statement"/> is, or directly wraps, an
-    /// unsupported IR node — covering both the
-    /// <see cref="IrUnsupportedStatement"/> form and the
-    /// <see cref="IrExpressionStatement"/> wrapping an
-    /// <see cref="IrUnsupportedExpression"/> (the shape a non-intercepted
-    /// deconstruction assignment falls through to: its
-    /// <see cref="DeclarationExpressionSyntax"/> left side has no IR mapping). A
-    /// deconstruction that escaped the JS-array guard lands in one of these, so
-    /// the body coverage probe rejects the body rather than emitting wrong code.
-    /// </summary>
-    private static bool ContainsUnsupported(IrStatement statement) =>
-        statement switch
-        {
-            IrUnsupportedStatement => true,
-            IrExpressionStatement es => ContainsUnsupported(es.Expression),
-            _ => false,
-        };
-
-    private static bool ContainsUnsupported(IrExpression expression) =>
-        expression switch
-        {
-            IrUnsupportedExpression => true,
-            IrBinaryExpression bin => ContainsUnsupported(bin.Left)
-                || ContainsUnsupported(bin.Right),
-            _ => false,
-        };
-
-    /// <summary>
     /// Extracts the statements of the subject method's body via
     /// <see cref="IrStatementExtractor"/> — the same harness
     /// <c>IrExpressionExtractionTests</c> uses. The subject method is the last
@@ -243,10 +212,12 @@ public class JsInteropReviewGuardTests
         var compilation = IrTestHelper.Compile(csharp);
         var tree = compilation.SyntaxTrees.First();
         var model = compilation.GetSemanticModel(tree);
+
         var target = tree.GetRoot()
             .DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .Last(m => m.Identifier.ValueText == "M");
+
         var extractor = new IrStatementExtractor(model, IrExtractionContext.Empty);
 
         return extractor.ExtractBody(target.Body, target.ExpressionBody, isVoid: true).Statements;
