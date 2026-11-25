@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler.Extraction;
@@ -63,6 +64,9 @@ public sealed partial class IrExpressionExtractor
         ["Union"] = 0,
         ["SequenceEqual"] = 0,
         ["ToHashSet"] = 0,
+        ["DistinctBy"] = 1,
+        ["ExceptBy"] = 1,
+        ["IntersectBy"] = 1,
         ["GroupBy"] = 1,
         ["ToDictionary"] = 1,
         ["ToLookup"] = 1,
@@ -82,7 +86,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private static void ReportTupleValueLookup(SyntaxNode node, IMethodSymbol? method)
     {
-        if (method is null || !ComparesTupleElementInCollection(method))
+        if (method is null || !ComparesTupleElementInCollection(node, method))
             return;
 
         ReportTupleComparison(node, method);
@@ -110,27 +114,64 @@ public sealed partial class IrExpressionExtractor
                 + "key instead."
         );
 
-    private static bool ComparesTupleElementInCollection(IMethodSymbol method) =>
-        ComparesTupleElementInGenericCollection(method) || ComparesTupleInLinq(method);
+    private static bool ComparesTupleElementInCollection(SyntaxNode node, IMethodSymbol method) =>
+        ComparesTupleElementInGenericCollection(method) || ComparesTupleInLinq(node, method);
 
     private static bool ComparesTupleElementInGenericCollection(IMethodSymbol method) =>
-        method.ContainingType
-            is { TypeArguments: [INamedTypeSymbol { IsTupleType: true }, ..] } type
+        method.ContainingType is { TypeArguments: [var first, ..] } type
+        && IsTupleOrNullableTuple(first)
         && type.ContainingNamespace?.ToDisplayString() == GenericCollectionsNamespace
         && TupleSensitiveMembersByType.TryGetValue(type.Name, out var members)
         && members.Contains(method.Name);
 
     /// <summary>
-    /// A LINQ operator over tuples that supplies no comparer: the overload that takes an
-    /// <c>IEqualityComparer</c> compares as that comparer says.
+    /// A LINQ operator over tuples that supplies no comparer: an overload that takes an
+    /// <c>IEqualityComparer&lt;T&gt;</c> compares as that comparer says, unless the argument
+    /// is a literal <c>null</c> (the default comparer).
     /// </summary>
-    private static bool ComparesTupleInLinq(IMethodSymbol method) =>
+    private static bool ComparesTupleInLinq(SyntaxNode node, IMethodSymbol method) =>
         method.ContainingType is { Name: nameof(Enumerable) } owner
         && owner.ContainingNamespace?.ToDisplayString() == "System.Linq"
         && TupleSensitiveLinqOperators.TryGetValue(method.Name, out var index)
         && method.TypeArguments.Length > index
-        && method.TypeArguments[index] is INamedTypeSymbol { IsTupleType: true }
-        && !method.Parameters.Any(parameter => parameter.Type.Name == "IEqualityComparer");
+        && IsTupleOrNullableTuple(method.TypeArguments[index])
+        && !SuppliesComparer(node, method);
+
+    private static bool IsTupleOrNullableTuple(ITypeSymbol type) =>
+        type is INamedTypeSymbol { IsTupleType: true }
+        || type
+            is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+                TypeArguments: [INamedTypeSymbol { IsTupleType: true }]
+            };
+
+    private static bool SuppliesComparer(SyntaxNode node, IMethodSymbol method)
+    {
+        var comparer = method.Parameters.FirstOrDefault(IsEqualityComparerParameter);
+
+        if (comparer is null)
+            return false;
+
+        if (node is not InvocationExpressionSyntax { ArgumentList.Arguments: var arguments })
+            return true;
+
+        var argumentIndex = comparer.Ordinal - (method.Parameters.Length - arguments.Count);
+
+        return argumentIndex < 0
+            || argumentIndex >= arguments.Count
+            || !IsDefaultComparerLiteral(arguments[argumentIndex].Expression);
+    }
+
+    private static bool IsEqualityComparerParameter(IParameterSymbol parameter) =>
+        parameter.Type.OriginalDefinition.ToDisplayString()
+        == "System.Collections.Generic.IEqualityComparer<T>";
+
+    private static bool IsDefaultComparerLiteral(ExpressionSyntax expression) =>
+        expression is LiteralExpressionSyntax { RawKind: (int)SyntaxKind.NullLiteralExpression }
+        || expression
+            is DefaultExpressionSyntax
+                or LiteralExpressionSyntax { RawKind: (int)SyntaxKind.DefaultLiteralExpression };
 
     private static string LookupOwnerOf(IMethodSymbol method) =>
         IsMemoryExtensionsCall(method) ? "an array or span"
