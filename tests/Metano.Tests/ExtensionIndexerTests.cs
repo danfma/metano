@@ -525,6 +525,19 @@ public class ExtensionIndexerTests
     }
 
     [Test]
+    public async Task ExtensionIndexer_NullConditionalCompound_UsedValue_YieldsTheStoredValue()
+    {
+        var output = TranspileNullableBag("public int? Run(Bag? bag) => bag?[0] += 1;");
+
+        await Assert
+            .That(output)
+            .Contains(
+                "return bag == null ? null : (receiver$temp$0 = item$get(bag, 0) == null ? null "
+                    + ": (item$get(bag, 0)! + 1) | 0, item$set(bag, 0, receiver$temp$0), receiver$temp$0);"
+            );
+    }
+
+    [Test]
     public async Task ExtensionIndexer_DeconstructionTarget_ReportsMs0001Error()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(

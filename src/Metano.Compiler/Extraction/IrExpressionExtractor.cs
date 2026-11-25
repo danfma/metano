@@ -617,8 +617,13 @@ public sealed partial class IrExpressionExtractor
         if (!IrEvaluationTraits.IsReusableReceiver(receiver))
             return null;
 
-        if (TryBuildExtensionIndexerStoreForNullConditional(receiver, assign) is { } indexerWrite)
-            return WhenNotNull(receiver, indexerWrite);
+        var isValueUsed = !IsValueUnused(OutermostConditionalAccess(assign));
+
+        if (
+            TryBuildExtensionIndexerStoreForNullConditional(receiver, assign, isValueUsed) is
+            { } indexerWrite
+        )
+            return GuardedExtensionStore(receiver, indexerWrite, isValueUsed);
 
         if (RebindAssignmentTarget(assign.Left, receiver) is not { } rebound)
             return null;
@@ -634,15 +639,49 @@ public sealed partial class IrExpressionExtractor
         // with a setter. Build the helper call directly so the inner
         // assignment also benefits from the `$set` lowering; the
         // surrounding null check stays exactly as the legacy form.
-        var memberWrite = TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign)
-            ?? (
-                _context.KeepsNativeCollections
-                    ? null
-                    : TryExtractConditionalElementUpdate(rebound, assign, CompoundStoreOf(assign))
-            )
-            ?? CompoundStoreOf(assign)(rebound);
+        if (
+            TryBuildExtensionPropertyAssignmentForNullConditional(receiver, assign, isValueUsed) is
+            { } propertyWrite
+        )
+            return GuardedExtensionStore(receiver, propertyWrite, isValueUsed);
+
+        var memberWrite = (
+            _context.KeepsNativeCollections
+                ? null
+                : TryExtractConditionalElementUpdate(rebound, assign, CompoundStoreOf(assign))
+        ) ?? CompoundStoreOf(assign)(rebound);
 
         return WhenNotNull(receiver, memberWrite);
+    }
+
+    /// <summary>
+    /// A null-conditional extension accessor store: <c>receiver != null &amp;&amp; store</c>
+    /// when its value is discarded, else <c>receiver == null ? null : store</c>,
+    /// whose store yields the stored value, as C#'s <c>r?[i] op= v</c> does.
+    /// </summary>
+    private static IrExpression GuardedExtensionStore(
+        IrExpression receiver,
+        IrExpression store,
+        bool isValueUsed
+    ) =>
+        isValueUsed
+            ? new IrConditionalExpression(IsNull(receiver), NullLiteral, store)
+            : WhenNotNull(receiver, store);
+
+    /// <summary>
+    /// The outermost null-conditional access whose chain ends in
+    /// <paramref name="assign"/>: the expression whose value C# yields.
+    /// </summary>
+    private static ExpressionSyntax OutermostConditionalAccess(AssignmentExpressionSyntax assign)
+    {
+        ExpressionSyntax node = assign;
+
+        while (
+            node.Parent is ConditionalAccessExpressionSyntax access && access.WhenNotNull == node
+        )
+            node = access;
+
+        return node;
     }
 
     /// <summary><c>receiver != null &amp;&amp; write</c>, a null-conditional assignment's shape.</summary>

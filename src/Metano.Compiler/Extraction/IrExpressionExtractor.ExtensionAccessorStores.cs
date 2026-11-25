@@ -63,13 +63,13 @@ public sealed partial class IrExpressionExtractor
     /// <summary>
     /// The inner write of a null-conditional assignment (<c>r?.Prop op= v</c>)
     /// against an extension property, or <c>null</c> when the target is not
-    /// one. The receiver is already reusable (the null test repeats it), and
-    /// the value of the whole conditional access is not the stored one, so
-    /// the store yields nothing.
+    /// one. The receiver is already reusable (the null test repeats it); the
+    /// store yields the stored value when the conditional access's value is used.
     /// </summary>
     private IrExpression? TryBuildExtensionPropertyAssignmentForNullConditional(
         IrExpression receiver,
-        AssignmentExpressionSyntax assign
+        AssignmentExpressionSyntax assign,
+        bool isValueUsed
     )
     {
         if (
@@ -101,7 +101,7 @@ public sealed partial class IrExpressionExtractor
                     [new IrArgument(receiver), new IrArgument(value)],
                     typeArguments: null
                 ),
-            isValueUsed: false
+            isValueUsed
         );
     }
 
@@ -112,7 +112,8 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression? TryBuildExtensionIndexerStoreForNullConditional(
         IrExpression receiver,
-        AssignmentExpressionSyntax assign
+        AssignmentExpressionSyntax assign,
+        bool isValueUsed
     )
     {
         if (
@@ -130,7 +131,7 @@ public sealed partial class IrExpressionExtractor
                 indexer,
                 () => accessors.Read(boundReceiver, indices),
                 value => accessors.Write(boundReceiver, indices, value),
-                isValueUsed: false
+                isValueUsed
             );
 
         var indices = binding

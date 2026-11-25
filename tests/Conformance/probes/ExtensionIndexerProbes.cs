@@ -54,12 +54,20 @@ public sealed class XiTexts
     public List<string?> Items { get; } = [null, "a"];
 
     public string? Note { get; set; }
+
+    public int Hits { get; set; } = 3;
 }
 
 public static class XiTextsExtensions
 {
     extension(XiTexts t)
     {
+        public int Score
+        {
+            get => t.Hits;
+            set => t.Hits = value;
+        }
+
         [Name("xiText")]
         public string? this[int i]
         {
@@ -225,5 +233,23 @@ public static class ExtensionIndexerProbes
         bag?[1] += 1;
 
         return $"{Show(bag![0])},{Show(bag[1])},{_picks}";
+    }
+
+    public static string nullConditionalUsedValue()
+    {
+        XiBag? bag = new XiBag();
+        XiBag? none = null;
+        XiTexts? texts = new XiTexts();
+        XiTexts? noTexts = null;
+        var u1 = bag?[0] += 1;
+        var u2 = none?[0] += 1;
+        var u3 = texts?.Score += 5;
+        var u4 = noTexts?.Score += 5;
+        bag?[2] += 10;
+        none?[2] += 10;
+        texts?.Score += 1;
+        noTexts?.Score += 1;
+
+        return $"{Show(u1)},{Show(u2)},{Show(u3)},{Show(u4)},{Show(bag![2])},{texts!.Score}";
     }
 }
