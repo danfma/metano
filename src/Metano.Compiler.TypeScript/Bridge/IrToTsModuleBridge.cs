@@ -152,7 +152,12 @@ public static class IrToTsModuleBridge
         IrToTsBridgeContext context
     )
     {
-        var plan = PlanModuleFunctionGroup(overloads);
+        var shadowed = new HashSet<IrModuleFunction>(
+            ShadowedOverloadsOf(overloads, context).Select(found => found.Overload),
+            ReferenceEqualityComparer.Instance
+        );
+
+        var plan = PlanModuleFunctionGroup(overloads, shadowed);
 
         var dispatcherName = claims.ClaimOf(overloads[0].OverloadRef!)?.Dispatcher
             ?? throw new InvalidOperationException(
@@ -171,12 +176,21 @@ public static class IrToTsModuleBridge
         foreach (var (fn, fastPathName) in plan.Sorted.Zip(fastPathNames))
             statements.Add(ConvertFunction(fn, context, fastPathName));
 
+        var dispatched = plan
+            .Sorted.Zip(fastPathNames)
+            .Where(pair => !shadowed.Contains(pair.First))
+            .ToList();
+
         statements.Add(
             new TsFunction(
                 dispatcherName,
                 IrToTsOverloadDispatcherBridge.DispatcherParameters(),
                 plan.CommonReturn,
-                BuildModuleDispatcherBody(plan.Sorted, fastPathNames, context),
+                BuildModuleDispatcherBody(
+                    dispatched.Select(pair => pair.First).ToList(),
+                    dispatched.Select(pair => pair.Second).ToList(),
+                    context
+                ),
                 Async: plan.IsAsync,
                 Overloads: plan.Signatures
             )
@@ -187,15 +201,36 @@ public static class IrToTsModuleBridge
     private static string SignatureOf(IrModuleFunction function) =>
         function.SignatureText ?? function.Name;
 
-    /// <summary>The group in dispatch order with one signature per overload.</summary>
+    /// <summary>
+    /// The overloads of a module-function group whose dispatcher branch an
+    /// earlier branch with the same runtime test shadows (#778): the
+    /// dispatcher drops them, and the emitter reports them through this same
+    /// rule.
+    /// </summary>
+    internal static IReadOnlyList<ShadowedOverload<IrModuleFunction>> ShadowedOverloadsOf(
+        IReadOnlyList<IrModuleFunction> overloads,
+        IrToTsBridgeContext context
+    ) =>
+        ShadowedDispatchOverloads.Find(
+            OverloadDispatchOrder.Sort(overloads, fn => fn.Parameters),
+            fn => BranchTestOf(fn, context),
+            fn => fn.ReturnType is not IrPrimitiveTypeRef { Primitive: IrPrimitive.Void }
+        );
+
+    /// <summary>
+    /// The group in dispatch order with one signature per overload the
+    /// dispatcher reaches (none for a <paramref name="shadowed"/> one).
+    /// </summary>
     private static ModuleFunctionGroupPlan PlanModuleFunctionGroup(
-        IReadOnlyList<IrModuleFunction> overloads
+        IReadOnlyList<IrModuleFunction> overloads,
+        IReadOnlySet<IrModuleFunction> shadowed
     )
     {
         var sorted = OverloadDispatchOrder.Sort(overloads, fn => fn.Parameters);
         var isAsync = sorted.Any(fn => fn.Semantics.IsAsync);
 
         var signatures = sorted
+            .Where(fn => !shadowed.Contains(fn))
             .Select(fn => new TsMethodOverload(
                 SignatureParametersOf(fn),
                 IrToTsTypeMapper.Map(fn.ReturnType),
@@ -285,16 +320,17 @@ public static class IrToTsModuleBridge
             ? [new TsExpressionStatement(delegateCall), new TsReturnStatement()]
             : new List<TsStatement> { new TsReturnStatement(delegateCall) };
 
-        return new TsIfStatement(
-            argumentShape.Guard(
-                new TypeCheckScope(fn.TypeParameters ?? [], null)
-                {
-                    RuntimeTypes = context.RuntimeTypes,
-                }
-            ),
-            branchStatements
-        );
+        return new TsIfStatement(BranchTestOf(fn, context), branchStatements);
     }
+
+    /// <summary>The runtime test of <paramref name="fn"/>'s dispatcher branch.</summary>
+    private static TsExpression BranchTestOf(IrModuleFunction fn, IrToTsBridgeContext context) =>
+        new OverloadArgumentShape(fn.Parameters, fn.ReifiedTypeParameters).Guard(
+            new TypeCheckScope(fn.TypeParameters ?? [], null)
+            {
+                RuntimeTypes = context.RuntimeTypes,
+            }
+        );
 
     private sealed record ModuleFunctionGroupPlan(
         IReadOnlyList<IrModuleFunction> Sorted,

@@ -934,6 +934,15 @@ internal sealed class IrToTsClassEmitter(
                 }
             );
 
+            ShadowedOverloadReporter.ReportMethods(
+                type,
+                irMethod,
+                ir.TypeParameters ?? [],
+                claims,
+                lowering,
+                _context.ReportDiagnostic
+            );
+
             var dispatcher = TryBuildOverloadDispatcherFromIr(
                 irMethod,
                 type.Name,

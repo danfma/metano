@@ -146,14 +146,9 @@ export class Names {
   }
 
   sum(xs: number[]): number;
-  sum(xs: number[]): number;
   sum(...args: unknown[]): number {
     if (args.length === 1 && Array.isArray(args[0])) {
       return this.sumInt32Array(args[0] as number[]);
-    }
-
-    if (args.length === 1 && Array.isArray(args[0])) {
-      return this.sumDoubleArray(args[0] as number[]);
     }
 
     throw new Error("No matching overload for sum");

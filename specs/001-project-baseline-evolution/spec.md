@@ -1577,6 +1577,24 @@ Product requirements added after the migration (normative; each one is traced by
      (`var (a, (b, _)) = e;`), a tuple literal as one declaration per element; every other
      shape keeps the unsupported placeholder.
 
+- **FR-103** (indistinguishable dispatcher branches, #778, Group U): A TypeScript overload
+  dispatcher (a class method group, or the function group of an `[ExportedAsModule]` /
+  `[NoContainer]` class or an extension container) MUST NOT keep a branch whose runtime test is
+  the same JavaScript as the test of a branch tried before it (`Func<Action, T>` and
+  `Action<Action>` are both a one-parameter function; `JsArray<T>` and `T[]`, `int[]` and
+  `double[]` are both an array): the branch and its overload signature are dropped, the overload's
+  fast path stays, and `MS0063` is reported at the overload, naming the overload that takes its
+  calls and the fast path hand-written TypeScript must call (`Reactivity.rootActionOfAction`).
+  C# call sites already bind to the fast path (spec 013 FR-018) and are unchanged. A delegate
+  parameter is tested with `typeof === "function"` alone, never `Function.length` (which leaves
+  out ignored, defaulted and rest parameters: `Probes.run(() => 42)` must not throw "No matching
+  overload"), so delegate overloads share one test; when only the later of two such overloads
+  returns a value (`Action<Action>` before `Func<Action, T>`), the dispatcher keeps the
+  value-returning one. A pair that differs only by a branded 64-bit type keeps its existing
+  once-per-group `MS0063`. Constructor
+  dispatchers, dispatchers that also dispatch to a synthesized member and the static groups of a
+  branded companion object are not covered.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

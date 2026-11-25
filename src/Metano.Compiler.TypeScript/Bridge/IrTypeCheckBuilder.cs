@@ -57,7 +57,7 @@ internal static class IrTypeCheckBuilder
                         ? new TsTypeReference(exported.Name, origin)
                         : new TsIdentifier(exported.Name)
                 ),
-            IrFunctionTypeRef func => FunctionCheck(func, value),
+            IrFunctionTypeRef => FunctionCheck(value),
             IrCollectionTypeRef collection => IrToTsRuntimeTestBridge.DispatchCollectionTest(
                 value,
                 collection
@@ -192,23 +192,14 @@ internal static class IrTypeCheckBuilder
             );
 
     /// <summary>
-    /// A delegate parameter: any function of the delegate's arity, which tells
-    /// delegate overloads of different arities apart.
+    /// A delegate parameter: any function. Its arity is not tested:
+    /// <c>Function.length</c> leaves out ignored, defaulted and rest parameters
+    /// (<c>() =&gt; 42</c> is a valid <c>(arg: number) =&gt; number</c>), so
+    /// delegate overloads have the same test and the dispatcher keeps one of
+    /// them (#778, <see cref="ShadowedDispatchOverloads"/>).
     /// </summary>
-    private static TsExpression FunctionCheck(IrFunctionTypeRef func, TsExpression value)
-    {
-        var arityCheck = new TsBinaryExpression(
-            new TsPropertyAccess(value, "length"),
-            "===",
-            new TsLiteral(func.Parameters.Count.ToString())
-        );
-
-        return new TsBinaryExpression(
-            IrToTsRuntimeTestBridge.TypeofTest(value, "function"),
-            "&&",
-            arityCheck
-        );
-    }
+    private static TsExpression FunctionCheck(TsExpression value) =>
+        IrToTsRuntimeTestBridge.TypeofTest(value, "function");
 
     private static TsExpression TypeofObject(TsExpression value) =>
         IrToTsRuntimeTestBridge.TypeofTest(value, "object");
