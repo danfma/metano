@@ -263,7 +263,17 @@ public static class IrBodyPrinter
         label is null ? $"{keyword};" : $"{keyword} {IrToDartNamingPolicy.ToParameterName(label)};";
 
     /// <summary>
-    /// Appends a placeholder that drops code, reporting it as an error (W9-13).
+    /// A non-null assertion the IR inserted from C# flow analysis (#775) that
+    /// Dart leaves out: Dart promotes a local after <c>x!</c> itself, and its
+    /// <c>!</c> throws at run time on a field whose state a call changed, which
+    /// C# does not track. Only the assertions Dart's flow analysis cannot see
+    /// are printed.
+    /// </summary>
+    private static bool IsLeftOutOnDart(IrUnaryExpression unary) =>
+        unary.FlowProof is IrFlowNonNullProof.ForgivenLocalRead or IrFlowNonNullProof.MemberRead;
+
+    /// <summary>
+    /// Appends a placeholder that drops code, reporting it (W9-13 / W9-13a).
     /// </summary>
     private static void AppendDropped(StringBuilder sb, string placeholder, string construct)
     {
@@ -393,6 +403,9 @@ public static class IrBodyPrinter
                 PrintOperand(sb, bin.Left, DartBinaryOperandGrouping.NeedsLeftParentheses(bin));
                 sb.Append(' ').Append(FormatBinaryOp(bin.Operator)).Append(' ');
                 PrintOperand(sb, bin.Right, DartBinaryOperandGrouping.NeedsRightParentheses(bin));
+                break;
+            case IrUnaryExpression flow when IsLeftOutOnDart(flow):
+                PrintExpression(sb, flow.Operand);
                 break;
             case IrUnaryExpression un:
                 if (un.IsPrefix)

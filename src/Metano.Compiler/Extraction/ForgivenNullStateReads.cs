@@ -1,3 +1,4 @@
+using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -20,15 +21,39 @@ namespace Metano.Compiler.Extraction;
 /// state's origin is the last such event before the read in the member's
 /// source, a syntactic approximation of the flow.
 /// </para>
+/// <para>
+/// The proof is recorded with the assertion (<see cref="IrFlowNonNullProof"/>), so
+/// a target whose checker follows more (Dart promotes a local after <c>x!</c>) or
+/// whose assertion checks at run time (Dart's <c>!</c> throws on a field whose
+/// state a call changed, which C# does not track) can leave it out.
+/// </para>
 /// </summary>
 internal static class ForgivenNullStateReads
 {
-    /// <summary>Whether <paramref name="read"/> needs the non-null assertion.</summary>
-    public static bool NeedsAssertion(SemanticModel model, ExpressionSyntax read) =>
-        read is IdentifierNameSyntax or MemberAccessExpressionSyntax
-        && UsedAsNonNull(model, read)
-        && IsNullableReferenceProvedNonNull(model, read)
-        && !IsNarrowedByAssignmentOrTest(model, read);
+    /// <summary>
+    /// Why <paramref name="read"/> needs the non-null assertion; <c>null</c>
+    /// when it needs none.
+    /// </summary>
+    public static IrFlowNonNullProof? ProofOf(SemanticModel model, ExpressionSyntax read)
+    {
+        if (
+            read is not (IdentifierNameSyntax or MemberAccessExpressionSyntax)
+            || !UsedAsNonNull(model, read)
+            || !IsNullableReferenceProvedNonNull(model, read)
+        )
+            return null;
+
+        var symbol = model.GetSymbolInfo(read).Symbol;
+
+        return (LastEventBefore(model, read, symbol), symbol) switch
+        {
+            (ReadEvent.Narrowing, _) => null,
+            (null, ILocalSymbol) => null,
+            (_, IFieldSymbol or IPropertySymbol) => IrFlowNonNullProof.MemberRead,
+            (ReadEvent.Suppressed, _) => IrFlowNonNullProof.ForgivenLocalRead,
+            _ => IrFlowNonNullProof.AttributedLocalRead,
+        };
+    }
 
     private static bool UsedAsNonNull(SemanticModel model, ExpressionSyntax read) =>
         read.Parent switch
@@ -69,18 +94,18 @@ internal static class ForgivenNullStateReads
         };
 
     /// <summary>
-    /// Whether the last event of the read's variable before it — an
-    /// assignment, a null test, a null-forgiving <c>!</c> or a pass to a
-    /// method — is an assignment or a null test outside an argument list. A
-    /// local with no such event got its state from its initializer, which
-    /// narrows too. An assignment whose value holds the read
+    /// The last event of the read's variable before it — an assignment, a null
+    /// test, a null-forgiving <c>!</c> or a pass that proves it — or
+    /// <c>null</c> when there is none (a local then got its state from its
+    /// initializer). An assignment whose value holds the read
     /// (<c>stack = stack.Prev</c>) happens after it.
     /// </summary>
-    private static bool IsNarrowedByAssignmentOrTest(SemanticModel model, ExpressionSyntax read)
-    {
-        var symbol = model.GetSymbolInfo(read).Symbol;
-
-        var lastEvent = BodyOf(read)
+    private static ReadEvent? LastEventBefore(
+        SemanticModel model,
+        ExpressionSyntax read,
+        ISymbol? symbol
+    ) =>
+        BodyOf(read)
             ?.DescendantNodes()
             .OfType<ExpressionSyntax>()
             .Where(other =>
@@ -89,15 +114,9 @@ internal static class ForgivenNullStateReads
                 && SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(other).Symbol, symbol)
             )
             .Select(other => EventOf(model, other, read))
-            .LastOrDefault(kind => kind != ReadEvent.PlainRead);
-
-        return lastEvent switch
-        {
-            ReadEvent.Narrowing => true,
-            ReadEvent.Forgiving => false,
-            _ => symbol is ILocalSymbol,
-        };
-    }
+            .Where(kind => kind != ReadEvent.PlainRead)
+            .Select(kind => (ReadEvent?)kind)
+            .LastOrDefault();
 
     private static SyntaxNode? BodyOf(SyntaxNode read) =>
         read.Ancestors()
@@ -118,7 +137,7 @@ internal static class ForgivenNullStateReads
         {
             PostfixUnaryExpressionSyntax forgiven
                 when forgiven.IsKind(SyntaxKind.SuppressNullableWarningExpression) =>
-                ReadEvent.Forgiving,
+                ReadEvent.Suppressed,
             AssignmentExpressionSyntax assign
                 when assign.Left == occurrence && !assign.Span.Contains(read.Span) =>
                 ReadEvent.Narrowing,
@@ -126,7 +145,7 @@ internal static class ForgivenNullStateReads
                 when test.IsKind(SyntaxKind.EqualsExpression)
                     || test.IsKind(SyntaxKind.NotEqualsExpression) => TestEvent(test),
             IsPatternExpressionSyntax test => TestEvent(test),
-            ArgumentSyntax argument when ProvesNonNull(model, argument) => ReadEvent.Forgiving,
+            ArgumentSyntax argument when ProvesNonNull(model, argument) => ReadEvent.ProvingCall,
             _ => ReadEvent.PlainRead,
         };
 
@@ -154,13 +173,14 @@ internal static class ForgivenNullStateReads
     /// </summary>
     private static ReadEvent TestEvent(ExpressionSyntax test) =>
         test.Ancestors().TakeWhile(a => a is not StatementSyntax).Any(a => a is ArgumentSyntax)
-            ? ReadEvent.Forgiving
+            ? ReadEvent.ProvingCall
             : ReadEvent.Narrowing;
 
     private enum ReadEvent
     {
         PlainRead,
         Narrowing,
-        Forgiving,
+        Suppressed,
+        ProvingCall,
     }
 }

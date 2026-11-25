@@ -249,8 +249,11 @@ public sealed partial class IrExpressionExtractor
         IrExpression value
     ) =>
         value is not IrUnaryExpression { Operator: IrUnaryOp.NonNullAssertion }
-        && ForgivenNullStateReads.NeedsAssertion(_semantic, expression)
+        && ForgivenNullStateReads.ProofOf(_semantic, expression) is { } proof
             ? new IrUnaryExpression(IrUnaryOp.NonNullAssertion, value, IsPrefix: false)
+            {
+                FlowProof = proof,
+            }
             : value;
 
     /// <summary>

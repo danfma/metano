@@ -1598,7 +1598,11 @@ Product requirements added after the migration (normative; each one is traced by
   `NonNullAssertion` unary; it has no runtime effect in TypeScript. A read whose state comes from
   an assignment, a local's initializer or a null test of the same variable is left unasserted,
   since checkers narrow on those; the origin is the last such event before the read in the
-  member's source. Nullable-disabled code has no flow state and is unchanged. Tests:
+  member's source. Nullable-disabled code has no flow state and is unchanged. The IR records why
+  the read is proven (`IrFlowNonNullProof`): the Dart target keeps only the assertion of a local
+  or parameter proven by a call's nullable attributes, since Dart promotes a local after `x!`
+  itself and its `!` throws at run time on a field whose state a call changed (C# does not reset a
+  field's state across calls); TypeScript keeps every one (erased, type-only). Tests:
   `tests/Metano.Tests/ForgivenNullStateTests.cs` (output type-checked with `tsgo --strict`).
 
 ### Key Entities

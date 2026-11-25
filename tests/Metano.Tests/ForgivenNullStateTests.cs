@@ -120,4 +120,64 @@ public class ForgivenNullStateTests
         await Assert.That(log).IsEmpty();
         await Assert.That(exitCode).IsEqualTo(0);
     }
+
+    [Test]
+    public async Task Dart_KeepsOnlyTheAssertionsItsFlowAnalysisCannotSee()
+    {
+        // Dart promotes a local after `x!`, and its `!` throws at run time on a
+        // field whose state a call changed (C# keeps the field's state across
+        // the call): only a local proven by a call's nullable attributes keeps
+        // the assertion.
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            #nullable enable
+
+            [Transpile]
+            public sealed class Node
+            {
+                public Node? Next;
+                public int Id;
+            }
+
+            [Transpile]
+            public sealed class Queue
+            {
+                private Node? _head;
+
+                public static int Peek(Node node) => node.Id;
+
+                public int Drain()
+                {
+                    var first = Peek(_head!);
+                    _head = null;
+                    return first;
+                }
+
+                public int Again()
+                {
+                    var first = Peek(_head!);
+                    return first + _head.Id;
+                }
+
+                public static int Local(Node? node)
+                {
+                    var id = node!.Id;
+                    return id + node.Id;
+                }
+
+                public static int Thrown(Node? node)
+                {
+                    ArgumentNullException.ThrowIfNull(node);
+                    return node.Id;
+                }
+            }
+            """
+        );
+
+        var queue = files["queue.dart"];
+
+        await Assert.That(queue).Contains("return first + this._head.id;");
+        await Assert.That(queue).Contains("return id + node.id;");
+        await Assert.That(queue).Contains("return node!.id;");
+    }
 }

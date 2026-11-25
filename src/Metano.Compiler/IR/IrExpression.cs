@@ -723,6 +723,37 @@ public sealed record IrUnaryExpression(
     /// other operator.
     /// </summary>
     public IrTypeRef? EnumResultType { get; init; }
+
+    /// <summary>
+    /// For a <see cref="IrUnaryOp.NonNullAssertion"/> the source did not write:
+    /// why C# flow analysis proves the read non-null (#775); <c>null</c> for an
+    /// assertion the source wrote and every other operator.
+    /// </summary>
+    public IrFlowNonNullProof? FlowProof { get; init; }
+}
+
+/// <summary>
+/// Why C# flow analysis proves a nullable-declared read non-null where the IR
+/// asserts it (#775), so a target can tell which assertions its own checker
+/// needs and which are safe at run time.
+/// </summary>
+public enum IrFlowNonNullProof
+{
+    /// <summary>A local or parameter after an earlier <c>x!</c> of it.</summary>
+    ForgivenLocalRead,
+
+    /// <summary>
+    /// A local or parameter after a call whose nullable attributes prove it
+    /// (<c>ThrowIfNull(x)</c>, <c>string.IsNullOrEmpty(s)</c> false).
+    /// </summary>
+    AttributedLocalRead,
+
+    /// <summary>
+    /// A field or property: C# keeps its state across calls that may change
+    /// it, so an assertion that checks at run time may throw where C# lets the
+    /// <c>null</c> through.
+    /// </summary>
+    MemberRead,
 }
 
 /// <summary>
