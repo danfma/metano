@@ -416,8 +416,38 @@ public sealed class DispDoor : IDispClose
     public void Dispose(bool hard) => State += hard ? ">slam" : ">soft";
 }
 
+/// <summary>Dispatches two Dispose overloads, so a derived overload joins the dispatcher.</summary>
+public class DispMulti : IDisposable
+{
+    public List<string> Log = new();
+
+    public void Dispose() => Log.Add("closed");
+
+    public void Dispose(int count) => Log.Add("count:" + count);
+}
+
+public sealed class DispPooledMulti : DispMulti
+{
+    public void Dispose(bool returnToPool) => Log.Add("pool:" + returnToPool);
+}
+
 public static class DisposableOverloadProbes
 {
+    public static string DerivedOverloadOfADispatchedDispose()
+    {
+        var c = new DispPooledMulti();
+
+        using (c)
+        {
+            c.Log.Add("body");
+        }
+
+        c.Dispose(true);
+        c.Dispose(2);
+
+        return string.Join(",", c.Log);
+    }
+
     public static string InterfaceAddsADisposeOverload()
     {
         IDispClose c = new DispDoor();

@@ -475,6 +475,62 @@ public class DisposableTests
     }
 
     [Test]
+    public async Task UsingOverADisposeOverloadAddedBelowTheImplementation_ReportsMS0001()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Conn : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public class PooledConn : Conn
+            {
+                public void Dispose(bool returnToPool) { }
+            }
+
+            [Transpile]
+            public class Door : IDisposable
+            {
+                public void Dispose() { }
+                public void Dispose(bool hard) { }
+            }
+
+            [Transpile]
+            public class Multi : IDisposable
+            {
+                public void Dispose() { }
+                public void Dispose(int count) { }
+            }
+
+            [Transpile]
+            public class PooledMulti : Multi
+            {
+                public void Dispose(bool returnToPool) { }
+            }
+
+            [Transpile]
+            public static class Uses
+            {
+                public static void Run()
+                {
+                    using (var pooled = new PooledConn()) { }
+                    using (var door = new Door()) { }
+                    using (var multi = new PooledMulti()) { }
+                }
+            }
+            """
+        );
+
+        var errors = diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
+
+        await Assert.That(errors.Count).IsEqualTo(1);
+        await Assert.That(errors[0].Message).Contains("'PooledConn.Dispose(bool)'");
+    }
+
+    [Test]
     public async Task Implementer_WhoseShapeCannotSatisfyTheInterface_ReportsMS0001()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(

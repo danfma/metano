@@ -246,12 +246,23 @@ public sealed partial class IrStatementExtractor
             ? (_semantic.GetDeclaredSymbol(variable) as ILocalSymbol)?.Type
             : null;
 
-    private string? UnemittedDisposeReason(ITypeSymbol? type) =>
-        DisposableResources.DisposalOf(type, _semantic.Compilation, _context.Target).IsEmitted
-            ? null
-            : $"The C# using over '{type?.ToDisplayString()}' is not supported by the "
+    private string? UnemittedDisposeReason(ITypeSymbol? type)
+    {
+        var disposal = DisposableResources.DisposalOf(type, _semantic.Compilation, _context.Target);
+
+        if (!disposal.IsEmitted)
+            return $"The C# using over '{type?.ToDisplayString()}' is not supported by the "
                 + "transpiler: the target does not emit its Dispose method, so the resource "
                 + "would never be disposed.";
+
+        if (disposal.Shadowing is { } shadowing)
+            return $"The C# using over '{type?.ToDisplayString()}' is not supported by the "
+                + $"transpiler: '{shadowing.ToDisplayString()}' does not override the "
+                + "IDisposable implementation but is emitted under its name, so the resource "
+                + "would be disposed through the wrong method. Rename the overload.";
+
+        return null;
+    }
 
     private static string AwaitUsingReason(string form) =>
         $"The C# 'await using' {form} is not supported by the transpiler: IAsyncDisposable is "
