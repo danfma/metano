@@ -25,6 +25,7 @@ internal sealed class RuntimeQuestionScanner
 {
     private readonly Compilation _compilation;
     private readonly TargetLanguage _target;
+    private readonly OverloadGroupingPolicy _groupingPolicy;
     private readonly GeneratedSourceTrees _generatedSources;
 
     private readonly DeclarativeMappingRegistry _mappings;
@@ -42,11 +43,13 @@ internal sealed class RuntimeQuestionScanner
             IReadOnlyList<DeclarativeMappingEntry>
         > methodMappings,
         Analysis.ReifiedTypeAnalysisResult reifiedTypeAnalysis,
-        List<MetanoDiagnostic> diagnostics
+        List<MetanoDiagnostic> diagnostics,
+        OverloadGroupingPolicy? groupingPolicy
     )
     {
         _compilation = compilation;
         _target = target;
+        _groupingPolicy = groupingPolicy ?? OverloadGroupingPolicy.For(target);
         _generatedSources = generatedSources;
         _mappings = DeclarativeMappingRegistry.FromMethods(methodMappings);
         _reifiedTypeAnalysis = reifiedTypeAnalysis;
@@ -63,7 +66,8 @@ internal sealed class RuntimeQuestionScanner
             IReadOnlyList<DeclarativeMappingEntry>
         > methodMappings,
         Analysis.ReifiedTypeAnalysisResult reifiedTypeAnalysis,
-        List<MetanoDiagnostic> diagnostics
+        List<MetanoDiagnostic> diagnostics,
+        OverloadGroupingPolicy? groupingPolicy = null
     )
     {
         var scanner = new RuntimeQuestionScanner(
@@ -72,7 +76,8 @@ internal sealed class RuntimeQuestionScanner
             generatedSources,
             methodMappings,
             reifiedTypeAnalysis,
-            diagnostics
+            diagnostics,
+            groupingPolicy
         );
 
         CSharpSourceFrontend.CollectTopLevelTypes(compilation.Assembly.GlobalNamespace, type =>
@@ -698,9 +703,7 @@ internal sealed class RuntimeQuestionScanner
     /// </summary>
     private void RecordOverloadParameters(INamedTypeSymbol type)
     {
-        var policy = OverloadGroupingPolicy.For(_target);
-
-        foreach (var group in MethodOverloadGroups.Of(type, policy))
+        foreach (var group in MethodOverloadGroups.Of(type, _groupingPolicy))
         {
             var members = group
                 .Members.Concat(group.InheritedOverloads ?? [])

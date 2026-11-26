@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -23,13 +24,15 @@ internal sealed class InMemorySourceFrontend(Compilation compilation) : ISourceF
         string projectPath,
         CancellationToken ct = default,
         TargetLanguage target = TargetLanguage.TypeScript,
-        bool? supportsReifiedTypeParameters = null
+        bool? supportsReifiedTypeParameters = null,
+        OverloadGroupingPolicy? groupingPolicy = null
     ) =>
         Task.FromResult(
             _extractor.ExtractFromCompilation(
                 compilation,
                 target,
-                supportsReifiedTypeParameters: supportsReifiedTypeParameters
+                supportsReifiedTypeParameters: supportsReifiedTypeParameters,
+                groupingPolicy: groupingPolicy
             )
         );
 }

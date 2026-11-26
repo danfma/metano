@@ -1,10 +1,12 @@
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
 using Metano.Compiler.TypeScript;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Bridge;
 using Metano.Compiler.TypeScript.Transformation;
 using Metano.Packaging;
 using Microsoft.CodeAnalysis;
@@ -29,6 +31,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public TargetLanguage Language => TargetLanguage.TypeScript;
 
     public bool SupportsReifiedTypeParameters => true;
+
+    public OverloadGroupingPolicy GroupingPolicy => TsGroupingPolicy.Instance;
 
     /// <summary>
     /// The package.json inputs captured by the most recent <see cref="Transform"/> call,

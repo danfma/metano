@@ -1,6 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Dart.AST;
+using Metano.Compiler.Dart.Bridge;
 using Metano.Compiler.Dart.Transformation;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
@@ -19,6 +20,8 @@ public sealed class DartTarget : ITranspilerTarget
     public TargetLanguage Language => TargetLanguage.Dart;
 
     public bool SupportsReifiedTypeParameters => false;
+
+    public OverloadGroupingPolicy GroupingPolicy => DartGroupingPolicy.Instance;
 
     public IReadOnlyList<DartSourceFile> LastSourceFiles { get; private set; } = [];
 
