@@ -31,6 +31,20 @@ internal static class ConstructorScopeAliases
     /// </summary>
     private static readonly AsyncLocal<ImmutableDictionary<string, string>?> _active = new();
 
+    private static readonly AsyncLocal<IReadOnlySet<string>?> _fileScope = new();
+
+    /// <summary>
+    /// The names the constructor scopes of every class in the file being emitted
+    /// bind (<see cref="BoundNamesOf"/>). An alias avoids all of them, so one
+    /// imported name takes the same alias in every class of a file, and the
+    /// file's single import line binds it (W10-10).
+    /// </summary>
+    internal static IReadOnlySet<string>? FileScope
+    {
+        get => _fileScope.Value;
+        set => _fileScope.Value = value;
+    }
+
     /// <summary>
     /// Runs <paramref name="lower"/> with <paramref name="aliases"/> as the
     /// active constructor scope (<see cref="AliasedTypeValue"/>).
@@ -75,19 +89,24 @@ internal static class ConstructorScopeAliases
         IReadOnlyList<TsConstructorParam> parameters
     )
     {
-        var bound = BoundNames(ir, parameters);
-
-        return bound.ToImmutableDictionary(name => name, name => AliasOf(name, bound));
-    }
-
-    private static HashSet<string> BoundNames(
-        IrClassDeclaration ir,
-        IReadOnlyList<TsConstructorParam> parameters
-    )
-    {
         var bound = parameters
             .Select(parameter => parameter.Name)
+            .Concat(BoundNamesOf(ir))
             .ToHashSet(StringComparer.Ordinal);
+
+        HashSet<string> avoided = FileScope is { } file ? [.. bound, .. file] : bound;
+
+        return bound.ToImmutableDictionary(name => name, name => AliasOf(name, avoided));
+    }
+
+    /// <summary>
+    /// The names <paramref name="ir"/>'s constructors bind: the dispatcher's
+    /// <c>args</c>, each declaration's parameters and every local its body
+    /// declares.
+    /// </summary>
+    public static IEnumerable<string> BoundNamesOf(IrClassDeclaration ir)
+    {
+        var bound = new HashSet<string>(StringComparer.Ordinal);
 
         if (ir.Constructor is not { } constructor)
             return bound;
@@ -149,7 +168,7 @@ internal static class ConstructorScopeAliases
             AddOutLocals(child, bound);
     }
 
-    private static string AliasOf(string name, HashSet<string> bound)
+    private static string AliasOf(string name, IReadOnlySet<string> bound)
     {
         for (var attempt = 1; ; attempt++)
         {

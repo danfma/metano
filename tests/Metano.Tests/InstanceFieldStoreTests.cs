@@ -327,6 +327,56 @@ public class InstanceFieldStoreTests
     }
 
     [Test]
+    public async Task ClassesSharingAFile_ReadAShadowedImportUnderOneAlias()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, ExportedAsModule]
+            public static class Calc { public static int Reckon(int x) => x * 7; }
+
+            [Transpile]
+            public class Outer
+            {
+                public int C = Calc.Reckon(1);
+                public int Sum;
+                public Outer(int reckon) { Sum = reckon; }
+
+                [Transpile]
+                public class Inner
+                {
+                    public int C = Calc.Reckon(2);
+                    public int Sum;
+                    public Inner(int reckon) { var Reckon = reckon + 1; Sum = Reckon; }
+                }
+            }
+
+            [Transpile, EmitInFile("pair")]
+            public class PairA
+            {
+                public int C = Calc.Reckon(1);
+                public PairA(int reckon) { }
+            }
+
+            [Transpile, EmitInFile("pair")]
+            public class PairB
+            {
+                public int C = Calc.Reckon(2);
+                public PairB(int reckon) { var Reckon = reckon; }
+            }
+            """
+        );
+
+        var outer = files["outer.ts"];
+        var pair = files["pair.ts"];
+
+        await Assert.That(outer).Contains("import { reckon, reckon as reckon$2 }");
+        await Assert.That(outer).Contains("    this.c = reckon$2(1);\n");
+        await Assert.That(outer).Contains("    this.c = reckon$2(2);\n");
+        await Assert.That(pair).Contains("import { reckon, reckon as reckon$2 }");
+        await Assert.That(pair).DoesNotContain("reckon$1(");
+    }
+
+    [Test]
     public async Task DerivedClass_KeepsTheDefaultStoreOfAFieldTheBodyAssignsFirst()
     {
         var output = TranspileHelper.Transpile(

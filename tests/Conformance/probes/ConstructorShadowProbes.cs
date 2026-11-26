@@ -95,8 +95,72 @@ public class CsPackageTypeShadow
     }
 }
 
+public class CsOuter
+{
+    public int C = CsCalc.Reckon(1);
+    public int Sum;
+
+    public CsOuter(int reckon)
+    {
+        Sum = reckon;
+    }
+
+    public class Inner
+    {
+        public int C = CsCalc.Reckon(2);
+        public int Sum;
+
+        public Inner(int reckon)
+        {
+            var Reckon = reckon + 1;
+            Sum = Reckon;
+        }
+    }
+}
+
+[EmitInFile("cs-pair")]
+public class CsPairA
+{
+    public int C = CsCalc.Reckon(1);
+    public int Sum;
+
+    public CsPairA(int reckon)
+    {
+        Sum = reckon;
+    }
+}
+
+[EmitInFile("cs-pair")]
+public class CsPairB
+{
+    public int C = CsCalc.Reckon(2);
+    public int Sum;
+
+    public CsPairB(int reckon)
+    {
+        var Reckon = reckon + 1;
+        Sum = Reckon;
+    }
+}
+
 public static class ConstructorShadowProbes
 {
+    public static string NestedClassesShareOneAlias()
+    {
+        var a = new CsOuter(3);
+        var b = new CsOuter.Inner(3);
+
+        return $"{a.C},{a.Sum},{b.C},{b.Sum}";
+    }
+
+    public static string CoLocatedClassesShareOneAlias()
+    {
+        var a = new CsPairA(3);
+        var b = new CsPairB(3);
+
+        return $"{a.C},{a.Sum},{b.C},{b.Sum}";
+    }
+
     public static string EnumNamedLikeAParameter()
     {
         var e = new CsEnumShadow(8);
