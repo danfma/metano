@@ -4,6 +4,15 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 4.0.1
+
+_2026-11-26_
+
+
+### 🐛 Bug Fixes
+
+* keep inherited claiming members internal and publish the claim on the implementing class ([#823](https://github.com/danfma/metano/issues/823)) ([8209cc6](https://github.com/danfma/metano/commit/8209cc60882f5380012f3117c0ef53813865eb0c)), closes [#819](https://github.com/danfma/metano/issues/819) [#822](https://github.com/danfma/metano/issues/822) [#821](https://github.com/danfma/metano/issues/821)
+
 ## 4.0.0
 
 _2026-11-26_
