@@ -73,6 +73,70 @@ public class DisposableTests
     }
 
     [Test]
+    public async Task InterfaceAddingAnOverload_RedeclaresTheInheritedSignatures()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public interface IClose : IDisposable
+            {
+                void Dispose(bool hard);
+            }
+
+            [Transpile]
+            public interface IStop
+            {
+                void Stop();
+            }
+
+            [Transpile]
+            public interface IStop2 : IStop
+            {
+                void Stop(bool hard);
+            }
+
+            [Transpile]
+            public interface IStop3 : IStop
+            {
+                new void Stop();
+            }
+            """
+        );
+
+        await Assert
+            .That(result["i-close.ts"])
+            .Contains(
+                """
+                export interface IClose extends IDisposable {
+                  dispose(hard: boolean): void;
+                  dispose(): void;
+                }
+                """
+            );
+
+        await Assert
+            .That(result["i-stop2.ts"])
+            .Contains(
+                """
+                export interface IStop2 extends IStop {
+                  stop(hard: boolean): void;
+                  stop(): void;
+                }
+                """
+            );
+
+        await Assert
+            .That(result["i-stop3.ts"])
+            .Contains(
+                """
+                export interface IStop3 extends IStop {
+                  stop(): void;
+                }
+                """
+            );
+    }
+
+    [Test]
     public async Task TypeQuestions_TestTheRuntimeDescriptor()
     {
         var result = TranspileHelper.Transpile(

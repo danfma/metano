@@ -398,3 +398,40 @@ public static class DisposableNullGuardProbes
     private static DispLog? Lookup(List<string> log, bool found) =>
         found ? new DispLog(log, "found") : null;
 }
+
+/// <summary>Extends IDisposable with a Dispose overload (the TS interface keeps both).</summary>
+public interface IDispClose : IDisposable
+{
+    string State { get; }
+
+    void Dispose(bool hard);
+}
+
+public sealed class DispDoor : IDispClose
+{
+    public string State { get; private set; } = "open";
+
+    public void Dispose() => State += ">closed";
+
+    public void Dispose(bool hard) => State += hard ? ">slam" : ">soft";
+}
+
+public static class DisposableOverloadProbes
+{
+    public static string InterfaceAddsADisposeOverload()
+    {
+        IDispClose c = new DispDoor();
+        c.Dispose(true);
+        c.Dispose(false);
+        c.Dispose();
+
+        var direct = c.State;
+
+        using (IDispClose d = new DispDoor())
+        {
+            c = d;
+        }
+
+        return direct + "|" + c.State;
+    }
+}

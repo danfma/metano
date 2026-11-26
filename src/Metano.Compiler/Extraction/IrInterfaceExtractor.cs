@@ -43,7 +43,10 @@ public static class IrInterfaceExtractor
                             target,
                             ExtractMethod(method, originResolver, target, context),
                             groupSuffixes
-                        )
+                        ) with
+                        {
+                            InheritedOverloads = InheritedSignaturesOf(type, method, context),
+                        }
                     );
                     break;
 
@@ -119,6 +122,45 @@ public static class IrInterfaceExtractor
             DeclarationOrdinal = ordinal,
         };
     }
+
+    /// <summary>
+    /// On the first method an interface declares under a name: the methods of that name its
+    /// emitted base interfaces declare (a transpiled one, or one the target runtime declares,
+    /// such as <c>IDisposable</c>) and the interface does not redeclare, as it sees them.
+    /// They join its overload set: an interface that adds <c>Dispose(bool)</c> still has
+    /// <c>Dispose()</c>. <c>null</c> when there are none.
+    /// </summary>
+    private static IReadOnlyList<IrMethodDeclaration>? InheritedSignaturesOf(
+        INamedTypeSymbol type,
+        IMethodSymbol method,
+        IrExtractionContext? context
+    )
+    {
+        var target = context?.Target;
+        var declared = InterfaceOverloadGroup.Of(type, method.Name, target);
+
+        if (declared.IndexOf(method) != 0)
+            return null;
+
+        var inherited = type
+            .AllInterfaces.Where(iface => IsEmittedBase(iface, context))
+            .SelectMany(iface => iface.GetMembers(method.Name).OfType<IMethodSymbol>())
+            .Where(candidate =>
+                InterfaceOverloadGroup.IsMember(candidate, target)
+                && !declared.Any(own => SymbolHelper.HasSameParameters(own, candidate))
+            )
+            .Select(candidate => ExtractMethod(candidate, context?.OriginResolver, target, context))
+            .ToList();
+
+        return inherited.Count > 0 ? inherited : null;
+    }
+
+    private static bool IsEmittedBase(INamedTypeSymbol iface, IrExtractionContext? context) =>
+        IrTypeRefMapper.IsTranspilableType(iface, context?.Target)
+        || (
+            context?.Compilation is { } compilation
+            && BclExportReader.IsRuntimeDeclaredInterface(iface, compilation)
+        );
 
     /// <summary>
     /// A group's suffixes, computed once per interface, so a dead end is

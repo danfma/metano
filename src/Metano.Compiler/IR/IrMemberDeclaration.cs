@@ -56,7 +56,9 @@ public sealed record IrMethodDeclaration(
     /// dispatches: the overloads of the inherited dispatcher, as the deriving
     /// type sees them (type arguments substituted), the ones it cannot see
     /// included (spec 013 FR-030). Signatures only. <c>null</c> when no base
-    /// dispatches the group.
+    /// dispatches the group. On the first method an interface declares under
+    /// a name: the methods of that name its emitted base interfaces declare
+    /// and it does not redeclare.
     /// </summary>
     public IReadOnlyList<IrMethodDeclaration>? InheritedOverloads { get; init; }
 
