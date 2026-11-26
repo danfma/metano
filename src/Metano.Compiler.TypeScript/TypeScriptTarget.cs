@@ -272,7 +272,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             PackageVersionDiagnostics: UnrepresentedVersionDiagnostics(
                 explicitVersion,
                 packageVersion
-            )
+            ),
+            NeedsDisposalHelpers: DisposalHelpersPeerDependency.IsNeededBy(generatedFiles)
         );
     }
 

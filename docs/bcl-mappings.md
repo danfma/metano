@@ -666,47 +666,69 @@ hold any generated or runtime `IDisposable` in a `using` declaration too.
 | C# | TypeScript |
 |----|----|
 | `IDisposable` | `IDisposable` from `metano-runtime` (`interface IDisposable { dispose(): void; [Symbol.dispose](): void }`) |
-| `class Res : IDisposable { public void Dispose() { … } }` | `class Res implements IDisposable { dispose(): void { … } [Symbol.dispose](): void { disposeResource(this); } }` |
+| `class Res : IDisposable { public void Dispose() { … } }` | `class Res implements IDisposable { dispose(): void { … } [Symbol.dispose](): void { disposeResource(this, this.dispose); } }` |
+| `[Name("Close")] public void Dispose()` | `close(): void { … } [Symbol.dispose](): void { disposeResource(this, this.close); }` |
 | `using var r = e;` | `using r = e;` |
 | `using (var r = e) body` | `{ using r = e; body }` |
 | `using (e) body` | `{ using $using0 = e; body }` |
 | `using (var a = e1, b = e2) body` | `{ using a = e1; using b = e2; body }` |
 
-`disposeResource` (from `metano-runtime`) calls `dispose()`. A class whose base class already
-implements `IDisposable` inherits the alias. Resources are disposed in reverse order on every
-exit, and a `null` resource is skipped, as in .NET. When both the body and `dispose()` throw,
-JavaScript raises a `SuppressedError`; every generated `catch` converts the caught value with
-`toException`, which unwraps a `SuppressedError` (recursively, and also the stand-in
-TypeScript's downlevel helpers build on engines without the class) to the `dispose()`
-exception, the one .NET lets through. A `SuppressedError` that no generated `catch` handles
-still reaches the host as a `SuppressedError`.
+The alias runs the member that implements `Dispose()` under its emitted name;
+`disposeResource` (from `metano-runtime`) only invokes it and anchors the `Symbol.dispose`
+polyfill (below). A class whose base class already implements `IDisposable` inherits the
+alias. Resources are disposed in reverse order on every exit, and a `null` resource is
+skipped, as in .NET. When both the body and `dispose()` throw, JavaScript raises a
+`SuppressedError`; every generated `catch` converts the caught value with `toException`, which
+unwraps a `SuppressedError` (recursively, and also the stand-in TypeScript's downlevel helpers
+build on engines without the class) to the `dispose()` exception, the one .NET lets through.
+A `SuppressedError` that no generated `catch` handles still reaches the host as a
+`SuppressedError`.
+
+**Which resources become a `using` declaration.** A resource whose static type is a class or
+struct this build emits (it, or the base class that takes on `IDisposable`, is declared in
+the compiled project), and every interface- or type-parameter-typed resource
+(`IDisposable`, an interface extending it, `T : IDisposable`). These keep the `try`/`finally`
+lowering of the section below, because their runtime objects may have no
+`[Symbol.dispose]()`: a class bound to a hand-written declaration (`[Import]`, `[External]`,
+`[NoEmit]`), a class from a referenced package, a `ref struct` with a pattern-based
+`Dispose()`, and a `using` declaration that is a direct child of a `switch` section
+(JavaScript allows no `using` directly in a `case`). An interface- or generic-typed resource
+needs a value with `[Symbol.dispose]()`: TypeScript enforces it for hand-written values typed
+as the runtime `IDisposable`, and a value cast to it without the member throws a `TypeError`
+when the `using` is entered.
 
 **Consumer requirements.**
 
-- Add `"ESNext.Disposable"` (or `"ESNext"`) to the `lib` of every `tsconfig.json` that
-  type-checks generated code using `IDisposable`, or `metano-runtime`'s sources: the
-  runtime's `IDisposable` names `Symbol.dispose`, and `using` needs the `Disposable` type.
+- Every consumer of `metano-runtime` lists `"ESNext.Disposable"` (or `"ESNext"`) in the `lib`
+  of each `tsconfig.json` that type-checks the runtime's declarations or sources, or
+  generated code: the runtime's exported `IDisposable` names `Symbol.dispose`, and `using`
+  needs the `Disposable` type. `"skipLibCheck": true` skips only the runtime's `.d.ts`, not its
+  `.ts` sources (the `source` condition) nor generated code that declares a `using`.
   ```jsonc
-  { "compilerOptions": { "target": "es2023", "lib": ["ES2023", "ESNext.Disposable", "DOM"] } }
+  { "compilerOptions": { "target": "es2023", "lib": ["ES2023", "ESNext.Disposable", "DOM"], "importHelpers": true } }
   ```
-- Below target `ESNext`, TypeScript downlevels `using` to its `__addDisposableResource` /
-  `__disposeResources` helpers, which cost an allocation per block (accepted for backward
-  compatibility; target `ESNext` removes them). Without `"importHelpers": true` (and `tslib`
-  installed) each module that declares a `using` gets its own copy of the helpers, which a
-  bundler cannot drop; set it to share one copy and keep those modules tree-shakable.
+- Strongly recommended below target `ESNext`: `"importHelpers": true` with `tslib` installed.
+  TypeScript downlevels `using` to its `__addDisposableResource` / `__disposeResources`
+  helpers, which cost an allocation per block (accepted for backward compatibility; target
+  `ESNext` removes them). Without `importHelpers` each module that declares a `using` gets its
+  own copy of the helpers, which a bundler cannot drop. A generated package that declares a
+  `using` lists `tslib` (`^2.6.0`) as an optional peer dependency (`peerDependenciesMeta`);
+  a `tslib` entry the package already declares is left as written.
 - Engines without `Symbol.dispose` (stable Safari): the runtime installs
   `Symbol.dispose = Symbol.for("Symbol.dispose")`, the key TypeScript's helpers read, when it
-  builds `disposeResource`, which every generated implementer reads, so the symbol exists
-  before any generated class that needs it is defined, bundled or not.
+  builds `disposeResource`. Every generated implementer reads that binding, and the runtime
+  never imports generated code, so in the ESM graph (and in every bundle, import cycles
+  between generated modules included) the symbol exists before any generated class that
+  needs it is defined.
 - Hand-written TypeScript that implements the runtime `IDisposable` must now declare
   `[Symbol.dispose]()` too. A library transpiled by Metano 3.3 has no alias in its classes and
   must be regenerated.
 
 **Opt-out.** `MetanoUsingLowering=tryFinally` (MSBuild, or `MetanoTsUsingLowering`; CLI
-`--using-lowering tryFinally`) keeps the 3.3 `try`/`finally` lowering of the section below for
-every `using`. The `[Symbol.dispose]()` alias and the `lib` requirement stay. A `ref struct`
-with a pattern-based `Dispose()`, which implements no interface, always keeps the
-`try`/`finally` lowering. `await using` / `IAsyncDisposable` stay unsupported (`MS0001`).
+`--using-lowering tryFinally`) restores the 3.3 `try`/`finally` lowering of `using` (the
+section below); the output is not byte-identical to 3.3, since the `[Symbol.dispose]()` alias,
+its import and the `lib` requirement stay. `await using` / `IAsyncDisposable` stay
+unsupported (`MS0001`).
 
 ## `IDisposable` and `using` (spec 001 FR-111, #800)
 

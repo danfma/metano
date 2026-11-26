@@ -32,6 +32,6 @@ export class Res implements IDisposable {
   }
 
   [Symbol.dispose](): void {
-    disposeResource(this);
+    disposeResource(this, this.dispose);
   }
 }

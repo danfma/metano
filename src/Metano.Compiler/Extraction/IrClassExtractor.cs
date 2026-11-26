@@ -390,7 +390,7 @@ public static class IrClassExtractor
         {
             ValueEquality = ValueEqualityShapes.Of(type, context.GroupingPolicy),
             IsClosed = type.IsClosed,
-            TakesOnDisposable = InterfaceContractExtractor.TakesOnDisposable(type),
+            Disposable = InterfaceContractExtractor.ExtractDisposable(type, context),
         };
     }
 

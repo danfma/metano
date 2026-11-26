@@ -28,6 +28,6 @@ export class EffectNode extends OwnerNode implements IDisposable {
   }
 
   [Symbol.dispose](): void {
-    disposeResource(this);
+    disposeResource(this, this.dispose);
   }
 }

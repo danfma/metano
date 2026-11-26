@@ -32,7 +32,7 @@ class Resource implements IDisposable {
   }
 
   [Symbol.dispose](): void {
-    disposeResource(this);
+    disposeResource(this, this.dispose);
   }
 }
 
@@ -60,10 +60,10 @@ describe("IDisposable$runtimeType", () => {
 });
 
 describe("disposeResource", () => {
-  test("calls dispose()", () => {
+  test("runs the given method on the resource", () => {
     const resource = new Resource();
 
-    disposeResource(resource);
+    disposeResource(resource, resource.dispose);
 
     expect(resource.disposed).toBe(1);
   });

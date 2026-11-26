@@ -283,6 +283,40 @@ public static class NativeUsingProbes
         return string.Join(",", log);
     }
 
+    public static string UsingInSwitchSections()
+    {
+        var log = new List<string>();
+
+        foreach (var k in new[] { 1, 2, 3 })
+        {
+            switch (k)
+            {
+                case 1:
+                    var shared = "one";
+                    using (var r = new DispLog(log, "case1"))
+                        log.Add("body " + shared);
+                    break;
+                case 2:
+                    shared = "two";
+                    using (new DispLog(log, "case2"))
+                    {
+                        log.Add("body " + shared);
+
+                        break;
+                    }
+                default:
+                    {
+                        using var d = new DispLog(log, "default");
+                        log.Add("body default");
+                    }
+
+                    break;
+            }
+        }
+
+        return string.Join(",", log);
+    }
+
     public static async Task<string> AsyncDisposesAfterTheAwait()
     {
         var log = new List<string>();

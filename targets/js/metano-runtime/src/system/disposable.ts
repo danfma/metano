@@ -2,18 +2,22 @@ import { implementsInterface } from "./reflection/implements-interface.ts";
 import type { InterfaceType } from "./reflection/runtime-type.ts";
 
 /**
- * Disposes `resource`: the body of the `[Symbol.dispose]()` alias every generated
- * `IDisposable` implementer declares (spec FR-111). Building it installs `Symbol.dispose`
- * first when the engine has none (stable Safari), as `Symbol.for("Symbol.dispose")`, the key
- * TypeScript's downlevel `using` helpers then read. The alias reads this binding, so a bundle
- * that keeps a generated implementer keeps the initializer too, ahead of the class whose
- * `[Symbol.dispose]` key it defines; a bundle that keeps no implementer keeps nothing
- * (spec 011 FR-043).
+ * Runs `dispose` on `resource`: the body of the `[Symbol.dispose]()` alias every generated
+ * `IDisposable` implementer declares (spec FR-111), which passes the method that implements
+ * `Dispose()` under its emitted name (`disposeResource(this, this.dispose)`).
+ *
+ * The binding is the polyfill anchor. Building it installs `Symbol.dispose` first when the
+ * engine has none (stable Safari), as `Symbol.for("Symbol.dispose")`, the key TypeScript's
+ * downlevel `using` helpers then read. The ordering rests on the ESM graph: a generated
+ * module imports this one, and this module never imports generated code, so even in an
+ * import cycle between generated modules it is evaluated before any class whose
+ * `[Symbol.dispose]` key it defines; a bundle that keeps an implementer keeps this
+ * initializer (the alias reads it), and one that keeps none keeps nothing (spec 011 FR-043).
  */
-export const disposeResource: (resource: IDisposable) => void =
+export const disposeResource: <T>(resource: T, dispose: (this: T) => void) => void =
   /* @__PURE__ */ createResourceDisposer();
 
-function createResourceDisposer(): (resource: IDisposable) => void {
+function createResourceDisposer(): <T>(resource: T, dispose: (this: T) => void) => void {
   const symbols = Symbol as { dispose?: typeof Symbol.dispose };
 
   symbols.dispose ??= Symbol.for("Symbol.dispose") as typeof Symbol.dispose;
@@ -21,8 +25,8 @@ function createResourceDisposer(): (resource: IDisposable) => void {
   return disposeThrough;
 }
 
-function disposeThrough(resource: IDisposable): void {
-  resource.dispose();
+function disposeThrough<T>(resource: T, dispose: (this: T) => void): void {
+  dispose.call(resource);
 }
 
 /**

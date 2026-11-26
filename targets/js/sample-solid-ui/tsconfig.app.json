@@ -5,6 +5,7 @@
     "target": "es2023",
     "module": "esnext",
     "lib": ["ES2023", "ESNext.Disposable", "DOM", "DOM.Iterable"],
+    "importHelpers": true,
     "types": ["vite/client"],
     "skipLibCheck": true,
     "allowJs": false,

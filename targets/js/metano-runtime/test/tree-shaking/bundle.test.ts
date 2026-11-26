@@ -5,7 +5,7 @@
  * the listed strings.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { copyFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -140,6 +140,29 @@ test.each([...BUNDLERS])(
 
     expect(install).toBeGreaterThanOrEqual(0);
     expect(install).toBeLessThan(code.indexOf("[Symbol.dispose]"));
+  },
+  BUNDLE_TIMEOUT_MS,
+);
+
+test.each([...BUNDLERS])(
+  "implementers in an import cycle still install Symbol.dispose ahead of both classes (%s) (FR-111)",
+  async (bundler) => {
+    for (const fixture of ["dispose-cycle-a.js", "dispose-cycle-b.js"]) {
+      copyFileSync(join(import.meta.dir, "fixtures", fixture), join(directory.root, fixture));
+    }
+
+    const code = await bundle(
+      bundler,
+      directory,
+      'import { First } from "./dispose-cycle-a.js";\nexport const release = () => new First().partner()[Symbol.dispose]();\n',
+    );
+
+    const install = code.indexOf('Symbol.for("Symbol.dispose")');
+    const keys = [...code.matchAll(/\[Symbol\.dispose\]\(\)\{/g)].map((match) => match.index);
+
+    expect(install).toBeGreaterThanOrEqual(0);
+    expect(keys.length).toBe(2);
+    expect(keys.every((key) => install < key)).toBe(true);
   },
   BUNDLE_TIMEOUT_MS,
 );

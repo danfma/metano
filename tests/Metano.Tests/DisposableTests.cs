@@ -82,11 +82,106 @@ public class DisposableTests
         const string Alias = "[Symbol.dispose](): void {";
 
         await Assert.That(result["scope.ts"]).Contains(Alias);
-        await Assert.That(result["scope.ts"]).Contains("disposeResource(this);");
+        await Assert.That(result["scope.ts"]).Contains("disposeResource(this, this.dispose);");
         await Assert.That(result["scope.ts"]).Contains("} from \"metano-runtime\";");
         await Assert.That(result["child-scope.ts"]).DoesNotContain(Alias);
         await Assert.That(result["i-scope.ts"]).DoesNotContain(Alias);
-        await Assert.That(result["overloaded.ts"]).Contains(Alias);
+        await Assert.That(result["overloaded.ts"]).Contains("disposeResource(this, this.dispose);");
+    }
+
+    [Test]
+    public async Task DisposeAlias_CallsTheEmittedNameOfARenamedDispose()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Named : IDisposable
+            {
+                [Name("close")]
+                public void Dispose() { }
+            }
+            """
+        );
+
+        await Assert.That(result["named.ts"]).Contains("close(): void {");
+        await Assert.That(result["named.ts"]).Contains("disposeResource(this, this.close);");
+    }
+
+    [Test]
+    public async Task UsingStatementInASwitchSection_IsABlockWithAUsingDeclaration()
+    {
+        var result = TranspileHelper.Transpile(
+            Resources
+                + """
+                [Transpile]
+                public static class Uses
+                {
+                    public static void Touch(Res? r) { }
+
+                    public static void Run(int k)
+                    {
+                        switch (k)
+                        {
+                            case 1:
+                                var shared = 1;
+                                using (var r = new Res())
+                                    Touch(r);
+                                break;
+                            case 2:
+                                shared = 2;
+                                using (var s = new Res()) { Touch(s); }
+                                break;
+                        }
+                    }
+                }
+                """
+        );
+
+        var output = result["uses.ts"];
+
+        // C# rejects a using declaration directly in a section (CS8647); a using statement
+        // becomes a block, where a TypeScript `using` is allowed.
+        var lines = output.Split('\n').Select(line => line.Trim()).ToList();
+        var resource = lines.IndexOf("using r = new Res();");
+
+        await Assert.That(resource).IsGreaterThan(0);
+        await Assert.That(lines[resource - 1]).IsEqualTo("{");
+        await Assert.That(output).Contains("using s = new Res();");
+    }
+
+    [Test]
+    public async Task ResourcesOfClassesWithoutTheAlias_KeepTheTryFinally()
+    {
+        var result = TranspileHelper.Transpile(
+            Resources
+                + """
+                [Import("Socket", from: "net-lib")]
+                public sealed class Socket : IDisposable
+                {
+                    public void Dispose() { }
+                }
+
+                [Transpile]
+                public static class Uses
+                {
+                    public static Socket Open() => null!;
+
+                    public static void Run(IDisposable handle)
+                    {
+                        using var socket = Open();
+                        using var viaInterface = handle;
+                        using var own = new Res();
+                    }
+                }
+                """
+        );
+
+        var output = result["uses.ts"];
+
+        // An [Import] class has no emitted Dispose: MS0001, as in 3.3.0, never a native using.
+        await Assert.That(output).DoesNotContain("using socket");
+        await Assert.That(output).Contains("using viaInterface = handle;");
+        await Assert.That(output).Contains("using own = new Res();");
     }
 
     [Test]
@@ -857,7 +952,9 @@ public class DisposableTests
         var output = files["uses.ts"];
 
         await Assert.That(output).Contains("return isType(o, IDisposable$runtimeType);");
-        await Assert.That(output).Contains("using r = new LibRes();");
+        // A class of a referenced package may have no [Symbol.dispose]() alias.
+        await Assert.That(output).Contains("r.dispose();");
+        await Assert.That(output).DoesNotContain("using r");
     }
 
     [Test]

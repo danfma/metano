@@ -27,6 +27,6 @@ export class Countdown implements Iterator<number> {
   }
 
   [Symbol.dispose](): void {
-    disposeResource(this);
+    disposeResource(this, this.dispose);
   }
 }

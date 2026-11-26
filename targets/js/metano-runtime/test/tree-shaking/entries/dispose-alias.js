@@ -6,7 +6,7 @@ export class Resource {
   dispose() {}
 
   [Symbol.dispose]() {
-    disposeResource(this);
+    disposeResource(this, this.dispose);
   }
 }
 

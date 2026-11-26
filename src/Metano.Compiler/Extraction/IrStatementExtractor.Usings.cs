@@ -64,7 +64,7 @@ public sealed partial class IrStatementExtractor
     private bool LowersToTryFinally(LocalDeclarationStatementSyntax local) =>
         local.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)
         && UnloweredUsingDeclarationReason(local) is null
-        && !KeepsDeclaration(DeclaredTypeOf(local.Declaration));
+        && !KeepsUsingDeclaration(local);
 
     /// <summary>
     /// A <c>using</c> declaration the scope does not split at: one the target keeps as a
@@ -81,20 +81,34 @@ public sealed partial class IrStatementExtractor
         return ExtractDeclarators(local.Declaration, local.IsConst);
     }
 
+    /// <summary>
+    /// Whether a <c>using</c> declaration stays a declaration. One that is a direct child of
+    /// a switch section never does: a JavaScript <c>using</c> is not allowed directly in a
+    /// <c>case</c> clause, and hoisting it ahead of the <c>switch</c> would acquire the
+    /// resource early (decision W11-1a).
+    /// </summary>
     private bool KeepsUsingDeclaration(LocalDeclarationStatementSyntax local) =>
-        UnloweredUsingDeclarationReason(local) is null
+        local.Parent is not SwitchSectionSyntax
+        && UnloweredUsingDeclarationReason(local) is null
         && KeepsDeclaration(DeclaredTypeOf(local.Declaration));
 
     /// <summary>
     /// Whether a resource of static type <paramref name="type"/> stays a declaration: the
-    /// target declares <c>using</c> resources natively and disposes them through
-    /// <c>IDisposable</c>, which a pattern-based <c>Dispose()</c> does not implement.
+    /// target declares <c>using</c> resources natively, and the resource is disposed through
+    /// an <c>IDisposable</c> contract (not a pattern-based <c>Dispose()</c>) that a type of
+    /// this compilation takes on, or through an interface or type parameter (decision
+    /// W11-1a). A class bound to a hand-written declaration, or one from a referenced
+    /// package, may have no disposal-protocol member and keeps the <c>try</c>/<c>finally</c>.
     /// </summary>
-    private bool KeepsDeclaration(ITypeSymbol? type) =>
-        _context.EmitsUsingDeclarations
-        && !DisposableResources
-            .DisposalOf(type, _semantic.Compilation, _context.Target)
-            .IsPatternBased;
+    private bool KeepsDeclaration(ITypeSymbol? type)
+    {
+        if (!_context.EmitsUsingDeclarations)
+            return false;
+
+        var disposal = DisposableResources.DisposalOf(type, _semantic.Compilation, _context.Target);
+
+        return disposal is { IsPatternBased: false, IsContractTakenOnByThisCompilation: true };
+    }
 
     /// <summary>
     /// <c>using (…) body</c>: a block that declares the resources and disposes them in a

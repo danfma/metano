@@ -38,7 +38,14 @@ internal static class DisposableResources
                 interfaceDispose,
                 IsEmittedInterface(iface, target)
             ),
-            var resource => ImplementationDisposal(resource, interfaceDispose, target),
+            var resource => ImplementationDisposal(resource, interfaceDispose, target) with
+            {
+                IsContractTakenOnByThisCompilation = IsContractTakenOnBy(
+                    resource,
+                    compilation.Assembly,
+                    target
+                ),
+            },
         };
     }
 
@@ -74,6 +81,46 @@ internal static class DisposableResources
             IsPatternBased = interfaceImplementation is null,
         };
     }
+
+    /// <summary>
+    /// Whether the class or struct that takes on <c>IDisposable</c> for
+    /// <paramref name="resource"/> (itself, or the first base class that implements it
+    /// without inheriting it) is declared in <paramref name="assembly"/> and emitted there:
+    /// not bound to a hand-written declaration (<c>[Import]</c>, <c>[External]</c>,
+    /// <c>[NoEmit]</c>) nor ignored.
+    /// </summary>
+    private static bool IsContractTakenOnBy(
+        ITypeSymbol resource,
+        IAssemblySymbol assembly,
+        TargetLanguage? target
+    )
+    {
+        var taker = ContractTakerOf(resource as INamedTypeSymbol);
+
+        return taker is not null
+            && SymbolEqualityComparer.Default.Equals(taker.ContainingAssembly, assembly)
+            && !taker.HasImport()
+            && !taker.HasExternal()
+            && !SymbolHelper.HasAttribute(taker, "NoEmit")
+            && IsTranspiled(taker, target);
+    }
+
+    private static INamedTypeSymbol? ContractTakerOf(INamedTypeSymbol? type)
+    {
+        for (var candidate = type; candidate is not null; candidate = candidate.BaseType)
+        {
+            if (!ImplementsDisposable(candidate.BaseType))
+                return ImplementsDisposable(candidate) ? candidate : null;
+        }
+
+        return null;
+    }
+
+    private static bool ImplementsDisposable(INamedTypeSymbol? type) =>
+        type is not null
+        && type.AllInterfaces.Any(contract =>
+            contract.SpecialType is SpecialType.System_IDisposable
+        );
 
     /// <summary>
     /// A <c>Dispose</c> method a type between <paramref name="resource"/> and the declarer of
@@ -202,4 +249,12 @@ internal sealed record ResourceDisposal(IMethodSymbol Method, bool IsEmitted)
     /// reaches.
     /// </summary>
     public bool IsPatternBased { get; init; }
+
+    /// <summary>
+    /// The resource's <c>IDisposable</c> contract is taken on by a class or struct this
+    /// compilation emits, so a target bridge that adds a protocol member to such types
+    /// (TypeScript's <c>[Symbol.dispose]()</c>) gave it one. Always <c>true</c> for an
+    /// interface or type-parameter resource, whose runtime class is not known statically.
+    /// </summary>
+    public bool IsContractTakenOnByThisCompilation { get; init; } = true;
 }

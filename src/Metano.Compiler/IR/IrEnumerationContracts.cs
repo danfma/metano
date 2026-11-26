@@ -1,7 +1,7 @@
 namespace Metano.Compiler.IR;
 
 /// <summary>
-/// The declared member that implements one member of an enumeration contract,
+/// The declared member that implements one member of an interface contract,
 /// under the name and attributes the type declares it with: an ordinary member keeps
 /// its own, and an explicit implementation is declared under the interface member's
 /// (see <c>ExplicitImplementationLowering</c>). The member may be inherited from a

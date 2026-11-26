@@ -57,10 +57,11 @@ public sealed record IrTypeSemantics(
     public bool IsClosed { get; init; }
 
     /// <summary>
-    /// The class or struct takes on <c>IDisposable</c> itself — directly or through an
-    /// interface — rather than inheriting it from its base type, for a backend whose
-    /// disposal protocol differs from <c>Dispose()</c> (JavaScript: <c>[Symbol.dispose]()</c>).
-    /// False for every other type, and for interfaces.
+    /// The <c>IDisposable</c> contract the class or struct takes on itself — directly or
+    /// through an interface — rather than inheriting it from its base type, with the member
+    /// that implements <c>Dispose()</c>, for a backend whose disposal protocol differs
+    /// (JavaScript: <c>[Symbol.dispose]()</c>). Null for every other type, for interfaces,
+    /// and when the target declares no member for <c>Dispose()</c>.
     /// </summary>
-    public bool TakesOnDisposable { get; init; }
+    public IrDisposableContract? Disposable { get; init; }
 }

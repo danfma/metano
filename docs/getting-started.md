@@ -186,10 +186,10 @@ folder where Metano will write the generated files. Depending on your Bun
 version/template, you may also get a starter `tsconfig.json`; if not, add the
 TypeScript config that matches your frontend stack.
 
-Whatever the stack, its `lib` must include `"ESNext.Disposable"` (or `"ESNext"`) when the
-C# code implements `IDisposable` or declares `using` resources, or when it type-checks
-`metano-runtime`'s sources: generated code emits C# `using` as a TypeScript `using`
-declaration (see
+Whatever the stack, its `lib` must include `"ESNext.Disposable"` (or `"ESNext"`): the
+`IDisposable` that `metano-runtime` exports names `Symbol.dispose`, and generated code emits
+C# `using` as a TypeScript `using` declaration. Below target `ESNext`, also set
+`"importHelpers": true` and install `tslib` (see
 [BCL mappings](bcl-mappings.md#native-using-and-symboldispose-spec-001-fr-111-amendment-a1-817)).
 
 Add `metano-runtime` as a dependency (most generated code imports from it):
