@@ -1,7 +1,7 @@
 import 'money.dart';
 
 class Uses {
-  static bool try(int value) {
+  static bool try_(int value) {
     value = 4;
     return true;
   }

@@ -101,6 +101,39 @@ public class StrictModeReservedWordTests
     }
 
     [Test]
+    public async Task Dart_MembersNamedLikeReservedWords_AreEscapedAtTheDeclarationAndEveryUse()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record KW(int In, int New, int Of);
+
+            [Transpile]
+            public class KwUse
+            {
+                public int Default { get; set; }
+                public static int Sum(KW k) => k.In + k.New + k.Of;
+                public static KW With(KW k) => k with { In = 3 };
+                public int Read() => Default + this.Default;
+            }
+            """
+        );
+
+        var record = files["k_w.dart"];
+        var use = files["kw_use.dart"];
+
+        await Assert.That(record).Contains("KW(this.in_, this.new_, this.of);");
+        await Assert.That(record).Contains("other.in_ == this.in_");
+        await Assert.That(record).DoesNotContain("this.in ");
+        await Assert.That(record).DoesNotContain("this.in,");
+        await Assert.That(use).Contains("k.in_ + k.new_ + k.of");
+        await Assert.That(use).Contains("k.copyWith(in_: 3)");
+        await Assert.That(use).Contains("late int default_;");
+        await Assert.That(use).Contains("this.default_ + this.default_");
+        await Assert.That(use).Contains("static KW with_(KW k)");
+    }
+
+    [Test]
     public async Task EscapedFunctions_AreImportedByAnotherFile_AndThroughTheBarrel()
     {
         var files = TranspileHelper.Transpile(
