@@ -374,8 +374,8 @@ public static class IrClassExtractor
             IsJsxComponent: SymbolHelper.IsJsxComponent(type),
             JsxNativeElementTag: SymbolHelper.GetJsxNativeElementTag(type),
             RendersAsJsxElement: SymbolHelper.IsJsxRenderable(type),
-            Enumerable: EnumerationContractExtractor.ExtractEnumerable(type, context),
-            Enumerator: EnumerationContractExtractor.ExtractEnumerator(type, context),
+            Enumerable: InterfaceContractExtractor.ExtractEnumerable(type, context),
+            Enumerator: InterfaceContractExtractor.ExtractEnumerator(type, context),
             InheritsPerClassStorage: OverrideChains.AncestorEmitsPerClassStorage(
                 type,
                 context.Compilation,
@@ -390,6 +390,7 @@ public static class IrClassExtractor
         {
             ValueEquality = ValueEqualityShapes.Of(type, context.GroupingPolicy),
             IsClosed = type.IsClosed,
+            Disposable = InterfaceContractExtractor.ExtractDisposable(type, context),
         };
     }
 

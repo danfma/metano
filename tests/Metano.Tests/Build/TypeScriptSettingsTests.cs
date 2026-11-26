@@ -27,6 +27,7 @@ public partial class TypeScriptSettingsTests
         "SkipPackageJson",
         "NamespaceBarrels",
         "StripInterfacePrefix",
+        "UsingLowering",
         "FilePrefix",
         "ExtraArgs",
         "PostBuildCommand",

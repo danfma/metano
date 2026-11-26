@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { type IDisposable, IDisposable$runtimeType } from "#/system/disposable.ts";
+import {
+  disposeResource,
+  type IDisposable,
+  IDisposable$runtimeType,
+} from "#/system/disposable.ts";
 import type { ClassType } from "#/system/reflection/index.ts";
 
 let Resource$rt: ClassType<Resource> | undefined;
@@ -26,6 +30,10 @@ class Resource implements IDisposable {
   dispose(): void {
     this.disposed++;
   }
+
+  [Symbol.dispose](): void {
+    disposeResource(this, this.dispose);
+  }
 }
 
 /** Derives from an implementer without a descriptor of its own. */
@@ -48,5 +56,25 @@ describe("IDisposable$runtimeType", () => {
     expect(IDisposable$runtimeType.test(lookalike)).toBe(false);
     expect(IDisposable$runtimeType.test(null)).toBe(false);
     expect(IDisposable$runtimeType.test("s")).toBe(false);
+  });
+});
+
+describe("disposeResource", () => {
+  test("runs the given method on the resource", () => {
+    const resource = new Resource();
+
+    disposeResource(resource, resource.dispose);
+
+    expect(resource.disposed).toBe(1);
+  });
+
+  test("lets a using declaration dispose a generated-shape implementer", () => {
+    const resource = new Resource();
+
+    {
+      using _held = resource;
+    }
+
+    expect(resource.disposed).toBe(1);
   });
 });

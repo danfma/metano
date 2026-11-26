@@ -2,7 +2,8 @@
   "compilerOptions": {
     "target": "es2023",
     "module": "esnext",
-    "lib": ["ES2023", "DOM"],
+    "lib": ["ES2023", "ESNext.Disposable", "DOM"],
+    "importHelpers": true,
     "types": [],
     "skipLibCheck": true,
     "moduleResolution": "bundler",

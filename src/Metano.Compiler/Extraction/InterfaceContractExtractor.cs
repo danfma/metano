@@ -6,8 +6,10 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// Reads the enumeration contracts (<c>IEnumerable</c>, <c>IEnumerator</c>) a class or
-/// struct takes on itself, and the declared members that implement them. Members are
+/// Reads the interface contracts a backend may bridge to its own protocols (the
+/// enumeration contracts <c>IEnumerable</c> and <c>IEnumerator</c>, and <c>IDisposable</c>)
+/// that a class or struct takes on itself, and the declared members that implement them.
+/// Members are
 /// resolved through Roslyn's interface mapping
 /// (<see cref="ITypeSymbol.FindImplementationForInterfaceMember"/>), so an explicit
 /// implementation, a member inherited from a base class that does not take on the
@@ -15,11 +17,12 @@ namespace Metano.Compiler.Extraction;
 /// emitted with. A contract the base type already takes on is not reported: the
 /// base carries it, and an overriding member is reached through it.
 /// </summary>
-internal static class EnumerationContractExtractor
+internal static class InterfaceContractExtractor
 {
     private const string GetEnumeratorName = "GetEnumerator";
     private const string CurrentName = "Current";
     private const string MoveNextName = "MoveNext";
+    private const string DisposeName = "Dispose";
 
     public static IrEnumerableContract? ExtractEnumerable(
         INamedTypeSymbol type,
@@ -65,6 +68,21 @@ internal static class EnumerationContractExtractor
             current,
             moveNext
         );
+    }
+
+    public static IrDisposableContract? ExtractDisposable(
+        INamedTypeSymbol type,
+        IrExtractionContext? context
+    )
+    {
+        if (!TakesOnContract(type, SpecialType.System_IDisposable))
+            return null;
+
+        var contract = Interface(type, SpecialType.System_IDisposable);
+
+        return Implementation(type, contract, DisposeName, context?.Target) is { } dispose
+            ? new IrDisposableContract(dispose)
+            : null;
     }
 
     private static bool TakesOnContract(INamedTypeSymbol type, SpecialType contract)

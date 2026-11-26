@@ -62,6 +62,14 @@ public sealed class TypeScriptTransformContext(
     public required ModuleSpecifierRenderer ModuleSpecifiers { get; init; }
 
     /// <summary>
+    /// How a C# <c>using</c> is emitted (FR-111): <see cref="UsingLowering.Native"/> keeps
+    /// each <c>IDisposable</c> resource as a TypeScript <c>using</c> declaration
+    /// (<see cref="IrExtractionContext.EmitsUsingDeclarations"/>);
+    /// <see cref="UsingLowering.TryFinally"/> keeps the 3.3.0 <c>try</c>/<c>finally</c>.
+    /// </summary>
+    public UsingLowering UsingLowering { get; init; }
+
+    /// <summary>
     /// The runtime classes of the BCL exceptions, read from the
     /// <c>[ExportFromBcl]</c> entries in scope (spec 011 FR-014): the one
     /// resolver behind the type position, <c>extends</c>, construction, the
@@ -671,6 +679,7 @@ public sealed class TypeScriptTransformContext(
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
             EmitsStructZeroValue = true,
+            EmitsUsingDeclarations = UsingLowering is UsingLowering.Native,
             HasExceptionRuntimeClass = ExceptionClasses.HasRuntimeClass,
             UnprintableTextReason = TsUnprintableText.ReasonOf,
             EmittedMemberName = IrToTsNamingPolicy.DeclaredNameOf,

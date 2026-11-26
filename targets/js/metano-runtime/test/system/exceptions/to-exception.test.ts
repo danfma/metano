@@ -61,6 +61,68 @@ describe("toException", () => {
     expect(converted.innerException).toBe(original);
   });
 
+  test("unwraps a SuppressedError to the disposal's exception", () => {
+    const disposal = new InvalidOperationException("dispose");
+    const body = new InvalidOperationException("body");
+
+    expect(toException(new SuppressedError(disposal, body))).toBe(disposal);
+  });
+
+  test("unwraps a chain of SuppressedErrors through their error", () => {
+    const disposal = new InvalidOperationException("inner dispose");
+    const chained = new SuppressedError(new SuppressedError(disposal, "a"), "b");
+
+    expect(toException(chained)).toBe(disposal);
+  });
+
+  test("unwraps the stand-in TypeScript's downlevel helpers build without SuppressedError", () => {
+    const disposal = new InvalidOperationException("dispose");
+    const standIn = Object.assign(new Error("An error was suppressed during disposal."), {
+      name: "SuppressedError",
+      error: disposal,
+      suppressed: new Error("body"),
+    });
+
+    expect(toException(standIn)).toBe(disposal);
+  });
+
+  test("stops at a cyclic SuppressedError chain", () => {
+    const cyclic = new SuppressedError(undefined, "body");
+
+    (cyclic as { error: unknown }).error = cyclic;
+
+    expect(toException(cyclic)).toBeInstanceOf(Exception);
+  });
+
+  test("unwraps a SuppressedError whose disposal threw a plain Error", () => {
+    const converted = toException(new SuppressedError(new TypeError("x"), "body"));
+
+    expect(converted).toBeInstanceOf(NullReferenceException);
+  });
+
+  test("works with a using declaration whose body and disposal both throw", () => {
+    expect.assertions(2);
+
+    const disposal = new InvalidOperationException("dispose");
+
+    const run = () => {
+      using _resource = {
+        [Symbol.dispose]: () => {
+          throw disposal;
+        },
+      };
+
+      throw new InvalidOperationException("body");
+    };
+
+    try {
+      run();
+    } catch (error) {
+      expect(error).toBeInstanceOf(SuppressedError);
+      expect(toException(error)).toBe(disposal);
+    }
+  });
+
   test("turns a thrown non-Error value into an Exception carrying its text", () => {
     expect(toException("boom").message).toBe("boom");
     expect(toException(42).message).toBe("42");

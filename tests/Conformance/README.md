@@ -33,6 +33,13 @@ module of every probe class in its own Bun and Node process, each under a timeou
 `.js` specifiers (spec 004 FR-011, #573). The exit code is 1 when a row
 `CHANGED`, or when the C# sources changed since the .NET output was recorded.
 
+The disposable rows (`NativeUsingProbes`, `Disposable*Probes`) also run downlevelled
+(`tools/downlevel-check.mjs`, spec 001 FR-111): compiled at target `es2022` with
+`importHelpers` (`tools/workspace/probes/tsconfig.downlevel.json`, helpers from `tslib`), under
+Bun and Node, and again with `tools/without-symbol-dispose.mjs` preloaded, which hides
+`Symbol.dispose` and `SuppressedError` as on stable Safari. Each must print the .NET output;
+a difference fails the run.
+
 The probes are **not** part of `Metano.slnx`: `dotnet build Metano.slnx` never compiles them,
 `Conformance.csproj` has no `ProjectReference` from any solution project, and the script
 builds it only on demand.

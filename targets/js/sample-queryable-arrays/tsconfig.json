@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "lib": ["ESNext"],
+    "importHelpers": true,
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",

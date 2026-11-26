@@ -109,6 +109,10 @@ Reported as warnings, with no new diagnostic code: a `[This]` delegate converted
 
 On TypeScript a `using` statement or declaration no longer reports `MS0001`: it lowers to `try`/`finally` (Dart still reports it). New `MS0001` sources (error, dropped-code policy): an `await using` statement or declaration (`IAsyncDisposable` is not mapped); a `using` over a resource whose `Dispose` the target does not emit (a BCL type such as `IEnumerator<T>`); a `using` declaration directly in a module entry point body (`Extraction/IrStatementExtractor.Usings.cs`). New `MS0031` source (error): an explicit `IDisposable.Dispose()` beside a member that already claims `dispose`, when the explicit body does not just forward to it or that member is not `public` / `internal` (`Frontend/Roslyn/ExplicitImplementationValidator.cs`). Tests: `tests/Metano.Tests/DisposableTests.cs`.
 
+### Wave 11 native `using` (FR-111 amendment A1, #817, no new code)
+
+No diagnostic changes: the `MS0001` sources of wave 10 (`await using`, an unemitted `Dispose`, a `using` declaration directly in a module entry point, a `Dispose` overload shadowing the implementation) apply to the native `using` declarations and to the `tryFinally` opt-out alike.
+
 ## Build integration (`Metano.Build.<Target>` packages)
 
 Raised by the MSBuild target, not by the compiler, so it lives outside the `MS` code space.

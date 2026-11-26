@@ -6,9 +6,18 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// <c>using</c> statements and declarations (FR-111), lowered on a target that declares
-/// <c>System.IDisposable</c> to the <c>try</c>/<c>finally</c> the C# specification defines
-/// them as, with the existing statement nodes:
+/// <c>using</c> statements and declarations (FR-111) on a target that declares
+/// <c>System.IDisposable</c>. A target that declares such resources natively
+/// (<see cref="IrExtractionContext.EmitsUsingDeclarations"/>) keeps each resource of an
+/// <c>IDisposable</c> as a declaration marked <see cref="IrVariableDeclaration.IsUsing"/>:
+/// <list type="bullet">
+///   <item><c>using var x = e;</c> → <c>using x = e;</c>;</item>
+///   <item><c>using (T x = e) body</c> → <c>{ using x = e; body }</c>;</item>
+///   <item><c>using (e) body</c> → <c>{ using $using0 = e; body }</c>.</item>
+/// </list>
+/// Otherwise, and for the pattern-based <c>Dispose()</c> of a <c>ref struct</c>, which no
+/// interface reaches, a <c>using</c> lowers to the <c>try</c>/<c>finally</c> the C#
+/// specification defines it as, with the existing statement nodes:
 /// <list type="bullet">
 ///   <item><c>using (T x = e) body</c> → <c>{ const x = e; try { body } finally { x.dispose(); } }</c>;</item>
 ///   <item><c>using (e) body</c> → the same over a temporary (<c>$using0</c>), bound even when
@@ -27,7 +36,8 @@ public sealed partial class IrStatementExtractor
 {
     /// <summary>
     /// The statements of one scope in order, up to the first <c>using</c> declaration
-    /// that lowers: it takes the rest of the scope as the body of its <c>try</c>.
+    /// that lowers to <c>try</c>/<c>finally</c>: it takes the rest of the scope as the
+    /// body of its <c>try</c>.
     /// </summary>
     private List<IrStatement> ExtractUpToUsingDeclaration(IReadOnlyList<StatementSyntax> source)
     {
@@ -35,7 +45,7 @@ public sealed partial class IrStatementExtractor
 
         for (var index = 0; index < source.Count; index++)
         {
-            if (source[index] is LocalDeclarationStatementSyntax local && IsLoweredUsing(local))
+            if (source[index] is LocalDeclarationStatementSyntax local && LowersToTryFinally(local))
             {
                 var resources = DeclaredResources(local.Declaration);
                 var rest = ExtractStatementSequence([.. source.Skip(index + 1)]);
@@ -51,9 +61,51 @@ public sealed partial class IrStatementExtractor
         return extracted;
     }
 
-    private bool IsLoweredUsing(LocalDeclarationStatementSyntax local) =>
+    private bool LowersToTryFinally(LocalDeclarationStatementSyntax local) =>
         local.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)
-        && UnloweredUsingDeclarationReason(local) is null;
+        && UnloweredUsingDeclarationReason(local) is null
+        && !KeepsUsingDeclaration(local);
+
+    /// <summary>
+    /// A <c>using</c> declaration the scope does not split at: one the target keeps as a
+    /// declaration, or one that does not lower, which is extracted as a plain
+    /// declaration and reported (its value is never disposed).
+    /// </summary>
+    private List<IrStatement> ExtractUnsplitUsingDeclaration(LocalDeclarationStatementSyntax local)
+    {
+        if (KeepsUsingDeclaration(local))
+            return UsingDeclarators(local.Declaration);
+
+        ReportUnloweredUsingDeclaration(local);
+
+        return ExtractDeclarators(local.Declaration, local.IsConst);
+    }
+
+    /// <summary>
+    /// Whether a <c>using</c> declaration stays a declaration. C# never puts one directly in
+    /// a switch section (CS8647), where a JavaScript <c>using</c> would not be allowed either.
+    /// </summary>
+    private bool KeepsUsingDeclaration(LocalDeclarationStatementSyntax local) =>
+        UnloweredUsingDeclarationReason(local) is null
+        && KeepsDeclaration(DeclaredTypeOf(local.Declaration));
+
+    /// <summary>
+    /// Whether a resource of static type <paramref name="type"/> stays a declaration: the
+    /// target declares <c>using</c> resources natively, and the resource is disposed through
+    /// an <c>IDisposable</c> contract (not a pattern-based <c>Dispose()</c>) that a type of
+    /// this compilation takes on, or through an interface or type parameter (decision
+    /// W11-1a). A class bound to a hand-written declaration, or one from a referenced
+    /// package, may have no disposal-protocol member and keeps the <c>try</c>/<c>finally</c>.
+    /// </summary>
+    private bool KeepsDeclaration(ITypeSymbol? type)
+    {
+        if (!_context.EmitsUsingDeclarations)
+            return false;
+
+        var disposal = DisposableResources.DisposalOf(type, _semantic.Compilation, _context.Target);
+
+        return disposal is { IsPatternBased: false, IsContractTakenOnByThisCompilation: true };
+    }
 
     /// <summary>
     /// <c>using (…) body</c>: a block that declares the resources and disposes them in a
@@ -71,6 +123,9 @@ public sealed partial class IrStatementExtractor
             return new IrUnsupportedStatement(statement.Kind().ToString());
         }
 
+        if (KeepsDeclaration(ResourceTypeOf(statement)))
+            return ExtractUsingBlock(statement);
+
         var resources = statement.Declaration is { } declaration
             ? DeclaredResources(declaration)
             : [ExpressionResource(statement.Expression!)];
@@ -81,6 +136,34 @@ public sealed partial class IrStatementExtractor
             LowerStatementSequence(GuardedByResources(resources, UnwrappedBlock(body)))
         );
     }
+
+    /// <summary>
+    /// <c>{ using x = e; body }</c>: the resources declared ahead of the body, in one block
+    /// that disposes them when it exits.
+    /// </summary>
+    private IrBlockStatement ExtractUsingBlock(UsingStatementSyntax statement)
+    {
+        var declarations = statement.Declaration is { } declaration
+            ? UsingDeclarators(declaration)
+            : [ExpressionUsingDeclaration(statement.Expression!)];
+
+        var body = ExtractEmbedded(statement.Statement);
+
+        return new IrBlockStatement(
+            LowerStatementSequence([.. declarations, .. UnwrappedBlock(body)])
+        );
+    }
+
+    /// <summary>The declarators of a <c>using</c> declaration, each kept as a resource.</summary>
+    private List<IrStatement> UsingDeclarators(VariableDeclarationSyntax declaration) =>
+        [.. ExtractDeclarators(declaration, isConst: true).Select(AsUsing)];
+
+    /// <summary>The temporary of <c>using (expression)</c>, kept as a resource.</summary>
+    private IrStatement ExpressionUsingDeclaration(ExpressionSyntax expression) =>
+        AsUsing(ExpressionResourceDeclaration(expression, _expressions.NextUsingResourceName()));
+
+    private static IrStatement AsUsing(IrStatement declaration) =>
+        declaration is IrVariableDeclaration local ? local with { IsUsing = true } : declaration;
 
     /// <summary>
     /// The statements of a body that is one nested block (<c>using (a) using (b) { … }</c>),
@@ -139,6 +222,20 @@ public sealed partial class IrStatementExtractor
     private UsingResource ExpressionResource(ExpressionSyntax expression)
     {
         var name = _expressions.NextUsingResourceName();
+
+        return new UsingResource(
+            ExpressionResourceDeclaration(expression, name),
+            Disposal(new IrIdentifier(name), _semantic.GetTypeInfo(expression).Type, expression)
+        );
+    }
+
+    /// <summary>
+    /// The temporary <paramref name="name"/> that holds the value of <c>using (expression)</c>,
+    /// bound even when <paramref name="expression"/> is a local, since C# captures the value
+    /// at entry.
+    /// </summary>
+    private IrStatement ExpressionResourceDeclaration(ExpressionSyntax expression, string name)
+    {
         var type = _semantic.GetTypeInfo(expression).Type;
 
         var declaration = new IrVariableDeclaration(
@@ -149,10 +246,7 @@ public sealed partial class IrStatementExtractor
             InferredType: type is null ? null : MapType(type)
         );
 
-        return new UsingResource(
-            IrStatementSpans.WithSpanOf(expression, declaration),
-            Disposal(new IrIdentifier(name), type, expression)
-        );
+        return IrStatementSpans.WithSpanOf(expression, declaration);
     }
 
     private IrStatement Disposal(IrExpression resource, ITypeSymbol? type, ExpressionSyntax? value)
@@ -234,12 +328,13 @@ public sealed partial class IrStatementExtractor
         if (statement.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword))
             return AwaitUsingReason("statement");
 
-        var type = statement.Declaration is { } declaration
+        return UnemittedDisposeReason(ResourceTypeOf(statement));
+    }
+
+    private ITypeSymbol? ResourceTypeOf(UsingStatementSyntax statement) =>
+        statement.Declaration is { } declaration
             ? DeclaredTypeOf(declaration)
             : _semantic.GetTypeInfo(statement.Expression!).Type;
-
-        return UnemittedDisposeReason(type);
-    }
 
     private ITypeSymbol? DeclaredTypeOf(VariableDeclarationSyntax declaration) =>
         declaration.Variables.FirstOrDefault() is { } variable

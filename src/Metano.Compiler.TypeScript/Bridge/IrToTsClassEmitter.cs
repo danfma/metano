@@ -881,7 +881,9 @@ internal sealed class IrToTsClassEmitter(
     /// <see cref="IrToTsRecordSynthesisBridge"/>, and the
     /// <c>[Symbol.iterator]()</c> / <c>next()</c> members of an
     /// <c>IEnumerable&lt;T&gt;</c> / <c>IEnumerator&lt;T&gt;</c> implementation via
-    /// <see cref="IrToTsIterationProtocolBridge"/>.
+    /// <see cref="IrToTsIterationProtocolBridge"/>, and the <c>[Symbol.dispose]()</c>
+    /// alias of an <c>IDisposable</c> implementation via
+    /// <see cref="IrToTsDisposalProtocolBridge"/>.
     /// </summary>
     private void EmitSynthesizedMembers(
         INamedTypeSymbol type,
@@ -933,6 +935,7 @@ internal sealed class IrToTsClassEmitter(
         }
 
         classMembers.AddRange(IrToTsIterationProtocolBridge.BuildMembers(ir, BclOverrides));
+        classMembers.AddRange(IrToTsDisposalProtocolBridge.BuildMembers(ir));
 
         IteratorProtocolDiagnostics.ReportConflictingNext(type, ir, _context.ReportDiagnostic);
 

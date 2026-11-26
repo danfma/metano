@@ -88,6 +88,16 @@ public sealed record IrExtractionContext(
     internal bool LowersUsingStatements => DisposableInterfaces.IsDeclaredBy(Target);
 
     /// <summary>
+    /// Whether the target declares <c>using</c> resources natively, disposing them through
+    /// <c>IDisposable</c> when their scope exits (TypeScript's <c>using</c> declaration):
+    /// a <c>using</c> whose resource is an <c>IDisposable</c> then stays a declaration
+    /// marked <see cref="Metano.Compiler.IR.IrVariableDeclaration.IsUsing"/> instead of
+    /// lowering to <c>try</c>/<c>finally</c> (FR-111). <c>false</c>, the default, keeps the
+    /// lowering: a target without the form, or one whose project opts out of it.
+    /// </summary>
+    public bool EmitsUsingDeclarations { get; init; }
+
+    /// <summary>
     /// Whether the target's BCL collections are its native ones (Dart until
     /// spec 011 FR-038, D28): such a target gets the pre-011c lowering of every
     /// collection construct (the 2.x element-access reads, writes and

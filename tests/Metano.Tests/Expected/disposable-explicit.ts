@@ -1,4 +1,4 @@
-import { IDisposable$runtimeType, type ClassType, type IDisposable } from "metano-runtime";
+import { IDisposable$runtimeType, disposeResource, type ClassType, type IDisposable } from "metano-runtime";
 
 let Handle$rt: ClassType<Handle> | undefined;
 
@@ -29,5 +29,9 @@ export class Handle implements IDisposable {
 
   dispose(): void {
     this.count = (this.count + 1) | 0;
+  }
+
+  [Symbol.dispose](): void {
+    disposeResource(this, this.dispose);
   }
 }
