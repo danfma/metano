@@ -1926,6 +1926,21 @@ Product requirements added after the migration (normative; each one is traced by
   Tests: `tests/Metano.Tests/DisposableTests.cs`,
   `targets/js/metano-runtime/test/system/disposable.test.ts`; conformance `DisposableProbes`.
 
+- **FR-111a** (internal descendants and contract members, #819, decision W11-3, TypeScript;
+  amends FR-111 and spec 011 D29):
+  1. In an `[EmitPackage]` library (or under `[assembly: EmitRuntimeType]`), an internal class
+     (reached automatically by W9-9) gets its own `$runtimeType` getter, with its own base,
+     interfaces and type parameters, when it has a describable class ancestor that is public or
+     reached (decision W11-3a); otherwise it would inherit that ancestor's descriptor and answer
+     `is IFoo` wrongly. Any other internal type gets one only when D29 reaches it. Internal types
+     stay out of the barrels.
+  2. An `internal` or `private protected` member that an explicit implementation of a public
+     interface member forwards to (the claiming member of a superseded explicit
+     implementation, such as `IDisposable.Dispose()`, FR-111 item 4; `IDisposable` only accepts a
+     `public` or `internal` claimant) is emitted `public` and never tagged `@internal`, so
+     `stripInternal` keeps the member the `implements` clause relies on.
+  Tests: `tests/Metano.Tests/InternalRuntimeTypeTests.cs`; conformance `InternalRuntimeTypeProbes`.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

@@ -20,7 +20,9 @@ namespace Metano.Compiler.TypeScript.Analysis;
 ///   <c>isType</c> / <c>asType</c> / <c>castTo</c> with the descriptor),
 ///   <c>typeof(X)</c>, a <c>GetType()</c> receiver under the receiver rules,
 ///   <c>[EmitRuntimeType]</c>, every public type of an <c>[EmitPackage]</c>
-///   library, and every transpiled exception class. A class test, pattern,
+///   library, and every internal class with a public or reached describable ancestor (it
+///   would otherwise inherit its base's descriptor and answer its interfaces
+///   wrongly, #819), and every transpiled exception class. A class test, pattern,
 ///   cast or dispatch renders <c>instanceof</c> or <c>castTo(x, Ctor)</c>
 ///   and reaches nothing.</item>
 ///   <item>The receiver rules: a class or struct <c>C</c> reaches <c>C</c> and
@@ -124,6 +126,7 @@ internal sealed partial class RuntimeTypeReachability
         foreach (var question in ir.RuntimeQuestions)
             Answer(question);
 
+        var questioned = _reached.ToHashSet();
         var assemblyForcesAll = HasEmitRuntimeType(_compilation.Assembly);
         var isLibrary = ir.PackageName is not null;
 
@@ -132,11 +135,30 @@ internal sealed partial class RuntimeTypeReachability
             if (
                 type.IsException
                 || HasEmitRuntimeType(type.Symbol)
-                || ((assemblyForcesAll || isLibrary) && IsPublic(type.Symbol))
+                || (
+                    (assemblyForcesAll || isLibrary)
+                    && IsPublicOrInheritsADescriptor(type, questioned)
+                )
             )
                 Reach(type);
         }
     }
+
+    /// <summary>
+    /// A public type keeps D29 (libraries are complete). An internal type (W9-9) gets a
+    /// descriptor only when it is a class with a describable ancestor that is public or
+    /// already reached by a question, whose descriptor it would otherwise inherit with the
+    /// wrong interfaces (#819); any other internal type is reached only by a descriptor read.
+    /// </summary>
+    private bool IsPublicOrInheritsADescriptor(
+        DescribableType type,
+        IReadOnlySet<SupertypeKey> questioned
+    ) =>
+        IsPublic(type.Symbol)
+        || (
+            type.Kind is DescriptorKind.Class
+            && BasesOf(type).Any(@base => IsPublic(@base.Symbol) || questioned.Contains(@base.Key))
+        );
 
     private void Answer(IrRuntimeQuestion question)
     {
