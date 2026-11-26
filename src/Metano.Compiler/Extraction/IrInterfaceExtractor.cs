@@ -48,6 +48,7 @@ public static class IrInterfaceExtractor
                             InheritedOverloads = InheritedSignaturesOf(type, method, context),
                         }
                     );
+
                     break;
 
                 case IEventSymbol evt:

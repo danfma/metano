@@ -62,6 +62,7 @@ internal static partial class IrToTsClassBridge
             var (initializer, store) = prop.Initializer is { } init
                 ? MapInitializer(init, prop.IsStatic, context)
                 : (ComputeDefaultInitializer(prop.Type), null);
+
             return
             [
                 new TsFieldMember(
@@ -440,6 +441,7 @@ internal static partial class IrToTsClassBridge
             field.Initializer is not null && !field.IsCapturedByCtor
                 ? MapInitializer(field.Initializer, field.IsStatic, context)
                 : (null, null);
+
         if (!field.IsCapturedByCtor)
             initializer ??= ComputeDefaultInitializer(field.Type);
 
