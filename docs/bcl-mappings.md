@@ -689,12 +689,13 @@ struct this build emits (it, or the base class that takes on `IDisposable`, is d
 the compiled project), and every interface- or type-parameter-typed resource
 (`IDisposable`, an interface extending it, `T : IDisposable`). These keep the `try`/`finally`
 lowering of the section below, because their runtime objects may have no
-`[Symbol.dispose]()`: a class bound to a hand-written declaration (`[Import]`, `[External]`,
-`[NoEmit]`), a class from a referenced package, and a `ref struct` with a pattern-based
-`Dispose()`. An interface- or generic-typed resource
-needs a value with `[Symbol.dispose]()`: TypeScript enforces it for hand-written values typed
-as the runtime `IDisposable`, and a value cast to it without the member throws a `TypeError`
-when the `using` is entered.
+`[Symbol.dispose]()`: an `[Import]` class, a class from a referenced package (also through a
+class constraint, `T : LibRes`), and a `ref struct` with a pattern-based `Dispose()`. An
+interface- or generic-typed resource needs a value with `[Symbol.dispose]()`: TypeScript
+enforces it for hand-written values typed as the runtime `IDisposable`, a value cast to it
+without the member throws a `TypeError` when the `using` is entered, and instances of a
+referenced package must come from a build of this Metano version, whose classes carry the
+alias.
 
 **Consumer requirements.**
 

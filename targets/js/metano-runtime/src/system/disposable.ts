@@ -15,14 +15,20 @@ import type { InterfaceType } from "./reflection/runtime-type.ts";
  * initializer (the alias reads it), and one that keeps none keeps nothing (spec 011 FR-043).
  */
 export const disposeResource: <T>(resource: T, dispose: (this: T) => void) => void =
+  // Pure for bundlers: kept, and run at load, only while a generated alias reads it.
   /* @__PURE__ */ createResourceDisposer();
 
 function createResourceDisposer(): <T>(resource: T, dispose: (this: T) => void) => void {
+  installSymbolDispose();
+
+  return disposeThrough;
+}
+
+/** Defines `Symbol.dispose` as `Symbol.for("Symbol.dispose")` on an engine without it. */
+function installSymbolDispose(): void {
   const symbols = Symbol as { dispose?: typeof Symbol.dispose };
 
   symbols.dispose ??= Symbol.for("Symbol.dispose") as typeof Symbol.dispose;
-
-  return disposeThrough;
 }
 
 function disposeThrough<T>(resource: T, dispose: (this: T) => void): void {

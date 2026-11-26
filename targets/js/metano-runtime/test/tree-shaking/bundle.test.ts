@@ -147,6 +147,7 @@ test.each([...BUNDLERS])(
 test.each([...BUNDLERS])(
   "implementers in an import cycle still install Symbol.dispose ahead of both classes (%s) (FR-111)",
   async (bundler) => {
+    // Copied into the bundling directory, which afterAll removes.
     for (const fixture of ["dispose-cycle-a.js", "dispose-cycle-b.js"]) {
       copyFileSync(join(import.meta.dir, "fixtures", fixture), join(directory.root, fixture));
     }
@@ -158,7 +159,7 @@ test.each([...BUNDLERS])(
     );
 
     const install = code.indexOf('Symbol.for("Symbol.dispose")');
-    const keys = [...code.matchAll(/\[Symbol\.dispose\]\(\)\{/g)].map((match) => match.index);
+    const keys = [...code.matchAll(/\[Symbol\.dispose\]\(\)\s*\{/g)].map((match) => match.index);
 
     expect(install).toBeGreaterThanOrEqual(0);
     expect(keys.length).toBe(2);

@@ -11,6 +11,9 @@ const ABORT_ERROR_NAME = "AbortError";
 /** The `name` of the error a `using` declaration throws when its disposal hides another error. */
 const SUPPRESSED_ERROR_NAME = "SuppressedError";
 
+/** How many nested `SuppressedError`s `toException` unwraps at most. */
+const MAX_SUPPRESSION_DEPTH = 64;
+
 /**
  * Normalizes whatever a JavaScript `catch` caught to a `System.Exception`, as
  * the typed clauses of a C# `try` see it:
@@ -51,10 +54,13 @@ export function toException(thrown: unknown): Exception {
 }
 
 /**
- * The exception a chain of `SuppressedError`s ends with, following `error`.
+ * The exception a chain of `SuppressedError`s ends with, following `error`. A chain longer
+ * than {@link MAX_SUPPRESSION_DEPTH} (a cyclic `error`) stops at the error it reached.
  */
-function withoutSuppression(value: unknown): unknown {
-  return isSuppressedError(value) ? withoutSuppression(value.error) : value;
+function withoutSuppression(value: unknown, depth = 0): unknown {
+  return isSuppressedError(value) && depth < MAX_SUPPRESSION_DEPTH
+    ? withoutSuppression(value.error, depth + 1)
+    : value;
 }
 
 /**

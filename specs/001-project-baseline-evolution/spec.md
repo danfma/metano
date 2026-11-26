@@ -1947,12 +1947,13 @@ Product requirements added after the migration (normative; each one is traced by
      `using (e) body` → `{ using $using0 = e; body }` (the temporary binds the value at entry);
      several declarators → one `using` per declarator, in order. Disposal is in reverse order on
      every exit, a `null` resource is skipped, and a later initializer that throws still
-     disposes the earlier resources. Item 3's lowering stays for: a class bound to a
-     hand-written declaration (`[Import]`, `[External]`, `[NoEmit]`) or declared in a
-     referenced package, which may have no alias; a `ref struct` disposed through its
+     disposes the earlier resources. Item 3's lowering stays for: an `[Import]` class, or a
+     class declared in a referenced package, which may have no alias (also as the class
+     constraint of a type-parameter resource); a `ref struct` disposed through its
      pattern-based `Dispose()`. (A `using` declaration cannot be a direct child of a switch
-     section, CS8647; a `using` statement there becomes a block.) An interface- or type-parameter-typed
-     resource needs a value with `[Symbol.dispose]()`.
+     section, CS8647; a `using` statement there becomes a block.) An interface- or
+     type-parameter-typed resource needs a value with `[Symbol.dispose]()`, so instances of a
+     referenced package must come from a build of this version.
   3. When the body (or a later disposal) and `dispose()` both throw, JavaScript raises a
      `SuppressedError` whose `error` is the `dispose()` exception. `toException`, which every
      generated `catch` and `when` filter reads, unwraps it recursively through `error` (the

@@ -88,7 +88,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// <c>enums=const-v1</c>: a cache written before spec 011 FR-044, when a
     /// numeric enum was a TS <c>enum</c>, never matches. <c>specifiers=relative-js</c>
     /// keeps a cache written with <c>#/…</c> internal imports from being reused
-    /// (spec 004 FR-017).
+    /// (spec 004 FR-017). <c>usingLowering</c> pins <see cref="UsingLowering"/> (FR-111).
     /// </summary>
     public string ConfigurationFingerprint =>
         BuildConfigurationFingerprint(

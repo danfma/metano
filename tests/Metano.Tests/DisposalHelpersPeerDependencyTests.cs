@@ -71,6 +71,37 @@ public class DisposalHelpersPeerDependencyTests
     }
 
     [Test]
+    public async Task Writer_RemovesItsOwnTslibPeerOnceNoUsingIsDeclared()
+    {
+        var root = CreateTempDir();
+
+        Write(root);
+        Write(root, declaresDisposalHelpers: false);
+
+        var pkg = ReadJson(root);
+
+        await Assert.That(pkg.ContainsKey("peerDependencies")).IsFalse();
+        await Assert.That(pkg.ContainsKey("peerDependenciesMeta")).IsFalse();
+    }
+
+    [Test]
+    public async Task Writer_KeepsAConsumersTslibPeerWhenNoUsingIsDeclared()
+    {
+        var root = CreateTempDir();
+
+        File.WriteAllText(
+            Path.Combine(root, "package.json"),
+            """{ "name": "consumer", "peerDependencies": { "tslib": "^2.8.0" } }"""
+        );
+
+        Write(root, declaresDisposalHelpers: false);
+
+        await Assert
+            .That(ReadJson(root)["peerDependencies"]?["tslib"]?.GetValue<string>())
+            .IsEqualTo("^2.8.0");
+    }
+
+    [Test]
     public async Task Transform_UsingDeclaration_NeedsTheHelpersOnlyWhenNative()
     {
         const string Source = """
@@ -107,7 +138,7 @@ public class DisposalHelpersPeerDependencyTests
         return target.LastPackageManifestInputs;
     }
 
-    private static void Write(string root)
+    private static void Write(string root, bool declaresDisposalHelpers = true)
     {
         var srcDir = Path.Combine(root, "src");
         Directory.CreateDirectory(srcDir);
@@ -117,7 +148,7 @@ public class DisposalHelpersPeerDependencyTests
             srcDir,
             [],
             authoritativePackageName: "consumer",
-            declaresDisposalHelpers: true
+            declaresDisposalHelpers: declaresDisposalHelpers
         );
     }
 

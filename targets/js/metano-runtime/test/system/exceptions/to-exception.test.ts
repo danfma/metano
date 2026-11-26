@@ -86,6 +86,14 @@ describe("toException", () => {
     expect(toException(standIn)).toBe(disposal);
   });
 
+  test("stops at a cyclic SuppressedError chain", () => {
+    const cyclic = new SuppressedError(undefined, "body");
+
+    (cyclic as { error: unknown }).error = cyclic;
+
+    expect(toException(cyclic)).toBeInstanceOf(Exception);
+  });
+
   test("unwraps a SuppressedError whose disposal threw a plain Error", () => {
     const converted = toException(new SuppressedError(new TypeError("x"), "body"));
 

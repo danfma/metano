@@ -14,10 +14,18 @@ namespace Metano;
 /// </summary>
 public static partial class DisposalHelpersPeerDependency
 {
+    /// <summary>The npm package that ships TypeScript's emit helpers.</summary>
     public const string PackageName = "tslib";
 
     /// <summary>The first <c>tslib</c> release with the disposal helpers.</summary>
     public const string Specifier = "^2.6.0";
+
+    /// <summary>
+    /// True when a <c>tslib</c> peer entry is the one the writer declares: the
+    /// <see cref="Specifier"/> range, marked optional. Any other entry is the consumer's.
+    /// </summary>
+    public static bool IsOwnEntry(string? specifier, bool isOptional) =>
+        specifier == Specifier && isOptional;
 
     /// <summary>
     /// True when any generated file declares a <c>using</c> local. Reads the printed

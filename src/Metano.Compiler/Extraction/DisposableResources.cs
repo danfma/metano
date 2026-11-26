@@ -33,7 +33,12 @@ internal static class DisposableResources
             ITypeParameterSymbol parameter => new(
                 interfaceDispose,
                 IsEmittedConstraint(parameter, interfaceDispose, target)
-            ),
+            )
+            {
+                IsContractTakenOnByThisCompilation =
+                    ClassConstraintOf(parameter) is not { } constraint
+                    || IsContractTakenOnBy(constraint, compilation.Assembly, target),
+            },
             INamedTypeSymbol { TypeKind: TypeKind.Interface } iface => new(
                 interfaceDispose,
                 IsEmittedInterface(iface, target)
@@ -86,8 +91,9 @@ internal static class DisposableResources
     /// Whether the class or struct that takes on <c>IDisposable</c> for
     /// <paramref name="resource"/> (itself, or the first base class that implements it
     /// without inheriting it) is declared in <paramref name="assembly"/> and emitted there:
-    /// not bound to a hand-written declaration (<c>[Import]</c>, <c>[External]</c>,
-    /// <c>[NoEmit]</c>) nor ignored.
+    /// transpiled, and not bound to a hand-written <c>[Import]</c> declaration (which an
+    /// <c>[assembly: TranspileAssembly]</c> project still counts as transpiled).
+    /// <c>[External]</c> applies only to static classes, which implement no interface.
     /// </summary>
     private static bool IsContractTakenOnBy(
         ITypeSymbol resource,
@@ -100,10 +106,25 @@ internal static class DisposableResources
         return taker is not null
             && SymbolEqualityComparer.Default.Equals(taker.ContainingAssembly, assembly)
             && !taker.HasImport()
-            && !taker.HasExternal()
-            && !SymbolHelper.HasAttribute(taker, "NoEmit")
             && IsTranspiled(taker, target);
     }
+
+    /// <summary>
+    /// The class a type parameter is constrained to (directly or through another type
+    /// parameter): its values are instances of that class or of a class derived from it, so
+    /// they carry a disposal-protocol member only when that class's contract does.
+    /// </summary>
+    private static INamedTypeSymbol? ClassConstraintOf(ITypeParameterSymbol parameter) =>
+        parameter
+            .ConstraintTypes.Select(constraint =>
+                constraint switch
+                {
+                    ITypeParameterSymbol nested => ClassConstraintOf(nested),
+                    INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Struct } named => named,
+                    _ => null,
+                }
+            )
+            .FirstOrDefault(constraint => constraint is not null);
 
     private static INamedTypeSymbol? ContractTakerOf(INamedTypeSymbol? type)
     {

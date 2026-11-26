@@ -5,14 +5,16 @@
  *     bun golden-bundle.ts <goldens directory> <report file>
  *
  * Each `*.ts` golden is compiled with tsgo (`--module esnext --target es2022`,
- * without type-checking: its imports name modules that are not there; with
- * `--importHelpers`, so the helpers a downlevelled `using` declaration needs come from
- * `tslib` instead of an inline, unshakable copy that TypeScript, not Metano, writes into
- * the module, spec FR-111) and the compiled module is bundled as a side-effect-only import by bun, esbuild and
- * Rollup with every import external, in a temporary directory with its own
- * `package.json`, after the canary. A golden that concatenates several emitted
- * files is split at each top-level `import` that follows code; a part that
- * fails to compile or bundle is reported, never skipped.
+ * without type-checking: its imports name modules that are not there). It also
+ * uses `--importHelpers`: the helpers a downlevelled `using` declaration needs
+ * then come from `tslib`, an external import like every other, instead of an
+ * inline, unshakable copy that TypeScript, not Metano, writes into the module
+ * (spec FR-111). The compiled module is bundled as a side-effect-only import
+ * by bun, esbuild and Rollup with every import external, in a temporary
+ * directory with its own `package.json`, after the canary. A golden that
+ * concatenates several emitted files is split at each top-level `import` that
+ * follows code; a part that fails to compile or bundle is reported, never
+ * skipped.
  *
  * Writes one JSON object to the report file:
  * `{ canary, goldens: { [file]: { [bundler]: code } } }`,

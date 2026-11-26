@@ -245,6 +245,8 @@ public static class PackageJsonWriter
 
         if (declaresDisposalHelpers)
             DeclareDisposalHelpersPeerDependency(root);
+        else
+            RemoveOwnDisposalHelpersPeerDependency(root);
 
         Directory.CreateDirectory(packageRoot);
         File.WriteAllText(packageJsonPath, root.ToJsonString(WriteOptions) + "\n");
@@ -387,6 +389,47 @@ public static class PackageJsonWriter
         var meta = root[PeerDependenciesMetaSection] as JsonObject ?? new JsonObject();
         meta[DisposalHelpersPeerDependency.PackageName] = new JsonObject { ["optional"] = true };
         root[PeerDependenciesMetaSection] = meta;
+    }
+
+    /// <summary>
+    /// Removes the optional <c>tslib</c> peer this writer declared once the package no longer
+    /// declares a <c>using</c>. Only the writer's own entry goes: the
+    /// <see cref="DisposalHelpersPeerDependency.Specifier"/> range marked optional in
+    /// <c>peerDependenciesMeta</c> (<see cref="DisposalHelpersPeerDependency.IsOwnEntry"/>);
+    /// any other <c>tslib</c> entry is the consumer's. A section left empty is removed.
+    /// </summary>
+    private static void RemoveOwnDisposalHelpersPeerDependency(JsonObject root)
+    {
+        var peers = root[PeerDependenciesSection] as JsonObject;
+        var meta = root[PeerDependenciesMetaSection] as JsonObject;
+        var name = DisposalHelpersPeerDependency.PackageName;
+
+        var isOwnEntry = DisposalHelpersPeerDependency.IsOwnEntry(
+            peers is null ? null : ReadStringField(peers, name),
+            IsMarkedOptional(meta, name)
+        );
+
+        if (!isOwnEntry)
+            return;
+
+        RemoveEntry(root, PeerDependenciesSection, name);
+        RemoveEntry(root, PeerDependenciesMetaSection, name);
+    }
+
+    private static bool IsMarkedOptional(JsonObject? meta, string name) =>
+        meta?[name]?["optional"] is JsonValue optional
+        && optional.TryGetValue<bool>(out var isOptional)
+        && isOptional;
+
+    private static void RemoveEntry(JsonObject root, string section, string name)
+    {
+        if (root[section] is not JsonObject entries)
+            return;
+
+        entries.Remove(name);
+
+        if (entries.Count == 0)
+            root.Remove(section);
     }
 
     private static bool DeclaresRuntime(JsonObject root, string section) =>

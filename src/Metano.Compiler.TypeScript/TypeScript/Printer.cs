@@ -1452,8 +1452,10 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
 
             case TsVariableDeclaration varDecl:
                 PrintJSDoc(varDecl.JSDoc);
+
                 if (varDecl.Exported)
                     _sb.Write("export ");
+
                 _sb.Write(DeclarationKeyword(varDecl));
                 _sb.Write(varDecl.Name);
 

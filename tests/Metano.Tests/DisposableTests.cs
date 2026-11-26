@@ -44,6 +44,68 @@ public class DisposableTests
         }
         """;
 
+    private const string UsingForms = """
+        [Transpile]
+        public static class Uses
+        {
+            public static Res Open() => new Res();
+            public static void Touch(Res? r) { }
+            public static int A() { using var r = new Res(); return r.Count; }
+            public static void B(Res? maybe) { using (var r = maybe) { Touch(r); } Touch(null); }
+            public static void C() { using (Open()) { Touch(null); } }
+            public static void D() { using (Res a = new Res(), b = new Res()) { a.Count++; } }
+            public static void E() { using var a = new Res(); using var b = new Handle(); Touch(a); }
+            public static void F(SRes s, SRes? ns) { using (s) { } using (ns) { } }
+            public static void G<T>(T t) where T : IDisposable { using (t) { } }
+            public static void K() { using (var a = new Res()) using (var b = new Res()) { a.Count++; } }
+        }
+        """;
+
+    private const string NestedScopes = """
+        [Transpile]
+        public static class Uses
+        {
+            public static void Touch(Res? r) { }
+
+            public static void I(bool f)
+            {
+                if (f) { using var r = new Res(); Touch(r); }
+
+                for (var i = 0; i < 2; i++)
+                {
+                    using var q = new Res();
+                    if (i == 0) continue;
+                    break;
+                }
+            }
+
+            public static int J(System.Collections.Generic.Dictionary<string, int> d)
+            {
+                d.TryGetValue("a", out var v);
+                using var r = new Res();
+                Touch(r);
+                return v + 1;
+            }
+
+            public static Func<int> L() => () => { using var r = new Res(); return r.Count; };
+        }
+        """;
+
+    private const string AsyncUsing = """
+        [Transpile]
+        public static class Uses
+        {
+            public static async System.Threading.Tasks.Task<int> Run(
+                System.Threading.Tasks.Task<int> pending
+            )
+            {
+                using var r = new Res();
+
+                return await pending;
+            }
+        }
+        """;
+
     [Test]
     public async Task Implementer_KeepsTheInterfaceInImplementsAndItsDescriptor()
     {
@@ -150,9 +212,9 @@ public class DisposableTests
     }
 
     [Test]
-    public async Task ResourcesOfClassesWithoutTheAlias_KeepTheTryFinally()
+    public async Task ImportedClassResource_ReportsMS0001AndIsNeverAUsingDeclaration()
     {
-        var result = TranspileHelper.Transpile(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             Resources
                 + """
                 [Import("Socket", from: "net-lib")]
@@ -176,12 +238,97 @@ public class DisposableTests
                 """
         );
 
-        var output = result["uses.ts"];
+        var output = files["uses.ts"];
 
-        // An [Import] class has no emitted Dispose: MS0001, as in 3.3.0, never a native using.
+        // An [Import] class's Dispose is not emitted: MS0001 as in 3.3.0, the value is kept
+        // undisposed; interface and own-class resources stay using declarations.
+        await Assert.That(output).Contains("const socket = Uses.open();");
         await Assert.That(output).DoesNotContain("using socket");
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains("Socket")
+                )
+            )
+            .IsTrue();
+
         await Assert.That(output).Contains("using viaInterface = handle;");
         await Assert.That(output).Contains("using own = new Res();");
+    }
+
+    [Test]
+    public async Task ImportedClassResource_UnderTranspileAssembly_KeepsTheTryFinally()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            [Import("Socket", from: "net-lib")]
+            public sealed class Socket : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            public static class Uses
+            {
+                public static Socket Open() => null!;
+
+                public static void Run()
+                {
+                    using var socket = Open();
+                }
+            }
+            """
+        );
+
+        var output = result["uses.ts"];
+
+        // The [Import] class is transpilable under TranspileAssembly, so its Dispose counts as
+        // emitted, but the bound declaration has no [Symbol.dispose](): try/finally.
+        await Assert.That(output).DoesNotContain("using socket");
+        await Assert.That(output).Contains("socket?.dispose();");
+    }
+
+    [Test]
+    public async Task ClassConstrainedTypeParameterOfAReferencedPackage_KeepsTheTryFinally()
+    {
+        var files = TranspileHelper.TranspileWithLibrary(
+            """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@scope/lib")]
+
+            namespace Lib;
+
+            public class LibRes : IDisposable
+            {
+                public void Dispose() { }
+            }
+            """,
+            """
+            using Lib;
+
+            [Transpile]
+            public class OwnRes : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public static class Uses
+            {
+                public static void Lib<T>(T t) where T : LibRes { using (t) { } }
+                public static void Own<T>(T t) where T : OwnRes { using (t) { } }
+                public static void Iface<T>(T t) where T : IDisposable { using (t) { } }
+            }
+            """
+        );
+
+        var output = files["uses.ts"];
+
+        // Lib<T> keeps try/finally; Own<T> and Iface<T> declare `using` (one temporary each).
+        await Assert.That(output).Contains("$using0?.dispose();");
+        await Assert.That(output.Split("using $using0 = t;").Length - 1).IsEqualTo(2);
     }
 
     [Test]
@@ -318,23 +465,6 @@ public class DisposableTests
             .Contains("interfaces: [\n        () => IDisposable$runtimeType,");
     }
 
-    private const string UsingForms = """
-        [Transpile]
-        public static class Uses
-        {
-            public static Res Open() => new Res();
-            public static void Touch(Res? r) { }
-            public static int A() { using var r = new Res(); return r.Count; }
-            public static void B(Res? maybe) { using (var r = maybe) { Touch(r); } Touch(null); }
-            public static void C() { using (Open()) { Touch(null); } }
-            public static void D() { using (Res a = new Res(), b = new Res()) { a.Count++; } }
-            public static void E() { using var a = new Res(); using var b = new Handle(); Touch(a); }
-            public static void F(SRes s, SRes? ns) { using (s) { } using (ns) { } }
-            public static void G<T>(T t) where T : IDisposable { using (t) { } }
-            public static void K() { using (var a = new Res()) using (var b = new Res()) { a.Count++; } }
-        }
-        """;
-
     [Test]
     public async Task UsingForms_EmitUsingDeclarations()
     {
@@ -425,36 +555,6 @@ public class DisposableTests
                 """
             );
     }
-
-    private const string NestedScopes = """
-        [Transpile]
-        public static class Uses
-        {
-            public static void Touch(Res? r) { }
-
-            public static void I(bool f)
-            {
-                if (f) { using var r = new Res(); Touch(r); }
-
-                for (var i = 0; i < 2; i++)
-                {
-                    using var q = new Res();
-                    if (i == 0) continue;
-                    break;
-                }
-            }
-
-            public static int J(System.Collections.Generic.Dictionary<string, int> d)
-            {
-                d.TryGetValue("a", out var v);
-                using var r = new Res();
-                Touch(r);
-                return v + 1;
-            }
-
-            public static Func<int> L() => () => { using var r = new Res(); return r.Count; };
-        }
-        """;
 
     [Test]
     public async Task UsingDeclaration_UnderTheTryFinallyOptOut_WrapsTheRestOfItsScope()
@@ -780,21 +880,6 @@ public class DisposableTests
             .That(messages.Any(m => m.Contains("'Ignored' implements IDisposable")))
             .IsTrue();
     }
-
-    private const string AsyncUsing = """
-        [Transpile]
-        public static class Uses
-        {
-            public static async System.Threading.Tasks.Task<int> Run(
-                System.Threading.Tasks.Task<int> pending
-            )
-            {
-                using var r = new Res();
-
-                return await pending;
-            }
-        }
-        """;
 
     [Test]
     public async Task UsingDeclaration_InAnAsyncMethod_StaysADeclarationBeforeTheAwait()
