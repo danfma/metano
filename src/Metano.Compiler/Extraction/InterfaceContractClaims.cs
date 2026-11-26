@@ -34,7 +34,7 @@ internal static class InterfaceContractClaims
 
     private static readonly ConditionalWeakTable<
         Compilation,
-        ConcurrentDictionary<int, HashSet<ISymbol>>
+        ConcurrentDictionary<(int Target, bool HidesInternalMembers), HashSet<ISymbol>>
     > Cache = new();
 
     /// <summary>
@@ -49,8 +49,9 @@ internal static class InterfaceContractClaims
     ) =>
         Cache
             .GetValue(compilation, _ => new())
-            .GetOrAdd(policy.Target is { } target ? (int)target : NoTarget, _ =>
-                Collect(compilation, policy)
+            .GetOrAdd(
+                (policy.Target is { } target ? (int)target : NoTarget, policy.HidesInternalMembers),
+                _ => Collect(compilation, policy)
             )
             .Contains(member.OriginalDefinition);
 
