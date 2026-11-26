@@ -114,4 +114,66 @@ public class InternalRuntimeTypeTests
         await Assert.That(result["job2.ts"]).DoesNotContain("@internal");
         await Assert.That(result["job2.ts"]).Contains("  go(): void {");
     }
+
+    [Test]
+    public async Task InternalDescendantWithoutEmitPackage_OwnsItsDescriptorWhenTheInterfaceIsTested()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public abstract class OwnerNode { internal void Dispose() { } }
+            internal abstract class EffectNode : OwnerNode, IDisposable
+            {
+                void IDisposable.Dispose() => Dispose();
+            }
+            internal sealed class SplitEffect<T> : EffectNode { }
+
+            public static class Reactivity
+            {
+                public static IDisposable Effect<T>() => new SplitEffect<T>();
+                public static bool Is(object o) => o is IDisposable;
+            }
+            """
+        );
+
+        await Assert.That(result["split-effect.ts"]).Contains("get $runtimeType()");
+        await Assert.That(result["effect-node.ts"]).Contains("get $runtimeType()");
+    }
+
+    [Test]
+    public async Task InternalClassWithNoAncestor_GetsNoDescriptorInAPackage()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("probe-pkg")]
+
+            internal sealed class Blob { public int Size => 1; }
+            public static class Use { public static int Size() => new Blob().Size; }
+            """
+        );
+
+        await Assert.That(result["blob.ts"]).DoesNotContain("$runtimeType");
+    }
+
+    [Test]
+    public async Task UserInterfaceExplicitForwarder_ReportsConflictAndKeepsTheClaimInternal()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [assembly: TranspileAssembly]
+
+            public interface IRunner { void Run(); }
+            public class Base { internal void Run() { } }
+            public class Derived : Base, IRunner
+            {
+                void IRunner.Run() => Run();
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Select(d => d.Code)).Contains("MS0031");
+        await Assert.That(files["base.ts"]).Contains("/** @internal */\n  run(): void {");
+    }
 }

@@ -469,9 +469,7 @@ public static class IrClassExtractor
                     break;
 
                 case IEventSymbol evt:
-                    result.Add(
-                        DeclareUnderInterfaceName(ExtractEvent(evt, context.OriginResolver), evt)
-                    );
+                    result.Add(DeclareUnderInterfaceName(ExtractEvent(evt, context), evt));
                     break;
             }
         }
@@ -717,15 +715,12 @@ public static class IrClassExtractor
         return roots.Count > 0 ? roots : null;
     }
 
-    private static IrEventDeclaration ExtractEvent(
-        IEventSymbol evt,
-        IrTypeOriginResolver? originResolver
-    ) =>
+    private static IrEventDeclaration ExtractEvent(IEventSymbol evt, IrExtractionContext context) =>
         new(
             evt.Name,
-            IrVisibilityMapper.MapMember(evt),
+            IrVisibilityMapper.MapMember(evt, context),
             evt.IsStatic,
-            IrTypeRefMapper.Map(evt.Type, originResolver)
+            IrTypeRefMapper.Map(evt.Type, context.OriginResolver)
         )
         {
             Attributes = IrAttributeExtractor.Extract(evt),

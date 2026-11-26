@@ -13,6 +13,13 @@ namespace Metano.Compiler.Extraction;
 /// class) is what satisfies the public interface member at run time. Such a member is
 /// part of the contract, so it is no <c>internal</c> member (#819): a target that
 /// hides internal members from its public surface must not hide it.
+/// <para>
+/// It reads <c>Fate == Superseded</c> from <see cref="ExplicitImplementationLowering"/>
+/// and not <see cref="ExplicitImplementationFates.IsDropped"/>: the
+/// <c>KeepsSupersededEquatable</c> case keeps the explicit member, which only widens
+/// visibility here. It scans every source type of the compilation, emitted or not, so a
+/// claiming member may be promoted for a forwarder no emitted class carries.
+/// </para>
 /// </summary>
 internal static class InterfaceContractClaims
 {

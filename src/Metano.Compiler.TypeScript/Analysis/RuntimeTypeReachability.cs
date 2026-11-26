@@ -19,10 +19,10 @@ namespace Metano.Compiler.TypeScript.Analysis;
 ///   dispatch of an interface or an enum (TypeScript tests those through
 ///   <c>isType</c> / <c>asType</c> / <c>castTo</c> with the descriptor),
 ///   <c>typeof(X)</c>, a <c>GetType()</c> receiver under the receiver rules,
-///   <c>[EmitRuntimeType]</c>, every emitted type of an <c>[EmitPackage]</c>
-///   library (an internal type reached by W9-9 included: a descendant of a
-///   public class would otherwise inherit its base's descriptor and answer
-///   its interfaces wrongly), and every transpiled exception class. A class test, pattern,
+///   <c>[EmitRuntimeType]</c>, every public type of an <c>[EmitPackage]</c>
+///   library, and every internal class with a describable class ancestor (it
+///   would otherwise inherit its base's descriptor and answer its interfaces
+///   wrongly, #819), and every transpiled exception class. A class test, pattern,
 ///   cast or dispatch renders <c>instanceof</c> or <c>castTo(x, Ctor)</c>
 ///   and reaches nothing.</item>
 ///   <item>The receiver rules: a class or struct <c>C</c> reaches <c>C</c> and
@@ -134,12 +134,20 @@ internal sealed partial class RuntimeTypeReachability
             if (
                 type.IsException
                 || HasEmitRuntimeType(type.Symbol)
-                || assemblyForcesAll
-                || isLibrary
+                || ((assemblyForcesAll || isLibrary) && IsPublicOrInheritsADescriptor(type))
             )
                 Reach(type);
         }
     }
+
+    /// <summary>
+    /// A public type keeps D29 (libraries are complete). An internal type (W9-9) gets a
+    /// descriptor only when it is a class with a describable class ancestor, whose
+    /// descriptor it would otherwise inherit with the wrong interfaces (#819); any other
+    /// internal type is reached only by a descriptor read.
+    /// </summary>
+    private bool IsPublicOrInheritsADescriptor(DescribableType type) =>
+        IsPublic(type.Symbol) || (type.Kind is DescriptorKind.Class && BasesOf(type).Any());
 
     private void Answer(IrRuntimeQuestion question)
     {
