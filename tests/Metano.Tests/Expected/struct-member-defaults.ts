@@ -1,7 +1,7 @@
 import { HashCode, valueEquals } from "metano-runtime";
 import { Box } from "./box.js";
-import type { Celsius } from "./celsius.js";
-import type { Counter } from "./counter.js";
+import { Celsius } from "./celsius.js";
+import { Counter } from "./counter.js";
 import { Point } from "./point.js";
 import { Size } from "./size.js";
 
@@ -19,8 +19,8 @@ export class Segment {
     this.origin = null;
     this.boxed = new Box<number>();
     this.extent = new Size();
-    this.temperature = undefined!;
-    this.tally = undefined!;
+    this.temperature = Celsius.$default();
+    this.tally = Counter.$default();
     this.fixed = ((receiver$temp$0) => {
       receiver$temp$0.x = 1;
 

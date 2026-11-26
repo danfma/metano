@@ -239,6 +239,294 @@ public class InstanceFieldStoreTests
     }
 
     [Test]
+    public async Task InitializerCallingAFunctionNamedLikeAnOutVariable_AliasesTheImport()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Helpers
+            {
+                public static int Compute() => 7;
+                public static int Third() => 11;
+            }
+
+            [Transpile]
+            public class OutShadow
+            {
+                private int _x = Helpers.Compute();
+                private int _t = Helpers.Third();
+
+                public static bool TryGet(string s, out int v) { v = s.Length; return true; }
+
+                public OutShadow(string s)
+                {
+                    int.TryParse(s, out var compute);
+                    if (TryGet(s, out int third)) Y = compute + third;
+                }
+
+                public int Y;
+            }
+            """
+        );
+
+        var output = files["out-shadow.ts"];
+
+        await Assert.That(output).Contains("compute as compute$1");
+        await Assert.That(output).Contains("third as third$1");
+        await Assert.That(output).Contains("    this._x = compute$1();\n");
+        await Assert.That(output).Contains("    this._t = third$1();\n");
+    }
+
+    [Test]
+    public async Task InitializerReadingATypeNamedLikeAParameter_AliasesTheTypeImport()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, Name("widget")]
+            public class Widget { public int V = 3; public static int Make() => 9; public static int Count = 2; }
+
+            [Transpile, Name("shade")]
+            public enum Shade { Light, Dark }
+
+            [Transpile]
+            public static class Holder { public static object O = new Widget(); }
+
+            [Transpile]
+            public class EnumShadow
+            {
+                public Shade S = Shade.Dark;
+                public Shade Zero;
+                public int Sum;
+                public EnumShadow(int shade) { Sum = shade; }
+            }
+
+            [Transpile]
+            public class TypeShadow
+            {
+                public Widget W = new Widget();
+                public int M = Widget.Make();
+                public int N = Widget.Count;
+                public bool B = Holder.O is Widget;
+                public int Sum;
+                public TypeShadow(int widget) { Sum = widget; }
+            }
+            """
+        );
+
+        var enumShadow = files["enum-shadow.ts"];
+        var typeShadow = files["type-shadow.ts"];
+
+        await Assert.That(enumShadow).Contains("import { shade, shade as shade$1 }");
+        await Assert.That(enumShadow).Contains("    this.s = shade$1.Dark;\n");
+        await Assert.That(enumShadow).Contains("    this.zero = shade$1.Light;\n");
+        await Assert.That(typeShadow).Contains("widget as widget$1");
+        await Assert.That(typeShadow).Contains("    this.w = new widget$1();\n");
+        await Assert.That(typeShadow).Contains("    this.m = widget$1.make();\n");
+        await Assert.That(typeShadow).Contains("    this.n = widget$1.count;\n");
+        await Assert.That(typeShadow).Contains("instanceof widget$1");
+    }
+
+    [Test]
+    public async Task OwnLowercaseTypeNamedLikeAParameter_ReadsUnaliasedOutsideInstanceInitializers()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, Name("zzCopy")]
+            public class ZzCopy
+            {
+                public static readonly ZzCopy Empty = new ZzCopy(0);
+                public static int Seed = 4;
+                public int V;
+                public int Twice => V * ZzCopy.Seed;
+                public static ZzCopy Make() => new ZzCopy(1);
+                public ZzCopy(int zzCopy) { V = zzCopy; }
+                public ZzCopy(string zzCopy) { V = zzCopy.Length; }
+            }
+            """
+        );
+
+        var output = files["zz-copy.ts"];
+
+        await Assert
+            .That(diagnostics.Where(d => d.Severity == MetanoDiagnosticSeverity.Error))
+            .IsEmpty();
+
+        await Assert.That(output).DoesNotContain("zzCopy$");
+    }
+
+    [Test]
+    public async Task ClassesSharingAFile_ReadAShadowedImportUnderOneAlias()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, ExportedAsModule]
+            public static class Calc { public static int Reckon(int x) => x * 7; }
+
+            [Transpile]
+            public class Outer
+            {
+                public int C = Calc.Reckon(1);
+                public int Sum;
+                public Outer(int reckon) { Sum = reckon; }
+
+                [Transpile]
+                public class Inner
+                {
+                    public int C = Calc.Reckon(2);
+                    public int Sum;
+                    public Inner(int reckon) { var Reckon = reckon + 1; Sum = Reckon; }
+                }
+            }
+
+            [Transpile, EmitInFile("pair")]
+            public class PairA
+            {
+                public int C = Calc.Reckon(1);
+                public PairA(int reckon) { }
+            }
+
+            [Transpile, EmitInFile("pair")]
+            public class PairB
+            {
+                public int C = Calc.Reckon(2);
+                public PairB(int reckon) { var Reckon = reckon; }
+            }
+            """
+        );
+
+        var outer = files["outer.ts"];
+        var pair = files["pair.ts"];
+
+        await Assert.That(outer).Contains("import { reckon, reckon as reckon$2 }");
+        await Assert.That(outer).Contains("    this.c = reckon$2(1);\n");
+        await Assert.That(outer).Contains("    this.c = reckon$2(2);\n");
+        await Assert.That(pair).Contains("import { reckon, reckon as reckon$2 }");
+        await Assert.That(pair).DoesNotContain("reckon$1(");
+    }
+
+    [Test]
+    public async Task StructFieldWithoutInitializer_StoresTheStructZeroValue()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Pt { public int X; public int Y; public Pt(int x, int y) { X = x; Y = y; } }
+
+            [Transpile]
+            public sealed class StructHolder { public Pt Field; public Pt Auto { get; set; } public Pt Explicit = default; }
+            """
+        );
+
+        var holder = files["struct-holder.ts"];
+
+        await Assert.That(holder).Contains("    this.field = Pt.$default();\n");
+        await Assert.That(holder).Contains("    this.auto = Pt.$default();\n");
+        await Assert.That(holder).Contains("    this.explicit = Pt.$default();\n");
+        await Assert.That(files["pt.ts"]).Contains("static $default(): Pt");
+    }
+
+    [Test]
+    public async Task ValueFieldWithoutATargetZeroValue_WarnsUnlessEveryConstructorAssignsIt()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public sealed class NoDefaults<T>
+            {
+                public System.DateTime When;
+                public System.TimeSpan Span { get; set; }
+                public (int, string) Tup;
+                public T Val;
+                public System.DateOnly Day;
+                public System.DateTime Assigned;
+                public System.DateTime Half;
+                public required System.DateTime Required;
+                public int N;
+
+                public NoDefaults() { Assigned = Stamp; Half = Stamp; }
+
+                public NoDefaults(int n) : this() { N = n; }
+
+                public NoDefaults(string s) { Assigned = Stamp; }
+
+                private static readonly System.DateTime Stamp = new(2020, 1, 1);
+            }
+            """
+        );
+
+        var warned = diagnostics
+            .Where(d =>
+                d.Code == DiagnosticCodes.UnsupportedFeature
+                && d.Severity == MetanoDiagnosticSeverity.Warning
+            )
+            .Select(d => d.Location!.SourceTree!.GetText().ToString(d.Location.SourceSpan))
+            .ToList();
+
+        await Assert.That(warned).IsEquivalentTo(["When", "Span", "Tup", "Val", "Day", "Half"]);
+        await Assert.That(files["no-defaults.ts"]).Contains("    this.when = undefined!;\n");
+    }
+
+    [Test]
+    public async Task StructValueFieldWithoutATargetZeroValue_WarnsUnlessEveryConstructorAssignsIt()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct Partial { public System.DateTime When; public int X; public Partial(int x) { X = x; } }
+
+            [Transpile]
+            public struct ChainsToDefault { public System.DateTime Then; public int X; public ChainsToDefault(int x) : this() { X = x; } }
+
+            [Transpile]
+            public struct Assigns
+            {
+                public System.DateTime At;
+                public Assigns(int x) { At = new System.DateTime(2020, 1, 1); }
+                public Assigns(string s) : this(s.Length) { }
+            }
+
+            [Transpile]
+            public struct NoConstructor { public System.DateTime Never; }
+            """
+        );
+
+        var warned = diagnostics
+            .Where(d =>
+                d.Code == DiagnosticCodes.UnsupportedFeature
+                && d.Severity == MetanoDiagnosticSeverity.Warning
+                && d.Message.Contains("has no initializer")
+            )
+            .Select(d => d.Location!.SourceTree!.GetText().ToString(d.Location.SourceSpan))
+            .ToList();
+
+        await Assert.That(warned).IsEquivalentTo(["When", "Then"]);
+    }
+
+    [Test]
+    public async Task ReferenceConstrainedTypeParameterField_DoesNotWarn()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public sealed class Holder<TRef, TAny> where TRef : class
+            {
+                public TRef Ref;
+                public TRef Prop { get; set; }
+                public TAny Any;
+                public Holder(int n) { }
+            }
+            """
+        );
+
+        var warned = diagnostics
+            .Where(d => d.Message.Contains("has no initializer"))
+            .Select(d => d.Location!.SourceTree!.GetText().ToString(d.Location.SourceSpan))
+            .ToList();
+
+        await Assert.That(warned).IsEquivalentTo(["Any"]);
+    }
+
+    [Test]
     public async Task DerivedClass_KeepsTheDefaultStoreOfAFieldTheBodyAssignsFirst()
     {
         var output = TranspileHelper.Transpile(
