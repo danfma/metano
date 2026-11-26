@@ -35,7 +35,7 @@ export class OperationResult<T> {
   }
 
   get hasValue(): boolean {
-    return this.success && !(this.value == null);
+    return this.success && this.value != null;
   }
 
   static ok<T>(value: T): OperationResult<T> {

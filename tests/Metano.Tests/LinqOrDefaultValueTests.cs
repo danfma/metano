@@ -204,8 +204,9 @@ public class LinqOrDefaultValueTests
     /// a zero member) keeps the <c>null</c> miss; a tuple's miss is the tuple
     /// of its element defaults (#403),
     /// and each call reports <c>MS0001</c> as a warning, on the call. The
-    /// <c>defaultValue</c> overloads are the way to choose the value, and a
-    /// <c>default</c> written as that value reports the unresolved literal too.
+    /// <c>defaultValue</c> overloads are the way to choose the value: a
+    /// <c>default</c> written as that value is the struct's zero-value factory
+    /// (#802) and reports nothing.
     /// </summary>
     [Test]
     public async Task ElementsWithoutALiteralDefault_KeepNullAndWarn()
@@ -247,28 +248,10 @@ public class LinqOrDefaultValueTests
             .That(reported)
             .IsEquivalentTo([
                 Unrepresentable("xs.FirstOrDefault()", "Point", "FirstOrDefault"),
-                Unrepresentable(
-                    "xs.FirstOrDefault(p => p.X > 1, default)",
-                    "Point",
-                    "FirstOrDefault"
-                ),
-                Unrepresentable(
-                    "xs.FirstOrDefault(defaultValue: (default))",
-                    "Point",
-                    "FirstOrDefault"
-                ),
-                Unrepresentable(
-                    "xs.LastOrDefault(p => p.X > 1, default!)",
-                    "Point",
-                    "LastOrDefault"
-                ),
                 Unrepresentable("xs.SingleOrDefault()", "T", "SingleOrDefault"),
                 Unrepresentable("xs.FirstOrDefault()", "Tone", "FirstOrDefault"),
                 Unrepresentable("xs.Find(p => p.X > 1)", "Point", "Find"),
                 Unrepresentable("xs.Find(t => t != Tone.Loud)", "Tone", "Find"),
-                UnresolvedDefaultLiteral("Point"),
-                UnresolvedDefaultLiteral("Point"),
-                UnresolvedDefaultLiteral("Point"),
             ]);
 
         await TranspileHelper.AssertGolden(
@@ -326,10 +309,6 @@ public class LinqOrDefaultValueTests
             : throw new InvalidOperationException(
                 $"The diagnostic '{diagnostic.Message}' has no source location."
             );
-
-    private static string UnresolvedDefaultLiteral(string type) =>
-        $"Warning {DiagnosticCodes.UnsupportedFeature} at 'default': 'default({type})' has no "
-        + "literal in the target: it is left as an unresolved placeholder.";
 
     private static string Unrepresentable(string call, string type, string lookup) =>
         $"Warning {DiagnosticCodes.UnsupportedFeature} at '{call}': 'default({type})' has no "

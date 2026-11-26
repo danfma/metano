@@ -261,6 +261,9 @@ internal sealed class RuntimeQuestionScanner
             case ICollectionExpressionOperation:
                 RecordCollectionConstruction(operation.Type, operation.Syntax);
                 break;
+            case IDefaultValueOperation defaultValue when HasZeroValueFactory(defaultValue):
+                Record(IrRuntimeQuestionKind.StructDefault, defaultValue.Type, operation.Syntax);
+                break;
             case IInvocationOperation invocation:
                 InspectInvocation(invocation);
                 break;
@@ -282,6 +285,10 @@ internal sealed class RuntimeQuestionScanner
                 break;
         }
     }
+
+    private bool HasZeroValueFactory(IDefaultValueOperation defaultValue) =>
+        defaultValue.Type is INamedTypeSymbol named
+        && IrTypeRefMapper.HasZeroValueFactory(named, _target);
 
     private void RecordCollectionBase(INamedTypeSymbol baseType, Location location)
     {

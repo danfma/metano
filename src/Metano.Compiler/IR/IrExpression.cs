@@ -761,6 +761,13 @@ public enum IrFlowNonNullProof
     /// <c>null</c> through.
     /// </summary>
     MemberRead,
+
+    /// <summary>
+    /// A reassigned local or parameter read inside a lambda or local function:
+    /// C# carries its state into the closure, where a static checker never
+    /// narrows it (#798).
+    /// </summary>
+    CapturedLocalRead,
 }
 
 /// <summary>

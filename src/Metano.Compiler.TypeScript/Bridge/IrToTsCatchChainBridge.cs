@@ -89,6 +89,9 @@ internal static class IrToTsCatchChainBridge
         if (clauses is [var only] && KeepsPlainCatch(only))
             return MapPlainCatch(only, context);
 
+        if (clauses is [var bound] && BindsCaughtValueDirectly(bound))
+            return MapDirectBinding(bound, context);
+
         var caught = FreeName(CaughtValue, clauses);
         var normalized = NeedsNormalization(clauses) ? FreeName(NormalizedValue, clauses) : null;
         var subject = normalized ?? caught;
@@ -141,8 +144,38 @@ internal static class IrToTsCatchChainBridge
     private static bool ReadsVariable(IrCatchClause clause) =>
         clause.VariableName is { } name && IrReferencedNames.AnyIn(clause.Body, [name]);
 
+    /// <summary>
+    /// Whether a lone clause that takes every exception and reads its variable
+    /// binds it straight from the caught value
+    /// (<c>const error = toException(e$);</c>), with no chain to test.
+    /// </summary>
+    private static bool BindsCaughtValueDirectly(IrCatchClause clause) =>
+        clause.IsUnconditional && clause.ExceptionType is not null && ReadsVariable(clause);
+
+    private static TsCatchClause MapDirectBinding(IrCatchClause clause, IrToTsBridgeContext context)
+    {
+        var caught = FreeName(CaughtValue, [clause]);
+
+        var variable = new TsVariableDeclaration(
+            IrToTsNamingPolicy.ToLocalName(clause.VariableName!),
+            new TsCallExpression(
+                new TsRuntimeHelperReference(ToExceptionHelper),
+                [new TsIdentifier(caught)]
+            ),
+            Const: !Rebinds(clause, clause.VariableName!)
+        );
+
+        return new TsCatchClause(
+            caught,
+            [variable, .. IrToTsStatementBridge.MapBody(clause.Body, context.Rethrowing(caught))]
+        );
+    }
+
     private static TsCatchClause MapPlainCatch(IrCatchClause clause, IrToTsBridgeContext context)
     {
+        if (!ReadsVariable(clause) && !Rethrows(clause.Body))
+            return new TsCatchClause(null, IrToTsStatementBridge.MapBody(clause.Body, context));
+
         var parameter = clause.VariableName is { } name
             ? IrToTsNamingPolicy.ToLocalName(name)
             : FreeUnnamedCaughtValueName(clause);

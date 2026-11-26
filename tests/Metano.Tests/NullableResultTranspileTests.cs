@@ -93,11 +93,11 @@ public class NullableResultTranspileTests
             """
         );
 
-        await Assert.That(output).Contains("return !(x == null) && x <= 0;");
-        await Assert.That(output).Contains("return !(x == null) && x > 0 && x < 10;");
-        await Assert.That(output).Contains("return !(!(x == null) && x < 5);");
+        await Assert.That(output).Contains("return x != null && x <= 0;");
+        await Assert.That(output).Contains("return x != null && x > 0 && x < 10;");
+        await Assert.That(output).Contains("return !(x != null && x < 5);");
         await Assert.That(output).Contains("return x > 0;");
-        await Assert.That(output).Contains("!(b.size == null) && b.size > 10");
+        await Assert.That(output).Contains("b.size != null && b.size > 10");
     }
 
     [Test]

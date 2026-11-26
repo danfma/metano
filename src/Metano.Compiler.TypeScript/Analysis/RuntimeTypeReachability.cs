@@ -164,6 +164,7 @@ internal sealed partial class RuntimeTypeReachability
                 ReachTestedType(question, DescriptorRead.EnumAndPlainObject);
                 break;
             case IrRuntimeQuestionKind.TypeOf:
+            case IrRuntimeQuestionKind.StructDefault:
                 ReachTypeOf(question);
                 break;
             case IrRuntimeQuestionKind.GetType:

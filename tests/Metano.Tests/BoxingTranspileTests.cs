@@ -306,7 +306,7 @@ public class BoxingTranspileTests
 
         await Assert
             .That(output)
-            .Contains("return isType(o, Color$runtimeType) && !(unbox(o) as Color === Color.Red);");
+            .Contains("return isType(o, Color$runtimeType) && unbox(o) as Color !== Color.Red;");
 
         await Assert
             .That(output)

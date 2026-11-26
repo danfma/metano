@@ -1,5 +1,6 @@
 using Metano.Compiler.IR;
 using Metano.Compiler.TypeScript.AST;
+using Metano.Compiler.TypeScript.Transformation;
 
 namespace Metano.Compiler.TypeScript.Bridge;
 
@@ -26,8 +27,17 @@ public static partial class IrToTsExpressionBridge
         IrMemberOrigin origin,
         string memberName,
         IrTypeReference container
-    ) =>
-        origin.IsTranspiledDataMember || origin.IsDeclaringTypeExtensionContainer
-            ? ModuleExportReference(memberName, container)
-            : new TsIdentifier(memberName);
+    )
+    {
+        // A module member is a top-level binding, so its call site spells the
+        // escaped name its declaration took (`package` → `package_`) unless a
+        // `[Name]` pinned it verbatim.
+        var name = origin.EmittedName is null
+            ? TypeScriptNaming.EscapeIfReserved(memberName)
+            : memberName;
+
+        return origin.IsTranspiledDataMember || origin.IsDeclaringTypeExtensionContainer
+            ? ModuleExportReference(name, container)
+            : new TsIdentifier(name);
+    }
 }

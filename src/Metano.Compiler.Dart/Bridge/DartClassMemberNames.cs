@@ -68,7 +68,7 @@ internal static class DartClassMemberNames
     /// </summary>
     public static string MethodNameOf(DartOverloadShape shape, IrMethodDeclaration method) =>
         method is { OverloadName: not null, Semantics.IsOperator: false } && shape.PinsSuffixes
-            ? IrToDartNamingPolicy.ToParameterName(method.Name)
+            ? IrToDartNamingPolicy.ToMemberName(method.Name, null)
             : IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes);
 
     private static string? NameOf(IrMemberDeclaration member, DartOverloadShape shape) =>

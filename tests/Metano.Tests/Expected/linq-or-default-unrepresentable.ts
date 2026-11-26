@@ -1,6 +1,6 @@
 import { List } from "metano-runtime/system/collections";
 import { firstOrDefault, lastOrDefault, linq, singleOrDefault } from "metano-runtime/system/linq";
-import type { Point } from "./point.js";
+import { Point } from "./point.js";
 import { Tone } from "./tone.js";
 
 export class Zeroed {
@@ -11,15 +11,15 @@ export class Zeroed {
   }
 
   atDefault(xs: List<Point>): Point | null {
-    return linq(xs, firstOrDefault((p: Point) => p.x > 1));
+    return linq(xs, firstOrDefault((p: Point) => p.x > 1, Point.$default()));
   }
 
   atParenthesized(xs: List<Point>): Point | null {
-    return linq(xs, firstOrDefault());
+    return linq(xs, firstOrDefault(undefined, Point.$default()));
   }
 
   atForgiven(xs: List<Point>): Point | null {
-    return linq(xs, lastOrDefault((p: Point) => p.x > 1));
+    return linq(xs, lastOrDefault((p: Point) => p.x > 1, Point.$default()));
   }
 
   pair(xs: List<[number, number]>): [number, number] | null {

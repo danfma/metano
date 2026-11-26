@@ -489,7 +489,7 @@ public sealed class DartTransformer
 
                 var dartName = IrToDartModuleBridge.VariableNameOf(variable);
 
-                if (dartName != IrToDartNamingPolicy.ToParameterName(variable.Name))
+                if (dartName != IrToDartNamingPolicy.ToMemberName(variable.Name, null))
                     result[(fullName, variable.Name)] = dartName;
             }
         }

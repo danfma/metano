@@ -780,7 +780,7 @@ public sealed class IrStatementExtractor(
     )
     {
         var initializer = variable.Initializer is not null
-            ? _expressions.Extract(variable.Initializer.Value)
+            ? ExtractLocalInitializer(variable.Initializer.Value, isConst)
             : null;
 
         return new IrVariableDeclaration(
@@ -788,9 +788,23 @@ public sealed class IrStatementExtractor(
             DeclaredLocalType(declaration, variable),
             initializer,
             IsConst: isConst,
-            InferredType: InferredLocalType(declaration, variable)
+            InferredType: InferredLocalType(declaration, variable),
+            AssignedMaybeNull: MaybeNullLocalAssignments.AnyAfterDeclaration(
+                _semantic,
+                declaration,
+                variable
+            )
         );
     }
+
+    /// <summary>
+    /// The initializer of a local: a string <c>const</c> folds to the literal Roslyn
+    /// computed (<c>"a" + "b"</c> is <c>"ab"</c>, an interpolation of constants too).
+    /// </summary>
+    private IrExpression ExtractLocalInitializer(ExpressionSyntax value, bool isConst) =>
+        isConst && _semantic.GetConstantValue(value) is { HasValue: true, Value: string folded }
+            ? new IrLiteral(folded, IrLiteralKind.String)
+            : _expressions.Extract(value);
 
     /// <summary>The inferred type of a <c>var</c> local; <c>null</c> for any other.</summary>
     private IrTypeRef? InferredLocalType(

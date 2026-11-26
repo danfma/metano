@@ -302,6 +302,6 @@ public class ConstByDefaultTests
 
         var output = result["sample.ts"];
 
-        await Assert.That(output).Contains("const h = null;");
+        await Assert.That(output).Contains("const h: Sample = null!;");
     }
 }

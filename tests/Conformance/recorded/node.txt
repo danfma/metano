@@ -42,8 +42,6 @@ DefaultProbes.generic = null|null|F|null|null|null|notlow|null|null|null
 DefaultProbes.genericQ = null|null|null
 DefaultProbes.optional THROWS TypeError: Cannot read properties of undefined (reading 'year')
 DefaultProbes.optionalGeneric = null|null|null|null
-DefaultProbes.structParam THROWS TypeError: Cannot read properties of undefined (reading 'x')
-DefaultProbes.structs THROWS TypeError: Cannot read properties of undefined (reading 'x')
 DynamicProbes.asDynamicRenamedMember = null
 DynamicProbes.integerDivision = 3.5
 DynamicProbes.metanoMemberName = null
@@ -98,6 +96,7 @@ StageHInterfaceTestProbes.immutableAsIListAs THROWS Error: Unsupported expressio
 StageHInterfaceTestProbes.immutableAsIListBinding THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
 StageHInterfaceTestProbes.immutableAsIListSwitch THROWS Error: Unsupported expression: Pattern:IrUnsupportedPattern
 StageHRoundTwoProbes.crossTypeEmptyFactories = True,True,True
+StrictWordCallProbes.varConcatRefArgument = af
 StringComparisonProbes.cultureCompareSigns = -1,-1,-1,-1,-1|-1,-1,-1,-1,-1|-1,-1,-1,-1,-1|1,1,1,1,1|1,1,1,1,1|-1,-1,-1,-1,-1|1,1,1,1,1|1,1,1,1,1|-1,0,-1,0,-1|
 StringComparisonProbes.cultureIgnoreCaseWidthPairs = TT0|TT0|
 StringProbes.cases = ABC|abc|ABC|abc|SS|2

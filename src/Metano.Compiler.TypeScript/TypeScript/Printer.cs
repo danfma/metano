@@ -252,7 +252,7 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
 
         if (tryStmt.Catch is { } handler)
         {
-            _sb.Write($" catch ({handler.Parameter})");
+            _sb.Write(handler.Parameter is { } parameter ? $" catch ({parameter})" : " catch");
             _sb.WriteBlock(() => PrintStatementList(handler.Body));
         }
 
@@ -1384,7 +1384,13 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
                 PrintExpression(ifStmt.Condition);
                 _sb.Write(")");
                 _sb.WriteBlock(() => PrintStatementList(ifStmt.Then));
-                if (ifStmt.Else is { Count: > 0 })
+
+                if (ifStmt.Else is [TsIfStatement chained])
+                {
+                    _sb.Write(" else ");
+                    PrintStatement(chained);
+                }
+                else if (ifStmt.Else is { Count: > 0 })
                 {
                     _sb.Write(" else");
                     _sb.WriteBlock(() => PrintStatementList(ifStmt.Else));

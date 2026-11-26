@@ -646,6 +646,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 _diagnostics
             );
 
+        ApplyStrictModeEscape(
+            transpilableTypes,
+            typeNamesBySymbol,
+            transpilableTypesDict,
+            nameRenames
+        );
+
         // Build the explicit per-compilation context that replaces TypeMapper statics.
         // Omit the optional misses sink so the context provisions a ConcurrentHashSet;
         // the context always owns its CrossPackageDependencyLedger. Both are thread-safe
@@ -2505,6 +2512,37 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             siblings.Add(stripped);
             RewriteTranspilableTypeEntry(transpilableTypesDict, current, stripped);
             nameRenames[current] = stripped;
+        }
+    }
+
+    /// <summary>
+    /// A top-level type named like a strict-mode reserved word
+    /// (<c>class @implements</c>) is declared under a module-level binding, an
+    /// identifier position, so it takes the escaped name (<c>implements_</c>) in
+    /// the same dictionaries the interface-prefix strip rewrites. A <c>[Name]</c>
+    /// override wins.
+    /// </summary>
+    private static void ApplyStrictModeEscape(
+        IReadOnlyList<INamedTypeSymbol> transpilableTypes,
+        Dictionary<string, string> typeNamesBySymbol,
+        Dictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
+        Dictionary<string, string> nameRenames
+    )
+    {
+        foreach (var type in transpilableTypes.Where(t => t.ContainingType is null))
+        {
+            var key = type.GetCrossAssemblyOriginKey();
+
+            if (
+                !typeNamesBySymbol.TryGetValue(key, out var current)
+                || current != type.Name
+                || TypeScriptNaming.EscapeIfReserved(current) is var escaped && escaped == current
+            )
+                continue;
+
+            typeNamesBySymbol[key] = escaped;
+            RewriteTranspilableTypeEntry(transpilableTypesDict, current, escaped);
+            nameRenames[current] = escaped;
         }
     }
 

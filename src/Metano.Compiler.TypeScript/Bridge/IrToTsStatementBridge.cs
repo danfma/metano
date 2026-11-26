@@ -552,6 +552,41 @@ public static class IrToTsStatementBridge
                 Const: false,
                 Type: IrToTsTypeMapper.Map(declaredType, context.TypeOverrides)
             ),
+            // `IPort x = null!;` keeps its annotation (#794): TypeScript would
+            // type the local by the asserted `null` (`never`) and drop the C# type.
+            IrVariableDeclaration
+            {
+                Type: { } assertedType,
+                Initializer: IrUnaryExpression
+                {
+                    Operator: IrUnaryOp.NonNullAssertion,
+                    Operand: IrLiteral { Kind: IrLiteralKind.Null }
+                } assertedNull,
+            } vd => new TsVariableDeclaration(
+                IrToTsNamingPolicy.ToLocalName(vd.Name),
+                IrToTsExpressionBridge.Map(assertedNull, context),
+                Const: vd.IsConst,
+                Type: IrToTsTypeMapper.Map(assertedType, context.TypeOverrides)
+            ),
+            // The same for a `var` local C# declares nullable and later assigns
+            // a value that may be null (#796): without a declared type it would
+            // follow its initializer.
+            IrVariableDeclaration
+            {
+                Type: null,
+                Initializer: { } initializer,
+                IsConst: false,
+                AssignedMaybeNull: true,
+                InferredType: { } inferredType,
+            } vd => new TsVariableDeclaration(
+                IrToTsNamingPolicy.ToLocalName(vd.Name),
+                IrToTsExpressionBridge.Map(initializer, context),
+                Const: false,
+                Type: IrToTsTypeMapper.Map(
+                    inferredType as IrNullableTypeRef ?? new IrNullableTypeRef(inferredType),
+                    context.TypeOverrides
+                )
+            ),
             IrVariableDeclaration { Initializer: { } initializer } vd
                 when EnumValueAssertion.IsClosedNumericEnum(vd.Type ?? vd.InferredType) =>
                 new TsVariableDeclaration(

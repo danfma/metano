@@ -321,7 +321,7 @@ public class JsTupleTranspileTests
         );
 
         var output = result["probe.ts"];
-        await Assert.That(output).Contains("return !(this.next() == null);");
+        await Assert.That(output).Contains("return this.next() != null;");
 
         await Assert
             .That(output)

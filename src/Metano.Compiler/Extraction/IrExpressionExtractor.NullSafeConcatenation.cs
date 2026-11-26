@@ -52,7 +52,7 @@ public sealed partial class IrExpressionExtractor
 
         var value = StringCompoundOperand(assign);
 
-        if (!MayFormatAsNull(assign.Left))
+        if (!ReferenceNullability.MayBeNullAsTarget(_semantic, assign.Left))
             return new IrBinaryExpression(target, IrBinaryOp.AddAssign, value);
 
         return BuildReadModifyWrite(target, assign, current =>

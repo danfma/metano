@@ -85,9 +85,40 @@ public sealed partial class IrExpressionExtractor
             }
         }
 
+        if (StructZeroValueOf(syntax, type) is { } zeroValue)
+            return zeroValue;
+
         ReportUnrepresentableDefaultLiteral(syntax, type);
 
         return new IrLiteral(null, IrLiteralKind.Default);
+    }
+
+    /// <summary>
+    /// <c>default(S)</c> of a struct that declares a constructor (#802): the
+    /// struct's own zero value, which the TypeScript target reads from its
+    /// <c>$default()</c> factory. Another target keeps the placeholder.
+    /// </summary>
+    private IrExpression? StructZeroValueOf(SyntaxNode syntax, ITypeSymbol type)
+    {
+        if (
+            _target is not (null or Metano.Annotations.TargetLanguage.TypeScript)
+            || type is not INamedTypeSymbol named
+            || !IrTypeRefMapper.HasZeroValueFactory(named, _target)
+        )
+            return null;
+
+        ReportUnsetStructFields(syntax, type);
+
+        return new IrNewExpression(
+            IrTypeRefMapper.Map(named, _originResolver, _target),
+            [],
+            TypeArguments: named.TypeArguments.Length > 0
+                ? [.. named.TypeArguments.Select(MapElementType)]
+                : null
+        )
+        {
+            IsStructDefault = true,
+        };
     }
 
     /// <summary>

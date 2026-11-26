@@ -37,8 +37,7 @@ export class Collisions {
     try {
       ex = 1;
     } catch (e$) {
-      const e0 = toException(e$);
-      const ex$1 = e0;
+      const ex$1 = toException(e$);
 
       return (ex + ex$1.message.length) | 0;
     }

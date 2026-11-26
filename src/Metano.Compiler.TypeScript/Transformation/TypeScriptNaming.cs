@@ -13,6 +13,27 @@ namespace Metano.Compiler.TypeScript.Transformation;
 public static class TypeScriptNaming
 {
     /// <summary>
+    /// The words an ES module (strict mode) rejects as a binding or label name on
+    /// top of <see cref="JsReservedWords"/> — and <c>eval</c> / <c>arguments</c>,
+    /// which strict mode forbids binding. Property and member names may still
+    /// carry them (<c>x.public</c>), so only identifier positions consult this
+    /// set (<see cref="EscapeIfReserved"/>, <see cref="ToLabel"/>); the member
+    /// naming (<see cref="ToCamelCase"/>) does not.
+    /// </summary>
+    private static readonly HashSet<string> StrictModeReservedWords =
+    [
+        "arguments",
+        "eval",
+        "implements",
+        "interface",
+        "package",
+        "private",
+        "protected",
+        "public",
+        "static",
+    ];
+
+    /// <summary>
     /// Reads [Emit("expression")] from a symbol.
     /// </summary>
     public static string? GetEmit(ISymbol symbol)
@@ -111,16 +132,21 @@ public static class TypeScriptNaming
 
     private static bool IsReservedWord(string name) => JsReservedWords.Contains(name);
 
+    private static bool IsReservedIdentifier(string name) =>
+        IsReservedWord(name) || StrictModeReservedWords.Contains(name);
+
     /// <summary>
     /// Appends a trailing underscore to <paramref name="name"/> when
-    /// it is a JavaScript / TypeScript reserved word, leaving any
+    /// it is a JavaScript / TypeScript reserved word (strict-mode words
+    /// included, <see cref="StrictModeReservedWords"/>), leaving any
     /// other identifier unchanged. Used at top-level declaration
     /// sites (<c>export const/let/function</c>) where the language
     /// does not accept reserved identifiers — distinct from class
     /// members and property keys, which can carry reserved names
     /// freely.
     /// </summary>
-    public static string EscapeIfReserved(string name) => IsReservedWord(name) ? name + "_" : name;
+    public static string EscapeIfReserved(string name) =>
+        IsReservedIdentifier(name) ? name + "_" : name;
 
     /// <summary>
     /// The JavaScript spelling of a C# statement label (#772): the C# name,
@@ -128,5 +154,5 @@ public static class TypeScriptNaming
     /// by <c>$</c>, which no C# identifier holds, so the escape never meets
     /// another label.
     /// </summary>
-    public static string ToLabel(string name) => IsReservedWord(name) ? "$" + name : name;
+    public static string ToLabel(string name) => IsReservedIdentifier(name) ? "$" + name : name;
 }
