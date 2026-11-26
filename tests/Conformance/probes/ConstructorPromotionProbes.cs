@@ -40,6 +40,25 @@ public class CpOtherReceiver
     }
 }
 
+public class CpSetterReads
+{
+    private int _size;
+
+    public int Limit { get; }
+
+    public int Size
+    {
+        get => _size;
+        set => _size = value + Limit;
+    }
+
+    public CpSetterReads(int limit, int size)
+    {
+        Size = size;
+        Limit = limit;
+    }
+}
+
 public static class ConstructorPromotionProbes
 {
     public static string StoreAfterAnEarlyReturn() =>
@@ -59,5 +78,12 @@ public static class ConstructorPromotionProbes
         var child = new CpOtherReceiver(8);
 
         return $"{root.Limit}/{child.Limit}";
+    }
+
+    public static string StoreThroughASetterThatReadsTheMember()
+    {
+        var a = new CpSetterReads(10, 3);
+
+        return $"{a.Size}/{a.Limit}";
     }
 }

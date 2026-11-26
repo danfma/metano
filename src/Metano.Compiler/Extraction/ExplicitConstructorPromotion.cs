@@ -76,10 +76,10 @@ internal static class ExplicitConstructorPromotion
                 .Select(statement => ((ExpressionStatementSyntax)statement).Expression);
 
     /// <summary>
-    /// Whether <paramref name="expression"/> is a plain store to a member of the
-    /// instance (<c>X = value</c> / <c>this.X = value</c>) whose value never reads
-    /// the instance, so a promoted store after it still runs before anything can
-    /// observe the member (#801).
+    /// Whether <paramref name="expression"/> is a plain store to a field or
+    /// auto-property of the instance (<c>X = value</c> / <c>this.X = value</c>)
+    /// whose value never reads the instance, so a promoted store after it still
+    /// runs before anything can observe the member (#801).
     /// </summary>
     private static bool IsUnobservedStore(
         ExpressionSyntax expression,
@@ -106,7 +106,19 @@ internal static class ExplicitConstructorPromotion
                 or MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax }
         && model.GetSymbolInfo(target).Symbol
             is { IsStatic: false, Kind: SymbolKind.Field or SymbolKind.Property } member
-        && SymbolEqualityComparer.Default.Equals(member.ContainingType, type);
+        && SymbolEqualityComparer.Default.Equals(member.ContainingType, type)
+        && (member is not IPropertySymbol property || IsPlainStorage(property));
+
+    /// <summary>
+    /// A property whose setter only stores: a non-overridable auto-property. A
+    /// setter with a body, or one a derived class may override, could read
+    /// the instance.
+    /// </summary>
+    private static bool IsPlainStorage(IPropertySymbol property) =>
+        IsAutoProperty(property)
+        && !property.IsVirtual
+        && !property.IsAbstract
+        && property is not { IsOverride: true, IsSealed: false };
 
     private static bool ReadsInstance(
         ExpressionSyntax value,

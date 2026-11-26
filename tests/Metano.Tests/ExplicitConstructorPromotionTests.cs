@@ -100,4 +100,45 @@ public class ExplicitConstructorPromotionTests
 
         await Assert.That(promoted).Contains("    this.limit = limit;\n    this.size = size;\n");
     }
+
+    [Test]
+    public async Task StoreThroughASetterWithABody_EndsThePromotionRun()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Ps
+            {
+                private int _size;
+                public int Limit { get; }
+                public int Size { get => _size; set => _size = value + Limit; }
+                public Ps(int limit, int size) { Size = size; Limit = limit; }
+            }
+            """
+        )["ps.ts"];
+
+        await Assert.That(output).Contains("    this.limit = 0;\n");
+
+        await Assert
+            .That(output)
+            .DoesNotContain("    this.limit = limit;\n    this.size = size;\n");
+    }
+
+    [Test]
+    public async Task StoreThroughAVirtualAutoProperty_EndsThePromotionRun()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Pv
+            {
+                public int Limit { get; }
+                public virtual int Size { get; set; }
+                public Pv(int limit, int size) { Size = size; Limit = limit; }
+            }
+            """
+        )["pv.ts"];
+
+        await Assert.That(output).Contains("    this.limit = 0;\n");
+    }
 }
