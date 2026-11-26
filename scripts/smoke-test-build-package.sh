@@ -510,6 +510,16 @@ EOF
   fi
   incremental_build "$dir" skip "a build after the removal"
 
+  echo "select 1;" >"$dir/extra.sql"
+  printf '%s\n' '<Project><ItemGroup><MetanoAsset Include="extra.sql" OutputPath="db/extra.sql" /></ItemGroup></Project>' >"$dir/Directory.Build.targets"
+  incremental_build "$dir" transpile "an added MetanoAsset"
+  [ -f "$dir/generated/src/db/extra.sql" ] || fail "the added asset was not copied"
+  incremental_build "$dir" skip "a build after the asset was added"
+  echo '<Project />' >"$dir/Directory.Build.targets"
+  incremental_build "$dir" transpile "a removed MetanoAsset"
+  [ ! -f "$dir/generated/src/db/extra.sql" ] || fail "the removed asset is still in the output"
+  incremental_build "$dir" skip "a build after the asset was removed"
+
   mv "$dir/Use.cs" "$dir/Renamed.cs"
   incremental_build "$dir" transpile "a renamed source file"
   grep -rqs 'class Use' "$dir/generated/src" --include='*.ts' || fail "the renamed file's type is missing"
