@@ -19,7 +19,10 @@ namespace Metano.Compiler.Extraction;
 /// second member of the same name, so it stays the one member and is public
 /// (<see cref="InterfaceContractClaims"/>), as is any other claimer a target cannot
 /// forward to. A claiming member that is already public needs no forwarder (FR-111).
-/// A target that ignores <c>internal</c> (Dart) keeps dropping the forwarder.
+/// The forwarder is published only when its return type is the claiming member's:
+/// <c>object ICloneable.Clone() =&gt; Clone();</c> over an <c>internal Node Clone()</c>
+/// would declare an incompatible override. A target that hides no internal member
+/// (<see cref="IrExtractionContext.HidesInternalMembersFor"/>, Dart) keeps dropping it.
 /// </para>
 /// </summary>
 internal static class NarrowedClaimForwarders
@@ -32,7 +35,7 @@ internal static class NarrowedClaimForwarders
         ExplicitImplementation lowering,
         TargetLanguage? target
     ) =>
-        target is not TargetLanguage.Dart
+        IrExtractionContext.HidesInternalMembersFor(target)
         && lowering
             is {
                 Fate: ExplicitImplementationFate.Superseded,
@@ -47,26 +50,44 @@ internal static class NarrowedClaimForwarders
             claiming.ContainingType.OriginalDefinition,
             owner.OriginalDefinition
         )
+        && SymbolEqualityComparer.Default.Equals(member.ReturnType, claiming.ReturnType)
         && ForwardingImplementations.IsPureForwarder(member, claiming);
 
     /// <summary>
     /// <paramref name="declaration"/> of a published forwarder with its call rebound
-    /// from <c>this</c> to <c>base</c>: the member is declared under the claiming
+    /// from <c>this</c> to <c>base</c> (a signature-only extraction, with no compilation,
+    /// has no body to rebind): the member is declared under the claiming
     /// member's own name, so a call on <c>this</c> would reach itself. Any other
     /// declaration is returned unchanged.
     /// </summary>
     public static IrMethodDeclaration CallThroughBase(
         IrMethodDeclaration declaration,
         IMethodSymbol method,
-        TargetLanguage? target
+        IrExtractionContext context
     ) =>
-        ExplicitImplementationLowering.Resolve(method, target) is { } lowering
-        && IsPublishedAsOwnMember(lowering, target)
+        context.Compilation is not null
+        && ExplicitImplementationLowering.Resolve(method, context.Target) is { } lowering
+        && IsPublishedAsOwnMember(lowering, context.Target)
             ? declaration with
             {
-                Body = declaration.Body?.Select(RebindStatement).ToList(),
+                Body = RebindSoleStatement(declaration, method),
             }
             : declaration;
+
+    /// <summary>
+    /// The body of a published forwarder is one statement calling the claiming member on
+    /// <c>this</c>. Anything else would leave a call to itself (infinite recursion), so
+    /// it fails instead of emitting it.
+    /// </summary>
+    private static IReadOnlyList<IrStatement> RebindSoleStatement(
+        IrMethodDeclaration declaration,
+        IMethodSymbol method
+    ) =>
+        declaration.Body is [var statement] && TryRebindStatement(statement) is { } rebound
+            ? [rebound]
+            : throw new InvalidOperationException(
+                $"The forwarder '{method.ToDisplayString()}' has no single call on 'this' to rebind to 'base'."
+            );
 
     /// <summary>Whether the type and all its containers are public.</summary>
     public static bool IsPublic(INamedTypeSymbol type)
@@ -80,22 +101,25 @@ internal static class NarrowedClaimForwarders
         return true;
     }
 
-    private static IrStatement RebindStatement(IrStatement statement) =>
+    private static IrStatement? TryRebindStatement(IrStatement statement) =>
         statement switch
         {
-            IrExpressionStatement { Expression: var expression } => new IrExpressionStatement(
-                Rebind(expression)
-            ),
-            IrReturnStatement { Value: { } value } => new IrReturnStatement(Rebind(value)),
-            _ => statement,
+            IrExpressionStatement { Expression: var expression } => TryRebind(expression)
+                is { } rebound
+                ? new IrExpressionStatement(rebound)
+                : null,
+            IrReturnStatement { Value: { } value } => TryRebind(value) is { } rebound
+                ? new IrReturnStatement(rebound)
+                : null,
+            _ => null,
         };
 
-    private static IrExpression Rebind(IrExpression expression) =>
+    private static IrExpression? TryRebind(IrExpression expression) =>
         expression
             is IrCallExpression { Target: IrMemberAccess { Target: IrThisExpression } access } call
             ? call with
             {
                 Target = access with { Target = new IrBaseExpression() },
             }
-            : expression;
+            : null;
 }

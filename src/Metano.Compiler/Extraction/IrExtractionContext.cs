@@ -149,6 +149,17 @@ public sealed record IrExtractionContext(
     public bool EmitsStructZeroValue { get; init; }
 
     /// <summary>
+    /// Whether the target tags or hides <c>internal</c> members from its public
+    /// surface (TypeScript: <c>/** @internal */</c> and <c>stripInternal</c>), so a
+    /// member that a public interface relies on must not be widened for a base class
+    /// that other types inherit (#821). <c>false</c> for a target that ignores
+    /// accessibility on members (Dart). A <c>null</c> target (target-neutral
+    /// extraction) behaves as a hiding one.
+    /// </summary>
+    internal static bool HidesInternalMembersFor(Metano.Annotations.TargetLanguage? target) =>
+        target != Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
     /// <see cref="KeepsNativeCollections"/> for a code path that holds only the
     /// target language (the type mapper, the overload-group reporters).
     /// </summary>
