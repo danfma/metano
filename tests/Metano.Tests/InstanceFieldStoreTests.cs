@@ -239,6 +239,45 @@ public class InstanceFieldStoreTests
     }
 
     [Test]
+    public async Task InitializerCallingAFunctionNamedLikeAnOutVariable_AliasesTheImport()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Helpers
+            {
+                public static int Compute() => 7;
+                public static int Third() => 11;
+            }
+
+            [Transpile]
+            public class OutShadow
+            {
+                private int _x = Helpers.Compute();
+                private int _t = Helpers.Third();
+
+                public static bool TryGet(string s, out int v) { v = s.Length; return true; }
+
+                public OutShadow(string s)
+                {
+                    int.TryParse(s, out var compute);
+                    if (TryGet(s, out int third)) Y = compute + third;
+                }
+
+                public int Y;
+            }
+            """
+        );
+
+        var output = files["out-shadow.ts"];
+
+        await Assert.That(output).Contains("compute as compute$1");
+        await Assert.That(output).Contains("third as third$1");
+        await Assert.That(output).Contains("    this._x = compute$1();\n");
+        await Assert.That(output).Contains("    this._t = third$1();\n");
+    }
+
+    [Test]
     public async Task DerivedClass_KeepsTheDefaultStoreOfAFieldTheBodyAssignsFirst()
     {
         var output = TranspileHelper.Transpile(
