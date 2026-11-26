@@ -62,6 +62,7 @@ public class NarrowedClaimForwarderTests
         );
 
         await Assert.That(files["base.ts"]).Contains("/** @internal */\n  compareTo(");
+
         await Assert
             .That(files["derived.ts"])
             .Contains("override compareTo(other: Object | null): number {")
@@ -104,9 +105,11 @@ public class NarrowedClaimForwarderTests
         );
 
         await Assert.That(files["base.ts"]).Contains("/** @internal */\n  dispose(): void {");
+
         await Assert
             .That(files["mid.ts"])
             .Contains("/** @internal */\n  override dispose(): void {");
+
         await Assert.That(files["effect.ts"]).Contains("override dispose(): void {");
         await Assert.That(files["effect.ts"]).Contains("super.dispose();");
     }
