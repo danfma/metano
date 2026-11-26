@@ -524,6 +524,7 @@ public class DisposableTests
                         using var created = new Res();
                         using var element = items[0];
                         using var forgiven = Open()!;
+                        using var empty = new SRes?();
                     }
                 }
                 """
@@ -534,6 +535,7 @@ public class DisposableTests
         await Assert.That(output).Contains("created.dispose();");
         await Assert.That(output).Contains("element?.dispose();");
         await Assert.That(output).Contains("forgiven?.dispose();");
+        await Assert.That(output).Contains("empty?.dispose();");
     }
 
     [Test]

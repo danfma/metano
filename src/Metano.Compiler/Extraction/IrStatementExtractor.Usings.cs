@@ -170,10 +170,14 @@ public sealed partial class IrStatementExtractor
     /// collection creation (<c>new …</c>, <c>[…]</c>). Roslyn's flow state is not used: it
     /// is unsound for array elements, captured locals and <c>!</c> (decision W10-9a), and
     /// a dereferenced <c>null</c> in the <c>finally</c> would replace the body's exception.
+    /// A <c>Nullable&lt;T&gt;</c> resource always keeps the guard: <c>new S?()</c> has no value.
     /// </summary>
     private static bool MayBeNull(ITypeSymbol? type, ExpressionSyntax? value)
     {
-        if (type is { IsValueType: true } && !type.IsNullableValueType())
+        if (type is not null && type.IsNullableValueType())
+            return true;
+
+        if (type is { IsValueType: true })
             return false;
 
         return Unparenthesized(value)
