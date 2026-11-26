@@ -180,4 +180,77 @@ public class StrictModeReservedWordTests
         await Assert.That(all).DoesNotContain("class implements ");
         await Assert.That(files["use.ts"]).Contains("import { implements_ } from");
     }
+
+    [Test]
+    public async Task StaticDispatcher_OfAnEscapedOrRenamedClass_ReceivesItsEmittedName()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class let
+            {
+                public static string Make(int n) => "n" + n;
+                public static string Make(string s) => "s" + s;
+            }
+
+            [Transpile, Name("Signals")]
+            public static class Signal
+            {
+                public static string Describe(int x) => "int" + x;
+                public static string Describe(string x) => "str" + x;
+            }
+
+            [Transpile]
+            public class Signal<T> { public T Value; public Signal(T v) { Value = v; } }
+            """
+        );
+
+        await Assert.That(files["let_.ts"]).Contains("return let_.makeN(args[0] as number);");
+        await Assert.That(files["let_.ts"]).DoesNotContain("return let.");
+        await Assert
+            .That(files["signals.ts"])
+            .Contains("return Signals.describeInt32(args[0] as number);");
+    }
+
+    [Test]
+    public async Task ConstructorSelectors_OfAnEscapedClass_AgreeAcrossPackages()
+    {
+        const string library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("plib")]
+
+            namespace Lib;
+
+            public class let
+            {
+                public string K = "p";
+                public let(System.Func<int> f) { K = "fi" + f(); }
+                [Name("Lbl")] public let(System.Func<string> f) { K = "fs" + f(); }
+                public let(int n) { K = "n" + n; }
+            }
+            """;
+        const string consumer = """
+            using Lib;
+
+            [Transpile]
+            public class AppLet : let
+            {
+                public int Z = 1;
+                public AppLet(int n) : base(() => "a" + n) { Z += n; }
+                public AppLet(string s) : base(() => s.Length) { }
+            }
+            """;
+
+        var producer = TranspileHelper.Transpile(library);
+        var viaSource = TranspileHelper.TranspileWithLibrary(library, consumer)["app-let.ts"];
+        var viaImage = TranspileHelper.TranspileWithLibraryImage(library, consumer)["app-let.ts"];
+
+        await Assert
+            .That(string.Join("\n", producer.Values))
+            .Contains("static readonly bylet_Lbl = ");
+        await Assert.That(viaSource).Contains("super(let_.bylet_Lbl, ");
+        await Assert.That(viaSource).DoesNotContain("let_.byletLbl");
+        await Assert.That(viaImage).Contains("super(let_.bylet_Lbl, ");
+        await Assert.That(viaImage).DoesNotContain("let_.byletLbl");
+    }
 }
