@@ -73,10 +73,12 @@
 
       MetanoTranspileTs is skipped while every input is older than
       <resolved output dir>/.metano-stamp. Besides the user's sources, assets
-      and project file, its inputs include the reference assemblies of the compilation (a
-      referenced project's API or metadata change, such as a [Name] pin, #818), a list of all
-      those files, $(IntermediateOutputPath)$(MSBuildProjectFile).MetanoInputs.typescript.cache,
-      rewritten only when the set changes (a removed or renamed source, #797), and a toolchain
+      and project file, its inputs include the implementation assemblies of the references
+      (@(ReferencePath): the compiler reads a referenced project as source, so any change that
+      rebuilds its assembly, a body included, reruns the transpile, #818), a list of the
+      sources, assets and references,
+      $(IntermediateOutputPath)$(MSBuildProjectFile).MetanoInputs.typescript.cache, rewritten
+      only when the set changes (a removed or renamed source or asset, #797), and a toolchain
       key file,
       $(IntermediateOutputPath)$(MSBuildProjectFile).MetanoToolchain.typescript.cache,
       rewritten only when its content changes. The content names the Metano
@@ -224,6 +226,7 @@
         OutputDir="$(_MetanoTsOutputDir)"
         OutputDirFull="$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(_MetanoTsOutputDir)').TrimEnd('/\'))"
         ToolchainKeyFile="$(_MetanoTsToolchainKeyFile)"
+        InputListFile="$(_MetanoTsInputListFile)"
         CompilerProject="$(_MetanoTsCompilerProject)"
         ToolStoreName="metano.compiler.typescript"
         PostBuildCommand="$([MSBuild]::Escape('$(_MetanoTsPostBuildCommand)'))"
@@ -351,35 +354,16 @@
     </ItemGroup>
   </Target>
 
-  <!-- #797: timestamps alone cannot see a removed or renamed input, so the set of inputs is
-       itself an input. The list (compiled sources, assets, referenced assemblies) is rewritten
-       only when its content changes, so its timestamp moves exactly when the set does. -->
-  <Target
-    Name="_MetanoWriteTsInputList"
-    DependsOnTargets="_MetanoComposeTsArguments"
-    Condition="'$(_MetanoTsActive)' == 'true'"
-  >
-    <ItemGroup>
-      <_MetanoTsInputListLine Include="@(_MetanoUserCompile -> '%(FullPath)')" />
-      <_MetanoTsInputListLine Include="@(MetanoAsset -> '%(FullPath)')" />
-      <_MetanoTsInputListLine Include="@(ReferencePathWithRefAssemblies -> '%(FullPath)')" />
-    </ItemGroup>
-    <WriteLinesToFile
-      File="$(_MetanoTsInputListFile)"
-      Lines="@(_MetanoTsInputListLine)"
-      Overwrite="true"
-      WriteOnlyWhenDifferent="true"
-    />
-  </Target>
-
-  <!-- @(ReferencePathWithRefAssemblies) is the reference-assembly input of the compilation
-       (#818): a referenced project's body-only change leaves its reference assembly untouched,
-       while an API or metadata change, such as a [Name] pin, rewrites it. -->
+  <!-- @(ReferencePath), the implementation assemblies, is an input (#818): the compiler reads a
+       ProjectReference as source, so bodies of a referenced project ([Inline] expansion, getter
+       shapes, const reads) shape the output, and any rebuild of that project that changes its
+       assembly reruns the transpile. The input list (#797, written by _MetanoWriteInputLists)
+       makes a removed or renamed source or asset rerun it too. -->
   <Target
     Name="_MetanoTranspileTsIfOutOfDate"
-    DependsOnTargets="_MetanoComposeTsArguments;_MetanoWriteTsInputList"
+    DependsOnTargets="_MetanoComposeTsArguments"
     Condition="'$(_MetanoTsActive)' == 'true'"
-    Inputs="@(_MetanoUserCompile);@(MetanoAsset);@(ReferencePathWithRefAssemblies);$(MSBuildProjectFullPath);$(_MetanoTsToolchainKeyFile);$(_MetanoTsInputListFile)"
+    Inputs="@(_MetanoUserCompile);@(MetanoAsset->WithMetadataValue('Language', 'typescript'));@(MetanoAsset->WithMetadataValue('Language', 'all'));@(ReferencePath);$(MSBuildProjectFullPath);$(_MetanoTsToolchainKeyFile);$(_MetanoTsInputListFile)"
     Outputs="$(_MetanoTsOutputDir)/.metano-stamp"
   >
     <!-- Marks that the transpile really ran. Neither a PropertyGroup nor CreateProperty can:

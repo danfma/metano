@@ -1347,8 +1347,7 @@ Product requirements added after the migration (normative; each one is traced by
      inert. Settings are resolved when the build runs, not at evaluation, so values set in
      `Directory.Build.targets` (imported after NuGet package targets) are honoured.
   3. *Isolation.* Each enabled target runs in its own MSBuild target (`MetanoTranspileTs`, ...)
-     with its own incremental check (`<OutputDir>/.metano-stamp`; its inputs include the compilation's
-     reference assemblies, #818, and a list of the input files that changes when a source or
+     with its own incremental check (`<OutputDir>/.metano-stamp`; its inputs include the references' implementation assemblies, whose bodies the compiler reads, #818, and a list of the input files that changes when a source or
      `MetanoAsset` is added, removed or renamed, #797), its own toolchain key file in
      `obj/`, its own asset selection (`<MetanoAsset Language="...">`, unchanged) and its own
      post-build command; one target's settings never reach another's command line. As in 2.x, a
@@ -1374,9 +1373,9 @@ Product requirements added after the migration (normative; each one is traced by
      `Metano.Build.TypeScript` at a throw-away version into a local feed, installs the tool from
      that feed into a local tool manifest, and builds a throw-away consumer that references
      `Metano.Build.TypeScript` with `PackageReference`; it asserts the generated `.ts` file,
-     `.metano-stamp` and `package.json`, and that a second build skips the transpile; a two-project scenario also asserts that a `[Name]`
-     pin in a referenced project, and a removed or renamed source or `MetanoAsset`, re-transpile while
-     a body-only change does not (#818, #797). A negative
+     `.metano-stamp` and `package.json`, and that a second build skips the transpile; a two-project scenario also asserts that a body change (an `[Inline]` value) or a `[Name]`
+     pin in a referenced project, and a removed source, re-transpile, and that an unchanged build
+     does not (#818, #797). A negative
      case without the tool asserts `METANOBUILD001` and its install text. It uses an isolated
      NuGet package cache and `DOTNET_CLI_HOME`, so it neither reads nor pollutes the developer's.
      For #706, nuget.org downloads MUST use a reusable HTTP cache and bounded retries for

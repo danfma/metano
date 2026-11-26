@@ -15,6 +15,9 @@
       OutputDir          The resolved output directory as the user wrote it.
       OutputDirFull      The normalized full path, without trailing separators (METANOBUILD002).
       ToolchainKeyFile   The target's toolchain key file under obj/.
+      InputListFile      The target's input list under obj/: the compiled sources, the assets of
+                         the target's language and the reference assemblies, rewritten only when
+                         the set changes, so a removed or renamed input reruns the transpile.
       CompilerProject    The resolved MetanoCompilerProject (dev mode), or empty.
       ToolStoreName      The tool's folder in the global tool store (lower-case package id).
       ArgumentsHash      Hash of the effective CLI argument line, composed before the key write.
@@ -23,7 +26,7 @@
     Where each part runs:
 
       Parent instance (every build): user inputs, setting resolution, METANOBUILD002, asset
-      projection and argument composition, toolchain keys, the incremental check of each per-target
+      projection and argument composition, toolchain keys, input lists, the incremental check of each per-target
       transpile target, the post-build commands. Worker instance (only for an out-of-date
       target, through the MSBuild task with the resolved values as global properties): the tool
       probe (METANOBUILD001) and the CLI Exec. The worker cannot see items the parent produced by running targets, such as
@@ -31,7 +34,7 @@
 
     Public targets: MetanoTranspile runs after Build. User BeforeTargets hooks run first and may
     still set Metano* properties or add MetanoAsset items; its body then prepares every target
-    (resolution, keys, assets) and runs each enabled per-target transpile target, and
+    (resolution, keys, input lists, assets) and runs each enabled per-target transpile target, and
     AfterTargets hooks (MetanoPostBuild among them) run after all of them. A per-target target
     (MetanoTranspileTs) can also be run on its own.
   -->
@@ -158,6 +161,41 @@
     />
   </Target>
 
+  <!-- Input list (#797), one file per enabled target: the compiled sources, the assets of the
+       target's language (or `all`) and the implementation assemblies of the references (#818).
+       Timestamps cannot see a removed or renamed input, so the set is itself an input of the
+       transpile target; WriteOnlyWhenDifferent moves the file's timestamp only when the set
+       changes. Property functions cannot sort, so the order is the evaluation order, stable while
+       the files are unchanged. -->
+  <Target
+    Name="_MetanoWriteInputLists"
+    DependsOnTargets="_MetanoResolveTargets"
+    Outputs="%(_MetanoEnabledTarget.Identity)"
+  >
+    <PropertyGroup>
+      <_MetanoInputListFile>%(_MetanoEnabledTarget.InputListFile)</_MetanoInputListFile>
+      <_MetanoInputListLanguage>%(_MetanoEnabledTarget.Identity)</_MetanoInputListLanguage>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_MetanoInputListLine Remove="@(_MetanoInputListLine)" />
+      <_MetanoInputListLine Include="@(_MetanoUserCompile->'%(FullPath)')" />
+      <_MetanoInputListLine
+        Include="@(MetanoAsset->'%(FullPath)')"
+        Condition="'%(MetanoAsset.Language)' == '$(_MetanoInputListLanguage)' or '%(MetanoAsset.Language)' == 'all'"
+      />
+      <_MetanoInputListLine Include="@(ReferencePath->'%(FullPath)')" />
+    </ItemGroup>
+
+    <WriteLinesToFile
+      Condition="'$(_MetanoInputListFile)' != ''"
+      File="$(_MetanoInputListFile)"
+      Lines="@(_MetanoInputListLine)"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true"
+    />
+  </Target>
+
   <!-- Asset projection (FR-048), once per enabled target, in the project instance so items a
        target added, removed or changed before the transpile count: one _MetanoAssetArg item per
        @(MetanoAsset) whose Language is the target's or `all`, tagged with the target's language.
@@ -184,7 +222,7 @@
 
   <Target
     Name="_MetanoPrepare"
-    DependsOnTargets="_MetanoCheckCommonTargets;_MetanoCollectUserInputs;_MetanoResolveTargets;_MetanoCheckOutputCollisions;_MetanoWriteToolchainKeys;_MetanoProjectAssets"
+    DependsOnTargets="_MetanoCheckCommonTargets;_MetanoCollectUserInputs;_MetanoResolveTargets;_MetanoCheckOutputCollisions;_MetanoWriteToolchainKeys;_MetanoWriteInputLists;_MetanoProjectAssets"
   />
 
   <!-- No DependsOnTargets: the body prepares every target and then runs the per-target

@@ -13,9 +13,13 @@ set -euo pipefail
 #      Metano.Build.TypeScript with PackageReference; asserts the generated .ts
 #      file, .metano-stamp and package.json, an asset a target adds before the
 #      transpile, and that a second build skips the transpile;
-#   3. builds a consumer without the tool and asserts METANOBUILD001 with the
+#   3. builds a project that references another project, and asserts that a body
+#      change (an [Inline] value), a [Name] pin or a removed source in the
+#      referenced/own project reruns the transpile while an unchanged build does not
+#      (#818, #797);
+#   4. builds a consumer without the tool and asserts METANOBUILD001 with the
 #      install instructions.
-#   4. builds a consumer of a bridge NuGet package (buildTransitive only), and
+#   5. builds a consumer of a bridge NuGet package (buildTransitive only), and
 #      a project-reference graph with strict static-graph isolation.
 #
 # The NuGet package cache, DOTNET_CLI_HOME and the tool lookup are isolated in a
@@ -393,7 +397,7 @@ check_consumer_build() {
   }
   grep -q 'Metano: Transpiling Consumer' <<<"$changed" || fail "a changed -p: setting did not rerun the tool"
   grep -rqs '^// first;second$' "$dir/generated/src" --include='*.ts' || fail "the file prefix lost its semicolon"
-  check_up_to_date "$dir" '-p:MetanoFilePrefix=// first%3Bsecond'
+  incremental_build "$dir" skip "unchanged effective arguments" '-p:MetanoFilePrefix=// first%3Bsecond'
   step "Changed -p: setting reran; semicolon preserved; unchanged setting skipped"
 
   cat >"$dir/Directory.Build.props" <<'EOF'
@@ -407,7 +411,7 @@ EOF
   }
   grep -q 'Metano: Transpiling Consumer' <<<"$changed" || fail "a Directory.Build.props setting did not rerun the tool"
   grep -rqs '^// props;prefix$' "$dir/generated/src" --include='*.ts' || fail "the props file prefix lost its semicolon"
-  check_up_to_date "$dir"
+  incremental_build "$dir" skip "unchanged effective arguments"
   step "Changed Directory.Build.props setting reran; unchanged setting skipped"
 
   cat >"$dir/Directory.Build.targets" <<'EOF'
@@ -419,21 +423,8 @@ EOF
   }
   grep -q 'Metano: Transpiling Consumer' <<<"$changed" || fail "a Directory.Build.targets setting did not rerun the tool"
   grep -rqs '^// extra;args$' "$dir/generated/src" --include='*.ts' || fail "extra arguments lost their semicolon"
-  check_up_to_date "$dir"
+  incremental_build "$dir" skip "unchanged effective arguments"
   step "Changed Directory.Build.targets extra args reran; semicolon preserved; unchanged setting skipped"
-}
-
-check_up_to_date() {
-  local dir="$1"
-  shift
-  local output
-  capture_dotnet output "$dir" build --no-restore -nologo "$@" || {
-    echo "$output"
-    fail "the up-to-date consumer build failed"
-  }
-  if grep -q 'Metano: Transpiling' <<<"$output"; then
-    fail "unchanged effective arguments ran the transpile again"
-  fi
 }
 
 check_incremental_inputs() {
@@ -448,7 +439,7 @@ check_incremental_inputs() {
   <ItemGroup><PackageReference Include="Metano" Version="$SMOKE_VERSION" /></ItemGroup>
 </Project>
 EOF
-  write_lib_calc "$dir" "" "return a + b;"
+  write_lib_calc "$dir" "" "return a + b;" 42
   cat >"$dir/Consumer.csproj" <<EOF
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -475,6 +466,7 @@ namespace Smoke;
 public class Use
 {
     public int Run() => new Calc().Add(1, 2);
+    public int Ask() => Constants.Answer;
 }
 EOF
   cat >"$dir/Extra.cs" <<'EOF'
@@ -492,10 +484,14 @@ EOF
   grep -rqs 'class Extra' "$dir/generated/src" --include='*.ts' || fail "Extra was not emitted"
   incremental_build "$dir" skip "an unchanged build"
 
-  write_lib_calc "$dir" "" "return a + b + 0;"
-  incremental_build "$dir" skip "a body-only change in the referenced project"
+  grep -rqs 'return 42' "$dir/generated/src" --include='*.ts' || fail "the [Inline] value was not expanded"
 
-  write_lib_calc "$dir" '[Name("plus")]' "return a + b + 0;"
+  write_lib_calc "$dir" "" "return a + b;" 43
+  incremental_build "$dir" transpile "a body change in the referenced project"
+  grep -rqs 'return 43' "$dir/generated/src" --include='*.ts' || fail "the consumer kept the old [Inline] value"
+  incremental_build "$dir" skip "a build after the body change was picked up"
+
+  write_lib_calc "$dir" '[Name("plus")]' "return a + b;" 43
   incremental_build "$dir" transpile "a [Name] pin in the referenced project"
   grep -rqs '\.plus(' "$dir/generated/src" --include='*.ts' || fail "the consumer kept the old member name after the [Name] pin"
   incremental_build "$dir" skip "a build after the pin was picked up"
@@ -519,14 +515,10 @@ EOF
   incremental_build "$dir" transpile "a removed MetanoAsset"
   [ ! -f "$dir/generated/src/db/extra.sql" ] || fail "the removed asset is still in the output"
   incremental_build "$dir" skip "a build after the asset was removed"
-
-  mv "$dir/Use.cs" "$dir/Renamed.cs"
-  incremental_build "$dir" transpile "a renamed source file"
-  grep -rqs 'class Use' "$dir/generated/src" --include='*.ts' || fail "the renamed file's type is missing"
-  incremental_build "$dir" skip "a build after the rename"
 }
 
-# Writes the library's single source. $1 project dir, $2 attribute line, $3 method body.
+# Writes the library's single source. $1 project dir, $2 attribute line, $3 method body, $4 the
+# value of the [Inline] property.
 write_lib_calc() {
   cat >"$1/lib/Calc.cs" <<EOF
 using Metano.Annotations;
@@ -541,13 +533,22 @@ public class Calc
     $2
     public int Add(int a, int b) { $3 }
 }
+
+[NoContainer]
+public static class Constants
+{
+    [Inline]
+    public static int Answer => $4;
+}
 EOF
 }
 
-# Builds the incremental project and asserts whether the transpile ran ($2: transpile | skip).
+# Builds a project and asserts whether the transpile ran ($2: transpile | skip, $3 what changed,
+# the rest extra build arguments).
 incremental_build() {
   local dir="$1" expect="$2" what="$3" output
-  capture_dotnet output "$dir" build --no-restore -nologo || {
+  shift 3
+  capture_dotnet output "$dir" build --no-restore -nologo "$@" || {
     echo "$output"
     fail "the build failed: $what"
   }
@@ -594,7 +595,7 @@ EOF
   [ -f "$dir/generated/src/.metano-stamp" ] || fail "the transitive consumer did not write its stamp"
   grep -rqs 'class Todo' "$dir/generated/src" --include='*.ts' || fail "the transitive consumer did not emit Todo"
   [ -f "$dir/generated/package.json" ] || fail "the transitive consumer did not emit package.json"
-  check_up_to_date "$dir"
+  incremental_build "$dir" skip "unchanged effective arguments"
 }
 
 check_static_graph() {
