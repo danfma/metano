@@ -15,6 +15,9 @@ namespace Metano.Compiler.TypeScript.AST;
 /// <param name="Override">The field redeclares a base member
 /// (<c>override readonly name: string = "…";</c>), which
 /// <c>noImplicitOverride</c> requires to say so.</param>
+/// <param name="StoreInitializer">The <see cref="Initializer"/> for a constructor store:
+/// the same value over temporaries the store's statement list declares instead of an
+/// immediately invoked function; <c>null</c> when the initializer needs none.</param>
 public sealed record TsFieldMember(
     string Name,
     TsType Type,
@@ -27,5 +30,12 @@ public sealed record TsFieldMember(
     bool Abstract = false,
     TsJSDoc? JSDoc = null,
     bool Override = false,
-    bool Declare = false
+    bool Declare = false,
+    TsStoreInitializer? StoreInitializer = null
 ) : TsClassMember;
+
+/// <summary>
+/// A field initializer as a constructor statement stores it: <see cref="Value"/> assigns
+/// the temporaries <see cref="Temporaries"/> declares (<c>let $t0, $t1;</c>) inline.
+/// </summary>
+public sealed record TsStoreInitializer(TsExpression Value, IReadOnlyList<TsStatement> Temporaries);

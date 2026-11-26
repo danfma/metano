@@ -262,6 +262,20 @@ public static class DisposableProbes
 /// Resources whose flow state is not-null although the value is null at run time (review of
 /// #800, decision W10-9a): the dispose call must still skip them.
 /// </summary>
+/// <summary>Converts to a resource through a user-defined operator that returns null.</summary>
+public sealed class DispNullWrapper
+{
+    private readonly List<string> _log;
+
+    public DispNullWrapper(List<string> log)
+    {
+        _log = log;
+    }
+
+    public static implicit operator DispLog?(DispNullWrapper w) =>
+        w._log.Count > 100 ? new DispLog(w._log, "w") : null;
+}
+
 public static class DisposableNullGuardProbes
 {
     public static string ArrayElementResource()
@@ -348,6 +362,106 @@ public static class DisposableNullGuardProbes
         return string.Join(",", log);
     }
 
+    public static string CreatedThroughANullConversion()
+    {
+        var log = new List<string>();
+
+        try
+        {
+            using DispLog? r = new DispNullWrapper(log);
+            log.Add("body" + (r == null));
+
+            throw new InvalidOperationException("boom");
+        }
+        catch (InvalidOperationException e)
+        {
+            log.Add(e.Message);
+        }
+        catch (Exception e)
+        {
+            log.Add("escaped " + e.GetType().Name);
+        }
+
+        try
+        {
+            using (DispLog? q = new DispNullWrapper(log))
+                log.Add("stmt" + (q == null));
+        }
+        catch (Exception e)
+        {
+            log.Add("threw " + e.GetType().Name);
+        }
+
+        return string.Join(",", log);
+    }
+
     private static DispLog? Lookup(List<string> log, bool found) =>
         found ? new DispLog(log, "found") : null;
+}
+
+/// <summary>Extends IDisposable with a Dispose overload (the TS interface keeps both).</summary>
+public interface IDispClose : IDisposable
+{
+    string State { get; }
+
+    void Dispose(bool hard);
+}
+
+public sealed class DispDoor : IDispClose
+{
+    public string State { get; private set; } = "open";
+
+    public void Dispose() => State += ">closed";
+
+    public void Dispose(bool hard) => State += hard ? ">slam" : ">soft";
+}
+
+/// <summary>Dispatches two Dispose overloads, so a derived overload joins the dispatcher.</summary>
+public class DispMulti : IDisposable
+{
+    public List<string> Log = new();
+
+    public void Dispose() => Log.Add("closed");
+
+    public void Dispose(int count) => Log.Add("count:" + count);
+}
+
+public sealed class DispPooledMulti : DispMulti
+{
+    public void Dispose(bool returnToPool) => Log.Add("pool:" + returnToPool);
+}
+
+public static class DisposableOverloadProbes
+{
+    public static string DerivedOverloadOfADispatchedDispose()
+    {
+        var c = new DispPooledMulti();
+
+        using (c)
+        {
+            c.Log.Add("body");
+        }
+
+        c.Dispose(true);
+        c.Dispose(2);
+
+        return string.Join(",", c.Log);
+    }
+
+    public static string InterfaceAddsADisposeOverload()
+    {
+        IDispClose c = new DispDoor();
+        c.Dispose(true);
+        c.Dispose(false);
+        c.Dispose();
+
+        var direct = c.State;
+
+        using (IDispClose d = new DispDoor())
+        {
+            c = d;
+        }
+
+        return direct + "|" + c.State;
+    }
 }

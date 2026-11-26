@@ -1876,8 +1876,9 @@ Product requirements added after the migration (normative; each one is traced by
   value through the getter and store through the setter, evaluating the receiver and then each
   index once, in source order (an impure one, `xs[i++] += 1`, is assigned to a temporary declared
   at the head of the enclosing statement list, `($t = i++, item$set(xs, $t, item$get(xs, $t) + 1))`,
-  with no immediately invoked function, W10-6a; only where no statement list exists, a field
-  initializer, it stays the scoped arrow form); a `Nullable<T>` accessor stores the
+  with no immediately invoked function, W10-6a; only where no statement list exists, a static
+  field initializer, it stays the scoped arrow form, while an instance initializer, a constructor
+  statement, declares its temporaries in a block around its store, W10-12); a `Nullable<T>` accessor stores the
   lifted value (`null` stays `null`), a `bool?` `&=` / `|=` / `^=` stores the three-valued
   result a `bool?` field stores, and `??=` calls the setter only when the current value is
   `null` (`item$get(b, i) ?? item$set(b, i, v)`). Where the value of the assignment or increment

@@ -40,6 +40,22 @@ internal sealed class TsTemporaries
     }
 
     /// <summary>
+    /// Lowers one expression through <paramref name="map"/> with a fresh scope of
+    /// temporaries, for a statement the caller places: the expression and the
+    /// declarations of the temporaries it assigns (none when it assigns none).
+    /// </summary>
+    public static (TsExpression Value, IReadOnlyList<TsStatement> Declarations) AroundExpression(
+        IrToTsBridgeContext context,
+        Func<IrToTsBridgeContext, TsExpression> map
+    )
+    {
+        var temporaries = new TsTemporaries(context.ReservedLocals);
+        var mapped = map(context with { Temporaries = temporaries });
+
+        return (mapped, [.. temporaries.Declarations()]);
+    }
+
+    /// <summary>
     /// The block-scoped locals of a lowered loop, one per stem, each the first
     /// of <c>stem</c>, <c>stem1</c>, … that no enclosing loop reserved, and
     /// the context of the loop's body, which reserves them in turn.

@@ -171,8 +171,10 @@ public sealed partial class IrStatementExtractor
     /// is unsound for array elements, captured locals and <c>!</c> (decision W10-9a), and
     /// a dereferenced <c>null</c> in the <c>finally</c> would replace the body's exception.
     /// A <c>Nullable&lt;T&gt;</c> resource always keeps the guard: <c>new S?()</c> has no value.
+    /// A creation that reaches the resource through a user-defined conversion keeps it too:
+    /// the conversion operator may return <c>null</c>.
     /// </summary>
-    private static bool MayBeNull(ITypeSymbol? type, ExpressionSyntax? value)
+    private bool MayBeNull(ITypeSymbol? type, ExpressionSyntax? value)
     {
         if (type is not null && type.IsNullableValueType())
             return true;
@@ -180,9 +182,15 @@ public sealed partial class IrStatementExtractor
         if (type is { IsValueType: true })
             return false;
 
-        return Unparenthesized(value)
-            is not (BaseObjectCreationExpressionSyntax or CollectionExpressionSyntax);
+        return !IsCreatedResource(value);
     }
+
+    private bool IsCreatedResource(ExpressionSyntax? value) =>
+        value is not null
+        && Unparenthesized(value)
+            is BaseObjectCreationExpressionSyntax
+                or CollectionExpressionSyntax
+        && !_semantic.GetConversion(value).IsUserDefined;
 
     private static ExpressionSyntax? Unparenthesized(ExpressionSyntax? value) =>
         value is ParenthesizedExpressionSyntax parenthesized
@@ -238,12 +246,23 @@ public sealed partial class IrStatementExtractor
             ? (_semantic.GetDeclaredSymbol(variable) as ILocalSymbol)?.Type
             : null;
 
-    private string? UnemittedDisposeReason(ITypeSymbol? type) =>
-        DisposableResources.DisposalOf(type, _semantic.Compilation, _context.Target).IsEmitted
-            ? null
-            : $"The C# using over '{type?.ToDisplayString()}' is not supported by the "
+    private string? UnemittedDisposeReason(ITypeSymbol? type)
+    {
+        var disposal = DisposableResources.DisposalOf(type, _semantic.Compilation, _context.Target);
+
+        if (!disposal.IsEmitted)
+            return $"The C# using over '{type?.ToDisplayString()}' is not supported by the "
                 + "transpiler: the target does not emit its Dispose method, so the resource "
                 + "would never be disposed.";
+
+        if (disposal.Shadowing is { } shadowing)
+            return $"The C# using over '{type?.ToDisplayString()}' is not supported by the "
+                + $"transpiler: '{shadowing.ToDisplayString()}' does not override the "
+                + "IDisposable implementation but is emitted under its name, so the resource "
+                + "would be disposed through the wrong method. Rename the overload.";
+
+        return null;
+    }
 
     private static string AwaitUsingReason(string form) =>
         $"The C# 'await using' {form} is not supported by the transpiler: IAsyncDisposable is "

@@ -73,6 +73,70 @@ public class DisposableTests
     }
 
     [Test]
+    public async Task InterfaceAddingAnOverload_RedeclaresTheInheritedSignatures()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public interface IClose : IDisposable
+            {
+                void Dispose(bool hard);
+            }
+
+            [Transpile]
+            public interface IStop
+            {
+                void Stop();
+            }
+
+            [Transpile]
+            public interface IStop2 : IStop
+            {
+                void Stop(bool hard);
+            }
+
+            [Transpile]
+            public interface IStop3 : IStop
+            {
+                new void Stop();
+            }
+            """
+        );
+
+        await Assert
+            .That(result["i-close.ts"])
+            .Contains(
+                """
+                export interface IClose extends IDisposable {
+                  dispose(hard: boolean): void;
+                  dispose(): void;
+                }
+                """
+            );
+
+        await Assert
+            .That(result["i-stop2.ts"])
+            .Contains(
+                """
+                export interface IStop2 extends IStop {
+                  stop(hard: boolean): void;
+                  stop(): void;
+                }
+                """
+            );
+
+        await Assert
+            .That(result["i-stop3.ts"])
+            .Contains(
+                """
+                export interface IStop3 extends IStop {
+                  stop(): void;
+                }
+                """
+            );
+    }
+
+    [Test]
     public async Task TypeQuestions_TestTheRuntimeDescriptor()
     {
         var result = TranspileHelper.Transpile(
@@ -411,6 +475,62 @@ public class DisposableTests
     }
 
     [Test]
+    public async Task UsingOverADisposeOverloadAddedBelowTheImplementation_ReportsMS0001()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public class Conn : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public class PooledConn : Conn
+            {
+                public void Dispose(bool returnToPool) { }
+            }
+
+            [Transpile]
+            public class Door : IDisposable
+            {
+                public void Dispose() { }
+                public void Dispose(bool hard) { }
+            }
+
+            [Transpile]
+            public class Multi : IDisposable
+            {
+                public void Dispose() { }
+                public void Dispose(int count) { }
+            }
+
+            [Transpile]
+            public class PooledMulti : Multi
+            {
+                public void Dispose(bool returnToPool) { }
+            }
+
+            [Transpile]
+            public static class Uses
+            {
+                public static void Run()
+                {
+                    using (var pooled = new PooledConn()) { }
+                    using (var door = new Door()) { }
+                    using (var multi = new PooledMulti()) { }
+                }
+            }
+            """
+        );
+
+        var errors = diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature).ToList();
+
+        await Assert.That(errors.Count).IsEqualTo(1);
+        await Assert.That(errors[0].Message).Contains("'PooledConn.Dispose(bool)'");
+    }
+
+    [Test]
     public async Task Implementer_WhoseShapeCannotSatisfyTheInterface_ReportsMS0001()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
@@ -536,6 +656,36 @@ public class DisposableTests
         await Assert.That(output).Contains("element?.dispose();");
         await Assert.That(output).Contains("forgiven?.dispose();");
         await Assert.That(output).Contains("empty?.dispose();");
+    }
+
+    [Test]
+    public async Task DisposeGuard_IsKeptForACreationThroughAUserDefinedConversion()
+    {
+        var result = TranspileHelper.Transpile(
+            Resources
+                + """
+                [Transpile]
+                public sealed class Wrapper
+                {
+                    public static implicit operator Res?(Wrapper w) => null;
+                }
+
+                [Transpile]
+                public static class Uses
+                {
+                    public static void Run()
+                    {
+                        using Res? declared = new Wrapper();
+                        using (Res? statement = (new Wrapper())) { }
+                    }
+                }
+                """
+        );
+
+        var output = result["uses.ts"];
+
+        await Assert.That(output).Contains("declared?.dispose();");
+        await Assert.That(output).Contains("statement?.dispose();");
     }
 
     [Test]

@@ -8,7 +8,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <see cref="TsInterface"/> declaration. An overload group declares its
 /// dispatcher signatures and, after the interface's methods, one fast-path
 /// signature per overload (spec 013 FR-031), which implementers emit under
-/// the same names.
+/// the same names. A method that overloads a base interface's method of its
+/// name re-declares the inherited signatures beside it, since a TS interface
+/// member replaces the base member of its name instead of adding overloads.
 /// </summary>
 public static class IrToTsInterfaceBridge
 {
@@ -40,6 +42,7 @@ public static class IrToTsInterfaceBridge
 
                     case IrMethodDeclaration method:
                         methods.Add(ConvertMethod(method));
+                        methods.AddRange((method.InheritedOverloads ?? []).Select(ConvertMethod));
                         break;
 
                     // Events in interfaces are not currently rendered by the legacy

@@ -67,7 +67,79 @@ internal static class DisposableResources
                 ? interfaceDispose
                 : implementation;
 
-        return new(method, IsTranspiled(implementation.ContainingType, target));
+        return new(method, IsTranspiled(implementation.ContainingType, target))
+        {
+            Shadowing = ShadowingDisposeOf(resource, implementation, target),
+        };
+    }
+
+    /// <summary>
+    /// A <c>Dispose</c> method a type between <paramref name="resource"/> and the declarer of
+    /// <paramref name="implementation"/> adds without overriding it (<c>Dispose(bool)</c>
+    /// below a base <c>Dispose()</c>): the target emits it under the name the disposal
+    /// calls, so the call would reach it instead of the implementation. A declarer that
+    /// dispatches several <c>Dispose</c> overloads passes the added ones its dispatcher, so
+    /// none shadows. <c>null</c> when nothing shadows the implementation.
+    /// </summary>
+    private static IMethodSymbol? ShadowingDisposeOf(
+        ITypeSymbol resource,
+        IMethodSymbol implementation,
+        TargetLanguage? target
+    )
+    {
+        var declarer = implementation.ContainingType;
+
+        if (EmittedDisposeMethodsOf(declarer, target).Count() >= 2)
+            return null;
+
+        for (
+            var type = resource as INamedTypeSymbol;
+            type is not null && !SymbolEqualityComparer.Default.Equals(type, declarer);
+            type = type.BaseType
+        )
+        {
+            var added = EmittedDisposeMethodsOf(type, target)
+                .FirstOrDefault(method => !Overrides(method, implementation));
+
+            if (added is not null)
+                return added;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<IMethodSymbol> EmittedDisposeMethodsOf(
+        INamedTypeSymbol type,
+        TargetLanguage? target
+    ) =>
+        IsTranspiled(type, target)
+            ? type.GetMembers(nameof(IDisposable.Dispose))
+                .OfType<IMethodSymbol>()
+                .Where(method =>
+                    method is { MethodKind: MethodKind.Ordinary, IsStatic: false }
+                    && !method.HasName()
+                    && !SymbolHelper.HasIgnore(method, target)
+                )
+            : [];
+
+    private static bool Overrides(IMethodSymbol method, IMethodSymbol implementation)
+    {
+        for (
+            var overridden = method;
+            overridden is not null;
+            overridden = overridden.OverriddenMethod
+        )
+        {
+            if (
+                SymbolEqualityComparer.Default.Equals(
+                    overridden.OriginalDefinition,
+                    implementation.OriginalDefinition
+                )
+            )
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>The parameterless instance <c>Dispose()</c> a <c>ref struct</c> resource binds.</summary>
@@ -113,4 +185,12 @@ internal static class DisposableResources
 }
 
 /// <summary>The <c>Dispose</c> a <c>using</c> calls, and whether the target emits it.</summary>
-internal sealed record ResourceDisposal(IMethodSymbol Method, bool IsEmitted);
+internal sealed record ResourceDisposal(IMethodSymbol Method, bool IsEmitted)
+{
+    /// <summary>
+    /// The method a call of <see cref="Method"/> by its name would reach instead, as a
+    /// derived type adds a <c>Dispose</c> overload without overriding it; <c>null</c> when
+    /// none does.
+    /// </summary>
+    public IMethodSymbol? Shadowing { get; init; }
+}

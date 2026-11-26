@@ -554,9 +554,9 @@ public static class IrToTsConstructorDispatcherBridge
         }
 
         // The body references the original parameter names, which the caller
-        // already brought into scope.
-        foreach (var statement in ctor.Body ?? [])
-            statements.Add(IrToTsStatementBridge.Map(statement, context));
+        // already brought into scope; it declares its temporaries at its head.
+        if (ctor.Body is { Count: > 0 } body)
+            statements.AddRange(IrToTsStatementBridge.MapBody(body, context));
 
         return statements;
     }
