@@ -70,6 +70,13 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public string? ImportAlias { get; init; }
 
     /// <summary>
+    /// How a C# <c>using</c> is emitted (FR-111): a TypeScript <c>using</c> declaration by
+    /// default, or the 3.3.0 <c>try</c>/<c>finally</c> lowering. Set via
+    /// <c>--using-lowering</c> (MSBuild <c>MetanoUsingLowering</c>).
+    /// </summary>
+    public UsingLowering UsingLowering { get; init; }
+
+    /// <summary>
     /// Cache fingerprint (ADR-0021): pin the emit-affecting flags so
     /// flipping any one invalidates the incremental cache. Format is
     /// kept small + ordered so future additions extend it without
@@ -84,7 +91,12 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// (spec 004 FR-017).
     /// </summary>
     public string ConfigurationFingerprint =>
-        BuildConfigurationFingerprint(NamespaceBarrels, StripInterfacePrefix, ImportAlias);
+        BuildConfigurationFingerprint(
+            NamespaceBarrels,
+            StripInterfacePrefix,
+            ImportAlias,
+            UsingLowering
+        );
 
     /// <summary>
     /// Per-target fingerprint pinned into the incremental cache key
@@ -95,7 +107,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     private static string BuildConfigurationFingerprint(
         bool namespaceBarrels,
         bool stripInterfacePrefix,
-        string? importAlias
+        string? importAlias,
+        UsingLowering usingLowering
     ) =>
         string.Join(
             ';',
@@ -105,7 +118,8 @@ public sealed class TypeScriptTarget : ITranspilerTarget
             $"importAlias={PathNaming.NormalizeImportAliasPrefix(importAlias)}",
             "int64=bigint",
             "enums=const-v1",
-            "specifiers=relative-js"
+            "specifiers=relative-js",
+            $"usingLowering={usingLowering}"
         );
 
     /// <summary>
@@ -136,6 +150,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         {
             NamespaceBarrels = NamespaceBarrels,
             StripInterfacePrefix = StripInterfacePrefix,
+            UsingLowering = UsingLowering,
             CacheOutputDir = outputDir,
             CacheFilePrefix = filePrefix,
             CacheConfigurationFingerprint = BuildCacheFingerprint(
@@ -143,6 +158,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
                 filePrefix
             ),
         };
+
         var sourceFiles = transformer.TransformAll();
 
         var crossPackageDependencies = transformer.CrossPackageDependencies;

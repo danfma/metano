@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  BUNDLERS,
   type BundleDirectory,
   bundle,
   bundledModules,
@@ -126,6 +127,19 @@ test(
 
     expect(list.filter((module) => module.startsWith("system/reflection/"))).toEqual([]);
     expect(reflection.filter((module) => module.startsWith("system/collections/"))).toEqual([]);
+  },
+  BUNDLE_TIMEOUT_MS,
+);
+
+test.each([...BUNDLERS])(
+  "a kept IDisposable implementer installs Symbol.dispose ahead of its class (%s) (FR-111)",
+  async (bundler) => {
+    const source = readFileSync(join(import.meta.dir, "entries/dispose-alias.js"), "utf8");
+    const code = await bundle(bundler, directory, source);
+    const install = code.indexOf('Symbol.for("Symbol.dispose")');
+
+    expect(install).toBeGreaterThanOrEqual(0);
+    expect(install).toBeLessThan(code.indexOf("[Symbol.dispose]"));
   },
   BUNDLE_TIMEOUT_MS,
 );

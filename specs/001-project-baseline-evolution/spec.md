@@ -1923,6 +1923,49 @@ Product requirements added after the migration (normative; each one is traced by
   Tests: `tests/Metano.Tests/DisposableTests.cs`,
   `targets/js/metano-runtime/test/system/disposable.test.ts`; conformance `DisposableProbes`.
 
+  **Amendment A1 — native `using` and `Symbol.dispose`** (#817, decision W11-1, TypeScript).
+  Supersedes, for the default configuration, the last sentence of item 1 and the lowering of
+  item 3; item 3 stays normative under the opt-out of A1.5. Items 2, 4, 5 and 6 are unchanged.
+  1. The runtime interface is `IDisposable { dispose(): void; [Symbol.dispose](): void }`.
+     Every transpiled class or struct that takes on `IDisposable` itself (directly or through
+     an interface, not only by inheriting it from its base class;
+     `IrTypeSemantics.TakesOnDisposable`) declares
+     `[Symbol.dispose](): void { disposeResource(this); }`. The runtime's `disposeResource`
+     calls `dispose()`; building it installs `Symbol.dispose ??= Symbol.for("Symbol.dispose")`
+     first, so on an engine without the symbol (stable Safari) it exists before any class that
+     reads the binding is defined, bundled or not, while a module whose implementer is unused
+     keeps no load-time code (spec 011 FR-043).
+  2. `using` declarations and statements whose resource is an `IDisposable` (a class, struct,
+     interface or constrained type parameter) emit TypeScript `using` declarations
+     (`IrVariableDeclaration.IsUsing`, set when `IrExtractionContext.EmitsUsingDeclarations`):
+     `using var x = e;` → `using x = e;`; `using (T x = e) body` → `{ using x = e; body }`;
+     `using (e) body` → `{ using $using0 = e; body }` (the temporary binds the value at entry);
+     several declarators → one `using` per declarator, in order. Disposal is in reverse order on
+     every exit, a `null` resource is skipped, and a later initializer that throws still
+     disposes the earlier resources. A `ref struct` disposed through its pattern-based
+     `Dispose()` keeps the item 3 lowering.
+  3. When the body (or a later disposal) and `dispose()` both throw, JavaScript raises a
+     `SuppressedError` whose `error` is the `dispose()` exception. `toException`, which every
+     generated `catch` and `when` filter reads, unwraps it recursively through `error` (the
+     native class and the stand-in TypeScript's downlevel helpers build, recognized by its
+     `name`), so the clause sees the exception .NET lets through. An unhandled one reaches the
+     host as a `SuppressedError`.
+  4. Consumers need `ESNext.Disposable` in their tsconfig `lib`; below target `ESNext`,
+     TypeScript downlevels `using` to its helpers (a per-block allocation, accepted for
+     backward compatibility; `importHelpers` shares them). The samples' tsconfigs list it.
+  5. Opt-out: MSBuild `MetanoUsingLowering=tryFinally` (`MetanoTsUsingLowering`), CLI
+     `--using-lowering tryFinally` (`UsingLowering.TryFinally`), keeps the item 3 lowering for
+     every `using`, byte-identical to 3.3.0; the A1.1 alias stays. `native` is the default.
+     This adds `UsingLowering` to the FR-086.1 settings list of `Metano.Build.TypeScript`.
+  6. Kept from W10-9: `await using` reports `MS0001` (`IAsyncDisposable` stays unmapped, so a
+     native `await using` would have no `Symbol.asyncDispose` to call); the module entry point,
+     unemitted-`Dispose` and shadowing rules of item 5; the forwarder rules of item 4; Dart.
+  Tests: `tests/Metano.Tests/DisposableTests.cs` (goldens `disposable-using-declarations.ts`,
+  `disposable-using-forms.ts` under the opt-out), `test/system/disposable.test.ts`,
+  `test/system/exceptions/to-exception.test.ts`, `test/tree-shaking/bundle.test.ts`;
+  conformance `NativeUsingProbes`, `DisposableProbes`, `DisposableNullGuardProbes`,
+  `DisposableOverloadProbes` (Bun and Node).
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

@@ -44,6 +44,7 @@
       MetanoShowTimings      (optional)  true to print timing info (default: false)
       MetanoNamespaceBarrels (optional)  true to emit a root src/index.ts barrel mirroring C# namespaces (default: false)
       MetanoStripInterfacePrefix (optional)  true to drop the `I` prefix from interface names when the second letter is uppercase (default: false). Collisions with sibling types surface MS0017.
+      MetanoUsingLowering    (optional)  How a C# `using` is emitted: `native` (default) emits a TypeScript `using` declaration, which needs `ESNext.Disposable` in the consumer's tsconfig `lib`; `tryFinally` keeps the 3.3.0 `try`/`finally` lowering.
       MetanoFilePrefix       (optional)  Verbatim text inserted at the top of every generated file, followed by a single newline. Use for formatter / lint directives (Biome `biome-ignore-all`, Prettier `// @prettier-ignore`, `// @generated` markers). Multi-line values are accepted; pass through MSBuild XML escaping.
       MetanoExtraArgs        (optional)  Additional CLI arguments
       MetanoPostBuildCommand (optional)  Shell command to run after transpilation completes. Receives the consumer's choice of formatter / linter / packager. Stays empty by default so the target ships no tool dependency; consumers opt in per project when they want the post-emit pass.
@@ -188,6 +189,9 @@
       <_MetanoTsStripInterfacePrefix>$(MetanoStripInterfacePrefix)</_MetanoTsStripInterfacePrefix>
       <_MetanoTsStripInterfacePrefix Condition="'$(MetanoTsStripInterfacePrefix)' != ''"
         >$(MetanoTsStripInterfacePrefix)</_MetanoTsStripInterfacePrefix>
+      <_MetanoTsUsingLowering>$(MetanoUsingLowering)</_MetanoTsUsingLowering>
+      <_MetanoTsUsingLowering Condition="'$(MetanoTsUsingLowering)' != ''"
+        >$(MetanoTsUsingLowering)</_MetanoTsUsingLowering>
       <_MetanoTsFilePrefix>$(MetanoFilePrefix)</_MetanoTsFilePrefix>
       <_MetanoTsFilePrefix Condition="'$(MetanoTsFilePrefix)' != ''"
         >$(MetanoTsFilePrefix)</_MetanoTsFilePrefix>
@@ -317,6 +321,10 @@
       <_MetanoTsArg
         Include="--strip-interface-prefix"
         Condition="'$(_MetanoTsStripInterfacePrefix)' == 'true'"
+      />
+      <_MetanoTsArg
+        Include="--using-lowering &quot;$(_MetanoTsUsingLowering)&quot;"
+        Condition="'$(_MetanoTsUsingLowering)' != ''"
       />
       <_MetanoTsArg
         Include="--file-prefix &quot;$([MSBuild]::Escape('$(_MetanoTsFilePrefix)'))&quot;"

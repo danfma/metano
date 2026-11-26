@@ -55,4 +55,12 @@ public sealed record IrTypeSemantics(
     /// (<see cref="IrClassDeclaration.ClosedCases"/>).
     /// </summary>
     public bool IsClosed { get; init; }
+
+    /// <summary>
+    /// The class or struct takes on <c>IDisposable</c> itself — directly or through an
+    /// interface — rather than inheriting it from its base type, for a backend whose
+    /// disposal protocol differs from <c>Dispose()</c> (JavaScript: <c>[Symbol.dispose]()</c>).
+    /// False for every other type, and for interfaces.
+    /// </summary>
+    public bool TakesOnDisposable { get; init; }
 }

@@ -55,9 +55,10 @@ internal static class DisposableResources
         TargetLanguage? target
     )
     {
-        var implementation =
-            resource.FindImplementationForInterfaceMember(interfaceDispose) as IMethodSymbol
-            ?? PatternDisposeOf(resource);
+        var interfaceImplementation =
+            resource.FindImplementationForInterfaceMember(interfaceDispose) as IMethodSymbol;
+
+        var implementation = interfaceImplementation ?? PatternDisposeOf(resource);
 
         if (implementation is null)
             return new(interfaceDispose, IsEmitted: false);
@@ -70,6 +71,7 @@ internal static class DisposableResources
         return new(method, IsTranspiled(implementation.ContainingType, target))
         {
             Shadowing = ShadowingDisposeOf(resource, implementation, target),
+            IsPatternBased = interfaceImplementation is null,
         };
     }
 
@@ -193,4 +195,11 @@ internal sealed record ResourceDisposal(IMethodSymbol Method, bool IsEmitted)
     /// none does.
     /// </summary>
     public IMethodSymbol? Shadowing { get; init; }
+
+    /// <summary>
+    /// The resource does not implement <c>IDisposable</c>: <see cref="Method"/> is the
+    /// pattern-based <c>Dispose()</c> of a <c>ref struct</c>, which no interface member
+    /// reaches.
+    /// </summary>
+    public bool IsPatternBased { get; init; }
 }

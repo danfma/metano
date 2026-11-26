@@ -1,6 +1,7 @@
 using ConsoleAppFramework;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.TypeScript;
 using Metano.Compiler.Watch;
 using Metano.Packaging;
 
@@ -23,6 +24,7 @@ public class Commands
     /// <param name="skipPackageJson">Skip generating/updating package.json</param>
     /// <param name="namespaceBarrels">Emit an additional src/index.ts root barrel mirroring the C# namespace hierarchy via `export namespace` blocks (opt-in; see ADR-0006).</param>
     /// <param name="stripInterfacePrefix">Drop the C# `I` prefix from generated interface names when it is followed by another uppercase letter (opt-in). Collisions with sibling types in the same namespace keep the prefix and emit MS0017.</param>
+    /// <param name="usingLowering">How a C# `using` is emitted: `native` (default) emits a TypeScript `using` declaration, which needs `ESNext.Disposable` in the consumer's tsconfig `lib` (below target `ESNext`, TypeScript downlevels it to its disposal helpers); `tryFinally` keeps the 3.3.0 `try`/`finally` lowering that calls `dispose()`. Wired from MSBuild's `MetanoUsingLowering`.</param>
     /// <param name="filePrefix">Opaque text written verbatim at the top of every generated file, followed by a single newline. Use to inject formatter / lint directives (e.g., a Biome `biome-ignore-all` block, a Prettier `// @prettier-ignore`, a `// @generated` provenance marker).</param>
     /// <param name="dryRun">Run the full pipeline but do NOT write any files. Print a preflight summary (file count + total line count + per-file paths) instead. Useful for CI preflight checks and exploratory runs. Skips the package.json update too.</param>
     /// <param name="noCache">Disable the incremental cache. Forces a full transpilation even when sources, references, and outputs are byte-identical to the previous run. Note: orphan pruning reconciles against the cache manifest, so with --noCache there is no prior manifest and stale files are NOT pruned — pair it with --clean for a guaranteed clean output tree.</param>
@@ -46,6 +48,7 @@ public class Commands
         bool skipPackageJson = false,
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
+        UsingLowering usingLowering = UsingLowering.Native,
         string? filePrefix = null,
         bool dryRun = false,
         bool noCache = false,
@@ -70,6 +73,7 @@ public class Commands
             NamespaceBarrels = namespaceBarrels,
             StripInterfacePrefix = stripInterfacePrefix,
             ImportAlias = importAlias,
+            UsingLowering = usingLowering,
         };
 
         var policy = DiagnosticPolicy.FromCommandLine(

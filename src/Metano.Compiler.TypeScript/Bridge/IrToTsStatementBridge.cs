@@ -331,6 +331,23 @@ public static class IrToTsStatementBridge
             )
         );
 
+    /// <summary>
+    /// <c>using x = e;</c>: the resource's declaration, mapped as a plain local, printed
+    /// with <c>using</c>.
+    /// </summary>
+    private static TsVariableDeclaration UsingDeclaration(
+        IrVariableDeclaration resource,
+        IrToTsBridgeContext context
+    ) =>
+        MapAtLocation(resource with { IsUsing = false }, context) is TsVariableDeclaration local
+            ? local with
+            {
+                Using = true,
+            }
+            : throw new InvalidOperationException(
+                $"The using resource '{resource.Name}' did not map to a variable declaration."
+            );
+
     private static TsStatement MapWhile(IrWhileStatement ws, IrToTsBridgeContext context)
     {
         var condition = IrToTsExpressionBridge.Map(ws.Condition, context);
@@ -476,6 +493,9 @@ public static class IrToTsStatementBridge
             IrReturnStatement ret => new TsReturnStatement(
                 ret.Value is not null ? IrToTsExpressionBridge.Map(ret.Value, context) : null
             ),
+            // A C# `using` resource kept as a declaration (FR-111): declared like any
+            // other local, with `using` in place of `const`.
+            IrVariableDeclaration { IsUsing: true } resource => UsingDeclaration(resource, context),
             // Declared ahead of its first assignment (an `out var` local, a
             // pattern designator, or `T x;`): a typed, uninitialized
             // `let x: T;` keeps TypeScript's definite-assignment analysis in

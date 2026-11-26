@@ -193,7 +193,8 @@ public static class TranspileHelper
         bool useIrBodies = true,
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
-        IEnumerable<SyntaxTree>? generatedTrees = null
+        IEnumerable<SyntaxTree>? generatedTrees = null,
+        UsingLowering usingLowering = UsingLowering.Native
     )
     {
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(
@@ -206,6 +207,7 @@ public static class TranspileHelper
             UseIrBodiesWhenCovered = useIrBodies,
             NamespaceBarrels = namespaceBarrels,
             StripInterfacePrefix = stripInterfacePrefix,
+            UsingLowering = usingLowering,
         };
 
         var files = transformer.TransformAll();
@@ -341,6 +343,24 @@ public static class TranspileHelper
         );
 
         return TranspileCore(compilation, stripInterfacePrefix: true);
+    }
+
+    /// <summary>
+    /// Like <see cref="Transpile"/>, with C# <c>using</c> lowered to the 3.3.0
+    /// <c>try</c>/<c>finally</c> (<c>--using-lowering tryFinally</c>, FR-111).
+    /// </summary>
+    public static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileWithTryFinallyUsings(string csharpSource)
+    {
+        var compilation = CompileAssembly(
+            csharpSource,
+            "TestAssembly",
+            OutputKind.DynamicallyLinkedLibrary
+        );
+
+        return TranspileCore(compilation, usingLowering: UsingLowering.TryFinally);
     }
 
     /// <summary>

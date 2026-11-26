@@ -657,11 +657,64 @@ native array methods directly:
 | `async Task<T> Foo()` | `async foo(): Promise<T>` |
 | `await expr` | `await expr` |
 
-## `IDisposable` and `using` (spec 001 FR-111, #800)
+## Native `using` and `Symbol.dispose` (spec 001 FR-111 amendment A1, #817)
+
+A C# `using` becomes a TypeScript `using` declaration, and every class that
+implements `IDisposable` gains a `[Symbol.dispose]()` alias, so hand-written TypeScript can
+hold any generated or runtime `IDisposable` in a `using` declaration too.
 
 | C# | TypeScript |
 |----|----|
-| `IDisposable` | `IDisposable` from `metano-runtime` (`interface IDisposable { dispose(): void }`) |
+| `IDisposable` | `IDisposable` from `metano-runtime` (`interface IDisposable { dispose(): void; [Symbol.dispose](): void }`) |
+| `class Res : IDisposable { public void Dispose() { … } }` | `class Res implements IDisposable { dispose(): void { … } [Symbol.dispose](): void { disposeResource(this); } }` |
+| `using var r = e;` | `using r = e;` |
+| `using (var r = e) body` | `{ using r = e; body }` |
+| `using (e) body` | `{ using $using0 = e; body }` |
+| `using (var a = e1, b = e2) body` | `{ using a = e1; using b = e2; body }` |
+
+`disposeResource` (from `metano-runtime`) calls `dispose()`. A class whose base class already
+implements `IDisposable` inherits the alias. Resources are disposed in reverse order on every
+exit, and a `null` resource is skipped, as in .NET. When both the body and `dispose()` throw,
+JavaScript raises a `SuppressedError`; every generated `catch` converts the caught value with
+`toException`, which unwraps a `SuppressedError` (recursively, and also the stand-in
+TypeScript's downlevel helpers build on engines without the class) to the `dispose()`
+exception, the one .NET lets through. A `SuppressedError` that no generated `catch` handles
+still reaches the host as a `SuppressedError`.
+
+**Consumer requirements.**
+
+- Add `"ESNext.Disposable"` (or `"ESNext"`) to the `lib` of every `tsconfig.json` that
+  type-checks generated code using `IDisposable`, or `metano-runtime`'s sources: the
+  runtime's `IDisposable` names `Symbol.dispose`, and `using` needs the `Disposable` type.
+  ```jsonc
+  { "compilerOptions": { "target": "es2023", "lib": ["ES2023", "ESNext.Disposable", "DOM"] } }
+  ```
+- Below target `ESNext`, TypeScript downlevels `using` to its `__addDisposableResource` /
+  `__disposeResources` helpers, which cost an allocation per block (accepted for backward
+  compatibility; target `ESNext` removes them). Without `"importHelpers": true` (and `tslib`
+  installed) each module that declares a `using` gets its own copy of the helpers, which a
+  bundler cannot drop; set it to share one copy and keep those modules tree-shakable.
+- Engines without `Symbol.dispose` (stable Safari): the runtime installs
+  `Symbol.dispose = Symbol.for("Symbol.dispose")`, the key TypeScript's helpers read, when it
+  builds `disposeResource`, which every generated implementer reads, so the symbol exists
+  before any generated class that needs it is defined, bundled or not.
+- Hand-written TypeScript that implements the runtime `IDisposable` must now declare
+  `[Symbol.dispose]()` too. A library transpiled by Metano 3.3 has no alias in its classes and
+  must be regenerated.
+
+**Opt-out.** `MetanoUsingLowering=tryFinally` (MSBuild, or `MetanoTsUsingLowering`; CLI
+`--using-lowering tryFinally`) keeps the 3.3 `try`/`finally` lowering of the section below for
+every `using`. The `[Symbol.dispose]()` alias and the `lib` requirement stay. A `ref struct`
+with a pattern-based `Dispose()`, which implements no interface, always keeps the
+`try`/`finally` lowering. `await using` / `IAsyncDisposable` stay unsupported (`MS0001`).
+
+## `IDisposable` and `using` (spec 001 FR-111, #800)
+
+Under `MetanoUsingLowering=tryFinally` (the only form up to Metano 3.3):
+
+| C# | TypeScript |
+|----|----|
+| `IDisposable` | `IDisposable` from `metano-runtime` (see above) |
 | `x.Dispose()` | `x.dispose()` |
 | `o is IDisposable` | `isType(o, IDisposable$runtimeType)` (nominal: the class must implement it) |
 | `using var r = e; rest` | `const r = e; try { rest } finally { r?.dispose(); }` |
@@ -673,10 +726,8 @@ initializer is a `new` / collection expression. The nominal test means instances
 transpiled by Metano 3.2.0, whose descriptors do not list `IDisposable`, answer `false` to
 `is IDisposable` until that library is rebuilt. Several resources are disposed
 in reverse order, and an exception thrown by `dispose()` replaces the pending one, as in .NET.
-No `Symbol.dispose` or JavaScript `using` is emitted, so the output runs on every browser.
-Hand-written TypeScript calls `.dispose()`; a JavaScript `using` can wrap a handle with
-`stack.defer(() => h.dispose())`. `await using` / `IAsyncDisposable` are not supported
-(`MS0001`).
+This lowering emits no JavaScript `using`. `await using` / `IAsyncDisposable` are not
+supported (`MS0001`).
 
 ## String methods
 

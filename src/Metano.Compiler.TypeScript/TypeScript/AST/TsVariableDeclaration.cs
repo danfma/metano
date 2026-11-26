@@ -33,4 +33,11 @@ public sealed record TsVariableDeclaration(
     /// statement.
     /// </summary>
     public bool InitializesStaticState { get; init; }
+
+    /// <summary>
+    /// Declares the local with <c>using</c> instead of <c>const</c>: its value is disposed
+    /// through <c>[Symbol.dispose]()</c> when the enclosing block exits (C# <c>using</c>,
+    /// FR-111).
+    /// </summary>
+    public bool Using { get; init; }
 }

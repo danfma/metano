@@ -305,6 +305,16 @@ FR-111: `System.IDisposable` maps to the `metano-runtime` interface `IDisposable
 | Statements | `using (decl)`, `using (expr)` and `using` declarations → `try`/`finally`, reverse disposal, `?.` unless the resource is a non-nullable value type or a `new` / collection creation, `Dispose` exception replaces the pending one | TS | Implemented | `Extraction/IrStatementExtractor.Usings.cs`, `Extraction/DisposableResources.cs`, `Extraction/IrExpressionExtractor.Disposal.cs` | `tests/Metano.Tests/DisposableTests.cs`, conformance `DisposableProbes.*` | `await using`, a BCL resource whose `Dispose` is not emitted, and a `using` declaration directly in a module entry point report `MS0001`. Dart keeps `MS0001`. |
 | Interfaces | Explicit `IDisposable.Dispose()` colliding with a claiming member: dropped when a pure forwarder, else `MS0031` | TS | Implemented | `Frontend/Roslyn/ExplicitImplementationLowering.cs`, `Frontend/Roslyn/ForwardingImplementations.cs` | `tests/Metano.Tests/DisposableTests.cs` | Forwarder relaxation for user interfaces is a follow-up. |
 
+### Native `using` and `Symbol.dispose` (#817, FR-111 amendment A1)
+
+Amends the table above: `using` emits a TypeScript `using` declaration by default, and the `try`/`finally` row applies under `MetanoUsingLowering=tryFinally`.
+
+| Area | Feature | Target | Status | Code area | Test | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Statements | `using` declarations and statements over an `IDisposable` → TypeScript `using` declarations (`{ using x = e; body }`, `$using0` for an expression resource) | TS | Implemented | `Extraction/IrStatementExtractor.Usings.cs`, `Bridge/IrToTsStatementBridge.cs` | `tests/Metano.Tests/DisposableTests.cs`, conformance `NativeUsingProbes.*`, `DisposableProbes.*` | Needs `ESNext.Disposable` in the consumer's `lib`. A pattern-based `ref struct` `Dispose()` keeps `try`/`finally`. Opt-out `MetanoUsingLowering=tryFinally`. |
+| Classes | `[Symbol.dispose]()` alias on every class or struct that takes on `IDisposable` itself; the runtime installs `Symbol.dispose` where missing | TS | Implemented | `Bridge/IrToTsDisposalProtocolBridge.cs`, `Extraction/InterfaceContractExtractor.cs`, `metano-runtime/src/system/disposable.ts` | `tests/Metano.Tests/DisposableTests.cs`, `test/tree-shaking/bundle.test.ts` | Hand-written implementers of the runtime `IDisposable` must declare `[Symbol.dispose]()`. |
+| Exceptions | `toException` unwraps a `SuppressedError` (recursively) to the `dispose()` exception, as .NET's `finally` | TS | Implemented | `metano-runtime/src/system/exceptions/to-exception.ts` | `test/system/exceptions/to-exception.test.ts`, conformance `NativeUsingProbes.bothThrow*`, `chainedSuppression*` | An unhandled `SuppressedError` reaches the host unchanged. |
+
 ## UI components (JSX/TSX)
 
 First vertical slice of UI-component transpilation — C# renderable record components → idiomatic SolidJS TSX. Spec: [specs/002-jsx-codegen-from-csharp/](../../002-jsx-codegen-from-csharp/spec.md). Proving target SolidJS; recognition is library-agnostic (validated against an imported `solid-router` type).

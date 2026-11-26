@@ -1,3 +1,5 @@
+import { disposeResource } from "metano-runtime";
+
 export class Countdown implements Iterator<number> {
   declare private _value: number;
 
@@ -22,5 +24,9 @@ export class Countdown implements Iterator<number> {
 
   next(): IteratorResult<number> {
     return this.moveNext() ? { value: this.current, done: false } : { value: undefined, done: true };
+  }
+
+  [Symbol.dispose](): void {
+    disposeResource(this);
   }
 }
