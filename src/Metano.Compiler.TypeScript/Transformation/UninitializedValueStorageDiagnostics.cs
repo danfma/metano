@@ -62,36 +62,42 @@ internal static class UninitializedValueStorageDiagnostics
         {
             switch (member)
             {
-                case IrFieldDeclaration
-                {
-                    IsStatic: false,
-                    IsConstant: false,
-                    IsCompileTimeConstant: false,
-                    IsCapturedByCtor: false,
-                    IsRequired: false,
-                    Initializer: null,
-                } field:
+                case IrFieldDeclaration field when IsUninitialized(field):
                     yield return (field.Name, field.Type);
                     break;
 
-                case IrPropertyDeclaration
-                {
-                    IsStatic: false,
-                    Initializer: null,
-                    Semantics:
-                    {
-                        HasGetterBody: false,
-                        HasSetterBody: false,
-                        IsAbstract: false,
-                        IsRequired: false,
-                        IsIndexer: false,
-                    },
-                } property:
+                case IrPropertyDeclaration property when IsUninitializedAutoProperty(property):
                     yield return (property.Name, property.Type);
                     break;
             }
         }
     }
+
+    private static bool IsUninitialized(IrFieldDeclaration field) =>
+        field
+            is {
+                IsStatic: false,
+                IsConstant: false,
+                IsCompileTimeConstant: false,
+                IsCapturedByCtor: false,
+                IsRequired: false,
+                Initializer: null,
+            };
+
+    private static bool IsUninitializedAutoProperty(IrPropertyDeclaration property) =>
+        property
+            is {
+                IsStatic: false,
+                Initializer: null,
+                Semantics:
+                {
+                    HasGetterBody: false,
+                    HasSetterBody: false,
+                    IsAbstract: false,
+                    IsRequired: false,
+                    IsIndexer: false,
+                },
+            };
 
     private static bool LacksZeroValue(IrTypeRef type) =>
         IsValueType(type) && IrToTsClassBridge.InstanceStorageDefault(type) is null;
