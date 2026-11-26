@@ -7,7 +7,7 @@ import { isInt32, isString } from "metano-runtime";
 export class Clash5 {
   protected static readonly byClash5N = /* @__PURE__ */ Symbol("Clash5(int n)");
   protected static readonly byClash5Label = /* @__PURE__ */ Symbol("Clash5(string s)");
-  seen: string = "";
+  declare seen: string;
 
   constructor(overload: typeof Clash5.byClash5N, n: number);
   constructor(overload: typeof Clash5.byClash5Label, s: string);
@@ -84,8 +84,6 @@ export class Clash5 {
 import { isInt32, isString } from "metano-runtime";
 
 export class Clash2 {
-  constructor() { }
-
   private pickText(g: string): string {
     return "private:" + (g ?? "");
   }

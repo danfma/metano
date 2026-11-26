@@ -3,9 +3,11 @@ import { IDisposable$runtimeType, type ClassType, type IDisposable } from "metan
 let Res$rt: ClassType<Res> | undefined;
 
 export class Res implements IDisposable {
-  count: number = 0;
+  declare count: number;
 
-  constructor() { }
+  constructor() {
+    this.count = 0;
+  }
 
   static get $runtimeType(): ClassType<Res> {
     return (Res$rt ??= {

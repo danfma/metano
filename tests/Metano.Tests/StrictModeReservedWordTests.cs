@@ -70,7 +70,8 @@ public class StrictModeReservedWordTests
         )["inst.ts"];
 
         await Assert.That(output).Contains("public(): number");
-        await Assert.That(output).Contains("static: number = 0;");
+        await Assert.That(output).Contains("declare static: number;");
+        await Assert.That(output).Contains("this.static = 0;");
         await Assert.That(output).Contains("this.public() + this.static");
     }
 

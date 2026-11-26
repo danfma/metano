@@ -74,7 +74,7 @@ public class PinnedShadowedOverloadTests
         import { Picker, Reactivity } from "acme-lib/acme";
 
         export class Use {
-          constructor() { }
+          private constructor() { }
 
           static run(): string {
             Reactivity.rootRootVoid((d: () => void) => {

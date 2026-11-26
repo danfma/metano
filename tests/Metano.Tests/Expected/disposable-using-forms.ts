@@ -4,7 +4,7 @@ import { Res } from "./res.js";
 import type { SRes } from "./s-res.js";
 
 export class Uses {
-  constructor() { }
+  private constructor() { }
 
   static open(): Res {
     return new Res();

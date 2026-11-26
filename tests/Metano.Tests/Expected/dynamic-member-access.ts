@@ -16,42 +16,42 @@ export class Probe {
   constructor();
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Probe.byProbeDefault) {
-      this.value = null;
+      this.value = null!;
       this.items = new List<any>();
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Probe.byProbeX) {
-      this.value = null;
+      this.value = null!;
       this.items = new List<any>();
 
       return;
     }
 
     if (typeof args[0] === "symbol" && args[0] === Probe.byProbeS) {
-      this.value = null;
+      this.value = null!;
       this.items = new List<any>();
 
       return;
     }
 
     if (args.length === 1 && isInt32(args[0])) {
-      this.value = null;
+      this.value = null!;
       this.items = new List<any>();
 
       return;
     }
 
     if (args.length === 1 && isString(args[0])) {
-      this.value = null;
+      this.value = null!;
       this.items = new List<any>();
 
       return;
     }
 
     if (args.length === 0) {
-      this.value = null;
+      this.value = null!;
       this.items = new List<any>();
 
       return;

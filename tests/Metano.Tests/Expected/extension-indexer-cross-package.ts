@@ -1,7 +1,7 @@
 import { item$get, item$set, type Sig } from "sig-lib";
 
 export class Use {
-  constructor() { }
+  private constructor() { }
 
   static bump(s: Sig): number {
     let receiver$temp$0;
