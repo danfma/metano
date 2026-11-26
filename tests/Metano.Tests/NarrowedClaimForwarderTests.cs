@@ -157,6 +157,7 @@ public class NarrowedClaimForwarderTests
             .That(files["a-effect.ts"])
             .DoesNotContain("super.dispose")
             .And.DoesNotContain("  dispose(");
+
         await Assert.That(files["a-base.ts"]).Contains("  abstract dispose(): void;");
         await Assert.That(files["a-base.ts"]).DoesNotContain("@internal");
     }
@@ -181,6 +182,7 @@ public class NarrowedClaimForwarderTests
         );
 
         await Assert.That(diagnostics.Select(d => d.Code)).DoesNotContain("MS0067");
+
         await Assert
             .That(files["effect.ts"])
             .DoesNotContain("super.dispose")
