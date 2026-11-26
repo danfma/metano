@@ -551,6 +551,7 @@ public static class IrTypeRefMapper
             )
             {
                 HasExplicitParameterlessCtor = HasExplicitParameterlessCtor(named, target),
+                HasZeroValueFactory = HasZeroValueFactory(named, target),
                 IsClosed = named.IsClosed,
             };
 
@@ -572,6 +573,7 @@ public static class IrTypeRefMapper
             )
             {
                 HasExplicitParameterlessCtor = HasExplicitParameterlessCtor(named, target),
+                HasZeroValueFactory = HasZeroValueFactory(named, target),
             };
 
         if (named.TypeKind == TypeKind.Class)

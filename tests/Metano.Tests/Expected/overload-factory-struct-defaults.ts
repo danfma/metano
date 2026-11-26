@@ -34,7 +34,7 @@ export class Day {
       this.tag = "\u0000";
       this.label = undefined!;
       this.mood = Mood.Calm;
-      this.nested = undefined!;
+      this.nested = Inner.$default();
       this.id = UUID.empty;
       this.span = undefined!;
       this.tag = "a";
@@ -56,7 +56,7 @@ export class Day {
         this.tag = "\u0000";
         this.label = undefined!;
         this.mood = Mood.Calm;
-        this.nested = undefined!;
+        this.nested = Inner.$default();
         this.id = UUID.empty;
         this.span = undefined!;
         this.tag = "a";
@@ -77,7 +77,7 @@ export class Day {
       this.tag = "\u0000";
       this.label = undefined!;
       this.mood = Mood.Calm;
-      this.nested = undefined!;
+      this.nested = Inner.$default();
       this.id = UUID.empty;
       this.span = undefined!;
       this.tag = "a";
@@ -99,7 +99,7 @@ export class Day {
         this.tag = "\u0000";
         this.label = undefined!;
         this.mood = Mood.Calm;
-        this.nested = undefined!;
+        this.nested = Inner.$default();
         this.id = UUID.empty;
         this.span = undefined!;
         this.tag = "a";

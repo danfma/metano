@@ -197,6 +197,7 @@ internal sealed class IrToTsClassEmitter(
         var dataMembersStart = classMembers.Count;
 
         IndexerDiagnostics.Report(type, ir, _context.ReportDiagnostic);
+        UninitializedValueStorageDiagnostics.Report(type, ir, _context.ReportDiagnostic);
         EventDiagnostics.Report(type, _context.ReportDiagnostic);
 
         ConstructorScopeAliases.InScope(ctorLowering.ShadowedImports, () =>

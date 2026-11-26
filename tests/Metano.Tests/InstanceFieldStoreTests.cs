@@ -377,6 +377,68 @@ public class InstanceFieldStoreTests
     }
 
     [Test]
+    public async Task StructFieldWithoutInitializer_StoresTheStructZeroValue()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public struct Pt { public int X; public int Y; public Pt(int x, int y) { X = x; Y = y; } }
+
+            [Transpile]
+            public sealed class StructHolder { public Pt Field; public Pt Auto { get; set; } public Pt Explicit = default; }
+            """
+        );
+
+        var holder = files["struct-holder.ts"];
+
+        await Assert.That(holder).Contains("    this.field = Pt.$default();\n");
+        await Assert.That(holder).Contains("    this.auto = Pt.$default();\n");
+        await Assert.That(holder).Contains("    this.explicit = Pt.$default();\n");
+        await Assert.That(files["pt.ts"]).Contains("static $default(): Pt");
+    }
+
+    [Test]
+    public async Task ValueFieldWithoutATargetZeroValue_WarnsUnlessEveryConstructorAssignsIt()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public sealed class NoDefaults<T>
+            {
+                public System.DateTime When;
+                public System.TimeSpan Span { get; set; }
+                public (int, string) Tup;
+                public T Val;
+                public System.DateOnly Day;
+                public System.DateTime Assigned;
+                public System.DateTime Half;
+                public required System.DateTime Required;
+                public int N;
+
+                public NoDefaults() { Assigned = Stamp; Half = Stamp; }
+
+                public NoDefaults(int n) : this() { N = n; }
+
+                public NoDefaults(string s) { Assigned = Stamp; }
+
+                private static readonly System.DateTime Stamp = new(2020, 1, 1);
+            }
+            """
+        );
+
+        var warned = diagnostics
+            .Where(d =>
+                d.Code == DiagnosticCodes.UnsupportedFeature
+                && d.Severity == MetanoDiagnosticSeverity.Warning
+            )
+            .Select(d => d.Location!.SourceTree!.GetText().ToString(d.Location.SourceSpan))
+            .ToList();
+
+        await Assert.That(warned).IsEquivalentTo(["When", "Span", "Tup", "Val", "Day", "Half"]);
+        await Assert.That(files["no-defaults.ts"]).Contains("    this.when = undefined!;\n");
+    }
+
+    [Test]
     public async Task DerivedClass_KeepsTheDefaultStoreOfAFieldTheBodyAssignsFirst()
     {
         var output = TranspileHelper.Transpile(

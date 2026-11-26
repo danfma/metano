@@ -233,6 +233,15 @@ public sealed record IrNamedTypeSemantics(
     public bool HasExplicitParameterlessCtor { get; init; }
 
     /// <summary>
+    /// Whether the referenced type is a transpiled struct with a runtime class
+    /// that declares a constructor (the complement of
+    /// <see cref="IsDefaultConstructible"/> among such structs): its zero value
+    /// cannot be built by a parameterless construction, so a backend reads it
+    /// from the struct's own zero value (#802).
+    /// </summary>
+    public bool HasZeroValueFactory { get; init; }
+
+    /// <summary>
     /// The referenced type is a C# 15 <c>closed</c> class (spec 010 FR-C1).
     /// </summary>
     public bool IsClosed { get; init; }

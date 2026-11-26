@@ -61,7 +61,8 @@ internal static partial class IrToTsClassBridge
         {
             var initializer = prop.Initializer is { } init
                 ? IrToTsExpressionBridge.Map(init, context)
-                : ComputeDefaultInitializer(prop.Type);
+                : StorageDefault(prop.Type, prop.IsStatic);
+
             return
             [
                 new TsFieldMember(
@@ -184,7 +185,7 @@ internal static partial class IrToTsClassBridge
 
         var initializer = prop.Initializer is { } init
             ? IrToTsExpressionBridge.Map(init, context)
-            : ComputeDefaultInitializer(prop.Type);
+            : StorageDefault(prop.Type, prop.IsStatic);
 
         var members = new List<TsClassMember>
         {
@@ -438,8 +439,9 @@ internal static partial class IrToTsClassBridge
             field.Initializer is not null && !field.IsCapturedByCtor
                 ? IrToTsExpressionBridge.Map(field.Initializer, context)
                 : null;
+
         if (!field.IsCapturedByCtor)
-            initializer ??= ComputeDefaultInitializer(field.Type);
+            initializer ??= StorageDefault(field.Type, field.IsStatic);
 
         var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(field.Visibility);
 
@@ -454,4 +456,7 @@ internal static partial class IrToTsClassBridge
             JSDoc: jsdoc
         );
     }
+
+    private static TsExpression? StorageDefault(IrTypeRef type, bool isStatic) =>
+        isStatic ? ComputeDefaultInitializer(type) : InstanceStorageDefault(type);
 }

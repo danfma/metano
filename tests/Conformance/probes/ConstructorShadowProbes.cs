@@ -143,8 +143,34 @@ public class CsPairB
     }
 }
 
+public struct CsPt
+{
+    public int X;
+    public int Y;
+
+    public CsPt(int x, int y)
+    {
+        X = x;
+        Y = y;
+    }
+}
+
+public sealed class CsStructHolder
+{
+    public CsPt Field;
+    public CsPt Auto { get; set; }
+    public CsPt Explicit = default;
+}
+
 public static class ConstructorShadowProbes
 {
+    public static string UninitializedStructMembersStartAtZero()
+    {
+        var h = new CsStructHolder();
+
+        return $"{h.Explicit.X}:{h.Field.X}:{h.Auto.Y}:{h.Field.Equals(default(CsPt))}";
+    }
+
     public static string NestedClassesShareOneAlias()
     {
         var a = new CsOuter(3);
