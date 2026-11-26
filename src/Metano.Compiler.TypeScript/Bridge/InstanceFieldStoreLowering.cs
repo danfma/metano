@@ -69,6 +69,7 @@ internal static class InstanceFieldStoreLowering
         {
             Declare = true,
             Initializer = null,
+            StoreInitializer = null,
             DefinitelyAssigned = false,
         };
 
@@ -185,8 +186,26 @@ internal static class InstanceFieldStoreLowering
                 if (promoted.Contains(field.Name) || replacedByTheBody.Contains(field.Name))
                     continue;
 
-                yield return Store(field.Name, ValueOf(field, point));
+                yield return StoreOf(field, point);
             }
+        }
+
+        /// <summary>
+        /// The store of a field at a store point. An initializer over temporaries gets a
+        /// block that declares them, so they never clash with the constructor body's own.
+        /// </summary>
+        private static TsStatement StoreOf(TsFieldMember field, TsInstanceFieldStores point)
+        {
+            if (
+                field.StoreInitializer is { } scoped
+                && !point.Captured.Any(binding => binding.Member == field.Name)
+            )
+                return new TsBlockStatement([
+                    .. scoped.Temporaries,
+                    Store(field.Name, scoped.Value),
+                ]);
+
+            return Store(field.Name, ValueOf(field, point));
         }
 
         private bool IsStoredHere(TsFieldStoreBinding binding) =>

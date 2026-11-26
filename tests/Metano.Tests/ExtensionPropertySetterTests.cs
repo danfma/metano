@@ -296,6 +296,53 @@ public class ExtensionPropertySetterTests
             );
     }
 
+    [Test]
+    public async Task ExtensionProperty_CompoundInAnInstanceInitializer_UsesStoreTemporaries()
+    {
+        var output = TranspileLabeledCell(
+            """
+            public static Cell Shared = new Cell();
+            public int Total = Shared.Count += 2;
+            """
+        );
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    {
+                      let receiver$temp$0;
+                      this.total = (receiver$temp$0 = (count$get(Caller.shared) + 2) | 0, count$set(Caller.shared, receiver$temp$0), receiver$temp$0);
+                    }
+                """
+            );
+    }
+
+    [Test]
+    public async Task ExtensionProperty_CompoundInDispatcherBranches_UsesStoreTemporaries()
+    {
+        var output = TranspileLabeledCell(
+            """
+            public static Cell Shared = new Cell();
+            public int Total = Shared.Count += 2;
+            public int Y;
+            public Caller(int v) { Y = (Shared.Count += v); }
+            public Caller(string s) { Y = (Shared.Count += s.Length); }
+            """
+        );
+
+        await Assert.That(output).DoesNotContain("(receiver$temp$0) =>");
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                      let receiver$temp$0;
+                      this.y = (receiver$temp$0 = (count$get(Caller.shared) + s.length) | 0, count$set(Caller.shared, receiver$temp$0), receiver$temp$0);
+                """
+            );
+    }
+
     private static string TranspileLabeledCell(string callerMembers)
     {
         var result = TranspileHelper.Transpile(
