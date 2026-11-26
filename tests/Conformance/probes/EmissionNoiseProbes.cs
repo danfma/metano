@@ -171,6 +171,45 @@ public static class EmissionNoiseProbes
 
         return count.ToString();
     }
+
+    public static string UserOperatorConcatInit()
+    {
+        var s = new NullableConcatLeft() + "a";
+        s += "b";
+
+        return s;
+    }
+
+    public static string UserOperatorConcatAssign()
+    {
+        var s = "x";
+        s = new NullableConcatLeft() + "a";
+        s += "b";
+
+        return s;
+    }
+
+    public static string UserOperatorCompoundConcat()
+    {
+        var s = "a";
+        s += new NullableConcatRight();
+        s += "b";
+
+        return s;
+    }
+}
+
+public sealed class NullableConcatLeft
+{
+    public string? Value;
+
+    public static string? operator +(NullableConcatLeft left, string right) =>
+        left.Value == null ? null : left.Value + right;
+}
+
+public sealed class NullableConcatRight
+{
+    public static string? operator +(string left, NullableConcatRight right) => null;
 }
 
 public interface IProbePort

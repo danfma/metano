@@ -193,4 +193,39 @@ public class EmissionNoiseTests
         await Assert.That(output).Contains("s = (s ?? \"\") + \"d\";");
         await Assert.That(output).Contains("s = (s ?? \"\") + \"o\";");
     }
+
+    [Test]
+    public async Task StringCompoundAssignment_KeepsTheGuardAfterAUserDefinedPlus()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            [Transpile]
+            public sealed class Left
+            {
+                public string? V;
+                public static string? operator +(Left a, string b) => a.V == null ? null : a.V + b;
+            }
+
+            [Transpile]
+            public sealed class Right
+            {
+                public static string? operator +(string a, Right b) => null;
+            }
+
+            [Transpile]
+            public static class Probes
+            {
+                public static string Init() { var s = new Left() + "a"; s += "b"; return s; }
+                public static string Assign() { var s = "x"; s = new Left() + "a"; s += "c"; return s; }
+                public static string Compound() { var s = "a"; s += new Right(); s += "d"; return s; }
+            }
+            """
+        );
+        var output = files["probes.ts"];
+
+        await Assert.That(output).Contains("s = (s ?? \"\") + \"b\";");
+        await Assert.That(output).Contains("s = (s ?? \"\") + \"c\";");
+        await Assert.That(output).Contains("s = (s ?? \"\") + \"d\";");
+    }
 }
