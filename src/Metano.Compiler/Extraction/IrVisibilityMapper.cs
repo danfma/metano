@@ -34,17 +34,28 @@ public static class IrVisibilityMapper
             : Map(member.DeclaredAccessibility);
 
     /// <summary>
-    /// <see cref="MapMember(ISymbol)"/>, except that an <c>internal</c> (or <c>private protected</c>) member an
-    /// explicit implementation of a public interface member relies on (it claims the
-    /// name that implementation forwards to) is <see cref="IrVisibility.Public"/>:
-    /// it satisfies the interface contract, so it is not internal API (#819).
+    /// <see cref="MapMember(ISymbol)"/>, except that an <c>internal</c> or
+    /// <c>private protected</c> member that an explicit implementation of a public
+    /// interface member forwards to is <see cref="IrVisibility.Public"/>: it satisfies
+    /// the interface contract, so it is not internal API (#819).
     /// </summary>
-    public static IrVisibility MapMember(ISymbol member, IrExtractionContext context) =>
-        MapMember(member) is IrVisibility.Internal or IrVisibility.PrivateProtected
-        && context.Compilation is { } compilation
-        && InterfaceContractClaims.IsRelied(member, compilation, context.Target)
+    public static IrVisibility MapMember(ISymbol member, IrExtractionContext context)
+    {
+        var visibility = MapMember(member);
+
+        return IsNarrowerThanItsContract(visibility, member, context)
             ? IrVisibility.Public
-            : MapMember(member);
+            : visibility;
+    }
+
+    private static bool IsNarrowerThanItsContract(
+        IrVisibility visibility,
+        ISymbol member,
+        IrExtractionContext context
+    ) =>
+        visibility is IrVisibility.Internal or IrVisibility.PrivateProtected
+        && context.Compilation is { } compilation
+        && InterfaceContractClaims.IsClaimedByPublicContract(member, compilation, context.Target);
 
     private static ISymbol RootDeclarationOf(ISymbol member)
     {

@@ -108,13 +108,46 @@ public class InternalRuntimeTypeTests
     }
 
     [Test]
-    public async Task InternalClassImplementingAUserInterface_KeepsItsMembersPublic()
+    public async Task PrivateProtectedClaimingMember_EmitsPublicAndUntagged()
     {
-        var result = TranspileHelper.Transpile(Source);
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
 
-        await Assert.That(result["job.ts"]).DoesNotContain("@internal");
-        await Assert.That(result["job2.ts"]).DoesNotContain("@internal");
-        await Assert.That(result["job2.ts"]).Contains("  go(): void {");
+            public class Owner
+            {
+                private protected string ToString(string? format, IFormatProvider? provider) => "x";
+            }
+
+            public sealed class Effect : Owner, IFormattable
+            {
+                string IFormattable.ToString(string? format, IFormatProvider? provider) =>
+                    ToString(format, provider);
+            }
+            """
+        );
+
+        await Assert.That(result["owner.ts"]).Contains("\n  toString(");
+        await Assert.That(result["owner.ts"]).DoesNotContain("@internal");
+        await Assert.That(result["owner.ts"]).DoesNotContain("protected");
+    }
+
+    [Test]
+    public async Task InternalDescendantOfAnInternalBase_GetsNoDescriptorInAPackage()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("probe-pkg")]
+
+            internal class WorkBase { public virtual int Run() => 1; }
+            internal sealed class WorkDerived : WorkBase { public override int Run() => 2; }
+            public static class Use { public static int Run() => new WorkDerived().Run(); }
+            """
+        );
+
+        await Assert.That(result["work-base.ts"]).DoesNotContain("$runtimeType");
+        await Assert.That(result["work-derived.ts"]).DoesNotContain("$runtimeType");
     }
 
     [Test]

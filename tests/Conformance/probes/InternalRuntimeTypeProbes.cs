@@ -47,10 +47,8 @@ public static class InternalRuntimeTypeProbes
         return string.Join(",", effect is IDisposable, owner is IDisposable, text is IDisposable);
     }
 
-    public static string DispatchOnTheInterfaceOfAnInternalDescendant()
-    {
-        return string.Join(",", Describe(Effect<int>()), Describe(new object()), Describe(Work()));
-    }
+    public static string DispatchOnTheInterfaceOfAnInternalDescendant() =>
+        string.Join(",", Describe(Effect<int>()), Describe(new object()), Describe(Work()));
 
     public static string UserInterfaceOfAnInternalDescendant()
     {

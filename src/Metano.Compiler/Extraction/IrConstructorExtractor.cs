@@ -835,7 +835,7 @@ public static class IrConstructorExtractor
 
         return (
             promotion,
-            IrVisibilityMapper.MapMember(prop),
+            IrVisibilityMapper.MapMember(prop, context.Extraction),
             SymbolHelper.GetNameOverride(prop, context.Target),
             prop.Name
         );

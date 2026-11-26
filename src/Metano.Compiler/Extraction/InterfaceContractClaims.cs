@@ -19,10 +19,14 @@ namespace Metano.Compiler.Extraction;
 /// <c>KeepsSupersededEquatable</c> case keeps the explicit member, which only widens
 /// visibility here. It scans every source type of the compilation, emitted or not, so a
 /// claiming member may be promoted for a forwarder no emitted class carries.
+/// The rule is target-neutral: it only widens the IR visibility, and a target that
+/// ignores <c>Internal</c> (Dart) is unaffected.
 /// </para>
 /// </summary>
 internal static class InterfaceContractClaims
 {
+    private const int NoTarget = -1;
+
     private static readonly ConditionalWeakTable<
         Compilation,
         ConcurrentDictionary<int, HashSet<ISymbol>>
@@ -33,10 +37,14 @@ internal static class InterfaceContractClaims
     /// explicit implementation of a public interface member somewhere in
     /// <paramref name="compilation"/>.
     /// </summary>
-    public static bool IsRelied(ISymbol member, Compilation compilation, TargetLanguage? target) =>
+    public static bool IsClaimedByPublicContract(
+        ISymbol member,
+        Compilation compilation,
+        TargetLanguage? target
+    ) =>
         Cache
             .GetValue(compilation, _ => new())
-            .GetOrAdd(target is { } t ? (int)t : -1, _ => Collect(compilation, target))
+            .GetOrAdd(target is { } t ? (int)t : NoTarget, _ => Collect(compilation, target))
             .Contains(member.OriginalDefinition);
 
     private static HashSet<ISymbol> Collect(Compilation compilation, TargetLanguage? target)
@@ -55,16 +63,18 @@ internal static class InterfaceContractClaims
         return claims;
     }
 
-    private static ISymbol? ClaimOf(ISymbol member, TargetLanguage? target) =>
-        ExplicitImplementationLowering.Resolve(member, target)
-            is {
-                Fate: ExplicitImplementationFate.Superseded,
-                ClaimingMember: { } claiming,
-                InterfaceMember.ContainingType: var contract
-            }
-        && IsPublic(contract)
-            ? claiming
-            : null;
+    private static ISymbol? ClaimOf(ISymbol member, TargetLanguage? target)
+    {
+        if (ExplicitImplementationLowering.Resolve(member, target) is not { } lowering)
+            return null;
+
+        return IsSupersededByPublicContract(lowering) ? lowering.ClaimingMember : null;
+    }
+
+    private static bool IsSupersededByPublicContract(ExplicitImplementation lowering) =>
+        lowering.Fate is ExplicitImplementationFate.Superseded
+        && lowering.ClaimingMember is not null
+        && IsPublic(lowering.InterfaceMember.ContainingType);
 
     private static bool IsPublic(INamedTypeSymbol type)
     {
