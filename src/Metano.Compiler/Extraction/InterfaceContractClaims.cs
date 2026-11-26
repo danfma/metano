@@ -13,6 +13,9 @@ namespace Metano.Compiler.Extraction;
 /// class) is what satisfies the public interface member at run time. Such a member is
 /// part of the contract, so it is no <c>internal</c> member (#819): a target that
 /// hides internal members from its public surface must not hide it.
+/// A claiming member inherited by a class whose forwarder is published as the class's own
+/// member (<see cref="NarrowedClaimForwarders"/>, #821) is no claim: it keeps its own
+/// visibility.
 /// <para>
 /// It reads <c>Fate == Superseded</c> from <see cref="ExplicitImplementationLowering"/>
 /// and not <see cref="ExplicitImplementationFates.IsDropped"/>: the
@@ -68,24 +71,17 @@ internal static class InterfaceContractClaims
         if (ExplicitImplementationLowering.Resolve(member, target) is not { } lowering)
             return null;
 
-        return IsSupersededByPublicContract(lowering) ? lowering.ClaimingMember : null;
+        return IsSupersededByPublicContract(lowering, target) ? lowering.ClaimingMember : null;
     }
 
-    private static bool IsSupersededByPublicContract(ExplicitImplementation lowering) =>
+    private static bool IsSupersededByPublicContract(
+        ExplicitImplementation lowering,
+        TargetLanguage? target
+    ) =>
         lowering.Fate is ExplicitImplementationFate.Superseded
         && lowering.ClaimingMember is not null
-        && IsPublic(lowering.InterfaceMember.ContainingType);
-
-    private static bool IsPublic(INamedTypeSymbol type)
-    {
-        for (var current = type; current is not null; current = current.ContainingType)
-        {
-            if (current.DeclaredAccessibility is not Accessibility.Public)
-                return false;
-        }
-
-        return true;
-    }
+        && NarrowedClaimForwarders.IsPublic(lowering.InterfaceMember.ContainingType)
+        && !NarrowedClaimForwarders.IsPublishedAsOwnMember(lowering, target);
 
     private static IEnumerable<INamedTypeSymbol> TypesOf(INamespaceSymbol container)
     {

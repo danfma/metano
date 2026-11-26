@@ -1996,11 +1996,19 @@ Product requirements added after the migration (normative; each one is traced by
      reached (decision W11-3a); otherwise it would inherit that ancestor's descriptor and answer
      `is IFoo` wrongly. Any other internal type gets one only when D29 reaches it. Internal types
      stay out of the barrels.
-  2. An `internal` or `private protected` member that an explicit implementation of a public
-     interface member forwards to (the claiming member of a superseded explicit
-     implementation, such as `IDisposable.Dispose()`, FR-111 item 4; `IDisposable` only accepts a
-     `public` or `internal` claimant) is emitted `public` and never tagged `@internal`, so
-     `stripInternal` keeps the member the `implements` clause relies on.
+  2. (amended by #821, decision W12-1) An `internal` or `private protected` member that a pure
+     forwarder (`void IDisposable.Dispose() => Dispose();`) of a public interface member leans
+     on keeps its own visibility tag (`@internal`): it is not widened, so a sibling subclass of
+     its base class gains no public member (`stripInternal` keeps `Computed<T>` free of
+     `dispose`, as in .NET). The forwarder is not dropped: when the claiming member is inherited
+     from a base class, the implementing class declares its own public member under the
+     interface member's emitted name, which calls the claiming member through `base`
+     (`override dispose(): void { super.dispose(); }`); the `[Symbol.dispose]` alias (item 4)
+     stays on that class. A claiming member declared on the implementing class itself cannot
+     coexist with a second member of that name, so it is the one member and is emitted public
+     and untagged. A claiming member that is already `public` keeps the FR-111 drop. A
+     forwarder that is not pure keeps the claiming member public. Dart ignores `internal` and
+     keeps its output.
   Tests: `tests/Metano.Tests/InternalRuntimeTypeTests.cs`; conformance `InternalRuntimeTypeProbes`.
 
 ### Key Entities

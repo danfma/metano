@@ -18,7 +18,8 @@ internal static class ExplicitImplementationFates
     public static bool IsDropped(ISymbol member, OverloadGroupingPolicy policy) =>
         ExplicitImplementationLowering.Resolve(member, policy.Target) is { } lowering
         && lowering.Fate is not ExplicitImplementationFate.EmittedUnderInterfaceName
-        && !KeepsSupersededEquatable(member, lowering, policy);
+        && !KeepsSupersededEquatable(member, lowering, policy)
+        && !NarrowedClaimForwarders.IsPublishedAsOwnMember(lowering, policy.Target);
 
     /// <summary>
     /// Whether a struct's (or record struct's) explicit

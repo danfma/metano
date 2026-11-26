@@ -74,12 +74,87 @@ public class InternalRuntimeTypeTests
     }
 
     [Test]
-    public async Task ClaimingMemberOfADroppedForwarder_IsNotMarkedInternal()
+    public async Task InheritedClaimingMember_StaysInternalAndTheForwarderIsPublishedOnTheImplementingClass()
     {
         var result = TranspileHelper.Transpile(Source);
 
+        await Assert
+            .That(result["owner-node.ts"])
+            .Contains("/** @internal */\n  dispose(): void {");
+
+        await Assert
+            .That(result["effect-node.ts"])
+            .Contains("override dispose(): void {")
+            .And.Contains("super.dispose();");
+    }
+
+    [Test]
+    public async Task SiblingSubclassOfTheClaimingMember_ExposesNoPublicMember()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public abstract class OwnerNode { internal void Dispose() { } }
+            internal abstract class EffectNode : OwnerNode, IDisposable
+            {
+                void IDisposable.Dispose() => Dispose();
+            }
+            public abstract class ComputedNode : OwnerNode { }
+            public sealed class Computed<T> : ComputedNode { }
+            internal sealed class SplitEffect<T> : EffectNode { }
+            public static class Reactivity
+            {
+                public static IDisposable Effect<T>() => new SplitEffect<T>();
+            }
+            """
+        );
+
+        await Assert
+            .That(result["owner-node.ts"])
+            .Contains("/** @internal */\n  dispose(): void {");
+
+        await Assert.That(result["computed-node.ts"]).DoesNotContain("dispose");
+        await Assert.That(result["computed.ts"]).DoesNotContain("dispose");
+        await Assert.That(result["effect-node.ts"]).Contains("override dispose(): void {");
+    }
+
+    [Test]
+    public async Task PublicClaimingMember_KeepsTheForwarderDropped()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public abstract class OwnerNode { public void Dispose() { } }
+            public sealed class EffectNode : OwnerNode, IDisposable
+            {
+                void IDisposable.Dispose() => Dispose();
+            }
+            """
+        );
+
+        await Assert.That(result["effect-node.ts"]).DoesNotContain("dispose()");
         await Assert.That(result["owner-node.ts"]).DoesNotContain("@internal");
-        await Assert.That(result["owner-node.ts"]).Contains("  dispose(): void {");
+    }
+
+    [Test]
+    public async Task ClaimingMemberOnTheImplementingClass_IsTheOnePublicMember()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            public class Effect : IDisposable
+            {
+                internal void Dispose() { }
+                void IDisposable.Dispose() => Dispose();
+            }
+            """
+        );
+
+        await Assert.That(result["effect.ts"]).Contains("  dispose(): void {");
+        await Assert.That(result["effect.ts"]).DoesNotContain("@internal");
     }
 
     [Test]
@@ -102,13 +177,13 @@ public class InternalRuntimeTypeTests
             """
         );
 
-        await Assert.That(result["plain.ts"]).Contains("  dispose(): void {");
+        await Assert.That(result["plain.ts"]).Contains("/** @internal */\n  dispose(): void {");
         await Assert.That(result["plain.ts"]).Contains("/** @internal */\n  other(): void {");
-        await Assert.That(result["plain.ts"]).DoesNotContain("/** @internal */\n  dispose");
+        await Assert.That(result["owner.ts"]).Contains("override dispose(): void {");
     }
 
     [Test]
-    public async Task PrivateProtectedClaimingMember_EmitsPublicAndUntagged()
+    public async Task PrivateProtectedClaimingMember_StaysInternalAndTheForwarderIsPublic()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -127,9 +202,12 @@ public class InternalRuntimeTypeTests
             """
         );
 
-        await Assert.That(result["owner.ts"]).Contains("\n  toString(");
-        await Assert.That(result["owner.ts"]).DoesNotContain("@internal");
-        await Assert.That(result["owner.ts"]).DoesNotContain("protected");
+        await Assert.That(result["owner.ts"]).Contains("/** @internal */\n  protected toString(");
+
+        await Assert
+            .That(result["effect.ts"])
+            .Contains("override toString(")
+            .And.Contains("super.toString(format, provider)");
     }
 
     [Test]

@@ -17,6 +17,11 @@ internal abstract class EffectNode : OwnerNode, IDisposable
 
 internal sealed class SplitEffect<T> : EffectNode { }
 
+/// <summary>A public sibling of the internal descendant: not <c>IDisposable</c>, no public <c>Dispose</c> (#821).</summary>
+public abstract class ComputedNode : OwnerNode { }
+
+public sealed class Computed<T> : ComputedNode { }
+
 public interface IWorkItem
 {
     string Run();
@@ -45,6 +50,38 @@ public static class InternalRuntimeTypeProbes
         object text = "s";
 
         return string.Join(",", effect is IDisposable, owner is IDisposable, text is IDisposable);
+    }
+
+    public static string DisposeThroughTheInterfaceOfAnInternalDescendant()
+    {
+        var effect = new SplitEffect<int>();
+
+        ((IDisposable)effect).Dispose();
+        Effect<int>().Dispose();
+
+        return effect.Disposed.ToString();
+    }
+
+    public static string UsingOverAnInternalDescendant()
+    {
+        var effect = new SplitEffect<int>();
+
+        using (effect) { }
+
+        return effect.Disposed.ToString();
+    }
+
+    public static string IsIDisposableOfASiblingOfTheInternalDescendant()
+    {
+        object computed = new Computed<int>();
+        object node = new SplitEffect<int>();
+
+        return string.Join(
+            ",",
+            computed is IDisposable,
+            computed is OwnerNode,
+            node is IDisposable
+        );
     }
 
     public static string DispatchOnTheInterfaceOfAnInternalDescendant() =>

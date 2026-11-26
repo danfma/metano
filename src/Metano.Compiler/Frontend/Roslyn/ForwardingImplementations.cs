@@ -25,15 +25,24 @@ internal static class ForwardingImplementations
         if (member.DeclaringSyntaxReferences.IsEmpty)
             return true;
 
-        return member is IMethodSymbol method
-            && claiming
+        return claiming
                 is IMethodSymbol
                 {
                     DeclaredAccessibility: Accessibility.Public or Accessibility.Internal,
-                } target
-            && ForwardedCallOf(method) is { } call
-            && IsForwardingCall(call, method, target);
+                }
+            && IsPureForwarder(member, claiming);
     }
+
+    /// <summary>
+    /// Whether the body of <paramref name="member"/> is one call of
+    /// <paramref name="claiming"/> on <c>this</c>, passing its own parameters in order,
+    /// whatever the accessibility of <paramref name="claiming"/>.
+    /// </summary>
+    public static bool IsPureForwarder(ISymbol member, ISymbol claiming) =>
+        member is IMethodSymbol method
+        && claiming is IMethodSymbol target
+        && ForwardedCallOf(method) is { } call
+        && IsForwardingCall(call, method, target);
 
     private static IInvocationOperation? ForwardedCallOf(IMethodSymbol method)
     {

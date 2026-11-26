@@ -700,7 +700,7 @@ public class DisposableTests
     }
 
     [Test]
-    public async Task ExplicitForwarder_ToTheClaimingMember_IsDroppedSilently()
+    public async Task ExplicitForwarder_ToAnInheritedInternalClaimingMember_IsPublishedAsOwnMember()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
