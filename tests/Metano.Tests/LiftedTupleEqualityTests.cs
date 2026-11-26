@@ -59,6 +59,8 @@ public class LiftedTupleEqualityTests
     {
         var output = TranspileHelper.Transpile(Source)["lifted.ts"];
 
-        await Assert.That(output).Contains("(side()))(next());");
+        await Assert
+            .That(output)
+            .Contains("const tuple$temp$0 = next();\n    const tuple$temp$1 = side();");
     }
 }

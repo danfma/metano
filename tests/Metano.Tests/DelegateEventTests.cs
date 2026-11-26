@@ -245,12 +245,12 @@ public class DelegateEventTests
         );
 
         var output = result["app/worker.ts"];
-        // The IIFE captures the receiver once; the bind argument
-        // reads from the captured temporary instead of re-running
-        // the chain. The receiver expression itself appears exactly
-        // once in the emitted text.
-        await Assert.That(output).Contains("__r.tick.bind(__r)");
-        await Assert.That(output).Contains(")(this.getCache().service)");
+        // A temporary captures the receiver once; the bind argument
+        // reads it instead of re-running the chain. The receiver
+        // expression itself appears exactly once in the emitted text.
+        await Assert
+            .That(output)
+            .Contains("($__r = this.getCache().service, $__r.tick.bind($__r))");
 
         var occurrences = System
             .Text.RegularExpressions.Regex.Matches(output, @"this\.getCache\(\)")

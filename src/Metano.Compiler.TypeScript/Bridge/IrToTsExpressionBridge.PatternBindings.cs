@@ -241,10 +241,20 @@ public static partial class IrToTsExpressionBridge
     {
         var bindings = EnumeratePatternBindings(subject, pattern, context).ToList();
 
-        var lowered = Map(guard, context);
-
         if (!IrReferencedNames.AnyIn(guard, bindings.Select(binding => binding.Name)))
-            return lowered;
+            return Map(guard, context);
+
+        if (
+            context.Temporaries is { } temporaries
+            && TryBindCaseGuardInline(bindings, guard, temporaries, context) is { } inline
+        )
+            return inline;
+
+        // Outside a statement list, or where a function in the guard reads a
+        // designator, which then needs a scope of its own per evaluation: the
+        // designators are the parameters of an arrow invoked on the spot, and the
+        // guard declares no temporary of the enclosing list, read inside it.
+        var lowered = Map(guard, context with { Temporaries = null });
 
         return TsImmediateInvocation.Of(
             [
@@ -256,6 +266,69 @@ public static partial class IrToTsExpressionBridge
             [new TsReturnStatement(lowered)],
             isAsync: IrEvaluationTraits.ContainsAwait(guard)
         );
+    }
+
+    /// <summary>
+    /// A case guard that reads designators, over temporaries of the enclosing
+    /// statement list that hold them while it runs:
+    /// <c>$s instanceof Square &amp;&amp; ($s1 = $s, $s1.side &gt; 2)</c>. Each
+    /// temporary is named after its designator with a <c>$</c>, so it never
+    /// collides with the local the section body declares for it. <c>null</c> when a
+    /// function in the lowered guard reads one (<see cref="CapturesABinding"/>).
+    /// </summary>
+    private static TsExpression? TryBindCaseGuardInline(
+        IReadOnlyList<PatternBinding> bindings,
+        IrExpression guard,
+        TsTemporaries temporaries,
+        IrToTsBridgeContext context
+    )
+    {
+        var read = bindings
+            .Where(binding => IrReferencedNames.AnyIn(guard, [binding.Name]))
+            .ToList();
+
+        var temporariesByName = read.ToDictionary(
+            binding => binding.Name,
+            binding =>
+                temporaries.TemporaryFor(
+                    guard,
+                    () =>
+                        temporaries.Claim(
+                            "$" + IrToTsNamingPolicy.ToLocalName(binding.Name),
+                            context.ReservedLocals
+                        ),
+                    role: binding.Name
+                )
+        );
+
+        var guardContext = context with
+        {
+            BoundElements = temporariesByName.Aggregate(context.BoundElements, (bound, entry) =>
+                bound.SetItem(entry.Key, entry.Value)
+            ),
+        };
+
+        var mappedGuard = Map(guard, guardContext);
+
+        if (
+            CapturesABinding(
+                [mappedGuard],
+                temporariesByName.Values.Select(temporary => temporary.Name)
+            )
+        )
+            return null;
+
+        foreach (var temporary in temporariesByName.Values)
+            temporaries.DeclareClaimed(temporary);
+
+        return Sequence([
+            .. read.Select(binding => new TsBinaryExpression(
+                temporariesByName[binding.Name],
+                "=",
+                binding.Value
+            )),
+            mappedGuard,
+        ]);
     }
 
     /// <summary>

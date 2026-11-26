@@ -35,7 +35,10 @@ public static class IrToTsStatementBridge
     internal static IReadOnlyList<TsStatement> MapBody(
         IReadOnlyList<IrStatement> body,
         IrToTsBridgeContext context
-    ) => TsTemporaries.Around(context, scoped => body.Select(stmt => Map(stmt, scoped)).ToList());
+    ) =>
+        TsTemporaries.Around(context, scoped =>
+            [.. body.SelectMany(stmt => MapInList(stmt, scoped))]
+        );
 
     /// <summary>
     /// Maps the statements of a <c>switch</c> section. Every <c>case</c>
@@ -48,10 +51,103 @@ public static class IrToTsStatementBridge
     internal static IReadOnlyList<TsStatement> MapSectionBody(
         IReadOnlyList<IrStatement> body,
         IrToTsBridgeContext context
+    ) => context.Temporaries is null ? MapBody(body, context) : MapInScope(body, context);
+
+    /// <summary>
+    /// Maps statements into the statement list of <paramref name="context"/>,
+    /// whose head declares their temporaries: a constructor body shares the scope
+    /// of its base call, so the two never declare the same name.
+    /// </summary>
+    internal static IReadOnlyList<TsStatement> MapInScope(
+        IReadOnlyList<IrStatement> body,
+        IrToTsBridgeContext context
+    ) => [.. body.SelectMany(statement => MapInList(statement, context))];
+
+    /// <summary>
+    /// <paramref name="value"/> as the value of a statement the caller places in a
+    /// block of its own (a field initializer's constructor store): the expression
+    /// left to store and the statements to run before it, which declare its
+    /// temporaries and evaluate its hoisted bindings (<see cref="TsLetHoisting"/>);
+    /// no statements when it needs none. An initializer extraction wrapped in an
+    /// arrow invoked on the spot to bind its <c>out</c> locals
+    /// (<see cref="StandaloneBodyOf"/>) runs its statements in that block instead.
+    /// </summary>
+    internal static (TsExpression Value, IReadOnlyList<TsStatement> Prelude) MapStatementValue(
+        IrExpression value,
+        IrToTsBridgeContext context
+    )
+    {
+        var (leading, result) = StandaloneBodyOf(value);
+
+        var ((statements, mapped), declarations) = TsTemporaries.Around(context, scoped =>
+        {
+            var (hoisted, rest) = TsLetHoisting.Split(result, scoped);
+
+            var lowered = leading
+                .Concat(hoisted)
+                .SelectMany(part => MapInList(part, scoped))
+                .ToList();
+
+            return (lowered, IrToTsExpressionBridge.Map(rest, scoped));
+        });
+
+        return (mapped, [.. declarations, .. statements]);
+    }
+
+    /// <summary>
+    /// The statements and the value of an expression extraction wrapped in an arrow
+    /// invoked on the spot (<c>IrExpressionExtractor.ExtractStandalone</c>: the
+    /// <c>out</c> locals of an initializer bound ahead of its value), when the
+    /// arrow's body only ends in a <c>return</c>; no statements and the expression
+    /// itself otherwise.
+    /// </summary>
+    private static (IReadOnlyList<IrStatement> Leading, IrExpression Value) StandaloneBodyOf(
+        IrExpression value
+    )
+    {
+        if (
+            StandaloneLambdaOf(value) is not { Body: { Count: > 0 } body }
+            || body[^1] is not IrReturnStatement { Value: { } returned }
+        )
+            return ([], value);
+
+        var leading = body.Take(body.Count - 1).ToList();
+
+        return leading.Any(ReturnsWithin) ? ([], value) : (leading, returned);
+    }
+
+    /// <summary>The parameterless arrow <paramref name="value"/> invokes with no arguments, if any.</summary>
+    private static IrLambdaExpression? StandaloneLambdaOf(IrExpression value) =>
+        value
+            is IrCallExpression
+            {
+                Arguments.Count: 0,
+                Target: IrLambdaExpression
+                {
+                    Parameters.Count: 0,
+                    IsAsync: false,
+                    UsesThis: false,
+                    Name: null,
+                } lambda,
+            }
+            ? lambda
+            : null;
+
+    private static bool ReturnsWithin(IrStatement statement) =>
+        statement is IrReturnStatement or IrYieldBreakStatement
+        || IrNodeChildren.StatementsOf(statement).Any(ReturnsWithin);
+
+    /// <summary>
+    /// One statement of a statement list: a statement whose value is a binding is
+    /// split first (<see cref="TsLetHoisting"/>), and each part lowered in turn.
+    /// </summary>
+    private static IEnumerable<TsStatement> MapInList(
+        IrStatement statement,
+        IrToTsBridgeContext context
     ) =>
-        context.Temporaries is null
-            ? MapBody(body, context)
-            : body.Select(statement => Map(statement, context)).ToList();
+        context.Temporaries is not null && TsLetHoisting.TryHoist(statement, context) is { } hoisted
+            ? hoisted.SelectMany(part => MapInList(part, context))
+            : [Map(statement, context)];
 
     private static TsStatement MapForEach(IrForEachStatement fe, IrToTsBridgeContext context)
     {

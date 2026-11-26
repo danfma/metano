@@ -26,44 +26,48 @@ public static partial class IrToTsExpressionBridge
 
     private static TsOrderedArguments BindStaticCallArguments(
         IReadOnlyList<TsExpression> arguments,
-        IReadOnlyList<int>? order
+        IReadOnlyList<int>? order,
+        IrToTsBridgeContext context
     ) =>
         TsEvaluationOrder.Bind(
             arguments,
             order ?? Enumerable.Range(0, arguments.Count).ToList(),
-            BoundArgumentPrefix
+            BoundArgumentPrefix,
+            context
         );
 
+    /// <summary>
+    /// A call to a static member of a lazily initialized type: the arguments,
+    /// in C#'s order, then the type's initialization, then the call —
+    /// <c>($arg0 = a, T.$initialize(), T.f($arg0))</c> (<see cref="BoundBefore"/>).
+    /// A lifted operator initializes the type only when both operands are
+    /// non-null, as C# skips the call then.
+    /// </summary>
     private static TsExpression GuardStaticCall(
         IrBoundStaticCall call,
         TsOrderedArguments arguments,
-        TsExpression result
+        TsExpression result,
+        IrToTsBridgeContext context
     )
     {
-        var guard = new TsExpressionStatement(
-            new TsCallExpression(
-                new TsPropertyAccess(CanonicalTypeValue(call.DeclaringType), "$initialize"),
-                []
-            )
+        var guard = new TsCallExpression(
+            new TsPropertyAccess(CanonicalTypeValue(call.DeclaringType), "$initialize"),
+            []
         );
 
         var trigger = call.IsLifted
-            ? (TsStatement)
-                new TsIfStatement(
-                    new TsBinaryExpression(
-                        new TsBinaryExpression(arguments.Arguments[0], "!=", new TsLiteral("null")),
-                        "&&",
-                        new TsBinaryExpression(arguments.Arguments[1], "!=", new TsLiteral("null"))
-                    ),
-                    [guard]
-                )
-            : guard;
+            ? new TsBinaryExpression(
+                new TsBinaryExpression(
+                    new TsBinaryExpression(arguments.Arguments[0], "!=", new TsLiteral("null")),
+                    "&&",
+                    new TsBinaryExpression(arguments.Arguments[1], "!=", new TsLiteral("null"))
+                ),
+                "&&",
+                guard
+            )
+            : (TsExpression)guard;
 
-        return TsImmediateInvocation.Of(
-            arguments.Bindings,
-            [trigger, new TsReturnStatement(result)],
-            isAsync: false
-        );
+        return BoundBefore(arguments.Bindings, result, context, effects: [trigger]);
     }
 
     private static TsExpression MapStaticEquality(
@@ -73,7 +77,8 @@ public static partial class IrToTsExpressionBridge
     {
         var arguments = BindStaticCallArguments(
             [Map(binary.Left, context), Map(binary.Right, context)],
-            null
+            null,
+            context
         );
 
         var bound = binary with
@@ -83,7 +88,19 @@ public static partial class IrToTsExpressionBridge
             BoundStaticCall = null,
         };
 
-        return GuardStaticCall(binary.BoundStaticCall!, arguments, MapBinary(bound, context));
+        var boundContext = context with
+        {
+            BoundElements = context
+                .BoundElements.SetItem(BoundArgumentPrefix + 0, arguments.Arguments[0])
+                .SetItem(BoundArgumentPrefix + 1, arguments.Arguments[1]),
+        };
+
+        return GuardStaticCall(
+            binary.BoundStaticCall!,
+            arguments,
+            MapBinary(bound, boundContext),
+            context
+        );
     }
 
     // A null literal stays in the comparison: the loose `== null` decision reads it.

@@ -40,7 +40,7 @@ public class InterpolationFormatClauseTests
         """;
 
     private const string Placeholder =
-        "throw new Error(\"Unsupported expression: UnsupportedFormat\");";
+        "throwError(new Error(\"Unsupported expression: UnsupportedFormat\"))";
 
     private const string Host = """
         using System;

@@ -25,8 +25,8 @@ public static partial class IrToTsExpressionBridge
     /// more than once is captured in such a local by extraction too, so the
     /// remaining patterns read their subject at most once or read a repeatable
     /// one. Only an <c>is</c> node that did not come from C# source (a
-    /// synthesized one) with a subject that is neither falls back to binding
-    /// it as the argument of an arrow: <c>(($v) =&gt; test)(subject)</c>.
+    /// synthesized one) with a subject that is neither binds it to a temporary
+    /// of the statement list: <c>($v = subject, test)</c>.
     /// </summary>
     private static TsExpression MapIsPattern(
         IrIsPatternExpression node,
@@ -44,6 +44,23 @@ public static partial class IrToTsExpressionBridge
         )
             return MapIsPatternTest(subject, node, context);
 
+        if (context.Temporaries is { } temporaries)
+        {
+            var subjectTemporary = temporaries.TemporaryFor(node, () =>
+                temporaries.Declare(PatternSubjectParameterName, context.ReservedLocals)
+            );
+
+            return new TsParenthesized(
+                new TsBinaryExpression(
+                    new TsBinaryExpression(subjectTemporary, "=", subject),
+                    ",",
+                    MapIsPatternTest(subjectTemporary, node, context)
+                )
+            );
+        }
+
+        // Outside any statement list (a static initializer) no temporary can be
+        // declared, so an arrow invoked on the spot binds the subject.
         var boundSubject = new TsIdentifier(PatternSubjectParameterName);
 
         return TsImmediateInvocation.Of(

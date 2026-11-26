@@ -370,7 +370,10 @@ public class SwitchStatementPatternTests
 
         await Assert.That(output).Contains("const $subject = items[0]!;");
         await Assert.That(output).Contains("const $subject = items[1]!;");
-        await Assert.That(output).Contains("((d) => d.r === c.r)($subject)");
+
+        await Assert
+            .That(output)
+            .Contains("$subject instanceof Circle && ($d = $subject, $d.r === c.r)");
     }
 
     [Test]

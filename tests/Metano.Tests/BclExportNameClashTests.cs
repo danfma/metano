@@ -85,7 +85,7 @@ public class BclExportNameClashTests
         var output = result["app/calculator.ts"];
 
         await Assert.That(output).Contains("import { Decimal } from \"./decimal.js\";");
-        await Assert.That(output).Contains("})(new Decimal());");
+        await Assert.That(output).Contains("const receiver$temp$0 = new Decimal();");
         await Assert.That(output).DoesNotContain("metano-runtime/system/decimal");
     }
 

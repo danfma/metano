@@ -21,11 +21,12 @@ export class Segment {
     this.extent = new Size();
     this.temperature = Celsius.$default();
     this.tally = Counter.$default();
-    this.fixed = ((receiver$temp$0) => {
-      receiver$temp$0.x = 1;
 
-      return receiver$temp$0;
-    })(new Point());
+    {
+      const receiver$temp$0 = new Point();
+      receiver$temp$0.x = 1;
+      this.fixed = receiver$temp$0;
+    }
   }
 
   equals(other: any): boolean {

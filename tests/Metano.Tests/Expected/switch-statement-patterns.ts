@@ -7,10 +7,12 @@ export class Describer {
   private constructor() { }
 
   static describe(o: Object | null): string {
+    let $c;
+
     switch (true) {
       case o == null:
         return "null";
-      case o instanceof Circle && ((c) => c.r > 10)(o):
+      case o instanceof Circle && ($c = o, $c.r > 10):
         {
           const c = o;
 
@@ -59,11 +61,13 @@ export class Describer {
   }
 
   static ofCurrent(shapes: Shape[]): string {
+    let $s;
+
     {
       const $subject = shapes[0]!;
 
       switch (true) {
-        case $subject instanceof Square && ((s) => s.side > 2)($subject):
+        case $subject instanceof Square && ($s = $subject, $s.side > 2):
           {
             const s = $subject;
 

@@ -127,7 +127,7 @@ public class CollectionConstructionTests
 
         await Assert
             .That(result["factory.ts"])
-            .Contains("return (($arg0, $arg1) => makeWidget($arg0))(this._n, this.next());");
+            .Contains("return ($arg0 = this._n, $arg1 = this.next(), makeWidget($arg0));");
     }
 
     [Test]
@@ -163,7 +163,7 @@ public class CollectionConstructionTests
         await Assert
             .That(result["factory.ts"])
             .Contains(
-                "return (($arg0, $arg1) => makeWidget($arg0))(this.next(), Math.imul(this.next(), 10));"
+                "return ($arg0 = this.next(), $arg1 = Math.imul(this.next(), 10), makeWidget($arg0));"
             );
     }
 

@@ -17,12 +17,16 @@ internal static class TsEvaluationOrder
     /// <paramref name="arguments"/> (lowered, in parameter order) with the
     /// bindings that evaluate them in <paramref name="order"/>; no bindings
     /// when <paramref name="order"/> is <c>null</c>. Each binding is named
-    /// <paramref name="prefix"/> plus its parameter position.
+    /// after <paramref name="prefix"/> plus its parameter position: a name the
+    /// statement list of <paramref name="context"/> claims, which no other
+    /// binding there takes, so the bindings may be assigned inline; the bare
+    /// stem outside a statement list.
     /// </summary>
     public static TsOrderedArguments Bind(
         IReadOnlyList<TsExpression> arguments,
         IReadOnlyList<int>? order,
-        string prefix
+        string prefix,
+        IrToTsBridgeContext? context
     )
     {
         if (order is null)
@@ -30,21 +34,39 @@ internal static class TsEvaluationOrder
 
         // A trailing null `params` array was dropped from the lowered
         // arguments (a rest parameter cannot take it), so its position binds
-        // nothing.
-        var bindings = order
+        // nothing. Only a bound position claims a name; any other passes its
+        // argument in place.
+        var bound = order
             .Where(position => position < arguments.Count)
-            .Select(position => new TsImmediateBinding(
-                prefix + position,
-                Unspread(arguments[position])
+            .Select(position => (Position: position, Name: NameOf(prefix + position, context)))
+            .ToList();
+
+        var bindings = bound
+            .Select(binding => new TsImmediateBinding(
+                binding.Name.Name,
+                Unspread(arguments[binding.Position])
             ))
             .ToList();
 
+        var names = bound.ToDictionary(binding => binding.Position, binding => binding.Name);
+
         var passed = arguments
-            .Select((argument, position) => Respread(argument, new TsIdentifier(prefix + position)))
+            .Select(
+                (argument, position) =>
+                    names.TryGetValue(position, out var name) ? Respread(argument, name) : argument
+            )
             .ToList();
 
         return new TsOrderedArguments(bindings, passed);
     }
+
+    /// <summary>
+    /// The name of a binding after <paramref name="stem"/>: claimed from the
+    /// statement list of <paramref name="context"/> (skipping the locals its
+    /// enclosing loops reserve), or the stem itself outside a statement list.
+    /// </summary>
+    public static TsIdentifier NameOf(string stem, IrToTsBridgeContext? context) =>
+        context?.Temporaries?.Claim(stem, context.ReservedLocals) ?? new TsIdentifier(stem);
 
     private static TsExpression Unspread(TsExpression argument) =>
         argument is TsSpreadExpression spread ? spread.Expression : argument;

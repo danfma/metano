@@ -515,7 +515,7 @@ public class TupleLiteralTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : tupleEquals($receiver, b, [[], null]))(Comparisons.next());"
+                "return ($receiver = Comparisons.next(), $receiver == null ? null : tupleEquals($receiver, b, [[], null]));"
             );
     }
 
@@ -577,7 +577,7 @@ public class TupleLiteralTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : (s.other(), false))(s.next());"
+                "return ($receiver = s.next(), $receiver == null ? null : (s.other(), false));"
             );
 
         await Assert.That(output).Contains("static letBound(s: Source): boolean {");
@@ -585,7 +585,9 @@ public class TupleLiteralTests
         await Assert
             .That(output)
             .Contains(
-                "return ((tuple$left) => ((tuple$right) => tuple$left == null ? tuple$right == null : false)(s.maybeOther()))(s.next());"
+                "const tuple$left = s.next();\n"
+                    + "    const tuple$right = s.maybeOther();\n\n"
+                    + "    return tuple$left == null ? tuple$right == null : false;"
             );
     }
 

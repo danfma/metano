@@ -244,7 +244,9 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw ((receiver$temp$0) => ((receiver$temp$1) => namedException(\"System.IO\", \"FileNotFoundException\", receiver$temp$0))(Guard.locate()))(Guard.describe());"
+                "const receiver$temp$0 = Guard.describe();\n"
+                    + "    const receiver$temp$1 = Guard.locate();\n"
+                    + "    throw namedException(\"System.IO\", \"FileNotFoundException\", receiver$temp$0);"
             );
     }
 
@@ -264,7 +266,9 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw ((receiver$temp$0) => ((receiver$temp$1) => new ArgumentOutOfRangeException(receiver$temp$0, undefined, receiver$temp$1))(Guard.describe()))(Guard.name());"
+                "const receiver$temp$0 = Guard.name();\n"
+                    + "    const receiver$temp$1 = Guard.describe();\n"
+                    + "    throw new ArgumentOutOfRangeException(receiver$temp$0, undefined, receiver$temp$1);"
             );
     }
 
@@ -300,7 +304,8 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "throw ((receiver$temp$0) => namedException(\"System.IO\", \"FileNotFoundException\", \"missing\"))(Guard.locate());"
+                "const receiver$temp$0 = Guard.locate();\n"
+                    + "    throw namedException(\"System.IO\", \"FileNotFoundException\", \"missing\");"
             );
     }
 
@@ -491,7 +496,7 @@ public class BclExceptionConstructionTests
     }
 
     [Test]
-    public async Task AwaitedSideEffectingArguments_BindInsideAsyncIife()
+    public async Task AwaitedSideEffectingArguments_BindInTheAsyncFunction()
     {
         var output = TranspileGuard(
             """
@@ -507,7 +512,9 @@ public class BclExceptionConstructionTests
         await Assert
             .That(output)
             .Contains(
-                "return await (async (receiver$temp$0) => ((receiver$temp$1) => new ArgumentOutOfRangeException(receiver$temp$0, undefined, receiver$temp$1))(await Guard.describe()))(await Guard.name());"
+                "const receiver$temp$0 = await Guard.name();\n"
+                    + "    const receiver$temp$1 = await Guard.describe();\n\n"
+                    + "    return new ArgumentOutOfRangeException(receiver$temp$0, undefined, receiver$temp$1);"
             );
     }
 

@@ -222,7 +222,7 @@ public class IndexAndRangeTests
 
         await Assert
             .That(files["buffer.ts"])
-            .Contains("throw new Error(\"Unsupported expression: IndexFromEndWrite\");");
+            .Contains("throwError(new Error(\"Unsupported expression: IndexFromEndWrite\"))");
     }
 
     [Test]
@@ -244,7 +244,7 @@ public class IndexAndRangeTests
 
         await Assert
             .That(files["picker.ts"])
-            .Contains("throw new Error(\"Unsupported expression: IndexElementAccess\");");
+            .Contains("throwError(new Error(\"Unsupported expression: IndexElementAccess\"))");
     }
 
     [Test]
@@ -266,7 +266,7 @@ public class IndexAndRangeTests
 
         await Assert
             .That(files["picker.ts"])
-            .Contains("throw new Error(\"Unsupported expression: RangeElementAccess\");");
+            .Contains("throwError(new Error(\"Unsupported expression: RangeElementAccess\"))");
     }
 
     [Test]
@@ -346,7 +346,7 @@ public class IndexAndRangeTests
 
         await Assert
             .That(files["picker.ts"])
-            .Contains("throw new Error(\"Unsupported expression: IndexExpression\");");
+            .Contains("throwError(new Error(\"Unsupported expression: IndexExpression\"))");
     }
 
     [Test]
@@ -366,7 +366,7 @@ public class IndexAndRangeTests
 
         await Assert
             .That(files["sizes.ts"])
-            .Contains("throw new Error(\"Unsupported expression: SizeOfExpression\");");
+            .Contains("throwError(new Error(\"Unsupported expression: SizeOfExpression\"))");
     }
 
     [Test]

@@ -3,7 +3,9 @@ import { InvalidOperationException } from "metano-runtime/system/exceptions/inva
 
 export class Unwrapping {
   of(pair: [number, number] | null): [bigint, bigint] {
-    return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair ?? throwError(new InvalidOperationException("Nullable object must have a value.")));
+    const receiver$temp$0 = pair ?? throwError(new InvalidOperationException("Nullable object must have a value."));
+
+    return [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint];
   }
 
   ofWrapped(second: number): [bigint, bigint] {
@@ -11,7 +13,9 @@ export class Unwrapping {
   }
 
   ofWidenedWrap(second: number): [bigint, bigint] {
-    return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), receiver$temp$0[1]] as [bigint, bigint])([1, BigInt(second)] as [number, bigint]);
+    const receiver$temp$0 = [1, BigInt(second)] as [number, bigint];
+
+    return [BigInt(receiver$temp$0[0]), receiver$temp$0[1]] as [bigint, bigint];
   }
 
   ofChecked(first: number | null, second: number): [bigint, bigint] {

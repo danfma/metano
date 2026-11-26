@@ -35,14 +35,13 @@ public class NullableIncrementTests
     {
         var output = Transpile("public static int? Bump(int? a) => a++;");
 
-        await Assert.That(output).Contains("(receiver$temp$0) => {");
+        await Assert.That(output).Contains("const receiver$temp$0 = a;");
 
         await Assert
             .That(output)
             .Contains("a = receiver$temp$0 == null ? null : (receiver$temp$0 + 1) | 0;");
 
         await Assert.That(output).Contains("return receiver$temp$0;");
-        await Assert.That(output).Contains(")(a);");
     }
 
     [Test]
@@ -60,7 +59,7 @@ public class NullableIncrementTests
             .That(output)
             .Contains("this.count = receiver$temp$0 == null ? null : (receiver$temp$0 - 1) | 0;");
 
-        await Assert.That(output).Contains(")(this.count);");
+        await Assert.That(output).Contains("const receiver$temp$0 = this.count;");
     }
 
     [Test]

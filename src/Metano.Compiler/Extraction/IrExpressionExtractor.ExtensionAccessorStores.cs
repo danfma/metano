@@ -56,7 +56,7 @@ public sealed partial class IrExpressionExtractor
         var receiver = Extract(targetSyntax.Expression);
 
         return ReadsCurrentValue(assign)
-            ? BindStoreReceiverOnce(receiver, bound => Store([bound]))
+            ? BindReceiverOnce(receiver, bound => Store([bound]))
             : Store([receiver]);
     }
 
@@ -311,7 +311,7 @@ public sealed partial class IrExpressionExtractor
         bool isValueUsed
     ) =>
         isValueUsed
-            ? BindStoreValueOnce(value, stored => new IrSequenceExpression([write(stored)], stored))
+            ? BindValueOnce(value, stored => new IrSequenceExpression([write(stored)], stored))
             : write(value);
 
     /// <summary>
@@ -335,31 +335,9 @@ public sealed partial class IrExpressionExtractor
         IReadOnlyList<IrExpression> indices,
         Func<IrExpression, IReadOnlyList<IrExpression>, IrExpression> build
     ) =>
-        BindStoreReceiverOnce(receiver, boundReceiver =>
+        BindReceiverOnce(receiver, boundReceiver =>
             BindEachValueOnce(indices, boundIndices => build(boundReceiver, boundIndices))
         );
-
-    /// <summary>
-    /// <see cref="BindReceiverOnce"/> for an accessor store: the binding is a
-    /// store temporary (<see cref="IrLetExpression.IsStoreTemporary"/>), which
-    /// a backend may assign inline instead of scoping it, so no IIFE (W10-6a).
-    /// </summary>
-    private IrExpression BindStoreReceiverOnce(
-        IrExpression receiver,
-        Func<IrExpression, IrExpression> build
-    ) =>
-        BindOnce(
-            receiver,
-            IrEvaluationTraits.IsReusableReceiver(receiver),
-            build,
-            isStoreTemporary: true
-        );
-
-    /// <summary><see cref="BindValueOnce"/> for an accessor store (see <see cref="BindStoreReceiverOnce"/>).</summary>
-    private IrExpression BindStoreValueOnce(
-        IrExpression value,
-        Func<IrExpression, IrExpression> build
-    ) => BindOnce(value, IrEvaluationTraits.IsSideEffectFree(value), build, isStoreTemporary: true);
 
     private IrExpression BindEachValueOnce(
         IReadOnlyList<IrExpression> values,
@@ -369,7 +347,7 @@ public sealed partial class IrExpressionExtractor
         if (values.Count == 0)
             return build([]);
 
-        return BindStoreValueOnce(values[0], first =>
+        return BindValueOnce(values[0], first =>
             BindEachValueOnce(values.Skip(1).ToList(), rest => build([first, .. rest]))
         );
     }

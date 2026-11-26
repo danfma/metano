@@ -421,26 +421,53 @@ public static partial class IrToTsExpressionBridge
         member is { Origin.IsInitOnly: true, Target: not (IrThisExpression or IrBaseExpression) };
 
     /// <summary>
-    /// <c>Object.assign(receiver, { member: value })</c>. An <c>init</c>-only
-    /// property is declared <c>readonly</c>, which rejects a plain assignment
-    /// outside the constructor; <c>Object.assign</c> performs the same
-    /// <c>[[Set]]</c> (a setter still runs) and evaluates the receiver before
-    /// the value, as the assignment would.
+    /// A store to an <c>init</c>-only property, which is declared <c>readonly</c>
+    /// and so rejects a plain assignment outside the constructor: the receiver is
+    /// asserted to a writable view of that one member,
+    /// <c>(receiver as { member: typeof receiver.member }).member = value</c>, a
+    /// direct store with no allocation (W13-1). A receiver a type query cannot
+    /// name (an element read) keeps <c>Object.assign(receiver, { member: value })</c>.
+    /// Both evaluate the receiver before the value and run a setter.
     /// </summary>
     private static TsExpression MapInitOnlyInitializerWrite(
         IrMemberAccess member,
         IrExpression value,
         IrToTsBridgeContext context
-    ) =>
-        new TsCallExpression(
-            new TsPropertyAccess(new TsIdentifier("Object"), "assign"),
-            [
-                Map(member.Target, context),
-                new TsObjectLiteral([
-                    new TsObjectProperty(AccessedMemberName(member), Map(value, context)),
-                ]),
-            ]
+    )
+    {
+        var receiver = Map(member.Target, context);
+        var name = AccessedMemberName(member);
+        var stored = Map(value, context);
+
+        if (EntityNameOf(receiver) is not { } entity)
+            return new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("Object"), "assign"),
+                [receiver, new TsObjectLiteral([new TsObjectProperty(name, stored)])]
+            );
+
+        var writable = new TsObjectType([
+            new TsObjectTypeField(name, new TsTypeQuery($"{entity}.{name}")),
+        ]);
+
+        return new TsBinaryExpression(
+            new TsPropertyAccess(new TsCastExpression(receiver, writable), name),
+            "=",
+            stored
         );
+    }
+
+    /// <summary>
+    /// The dotted path <paramref name="expression"/> spells (<c>t</c>,
+    /// <c>t.inner</c>), which a type query can name; <c>null</c> otherwise.
+    /// </summary>
+    private static string? EntityNameOf(TsExpression expression) =>
+        expression switch
+        {
+            TsIdentifier identifier => identifier.Name,
+            TsPropertyAccess access when EntityNameOf(access.Object) is { } owner =>
+                $"{owner}.{access.Property}",
+            _ => null,
+        };
 
     /// <summary>
     /// An equality with a literal operand, where an <c>undefined</c> other
@@ -872,24 +899,17 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// Placeholder for a construct the extractor already reported as MS0001:
-    /// <c>(() =&gt; { throw new Error("…"); })()</c> parses in any expression
-    /// position, type-checks as <c>never</c>, and fails loudly if reached.
+    /// <c>throwError(new Error("…"))</c> (<see cref="ThrowFromExpression"/>)
+    /// parses in any expression position, type-checks as <c>never</c>, and
+    /// fails loudly if reached, with no closure.
     /// </summary>
     private static TsExpression MapUnsupported(IrUnsupportedExpression unsupported)
     {
-        var failure = new TsCallExpression(
-            new TsArrowFunction(
-                [],
-                [
-                    new TsThrowStatement(
-                        new TsNewExpression(
-                            new TsIdentifier("Error"),
-                            [new TsStringLiteral($"Unsupported expression: {unsupported.Kind}")]
-                        )
-                    ),
-                ]
-            ),
-            []
+        var failure = ThrowFromExpression(
+            new TsNewExpression(
+                new TsIdentifier("Error"),
+                [new TsStringLiteral($"Unsupported expression: {unsupported.Kind}")]
+            )
         );
 
         return unsupported.ResultType is { } type
@@ -1139,7 +1159,8 @@ public static partial class IrToTsExpressionBridge
             NeedsStaticCallGuard(tpl.BoundStaticCall)
                 ? tpl.EvaluationOrder ?? Enumerable.Range(0, tpl.Arguments.Count).ToList()
                 : tpl.EvaluationOrder,
-            BoundArgumentPrefix
+            BoundArgumentPrefix,
+            context
         );
 
         var (text, externalImports) = TsImportFacadeBinding.Escape(
@@ -1173,8 +1194,8 @@ public static partial class IrToTsExpressionBridge
         };
 
         return NeedsStaticCallGuard(tpl.BoundStaticCall)
-            ? GuardStaticCall(tpl.BoundStaticCall!, ordered, template)
-            : BoundBefore(ordered.Bindings, template);
+            ? GuardStaticCall(tpl.BoundStaticCall!, ordered, template, context)
+            : BoundBefore(ordered.Bindings, template, context);
     }
 
     private static TsExpression MapCall(IrCallExpression call, IrToTsBridgeContext context)
@@ -1190,13 +1211,15 @@ public static partial class IrToTsExpressionBridge
         {
             var ordered = BindStaticCallArguments(
                 loweredArgs,
-                call.BoundStaticCall!.EvaluationOrder ?? call.EvaluationOrder
+                call.BoundStaticCall!.EvaluationOrder ?? call.EvaluationOrder,
+                context
             );
 
             return GuardStaticCall(
                 call.BoundStaticCall!,
                 ordered,
-                MapUndispatchedCall(call, ordered.Arguments, context)
+                MapUndispatchedCall(call, ordered.Arguments, context),
+                context
             );
         }
 
@@ -1225,7 +1248,7 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var ordered = TsEvaluationOrder.Bind(loweredArgs, order, BoundArgumentPrefix);
+        var ordered = TsEvaluationOrder.Bind(loweredArgs, order, BoundArgumentPrefix, context);
         var method = MethodAccessOf(call);
         var computed = method is null ? call.Target : method.Target;
 
@@ -1239,12 +1262,24 @@ public static partial class IrToTsExpressionBridge
             Target = method is null ? reference : method with { Target = reference },
         };
 
+        var receiverName = TsEvaluationOrder.NameOf(ReceiverArgumentPrefix, context);
+
         var receiver = new TsImmediateBinding(
-            ReceiverArgumentPrefix,
+            receiverName.Name,
             MapNullTolerant(computed, context)
         );
 
-        return InSourceOrder([receiver, .. ordered.Bindings], bound, ordered.Arguments, context);
+        var boundContext = context with
+        {
+            BoundElements = context.BoundElements.SetItem(ReceiverArgumentPrefix, receiverName),
+        };
+
+        return InSourceOrder(
+            [receiver, .. ordered.Bindings],
+            bound,
+            ordered.Arguments,
+            boundContext
+        );
     }
 
     /// <summary>
@@ -1272,24 +1307,7 @@ public static partial class IrToTsExpressionBridge
         IrCallExpression call,
         IReadOnlyList<TsExpression> arguments,
         IrToTsBridgeContext context
-    ) => BoundBefore(bindings, MapUndispatchedCall(call, arguments, context));
-
-    /// <summary>
-    /// <paramref name="expression"/> behind the <paramref name="bindings"/>
-    /// that evaluate its parts first, as the parameters of an arrow invoked
-    /// on the spot; the expression itself when nothing is bound.
-    /// </summary>
-    private static TsExpression BoundBefore(
-        IReadOnlyList<TsImmediateBinding> bindings,
-        TsExpression expression
-    ) =>
-        bindings.Count == 0
-            ? expression
-            : TsImmediateInvocation.Of(
-                bindings,
-                [new TsReturnStatement(expression)],
-                isAsync: false
-            );
+    ) => BoundBefore(bindings, MapUndispatchedCall(call, arguments, context), context);
 
     /// <summary>The lowering of a call that reaches no claimed fast path.</summary>
     /// <summary>
@@ -1304,6 +1322,9 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
+        if (TryMapInvokedLambdaInline(call, loweredArgs, context) is { } inlined)
+            return inlined;
+
         // `[JsCallable]` invoke: `recv.Invoke(args)` lowers to a direct call on
         // the receiver `recv(args)`. After destructuring, the receiver IS the
         // JS function — the `Invoke` member is erased. Overloaded `Invoke`
@@ -1373,7 +1394,7 @@ public static partial class IrToTsExpressionBridge
             {
                 if (NeedsStaticCallGuard(call.BoundStaticCall))
                 {
-                    var ordered = BindStaticCallArguments(loweredArgs, null);
+                    var ordered = BindStaticCallArguments(loweredArgs, null, context);
 
                     var boundMapping = mapped switch
                     {
@@ -1400,7 +1421,8 @@ public static partial class IrToTsExpressionBridge
                     return GuardStaticCall(
                         call.BoundStaticCall!,
                         ordered,
-                        WithTypeArgumentDescriptors(boundMapping, call, context)
+                        WithTypeArgumentDescriptors(boundMapping, call, context),
+                        context
                     );
                 }
 
@@ -1718,7 +1740,8 @@ public static partial class IrToTsExpressionBridge
         var ordered = TsEvaluationOrder.Bind(
             stage.Arguments.Select(argument => Map(argument, context)).ToList(),
             stage.EvaluationOrder,
-            BoundArgumentPrefix
+            BoundArgumentPrefix,
+            context
         );
 
         var call = new TsCallExpression(
@@ -1739,7 +1762,7 @@ public static partial class IrToTsExpressionBridge
             )
             : call;
 
-        return BoundBefore(ordered.Bindings, terminal);
+        return BoundBefore(ordered.Bindings, terminal, context);
     }
 
     /// <summary>
@@ -2067,7 +2090,7 @@ public static partial class IrToTsExpressionBridge
             ),
             lambda.ReifiedTypeParameters
         );
-        var body = MapLambdaBody(lambda, context);
+        var body = MapLambdaBody(lambda, WithoutShadowedBindings(lambda, context));
         // Named function expression: emitted when the lambda is the
         // lowered body of a directly-recursive [Inline] method (#194).
         // The internal name lets the body call itself without relying
@@ -2113,7 +2136,7 @@ public static partial class IrToTsExpressionBridge
         lambda
             is {
                 ReturnType: IrPrimitiveTypeRef { Primitive: IrPrimitive.Void },
-                Body: [IrReturnStatement { Value: { } discarded }],
+                Body: [IrReturnStatement { Value: { } discarded and not IrLetExpression }],
             }
             ? TsTemporaries.Around(context, scoped =>
                 [new TsReturnStatement(MapNullTolerant(discarded, scoped))]
@@ -2227,14 +2250,12 @@ public static partial class IrToTsExpressionBridge
     }
 
     /// <summary>
-    /// Lowers <see cref="IrLetExpression"/> to an IIFE (see
-    /// <see cref="TsImmediateInvocation.Of"/>): the binding becomes the
-    /// arrow's lone parameter and the value supplies the single argument.
-    /// The arrow's body is a one-statement <c>return</c> of the body
-    /// expression so the let-binding stays a pure expression at the call site
-    /// (compound-assignment, increment, index-from-end and null-conditional
-    /// lowerings all need an expression, not a statement). A body that
-    /// awaits makes the IIFE async and awaited.
+    /// Lowers <see cref="IrLetExpression"/> in expression position (a statement
+    /// whose value it is hoists it first, see <see cref="TsLetHoisting"/>) to
+    /// <c>(name = value, effect, …, result)</c> over a temporary declared at the
+    /// head of the enclosing statement list (<see cref="TsTemporaries"/>), with
+    /// no closure (rule 1a, W13-1): the value is evaluated once, before the body,
+    /// and an <c>await</c> in the body stays in the enclosing async function.
     /// </summary>
     private static TsExpression MapLetExpression(IrLetExpression let, IrToTsBridgeContext context)
     {
@@ -2242,22 +2263,16 @@ public static partial class IrToTsExpressionBridge
 
         return TryFoldPlainObjectInitializer(let, value, context)
             ?? TryMapLetInline(let, value, context)
-            ?? TsImmediateInvocation.Of(
-                [new TsImmediateBinding(IrToTsNamingPolicy.ToLocalName(let.Name), value)],
-                ReturningBody(let.Body, context),
-                isAsync: IrEvaluationTraits.ContainsAwait(let.Body)
-            );
+            ?? MapLetAsImmediateInvocation(let, value, context);
     }
 
     /// <summary>
-    /// <see cref="IrLetExpression"/> as <c>(name = value, body)</c> over a
-    /// temporary declared at the head of the enclosing statement list
-    /// (<see cref="TsTemporaries"/>), with no immediately invoked function
-    /// (rule 1a, W10-6a): the value is evaluated once, before the body, as the
-    /// IIFE's argument is. Only for a store temporary
-    /// (<see cref="IrLetExpression.IsStoreTemporary"/>), where a statement list exists and no closure
-    /// in the value or the body could capture the temporary, which every
-    /// evaluation of the statement reassigns; <c>null</c> otherwise.
+    /// The comma form of <see cref="MapLetExpression"/>, or <c>null</c> where it
+    /// does not apply: outside a statement list, or when a function in the lowered
+    /// body reads the binding (<see cref="CapturesABinding"/>). The temporary keeps
+    /// the binding's name unless another temporary of the list holds it; then it
+    /// takes a fresh one, which the body reads through
+    /// <see cref="IrToTsBridgeContext.BoundElements"/>.
     /// </summary>
     private static TsExpression? TryMapLetInline(
         IrLetExpression let,
@@ -2265,33 +2280,58 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        if (
-            !let.IsStoreTemporary
-            || context.Temporaries is not { } temporaries
-            || ContainsClosure(let.Value)
-            || ContainsClosure(let.Body)
-        )
+        if (context.Temporaries is not { } temporaries)
             return null;
 
         var name = IrToTsNamingPolicy.ToLocalName(let.Name);
 
-        if (temporaries.TryDeclareExactly(name) is not { } temporary)
-            return null;
+        var temporary = temporaries.TemporaryFor(let, () =>
+            temporaries.TryClaimExactly(name)
+                ? new TsIdentifier(name)
+                : temporaries.Claim(name, context.ReservedLocals)
+        );
+
+        var bodyContext =
+            temporary.Name == name
+                ? context
+                : context with
+                {
+                    BoundElements = context.BoundElements.SetItem(let.Name, temporary),
+                };
 
         IReadOnlyList<IrExpression> body = let.Body is IrSequenceExpression sequence
             ? [.. sequence.Effects, sequence.Result]
             : [let.Body];
 
-        return new TsParenthesized(
-            body.Select(part => Map(part, context))
-                .Prepend(new TsBinaryExpression(temporary, "=", value))
-                .Aggregate((left, right) => new TsBinaryExpression(left, ",", right))
-        );
+        var parts = body.Select(part => Map(part, bodyContext)).ToList();
+
+        if (CapturesABinding(parts, [temporary.Name]))
+            return null;
+
+        temporaries.DeclareClaimed(temporary);
+
+        return Sequence([new TsBinaryExpression(temporary, "=", value), .. parts]);
     }
 
-    private static bool ContainsClosure(IrExpression expression) =>
-        expression is IrLambdaExpression
-        || IrNodeChildren.ExpressionsOf(expression).Any(ContainsClosure);
+    /// <summary>
+    /// <see cref="IrLetExpression"/> as an IIFE (see <see cref="TsImmediateInvocation.Of"/>),
+    /// the binding as the arrow's parameter. Left only where the comma form cannot
+    /// apply: outside any statement list (a static field initializer, which runs
+    /// once per class), where no temporary can be declared, and where a closure in
+    /// the body reads the binding, which needs a scope of its own per evaluation. The arrow's body is a statement list with
+    /// temporaries of its own, so none of the enclosing list is read inside a
+    /// function. A body that awaits makes the IIFE async and awaited.
+    /// </summary>
+    private static TsExpression MapLetAsImmediateInvocation(
+        IrLetExpression let,
+        TsExpression value,
+        IrToTsBridgeContext context
+    ) =>
+        TsImmediateInvocation.Of(
+            [new TsImmediateBinding(IrToTsNamingPolicy.ToLocalName(let.Name), value)],
+            TsTemporaries.Around(context, scoped => ReturningBody(let.Body, scoped)),
+            isAsync: IrEvaluationTraits.ContainsAwait(let.Body)
+        );
 
     /// <summary>
     /// Folds an object-initialized <c>[PlainObject]</c> construction —
@@ -2308,25 +2348,13 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        if (
-            let
-                is not {
-                    Value: IrNewExpression { IsPlainObject: true },
-                    Body: IrSequenceExpression { Result: IrIdentifier result } sequence,
-                }
-            || result.Name != let.Name
-            || mappedValue is not TsObjectLiteral literal
-        )
+        if (!IsPlainObjectInitializer(let) || mappedValue is not TsObjectLiteral literal)
             return null;
 
-        var writes = sequence
-            .Effects.Select(effect => PlainObjectMemberWrite(effect, let.Name))
+        var members = ((IrSequenceExpression)let.Body)
+            .Effects.Select(effect => PlainObjectMemberWrite(effect, let.Name)!.Value)
             .ToList();
 
-        if (writes.Any(write => write is null))
-            return null;
-
-        var members = writes.Select(write => write!.Value).ToList();
         var keys = members.Select(write => AccessedMemberName(write.Member)).ToList();
 
         if (
@@ -2342,6 +2370,30 @@ public static partial class IrToTsExpressionBridge
             ),
         ]);
     }
+
+    /// <summary>
+    /// Whether <paramref name="let"/> lowers to an expression that binds nothing:
+    /// a <c>[PlainObject]</c> initializer folded into one literal, or an
+    /// <c>as</c> whose <c>asType</c> call evaluates its operand once itself. A
+    /// statement keeps such a value in place instead of hoisting its binding
+    /// (<see cref="TsLetHoisting"/>).
+    /// </summary>
+    internal static bool LowersWithoutBinding(IrLetExpression let, IrToTsBridgeContext context) =>
+        IsPlainObjectInitializer(let) || BoundAsCastDescriptorOf(let, context) is not null;
+
+    /// <summary>
+    /// Whether <paramref name="let"/> is the extractor's lowering of an
+    /// object-initialized <c>[PlainObject]</c> construction whose effects all
+    /// assign members of the bound object (see <see cref="TryFoldPlainObjectInitializer"/>).
+    /// </summary>
+    private static bool IsPlainObjectInitializer(IrLetExpression let) =>
+        let
+            is {
+                Value: IrNewExpression { IsPlainObject: true },
+                Body: IrSequenceExpression { Result: IrIdentifier result } sequence,
+            }
+        && result.Name == let.Name
+        && sequence.Effects.All(effect => PlainObjectMemberWrite(effect, let.Name) is not null);
 
     /// <summary>
     /// The member and value of <c>instance.Member = value</c> written straight
@@ -2504,7 +2556,12 @@ public static partial class IrToTsExpressionBridge
 
         var args = ne.Arguments.Select(a => MapArgument(a, context)).ToList();
 
-        var ordered = TsEvaluationOrder.Bind(args, ne.EvaluationOrder, BoundArgumentPrefix);
+        var ordered = TsEvaluationOrder.Bind(
+            args,
+            ne.EvaluationOrder,
+            BoundArgumentPrefix,
+            context
+        );
 
         var construction = MapConstruction(ne, ordered.Arguments, context);
 
@@ -2512,7 +2569,8 @@ public static partial class IrToTsExpressionBridge
             ordered.Bindings,
             ne.Type is IrCollectionTypeRef collection
                 ? CollectionTypeArgumentSlots.Append(construction, collection, context.RuntimeTypes)
-                : construction
+                : construction,
+            context
         );
     }
 
@@ -2607,7 +2665,7 @@ public static partial class IrToTsExpressionBridge
 
         if (
             context.Bcl is not null
-            && MapDeclarativeConstruction(ne, args, context.Bcl, context.RuntimeTypes) is { } mapped
+            && MapDeclarativeConstruction(ne, args, context.Bcl, context) is { } mapped
         )
             return mapped;
 
@@ -2657,7 +2715,7 @@ public static partial class IrToTsExpressionBridge
             var factoryCallee = new TsPropertyAccess(MapNewTarget(ne.Type), factory);
             var typeArguments = ConstructedTypeArgumentsOf(ne.Type, context);
 
-            return InEvaluationOrder(ne, args, ordered => new TsCallExpression(
+            return InEvaluationOrder(ne, args, context, ordered => new TsCallExpression(
                 factoryCallee,
                 WithReifiedNewArguments(ordered, ne, context),
                 TypeArguments: typeArguments
@@ -2673,7 +2731,7 @@ public static partial class IrToTsExpressionBridge
             ? ConstructedTypeArgumentsOf(ne.Type, context)
             : null;
 
-        return InEvaluationOrder(ne, args, ordered => new TsNewExpression(
+        return InEvaluationOrder(ne, args, context, ordered => new TsNewExpression(
             MapNewTarget(ne.Type),
             WithReifiedNewArguments(ordered, ne, context),
             explicitTypeArguments
@@ -2705,7 +2763,8 @@ public static partial class IrToTsExpressionBridge
         var ordered = TsEvaluationOrder.Bind(
             WithoutNullRestArray(call.Arguments, loweredArgs),
             overload.EvaluationOrder,
-            BoundArgumentPrefix
+            BoundArgumentPrefix,
+            context
         );
 
         var superCall = new TsCallExpression(
@@ -2717,7 +2776,7 @@ public static partial class IrToTsExpressionBridge
                 .ToList()
         );
 
-        return BoundBefore(ordered.Bindings, superCall);
+        return BoundBefore(ordered.Bindings, superCall, context);
     }
 
     /// <summary>
@@ -2743,7 +2802,8 @@ public static partial class IrToTsExpressionBridge
         var ordered = TsEvaluationOrder.Bind(
             WithoutNullRestArray(call.Arguments, loweredArgs),
             overload.EvaluationOrder,
-            BoundArgumentPrefix
+            BoundArgumentPrefix,
+            context
         );
 
         var fastPath = TsOverloadCallSites.MethodFastPathOf(overload);
@@ -2774,7 +2834,7 @@ public static partial class IrToTsExpressionBridge
             ? [receiver.Binding, .. ordered.Bindings]
             : ordered.Bindings;
 
-        return BoundBefore(bindings, fastPathCall);
+        return BoundBefore(bindings, fastPathCall, context);
     }
 
     /// <summary>
@@ -2795,10 +2855,10 @@ public static partial class IrToTsExpressionBridge
         if (RemapsPurely(receiver))
             return null;
 
-        var reference = new TsIdentifier(ReceiverArgumentPrefix);
+        var reference = TsEvaluationOrder.NameOf(ReceiverArgumentPrefix, context);
 
         return (
-            new TsImmediateBinding(ReceiverArgumentPrefix, MapNullTolerant(receiver, context)),
+            new TsImmediateBinding(reference.Name, MapNullTolerant(receiver, context)),
             reference
         );
     }
@@ -2903,16 +2963,18 @@ public static partial class IrToTsExpressionBridge
     private static TsExpression InEvaluationOrder(
         IrNewExpression ne,
         IReadOnlyList<TsExpression> args,
+        IrToTsBridgeContext context,
         Func<IReadOnlyList<TsExpression>, TsExpression> build
     )
     {
         var ordered = TsEvaluationOrder.Bind(
             WithoutNullRestArray(ne.Arguments, args),
             ne.Overload?.EvaluationOrder,
-            BoundArgumentPrefix
+            BoundArgumentPrefix,
+            context
         );
 
-        return BoundBefore(ordered.Bindings, build(ordered.Arguments));
+        return BoundBefore(ordered.Bindings, build(ordered.Arguments), context);
     }
 
     private static bool KeepsTypeArguments(IrNewExpression ne) =>
@@ -2953,9 +3015,10 @@ public static partial class IrToTsExpressionBridge
         IrNewExpression ne,
         IReadOnlyList<TsExpression> args,
         DeclarativeMappingRegistry bclRegistry,
-        RuntimeTypeReachabilityResult runtimeTypes
+        IrToTsBridgeContext context
     )
     {
+        var runtimeTypes = context.RuntimeTypes;
         var typeArguments = (ne.TypeArguments ?? [])
             .Select(typeArgument => IrToTsTypeMapper.Map(typeArgument))
             .ToList();
@@ -2976,7 +3039,7 @@ public static partial class IrToTsExpressionBridge
         );
 
         return DropsASideEffect(ne.Arguments, referencedArgumentIndices)
-            ? BindSideEffectsInSourceOrder(template, ne.Arguments)
+            ? BindSideEffectsInSourceOrder(template, ne.Arguments, context)
             : template;
     }
 
@@ -2989,21 +3052,23 @@ public static partial class IrToTsExpressionBridge
             .Any(argument => !IrEvaluationTraits.IsSideEffectFree(argument.Value));
 
     /// <summary>
-    /// <c>(($arg0, $arg1) =&gt; template($arg0, $arg1, pure2))(read0, effect1)</c>.
+    /// <c>($arg0 = read0, $arg1 = effect1, template($arg0, $arg1, pure2))</c>
+    /// (<see cref="BoundBefore"/>).
     /// Every argument up to the last side-effecting one is bound, in source
     /// order, unless it is a literal: a side-effect-free read (a field, a
     /// local) placed before an effect must still observe the value from
     /// before that effect. Arguments after the last effect stay inline, as
     /// C# evaluates them after it too. The parameter names contain a
     /// <c>$</c>, which no C# identifier can, so they never shadow a user name;
-    /// the arrow body only reads parameters and values evaluated after every
-    /// effect, so it needs no <c>async</c> even when a bound argument awaits.
+    /// the template only reads them and values evaluated after every effect, so
+    /// an arrow that binds them needs no <c>async</c> even when one awaits.
     /// The template arguments are the lowered <paramref name="arguments"/>,
     /// index for index.
     /// </summary>
     private static TsExpression BindSideEffectsInSourceOrder(
         TsTemplate template,
-        IReadOnlyList<IrArgument> arguments
+        IReadOnlyList<IrArgument> arguments,
+        IrToTsBridgeContext context
     )
     {
         var bindings = new List<TsImmediateBinding>();
@@ -3024,14 +3089,13 @@ public static partial class IrToTsExpressionBridge
                 continue;
             }
 
-            var binding = new TsImmediateBinding($"$arg{index}", template.Arguments[index]);
+            var name = TsEvaluationOrder.NameOf($"{BoundArgumentPrefix}{index}", context);
+            var binding = new TsImmediateBinding(name.Name, template.Arguments[index]);
             bindings.Add(binding);
             boundArguments.Add(new TsIdentifier(binding.Name));
         }
 
-        var body = template with { Arguments = boundArguments };
-
-        return TsImmediateInvocation.Of(bindings, [new TsReturnStatement(body)], isAsync: false);
+        return BoundBefore(bindings, template with { Arguments = boundArguments }, context);
     }
 
     private static int LastSideEffectIndex(IReadOnlyList<IrArgument> arguments)

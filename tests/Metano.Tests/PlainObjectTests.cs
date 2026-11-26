@@ -288,7 +288,7 @@ public class PlainObjectTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : getTitle($receiver))(this.find());"
+                "return ($receiver = this.find(), $receiver == null ? null : getTitle($receiver));"
             );
     }
 
@@ -344,6 +344,7 @@ public class PlainObjectTests
         await Assert
             .That(result["counter.ts"])
             .Contains("export function add(self: Counter, amount: number)");
+
         await Assert.That(result["service.ts"]).Contains("add(c, n)");
     }
 

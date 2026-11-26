@@ -16,8 +16,9 @@ namespace Metano.Compiler.TypeScript.AST;
 /// (<c>override readonly name: string = "…";</c>), which
 /// <c>noImplicitOverride</c> requires to say so.</param>
 /// <param name="StoreInitializer">The <see cref="Initializer"/> for a constructor store:
-/// the same value over temporaries the store's statement list declares instead of an
-/// immediately invoked function; <c>null</c> when the initializer needs none.</param>
+/// the same value after the statements that declare its temporaries and evaluate its
+/// hoisted bindings, instead of an immediately invoked function; <c>null</c> when the
+/// initializer needs none.</param>
 public sealed record TsFieldMember(
     string Name,
     TsType Type,
@@ -35,7 +36,9 @@ public sealed record TsFieldMember(
 ) : TsClassMember;
 
 /// <summary>
-/// A field initializer as a constructor statement stores it: <see cref="Value"/> assigns
-/// the temporaries <see cref="Temporaries"/> declares (<c>let $t0, $t1;</c>) inline.
+/// A field initializer as a constructor statement stores it: <see cref="Prelude"/> runs
+/// first — it declares the temporaries <see cref="Value"/> assigns inline
+/// (<c>let $t0, $t1;</c>) and evaluates the bindings hoisted out of it
+/// (<c>const t = new T(); t.x = 1;</c>) — then the store of <see cref="Value"/>.
 /// </summary>
-public sealed record TsStoreInitializer(TsExpression Value, IReadOnlyList<TsStatement> Temporaries);
+public sealed record TsStoreInitializer(TsExpression Value, IReadOnlyList<TsStatement> Prelude);

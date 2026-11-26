@@ -98,7 +98,8 @@ export class Small {
   }
 
   onElementOnce(i: number): void {
-    ((receiver$temp$0) => this.cells[receiver$temp$0] = (this.cells[receiver$temp$0]! + 1) & 0xFF)(this.next(i));
+    const receiver$temp$0 = this.next(i);
+    this.cells[receiver$temp$0] = (this.cells[receiver$temp$0]! + 1) & 0xFF;
   }
 
   onOptional(): void {

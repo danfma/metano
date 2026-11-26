@@ -59,13 +59,10 @@ export class Ordered {
   }
 
   static list(capacity: number): SortedList<string, number> {
-    let $t;
+    const receiver$temp$0 = SortedList.withCapacity<string, number>(capacity);
+    receiver$temp$0.set("x", 1);
 
-    return ((receiver$temp$0) => {
-      (receiver$temp$0.set("x", $t = 1), $t);
-
-      return receiver$temp$0;
-    })((SortedList.withCapacity<string, number>(capacity)));
+    return receiver$temp$0;
   }
 
   static listExpression(): SortedList<string, number> {

@@ -74,11 +74,10 @@ export class EnumArithmetic {
   }
 
   static liftedPostfix(b: B | null): B | null {
-    return ((receiver$temp$0) => {
-      b = receiver$temp$0 == null ? null : ((receiver$temp$0 + 1) & 0xFF) as B;
+    const receiver$temp$0 = b;
+    b = receiver$temp$0 == null ? null : ((receiver$temp$0 + 1) & 0xFF) as B;
 
-      return receiver$temp$0;
-    })(b);
+    return receiver$temp$0;
   }
 
   static checkedLifted(b: B | null, n: number | null): B | null {

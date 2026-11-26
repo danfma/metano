@@ -135,7 +135,9 @@ public class BooleanLogicalOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 === false || receiver$temp$1 === false ? false : receiver$temp$0 == null || receiver$temp$1 == null ? null : true)(Logic.touch(b)))(Logic.touch(a));"
+                "const receiver$temp$0 = Logic.touch(a);\n"
+                    + "    const receiver$temp$1 = Logic.touch(b);\n\n"
+                    + "    return receiver$temp$0 === false || receiver$temp$1 === false ? false : receiver$temp$0 == null || receiver$temp$1 == null ? null : true;"
             );
     }
 

@@ -611,7 +611,7 @@ public class InlineAttributeTranspileTests
     }
 
     [Test]
-    public async Task Inline_DefaultMethod_LowersAsIifeAtCallSite()
+    public async Task Inline_DefaultMethod_BindsItsParameterAtTheCallSite()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -635,7 +635,8 @@ public class InlineAttributeTranspileTests
             await Assert.That(helpers).DoesNotContain("squared");
 
         var output = result["caller.ts"];
-        await Assert.That(output).Contains("((x: number) => Math.imul(x, x))((n + 1) | 0)");
+        await Assert.That(output).Contains("let $x: number;");
+        await Assert.That(output).Contains("return ($x = (n + 1) | 0, Math.imul($x, $x));");
         await Assert.That(output).DoesNotContain("(n + 1) * (n + 1)");
     }
 
@@ -737,7 +738,7 @@ public class InlineAttributeTranspileTests
     }
 
     [Test]
-    public async Task Inline_NonRecursive_StillEmitsArrow()
+    public async Task Inline_NonRecursive_ExpandsWithoutAFunction()
     {
         // Regression guard: without direct self-reference, the lowered
         // body keeps the arrow form (#193 step 2/3 unchanged).
@@ -760,7 +761,7 @@ public class InlineAttributeTranspileTests
         );
 
         var output = result["caller.ts"];
-        await Assert.That(output).Contains("((x: number) => Math.imul(x, x))");
+        await Assert.That(output).Contains("return ($x = n, Math.imul($x, $x));");
         await Assert.That(output).DoesNotContain("function inline$");
     }
 

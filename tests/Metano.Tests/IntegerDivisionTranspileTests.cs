@@ -210,7 +210,8 @@ public class IntegerDivisionTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "((receiver$temp$0) => receiver$temp$0.value = intDiv(receiver$temp$0.value, 2))(Counter.pick(c));"
+                "const receiver$temp$0 = Counter.pick(c);\n"
+                    + "    receiver$temp$0.value = intDiv(receiver$temp$0.value, 2);"
             );
     }
 
@@ -235,7 +236,8 @@ public class IntegerDivisionTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "((receiver$temp$0) => cells[receiver$temp$0] = intDiv(cells[receiver$temp$0]!, 2))(((index = (index + 1) | 0) - 1) | 0);"
+                "const receiver$temp$0 = ((index = (index + 1) | 0) - 1) | 0;\n"
+                    + "    cells[receiver$temp$0] = intDiv(cells[receiver$temp$0]!, 2);"
             );
 
         await Assert.That(output).Contains("cells[index] = intDiv(cells[index]!, 2);");

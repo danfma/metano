@@ -47,11 +47,9 @@ export class Uses {
   }
 
   static steps(arr: Decimal[], k: number): Decimal {
-    const d = ((receiver$temp$0) => {
-      arr[k] = receiver$temp$0.plus(new Decimal("1"));
-
-      return receiver$temp$0;
-    })(arr[k]!);
+    const receiver$temp$0 = arr[k]!;
+    arr[k] = receiver$temp$0.plus(new Decimal("1"));
+    const d = receiver$temp$0;
     arr[k] = arr[k]!.minus(new Decimal("1"));
 
     return d;

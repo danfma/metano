@@ -106,8 +106,12 @@ public class ObjectInitializerTests
             "public static Dto Make() => new Dto(1) { Id = 5 };"
         );
 
-        await Assert.That(output).Contains("Object.assign(receiver$temp$0, { id: 5 });");
-        await Assert.That(output).Contains("})({ id: 1 });");
+        await Assert
+            .That(output)
+            .Contains(
+                "return (receiver$temp$0 = { id: 1 }, "
+                    + "(receiver$temp$0 as { id: typeof receiver$temp$0.id }).id = 5, receiver$temp$0);"
+            );
     }
 
     [Test]
@@ -139,7 +143,7 @@ public class ObjectInitializerTests
 
         var output = result["grid.ts"];
 
-        await Assert.That(output).Contains("})(this.next());");
+        await Assert.That(output).Contains("const receiver$temp$1 = this.next();");
         await Assert.That(output).Contains(".cells.get(receiver$temp$1).value = 1;");
     }
 
@@ -176,7 +180,7 @@ public class ObjectInitializerTests
             .Contains(".get(receiver$temp$1).v = ((i = (i + 1) | 0) - 1) | 0;");
 
         await Assert.That(output).Contains(".get(receiver$temp$1).w = 0;");
-        await Assert.That(output).Contains("})(i);");
+        await Assert.That(output).Contains("const receiver$temp$1 = i;");
     }
 
     [Test]
@@ -211,7 +215,7 @@ public class ObjectInitializerTests
     }
 
     [Test]
-    public async Task AwaitInsideInitializer_MakesTheBindingAsync()
+    public async Task AwaitInsideInitializer_StaysInTheAsyncFunction()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -234,8 +238,7 @@ public class ObjectInitializerTests
         await Assert
             .That(result["factory.ts"])
             .Contains(
-                "return await (async (receiver$temp$0) => {\n"
-                    + "      receiver$temp$0.value = await value;"
+                "const receiver$temp$0 = new Box();\n" + "    receiver$temp$0.value = await value;"
             );
     }
 
@@ -362,7 +365,10 @@ public class ObjectInitializerTests
         await Assert.That(output).Contains("this._value = 0;");
         await Assert.That(output).Contains("set value(value: number) {");
         await Assert.That(output).Contains("this._value = Math.imul(value, 2);");
-        await Assert.That(output).Contains("Object.assign(receiver$temp$0, { value: 3 });");
+
+        await Assert
+            .That(output)
+            .Contains("(receiver$temp$0 as { value: typeof receiver$temp$0.value }).value = 3;");
 
         await Assert
             .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))

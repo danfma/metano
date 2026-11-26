@@ -57,7 +57,10 @@ export class Comparisons {
   }
 
   evaluatedOnce(c: Counter): boolean {
-    return ((tuple$temp$0) => ((tuple$temp$1) => tuple$temp$0[0] === tuple$temp$1 && tuple$temp$0[1] === 10)(c.next()))(c.pair());
+    const tuple$temp$0 = c.pair();
+    const tuple$temp$1 = c.next();
+
+    return tuple$temp$0[0] === tuple$temp$1 && tuple$temp$0[1] === 10;
   }
 
   decimalElements(a: [Decimal, number], d: Decimal): boolean {

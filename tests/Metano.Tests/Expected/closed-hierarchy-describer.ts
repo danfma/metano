@@ -149,10 +149,12 @@ export class Describer {
   }
 
   static statement(shape: Shape): string {
+    let $square;
+
     switch (true) {
       case shape instanceof Circle:
         return "round";
-      case shape instanceof Square && ((square) => square.area > 4)(shape):
+      case shape instanceof Square && ($square = shape, $square.area > 4):
         {
           const square = shape;
 

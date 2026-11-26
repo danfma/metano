@@ -19,29 +19,39 @@ export class SourceOrderCalls {
   private constructor() { }
 
   static instance(e: Engine): number {
-    return (($arg1, $arg0) => e.single($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), e.single($arg0, $arg1));
   }
 
   static getters(e: Engine, h: Holder): number {
-    return (($arg1, $arg0) => e.single($arg0, $arg1))(h.p, h.q);
+    let $arg1, $arg0;
+
+    return ($arg1 = h.p, $arg0 = h.q, e.single($arg0, $arg1));
   }
 
   static static(): number {
-    return (($arg1, $arg0) => Engine.mix($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), Engine.mix($arg0, $arg1));
   }
 
   static new(h: Holder): number {
-    return (($arg1, $arg0) => new Pair($arg0, $arg1))(h.p, h.q).total;
+    let $arg1, $arg0;
+
+    return ($arg1 = h.p, $arg0 = h.q, new Pair($arg0, $arg1)).total;
   }
 
   static targetTypedNew(): number {
-    const pair = (($arg1, $arg0) => new Pair($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const pair = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), new Pair($arg0, $arg1));
 
     return pair.total;
   }
 
   static record(): number {
-    const rec = (($arg1, $arg0) => new Rec($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const rec = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), new Rec($arg0, $arg1));
 
     return (Math.imul(rec.a, 10) + rec.b) | 0;
   }
@@ -59,15 +69,21 @@ export class SourceOrderCalls {
   }
 
   static extension(e: Engine): number {
-    return (($arg0, $arg2, $arg1) => scale($arg0, $arg1, $arg2))(e, Trace.next("p"), Trace.next("q"));
+    let $arg0, $arg2, $arg1;
+
+    return ($arg0 = e, $arg2 = Trace.next("p"), $arg1 = Trace.next("q"), scale($arg0, $arg1, $arg2));
   }
 
   static extensionReceiver(h: Holder): number {
-    return (($arg0, $arg2, $arg1) => scale($arg0, $arg1, $arg2))(h.target, Trace.next("p"), Trace.next("q"));
+    let $arg0, $arg2, $arg1;
+
+    return ($arg0 = h.target, $arg2 = Trace.next("p"), $arg1 = Trace.next("q"), scale($arg0, $arg1, $arg2));
   }
 
   static module(): number {
-    return (($arg1, $arg0) => blend($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), blend($arg0, $arg1));
   }
 
   static makeOp(): Op {
@@ -77,7 +93,9 @@ export class SourceOrderCalls {
   }
 
   static computedCallee(): number {
-    return (($recv, $arg1, $arg0) => $recv($arg0, $arg1))(SourceOrderCalls.makeOp(), Trace.next("p"), Trace.next("q"));
+    let $recv, $arg1, $arg0;
+
+    return ($recv = SourceOrderCalls.makeOp(), $arg1 = Trace.next("p"), $arg0 = Trace.next("q"), $recv($arg0, $arg1));
   }
 
   static thisReceiver(h: Holder): number {
@@ -85,79 +103,109 @@ export class SourceOrderCalls {
   }
 
   static delegateProperty(h: Holder): number {
-    return (($recv, $arg1, $arg0) => $recv($arg0, $arg1))(h.fn, Trace.next("p"), Trace.next("q"));
+    let $recv, $arg1, $arg0;
+
+    return ($recv = h.fn, $arg1 = Trace.next("p"), $arg0 = Trace.next("q"), $recv($arg0, $arg1));
   }
 
   static delegatePropertyInvoke(h: Holder): number {
-    return (($recv, $arg1, $arg0) => $recv($arg0, $arg1))(h.fn, Trace.next("p"), Trace.next("q"));
+    let $recv, $arg1, $arg0;
+
+    return ($recv = h.fn, $arg1 = Trace.next("p"), $arg0 = Trace.next("q"), $recv($arg0, $arg1));
   }
 
   static delegateField(h: Holder): number {
-    return (($recv, $arg1, $arg0) => $recv($arg0, $arg1))(h.field, Trace.next("p"), Trace.next("q"));
+    let $recv, $arg1, $arg0;
+
+    return ($recv = h.field, $arg1 = Trace.next("p"), $arg0 = Trace.next("q"), $recv($arg0, $arg1));
   }
 
   static extensionBlock(h: Holder): number {
-    return (($arg0, $arg2, $arg1) => scale2($arg0, $arg1, $arg2))(h.target, Trace.next("p"), Trace.next("q"));
+    let $arg0, $arg2, $arg1;
+
+    return ($arg0 = h.target, $arg2 = Trace.next("p"), $arg1 = Trace.next("q"), scale2($arg0, $arg1, $arg2));
   }
 
   static emitOnReceiver(h: Holder): number {
-    return (($arg0, $arg2, $arg1) => ($arg0.single($arg1, $arg2)))(h.target, Trace.next("p"), Trace.next("q"));
+    let $arg0, $arg2, $arg1;
+
+    return ($arg0 = h.target, $arg2 = Trace.next("p"), $arg1 = Trace.next("q"), ($arg0.single($arg1, $arg2)));
   }
 
   static delegate(): number {
+    let $arg1, $arg0;
     const op = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
 
-    return (($arg1, $arg0) => op($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), op($arg0, $arg1));
   }
 
   static delegateInvoke(): number {
+    let $arg1, $arg0;
     const op = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
 
-    return (($arg1, $arg0) => op($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), op($arg0, $arg1));
   }
 
   static funcDelegate(): number {
+    let $arg1, $arg0;
     const fn = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
 
-    return (($arg1, $arg0) => fn($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), fn($arg0, $arg1));
   }
 
   static optionalSkipped(e: Engine): number {
-    return (($arg2, $arg0, $arg1) => e.opt($arg0, $arg1, $arg2))(Trace.next("p"), Trace.next("q"), 7);
+    let $arg2, $arg0, $arg1;
+
+    return ($arg2 = Trace.next("p"), $arg0 = Trace.next("q"), $arg1 = 7, e.opt($arg0, $arg1, $arg2));
   }
 
   static params(e: Engine): number {
-    return (($arg1, $arg0, $arg2) => e.rest($arg0, $arg1, ...$arg2))(Trace.next("p"), Trace.next("q"), [1, 2]);
+    let $arg1, $arg0, $arg2;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), $arg2 = [1, 2], e.rest($arg0, $arg1, ...$arg2));
   }
 
   static receiver(h: Holder): number {
-    return (($recv, $arg1, $arg0) => $recv.single($arg0, $arg1))(h.target, Trace.next("p"), Trace.next("q"));
+    let $recv, $arg1, $arg0;
+
+    return ($recv = h.target, $arg1 = Trace.next("p"), $arg0 = Trace.next("q"), $recv.single($arg0, $arg1));
   }
 
   static nullConditional(e: Engine | null): number {
-    return (e == null ? null : (($arg1, $arg0) => e.single($arg0, $arg1))(Trace.next("p"), Trace.next("q"))) ?? -1;
+    let $arg1, $arg0;
+
+    return (e == null ? null : ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), e.single($arg0, $arg1))) ?? -1;
   }
 
   static lambdaArgument(e: Engine): number {
-    return (($arg2, $arg1, $arg0) => e.fold($arg0, $arg1, $arg2))(Trace.next("p"), Trace.next("q"), (x: number) => (x + 1) | 0);
+    let $arg2, $arg1, $arg0;
+
+    return ($arg2 = Trace.next("p"), $arg1 = Trace.next("q"), $arg0 = (x: number) => (x + 1) | 0, e.fold($arg0, $arg1, $arg2));
   }
 
   static plainObject(): number {
-    const dto = (($arg1, $arg0) => ({ f: $arg0, d: $arg1 }))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const dto = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), { f: $arg0, d: $arg1 });
 
     return (Math.imul(dto.f, 10) + dto.d) | 0;
   }
 
   static emit(): number {
-    return (($arg1, $arg0) => ($arg0 * 10 + $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), ($arg0 * 10 + $arg1));
   }
 
   static bclMapped(): number {
-    return (($arg1, $arg0) => Math.max($arg0, $arg1))(Trace.next("p") * 0, Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p") * 0, $arg0 = Trace.next("q"), Math.max($arg0, $arg1));
   }
 
   static nested(e: Engine): number {
-    return (($arg1, $arg0) => e.single($arg0, $arg1))((($arg1, $arg0) => e.single($arg0, $arg1))(Trace.next("p"), Trace.next("q")), Trace.next("r"));
+    let $arg1, $arg0, $arg1_1, $arg0_1;
+
+    return ($arg1_1 = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), e.single($arg0, $arg1)), $arg0_1 = Trace.next("r"), e.single($arg0_1, $arg1_1));
   }
 
   static tag(tag: string): string {
@@ -167,27 +215,39 @@ export class SourceOrderCalls {
   }
 
   static paramsOmitted(e: Engine): number {
-    return (($arg1, $arg0) => e.rest($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), e.rest($arg0, $arg1));
   }
 
   static stringEnumArgument(t: Tuner): number {
-    return (($arg2, $arg1, $arg0) => t.tuned($arg0, $arg1, $arg2))(Trace.next("p"), Tone.High, Trace.next("q"));
+    let $arg2, $arg1, $arg0;
+
+    return ($arg2 = Trace.next("p"), $arg1 = Tone.High, $arg0 = Trace.next("q"), t.tuned($arg0, $arg1, $arg2));
   }
 
   static generic(t: Tuner): number {
-    return (($arg1, $arg0) => t.pick($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), t.pick($arg0, $arg1));
   }
 
   static nullArgument(t: Tuner): number {
-    return (($arg1, $arg0) => t.named($arg0, $arg1))(SourceOrderCalls.tag("p"), (SourceOrderCalls.tag("q") ?? "") + "x");
+    let $arg1, $arg0;
+
+    return ($arg1 = SourceOrderCalls.tag("p"), $arg0 = (SourceOrderCalls.tag("q") ?? "") + "x", t.named($arg0, $arg1));
   }
 
   static bclInstance(): number {
-    return (($arg1, $arg0) => stringSubstring("abcdefgh", $arg0, $arg1))(Trace.next("p"), Trace.next("q")).length;
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), stringSubstring("abcdefgh", $arg0, $arg1)).length;
   }
 
   static bclException(): number {
-    return ((receiver$temp$0) => ((receiver$temp$1) => new ArgumentException(receiver$temp$1, receiver$temp$0))(SourceOrderCalls.tag("q")))(SourceOrderCalls.tag("p")).message.length;
+    let receiver$temp$1, receiver$temp$0;
+
+    return (receiver$temp$0 = SourceOrderCalls.tag("p"), (receiver$temp$1 = SourceOrderCalls.tag("q"), new ArgumentException(receiver$temp$1, receiver$temp$0))).message.length;
   }
 }
 
@@ -225,7 +285,9 @@ export class Holder {
   }
 
   onThis(e: Engine): number {
-    return (($arg1, $arg0) => e.single($arg0, $arg1))(this.p, this.q);
+    let $arg1, $arg0;
+
+    return ($arg1 = this.p, $arg0 = this.q, e.single($arg0, $arg1));
   }
 }
 
@@ -330,27 +392,39 @@ export class ParamsCalls {
   private constructor() { }
 
   static arrayOmitted(e: Collector): number {
-    return (($arg0, $arg2, $arg1) => e.restA($arg0, $arg1, $arg2))(Trace.next("x"), Trace.next("p"), Trace.next("q"));
+    let $arg0, $arg2, $arg1;
+
+    return ($arg0 = Trace.next("x"), $arg2 = Trace.next("p"), $arg1 = Trace.next("q"), e.restA($arg0, $arg1, $arg2));
   }
 
   static arrayOmittedLastFirst(e: Collector): number {
-    return (($arg2, $arg0, $arg1) => e.restA($arg0, $arg1, $arg2))(Trace.next("p"), Trace.next("x"), Trace.next("q"));
+    let $arg2, $arg0, $arg1;
+
+    return ($arg2 = Trace.next("p"), $arg0 = Trace.next("x"), $arg1 = Trace.next("q"), e.restA($arg0, $arg1, $arg2));
   }
 
   static arrayGiven(e: Collector): number {
-    return (($arg2, $arg0, $arg1, $arg3) => e.restA($arg0, $arg1, $arg2, ...$arg3))(Trace.next("p"), Trace.next("x"), Trace.next("q"), [1, 2]);
+    let $arg2, $arg0, $arg1, $arg3;
+
+    return ($arg2 = Trace.next("p"), $arg0 = Trace.next("x"), $arg1 = Trace.next("q"), $arg3 = [1, 2], e.restA($arg0, $arg1, $arg2, ...$arg3));
   }
 
   static listOmitted(e: Collector): number {
-    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of<number>([]));
+    let $arg0, $arg2, $arg1, $arg3;
+
+    return ($arg0 = Trace.next("x"), $arg2 = Trace.next("p"), $arg1 = Trace.next("q"), $arg3 = List.of<number>([]), e.restL($arg0, $arg1, $arg2, $arg3));
   }
 
   static listPositionalFirst(e: Collector): number {
-    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of<number>([]));
+    let $arg0, $arg2, $arg1, $arg3;
+
+    return ($arg0 = Trace.next("x"), $arg2 = Trace.next("p"), $arg1 = Trace.next("q"), $arg3 = List.of<number>([]), e.restL($arg0, $arg1, $arg2, $arg3));
   }
 
   static listGiven(e: Collector): number {
-    return (($arg0, $arg2, $arg1, $arg3) => e.restL($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), List.of<number>([Trace.next("r")]));
+    let $arg0, $arg2, $arg1, $arg3;
+
+    return ($arg0 = Trace.next("x"), $arg2 = Trace.next("p"), $arg1 = Trace.next("q"), $arg3 = List.of<number>([Trace.next("r")]), e.restL($arg0, $arg1, $arg2, $arg3));
   }
 
   static listPositional(e: Collector): number {
@@ -358,11 +432,15 @@ export class ParamsCalls {
   }
 
   static enumerableOmitted(e: Collector): number {
-    return (($arg0, $arg2, $arg1, $arg3) => e.restE($arg0, $arg1, $arg2, $arg3))(Trace.next("x"), Trace.next("p"), Trace.next("q"), []);
+    let $arg0, $arg2, $arg1, $arg3;
+
+    return ($arg0 = Trace.next("x"), $arg2 = Trace.next("p"), $arg1 = Trace.next("q"), $arg3 = [], e.restE($arg0, $arg1, $arg2, $arg3));
   }
 
   static enumerableOmittedLastFirst(e: Collector): number {
-    return (($arg2, $arg0, $arg1, $arg3) => e.restE($arg0, $arg1, $arg2, $arg3))(Trace.next("p"), Trace.next("x"), Trace.next("q"), []);
+    let $arg2, $arg0, $arg1, $arg3;
+
+    return ($arg2 = Trace.next("p"), $arg0 = Trace.next("x"), $arg1 = Trace.next("q"), $arg3 = [], e.restE($arg0, $arg1, $arg2, $arg3));
   }
 }
 
@@ -373,15 +451,21 @@ export class AmbientCalls {
   private constructor() { }
 
   static delegateProperty(box: NativeBox): number {
-    return (($arg1, $arg0) => box.calc($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), box.calc($arg0, $arg1));
   }
 
   static funcProperty(box: NativeBox): number {
-    return (($arg1, $arg0) => box.compute($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), box.compute($arg0, $arg1));
   }
 
   static delegatePropertyInvoke(box: NativeBox): number {
-    return (($arg1, $arg0) => box.calc($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+
+    return ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), box.calc($arg0, $arg1));
   }
 
   static make(): NativeBox {
@@ -391,6 +475,8 @@ export class AmbientCalls {
   }
 
   static computedReceiver(): number {
-    return (($recv, $arg1, $arg0) => $recv.calc($arg0, $arg1))(AmbientCalls.make(), Trace.next("p"), Trace.next("q"));
+    let $recv, $arg1, $arg0;
+
+    return ($recv = AmbientCalls.make(), $arg1 = Trace.next("p"), $arg0 = Trace.next("q"), $recv.calc($arg0, $arg1));
   }
 }

@@ -361,7 +361,7 @@ public class LinqUnimplementedOverloadTests
         await Assert
             .That(files["calls.ts"])
             .Contains(
-                "return linq((() => {\n      throw new Error(\"Unsupported expression: UnloweredLinqCall\");\n    })(), select((x: number) => Math.imul(x, 2)));"
+                "return linq(throwError(new Error(\"Unsupported expression: UnloweredLinqCall\")), select((x: number) => Math.imul(x, 2)));"
             );
     }
 
@@ -389,7 +389,7 @@ public class LinqUnimplementedOverloadTests
         await Assert
             .That(files["calls.ts"])
             .Contains(
-                "return (() => {\n      throw new Error(\"Unsupported expression: UnsupportedLinqOverload\");"
+                "return throwError(new Error(\"Unsupported expression: UnsupportedLinqOverload\"));"
             );
     }
 
@@ -697,5 +697,5 @@ public class LinqUnimplementedOverloadTests
     ) => diagnostics.Where(diagnostic => diagnostic.Code == DiagnosticCodes.UnsupportedFeature);
 
     private static string Placeholder(string kind) =>
-        $"throw new Error(\"Unsupported expression: {kind}\");";
+        $"throwError(new Error(\"Unsupported expression: {kind}\"))";
 }

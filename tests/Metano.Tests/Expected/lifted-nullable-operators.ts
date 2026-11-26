@@ -26,11 +26,16 @@ export function qtyOrSeven(o: Order): number {
 }
 
 export function twice(o: Order): number | null {
-  return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0)(o.nextQty()))(o.nextQty());
+  const receiver$temp$0 = o.nextQty();
+  const receiver$temp$1 = o.nextQty();
+
+  return receiver$temp$0 == null || receiver$temp$1 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0;
 }
 
 export function nestedPlus(o: Order | null): number | null {
-  return (($receiver) => $receiver == null ? null : $receiver.qty == null ? null : ($receiver.qty + 1) | 0)(o?.next);
+  let $receiver;
+
+  return ($receiver = o?.next, $receiver == null ? null : $receiver.qty == null ? null : ($receiver.qty + 1) | 0);
 }
 
 export function show(o: Order): string {

@@ -526,6 +526,23 @@ public static class IrToTsConstructorDispatcherBridge
         DispatcherBaseCall baseCall,
         string? typeArgumentSlot,
         IrToTsBridgeContext context
+    ) =>
+        TsTemporaries.Around(context, scoped =>
+            LowerConstructorInvocationInScope(ctor, chainDepth, baseCall, typeArgumentSlot, scoped)
+        );
+
+    /// <summary>
+    /// <see cref="LowerConstructorInvocation"/> in the scope of temporaries the
+    /// branch's base call (or delegation) and its body share, so they never
+    /// declare the same name and their declarations come once, ahead of
+    /// <c>super</c>.
+    /// </summary>
+    private static IReadOnlyList<TsStatement> LowerConstructorInvocationInScope(
+        IrConstructorDeclaration ctor,
+        int chainDepth,
+        DispatcherBaseCall baseCall,
+        string? typeArgumentSlot,
+        IrToTsBridgeContext context
     )
     {
         var statements = new List<TsStatement>();
@@ -554,9 +571,9 @@ public static class IrToTsConstructorDispatcherBridge
         }
 
         // The body references the original parameter names, which the caller
-        // already brought into scope; it declares its temporaries at its head.
+        // already brought into scope; its temporaries join the branch's scope.
         if (ctor.Body is { Count: > 0 } body)
-            statements.AddRange(IrToTsStatementBridge.MapBody(body, context));
+            statements.AddRange(IrToTsStatementBridge.MapInScope(body, context));
 
         return statements;
     }

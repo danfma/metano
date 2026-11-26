@@ -51,6 +51,7 @@ public class TupleCastNullableElementTests
     {
         var output = TranspileHelper.Transpile(Source)["casts.ts"];
 
-        await Assert.That(output).Contains(")(h.nested);");
+        await Assert.That(output).Contains("const receiver$temp$0 = h.nested;");
+        await Assert.That(output).DoesNotContain("h.nested[");
     }
 }
