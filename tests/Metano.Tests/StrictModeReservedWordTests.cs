@@ -238,11 +238,12 @@ public class StrictModeReservedWordTests
             """
         );
 
-        await Assert.That(files["let_.ts"]).Contains("return let_.makeN(args[0] as number);");
-        await Assert.That(files["let_.ts"]).DoesNotContain("return let.");
-        await Assert
-            .That(files["signals.ts"])
-            .Contains("return Signals.describeInt32(args[0] as number);");
+        var escaped = files["let_.ts"];
+        var renamed = files["signals.ts"];
+
+        await Assert.That(escaped).Contains("return let_.makeN(args[0] as number);");
+        await Assert.That(escaped).DoesNotContain("return let.");
+        await Assert.That(renamed).Contains("return Signals.describeInt32(args[0] as number);");
     }
 
     [Test]
@@ -277,10 +278,9 @@ public class StrictModeReservedWordTests
         var producer = TranspileHelper.Transpile(library);
         var viaSource = TranspileHelper.TranspileWithLibrary(library, consumer)["app-let.ts"];
         var viaImage = TranspileHelper.TranspileWithLibraryImage(library, consumer)["app-let.ts"];
+        var declared = string.Join("\n", producer.Values);
 
-        await Assert
-            .That(string.Join("\n", producer.Values))
-            .Contains("static readonly bylet_Lbl = ");
+        await Assert.That(declared).Contains("static readonly bylet_Lbl = ");
         await Assert.That(viaSource).Contains("super(let_.bylet_Lbl, ");
         await Assert.That(viaSource).DoesNotContain("let_.byletLbl");
         await Assert.That(viaImage).Contains("super(let_.bylet_Lbl, ");

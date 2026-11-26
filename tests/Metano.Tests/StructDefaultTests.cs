@@ -80,11 +80,10 @@ public class StructDefaultTests
     {
         var (files, diagnostics) = DartTranspileHelper.Transpile(ParameterDefaultSource);
         var output = string.Join("\n", files.Values);
+        var warned = diagnostics.Any(d => d.Message.Contains("'default(Vec)' has no literal"));
 
         await Assert.That(output).DoesNotContain("Vec v = Vec()");
         await Assert.That(output).Contains("/* default */");
-        await Assert
-            .That(diagnostics.Any(d => d.Message.Contains("'default(Vec)' has no literal")))
-            .IsTrue();
+        await Assert.That(warned).IsTrue();
     }
 }

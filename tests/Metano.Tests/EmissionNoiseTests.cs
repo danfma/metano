@@ -222,6 +222,7 @@ public class EmissionNoiseTests
             }
             """
         );
+
         var output = files["probes.ts"];
 
         await Assert.That(output).Contains("s = (s ?? \"\") + \"b\";");

@@ -129,6 +129,16 @@ public sealed record IrExtractionContext(
     public Func<INamedTypeSymbol, string?>? UnprintableTextReason { get; init; }
 
     /// <summary>
+    /// Whether the target gives a struct that declares a constructor a zero
+    /// value of its own (#802), so <c>default(S)</c> lowers to a struct-default
+    /// construction (<see cref="Metano.Compiler.IR.IrNewExpression.IsStructDefault"/>):
+    /// TypeScript reads it from the struct's <c>$default()</c> factory. <c>false</c>,
+    /// the default, for a target with no such value: <c>default(S)</c> keeps the
+    /// placeholder and its MS0001 warning (Dart).
+    /// </summary>
+    public bool EmitsStructZeroValue { get; init; }
+
+    /// <summary>
     /// <see cref="KeepsNativeCollections"/> for a code path that holds only the
     /// target language (the type mapper, the overload-group reporters).
     /// </summary>
@@ -161,16 +171,6 @@ public sealed record IrExtractionContext(
     /// such call keeps the source form (Dart).
     /// </summary>
     public Func<IMethodSymbol, bool>? EmitsBrandedFastPath { get; init; }
-
-    /// <summary>
-    /// Whether the target gives a struct that declares a constructor a zero
-    /// value of its own (#802), so <c>default(S)</c> lowers to a struct-default
-    /// construction (<see cref="Metano.Compiler.IR.IrNewExpression.IsStructDefault"/>):
-    /// TypeScript reads it from the struct's <c>$default()</c> factory. <c>false</c>,
-    /// the default, for a target with no such value: <c>default(S)</c> keeps the
-    /// placeholder and its MS0001 warning (Dart).
-    /// </summary>
-    public bool EmitsStructZeroValue { get; init; }
 
     /// <summary>
     /// The port through which a target says whether it gives an exception type

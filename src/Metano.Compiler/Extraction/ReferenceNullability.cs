@@ -196,9 +196,10 @@ internal static class ReferenceNullability
                 NullableAnnotation.NotAnnotated,
             InterpolatedStringExpressionSyntax => NullableAnnotation.NotAnnotated,
             BaseObjectCreationExpressionSyntax => NullableAnnotation.NotAnnotated,
-            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AddExpression }
-                when IsBuiltInStringConcatenation(model, expression) =>
-                NullableAnnotation.NotAnnotated,
+            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AddExpression } => AdditionAnnotation(
+                model,
+                expression
+            ),
             BinaryExpressionSyntax { RawKind: (int)SyntaxKind.CoalesceExpression } coalesce =>
                 DeclaredAnnotation(model, coalesce.Right),
             ConditionalExpressionSyntax conditional => Either(
@@ -209,6 +210,18 @@ internal static class ReferenceNullability
             _ => AnnotationOfSymbol(model, expression),
         };
     }
+
+    /// <summary>
+    /// A <c>+</c>: the built-in string concatenation never yields <c>null</c>; a
+    /// user-defined operator answers with its declared return annotation.
+    /// </summary>
+    private static NullableAnnotation AdditionAnnotation(
+        SemanticModel model,
+        ExpressionSyntax expression
+    ) =>
+        IsBuiltInStringConcatenation(model, expression)
+            ? NullableAnnotation.NotAnnotated
+            : AnnotationOfSymbol(model, expression);
 
     private static NullableAnnotation Either(NullableAnnotation first, NullableAnnotation second) =>
         first == NullableAnnotation.NotAnnotated ? second : first;
