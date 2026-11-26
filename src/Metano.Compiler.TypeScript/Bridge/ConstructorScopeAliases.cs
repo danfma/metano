@@ -10,15 +10,65 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// dispatcher's <c>args</c> and per-branch bindings too) and every local its
 /// bodies declare, out-variable designations included — each with the alias
 /// an imported binding of that name is read under inside the constructor
-/// (W10-1b). The instance initializers a
-/// constructor stores run in that scope (<see cref="InstanceFieldStoreLowering"/>),
-/// where a parameter or local named like a function they call would shadow it;
+/// (W10-1b). The instance initializers a constructor stores run in that scope
+/// (<see cref="InstanceFieldStoreLowering"/>), where a parameter or local named
+/// like a function or type they reference would shadow it;
 /// renaming the parameter is not an option, as its name is API
 /// (<c>[ObjectArgs]</c> keys, other targets).
 /// </summary>
 internal static class ConstructorScopeAliases
 {
     private const string DispatcherArguments = "args";
+
+    /// <summary>
+    /// The aliases of the constructor scope being lowered, so every
+    /// value-position type name (<see cref="IrToTsExpressionBridge.TypeValueReference"/>:
+    /// a static receiver, a <c>new</c> callee, an <c>instanceof</c> operand, an
+    /// enum member receiver) that a parameter or local shadows reads under its
+    /// alias too, like the imported functions the bridge context aliases.
+    /// <see cref="AsyncLocal{T}"/> keeps the slot per execution context, like
+    /// the other per-file scopes of the transform.
+    /// </summary>
+    private static readonly AsyncLocal<ImmutableDictionary<string, string>?> _active = new();
+
+    /// <summary>
+    /// Runs <paramref name="lower"/> with <paramref name="aliases"/> as the
+    /// active constructor scope (<see cref="AliasedTypeValue"/>).
+    /// </summary>
+    public static T InScope<T>(ImmutableDictionary<string, string> aliases, Func<T> lower)
+    {
+        var previous = _active.Value;
+
+        _active.Value = aliases;
+
+        try
+        {
+            return lower();
+        }
+        finally
+        {
+            _active.Value = previous;
+        }
+    }
+
+    /// <inheritdoc cref="InScope{T}"/>
+    public static void InScope(ImmutableDictionary<string, string> aliases, Action lower) =>
+        InScope(aliases, () =>
+        {
+            lower();
+
+            return true;
+        });
+
+    /// <summary>
+    /// <paramref name="reference"/>, a value-position reference to the type
+    /// emitted as <paramref name="name"/>, under its alias when the active
+    /// constructor scope binds that name.
+    /// </summary>
+    public static TsExpression AliasedTypeValue(TsExpression reference, string name) =>
+        _active.Value is { } aliases && aliases.TryGetValue(name, out var alias)
+            ? new TsAliasedReference(reference, name, alias)
+            : reference;
 
     public static ImmutableDictionary<string, string> Of(
         IrClassDeclaration ir,

@@ -278,6 +278,55 @@ public class InstanceFieldStoreTests
     }
 
     [Test]
+    public async Task InitializerReadingATypeNamedLikeAParameter_AliasesTheTypeImport()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile, Name("widget")]
+            public class Widget { public int V = 3; public static int Make() => 9; public static int Count = 2; }
+
+            [Transpile, Name("shade")]
+            public enum Shade { Light, Dark }
+
+            [Transpile]
+            public static class Holder { public static object O = new Widget(); }
+
+            [Transpile]
+            public class EnumShadow
+            {
+                public Shade S = Shade.Dark;
+                public Shade Zero;
+                public int Sum;
+                public EnumShadow(int shade) { Sum = shade; }
+            }
+
+            [Transpile]
+            public class TypeShadow
+            {
+                public Widget W = new Widget();
+                public int M = Widget.Make();
+                public int N = Widget.Count;
+                public bool B = Holder.O is Widget;
+                public int Sum;
+                public TypeShadow(int widget) { Sum = widget; }
+            }
+            """
+        );
+
+        var enumShadow = files["enum-shadow.ts"];
+        var typeShadow = files["type-shadow.ts"];
+
+        await Assert.That(enumShadow).Contains("import { shade, shade as shade$1 }");
+        await Assert.That(enumShadow).Contains("    this.s = shade$1.Dark;\n");
+        await Assert.That(enumShadow).Contains("    this.zero = shade$1.Light;\n");
+        await Assert.That(typeShadow).Contains("widget as widget$1");
+        await Assert.That(typeShadow).Contains("    this.w = new widget$1();\n");
+        await Assert.That(typeShadow).Contains("    this.m = widget$1.make();\n");
+        await Assert.That(typeShadow).Contains("    this.n = widget$1.count;\n");
+        await Assert.That(typeShadow).Contains("instanceof widget$1");
+    }
+
+    [Test]
     public async Task DerivedClass_KeepsTheDefaultStoreOfAFieldTheBodyAssignsFirst()
     {
         var output = TranspileHelper.Transpile(

@@ -138,17 +138,19 @@ internal sealed class IrToTsClassEmitter(
             ? IrToTsStructDefaultConstructorBridge.BuildBody(ir, type, _context.ReportDiagnostic)
             : null;
 
-        var constructor = BuildClassConstructor(
-            type,
-            ir,
-            ctorParams,
-            emitsDispatcher,
-            new ConstructorSelectors(typeName, claims),
-            implicitParameterlessBody,
-            constructorAccessibility,
-            extendsType,
-            keepsBaseMessage,
-            ctorLowering
+        var constructor = ConstructorScopeAliases.InScope(ctorLowering.ShadowedImports, () =>
+            BuildClassConstructor(
+                type,
+                ir,
+                ctorParams,
+                emitsDispatcher,
+                new ConstructorSelectors(typeName, claims),
+                implicitParameterlessBody,
+                constructorAccessibility,
+                extendsType,
+                keepsBaseMessage,
+                ctorLowering
+            )
         ) with
         {
             Accessibility = constructorAccessibility,
@@ -164,11 +166,13 @@ internal sealed class IrToTsClassEmitter(
             emitsSelectorsAndFactories && implicitParameterlessBody is not null
         );
 
-        var typeInitializer = TypeInitializerLowering.For(
-            new TypeInitializerSelection(type, _context.Compilation),
-            ir,
-            TypeInitializerTargetOf(type, typeName, implicitDefault, ir),
-            ctorLowering
+        var typeInitializer = ConstructorScopeAliases.InScope(ctorLowering.ShadowedImports, () =>
+            TypeInitializerLowering.For(
+                new TypeInitializerSelection(type, _context.Compilation),
+                ir,
+                TypeInitializerTargetOf(type, typeName, implicitDefault, ir),
+                ctorLowering
+            )
         );
 
         if (emitsSelectorsAndFactories)
@@ -195,13 +199,15 @@ internal sealed class IrToTsClassEmitter(
         IndexerDiagnostics.Report(type, ir, _context.ReportDiagnostic);
         EventDiagnostics.Report(type, _context.ReportDiagnostic);
 
-        EmitClassMembers(
-            ir,
-            PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMemberDeclaration),
-            classMembers,
-            keepsBaseMessage,
-            ctorLowering,
-            typeInitializer
+        ConstructorScopeAliases.InScope(ctorLowering.ShadowedImports, () =>
+            EmitClassMembers(
+                ir,
+                PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMemberDeclaration),
+                classMembers,
+                keepsBaseMessage,
+                ctorLowering,
+                typeInitializer
+            )
         );
 
         MarkInheritedOverrides(classMembers, dataMembersStart, claims);

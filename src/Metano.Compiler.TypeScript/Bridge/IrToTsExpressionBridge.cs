@@ -1091,10 +1091,15 @@ public static partial class IrToTsExpressionBridge
     /// The value-position reference to a type name. A cross-package type lowers to a
     /// <see cref="TsTypeReference"/> — printed exactly like the bare identifier — so
     /// the import collector sees the origin the file must import it from; every other
-    /// type stays a plain <see cref="TsIdentifier"/>.
+    /// type stays a plain <see cref="TsIdentifier"/>. Inside a constructor scope that
+    /// binds the name, the reference reads under its import alias
+    /// (<see cref="ConstructorScopeAliases.AliasedTypeValue"/>).
     /// </summary>
     internal static TsExpression TypeValueReference(string name, TsTypeOrigin? origin) =>
-        origin is null ? new TsIdentifier(name) : new TsTypeReference(name, origin);
+        ConstructorScopeAliases.AliasedTypeValue(
+            origin is null ? new TsIdentifier(name) : new TsTypeReference(name, origin),
+            name
+        );
 
     /// <summary>
     /// A <c>base.M(...)</c> whose member no emitted base declares (#506):
