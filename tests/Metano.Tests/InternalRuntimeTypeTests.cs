@@ -52,10 +52,12 @@ public class InternalRuntimeTypeTests
             .And.Contains("base: () => EffectNode.$runtimeType,")
             .And.Contains("() => IDisposable$runtimeType,")
             .And.Contains("typeParameters: [\"T\"],");
+
         await Assert
             .That(result["effect-node.ts"])
             .Contains("static override get $runtimeType(): ClassType<EffectNode>")
             .And.Contains("() => IDisposable$runtimeType,");
+
         await Assert.That(result["job.ts"]).Contains("() => IWork$runtimeType,");
     }
 
