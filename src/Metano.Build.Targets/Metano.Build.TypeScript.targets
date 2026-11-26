@@ -106,7 +106,8 @@
 
       A standalone `-t:MetanoTranspileTs` run without Build in the same invocation sees no
       resolved references, so its input list differs from a normal build's and the next normal
-      build reruns the transpile once.
+      build reruns the transpile once. In that mode a change in a referenced project is not
+      detected at all: run a normal build for it.
 
       Not tracked: a tool installed with the tool install `tool-path` option;
       a tool pinned in a manifest further up the tree than the nearest one
