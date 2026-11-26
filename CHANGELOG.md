@@ -4,6 +4,15 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 3.3.0
+
+_2026-11-26_
+
+
+### ✨ Features
+
+* ship wave 10 (field declarations, IDisposable, extension indexers, strict-mode output) ([#816](https://github.com/danfma/metano/issues/816)) ([4b97dc7](https://github.com/danfma/metano/commit/4b97dc71fdbc4e34055f27a08460381e7dfef278)), closes [#795](https://github.com/danfma/metano/issues/795) [#523](https://github.com/danfma/metano/issues/523) [#766](https://github.com/danfma/metano/issues/766) [#776](https://github.com/danfma/metano/issues/776) [#787](https://github.com/danfma/metano/issues/787) [#791](https://github.com/danfma/metano/issues/791) [#794](https://github.com/danfma/metano/issues/794) [#795](https://github.com/danfma/metano/issues/795) [#796](https://github.com/danfma/metano/issues/796) [#798](https://github.com/danfma/metano/issues/798) [#799](https://github.com/danfma/metano/issues/799) [#800](https://github.com/danfma/metano/issues/800) [#801](https://github.com/danfma/metano/issues/801) [#802](https://github.com/danfma/metano/issues/802) [#550](https://github.com/danfma/metano/issues/550)
+
 ## 3.2.0
 
 _2026-11-25_
