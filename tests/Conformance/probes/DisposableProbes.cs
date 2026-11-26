@@ -262,6 +262,20 @@ public static class DisposableProbes
 /// Resources whose flow state is not-null although the value is null at run time (review of
 /// #800, decision W10-9a): the dispose call must still skip them.
 /// </summary>
+/// <summary>Converts to a resource through a user-defined operator that returns null.</summary>
+public sealed class DispNullWrapper
+{
+    private readonly List<string> _log;
+
+    public DispNullWrapper(List<string> log)
+    {
+        _log = log;
+    }
+
+    public static implicit operator DispLog?(DispNullWrapper w) =>
+        w._log.Count > 100 ? new DispLog(w._log, "w") : null;
+}
+
 public static class DisposableNullGuardProbes
 {
     public static string ArrayElementResource()
@@ -339,6 +353,39 @@ public static class DisposableNullGuardProbes
         {
             using var r = Lookup(log, false)!;
             log.Add("body");
+        }
+        catch (Exception e)
+        {
+            log.Add("threw " + e.GetType().Name);
+        }
+
+        return string.Join(",", log);
+    }
+
+    public static string CreatedThroughANullConversion()
+    {
+        var log = new List<string>();
+
+        try
+        {
+            using DispLog? r = new DispNullWrapper(log);
+            log.Add("body" + (r == null));
+
+            throw new InvalidOperationException("boom");
+        }
+        catch (InvalidOperationException e)
+        {
+            log.Add(e.Message);
+        }
+        catch (Exception e)
+        {
+            log.Add("escaped " + e.GetType().Name);
+        }
+
+        try
+        {
+            using (DispLog? q = new DispNullWrapper(log))
+                log.Add("stmt" + (q == null));
         }
         catch (Exception e)
         {

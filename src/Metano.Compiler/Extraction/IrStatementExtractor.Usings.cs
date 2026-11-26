@@ -171,8 +171,10 @@ public sealed partial class IrStatementExtractor
     /// is unsound for array elements, captured locals and <c>!</c> (decision W10-9a), and
     /// a dereferenced <c>null</c> in the <c>finally</c> would replace the body's exception.
     /// A <c>Nullable&lt;T&gt;</c> resource always keeps the guard: <c>new S?()</c> has no value.
+    /// A creation that reaches the resource through a user-defined conversion keeps it too:
+    /// the conversion operator may return <c>null</c>.
     /// </summary>
-    private static bool MayBeNull(ITypeSymbol? type, ExpressionSyntax? value)
+    private bool MayBeNull(ITypeSymbol? type, ExpressionSyntax? value)
     {
         if (type is not null && type.IsNullableValueType())
             return true;
@@ -180,9 +182,15 @@ public sealed partial class IrStatementExtractor
         if (type is { IsValueType: true })
             return false;
 
-        return Unparenthesized(value)
-            is not (BaseObjectCreationExpressionSyntax or CollectionExpressionSyntax);
+        return !IsCreatedResource(value);
     }
+
+    private bool IsCreatedResource(ExpressionSyntax? value) =>
+        value is not null
+        && Unparenthesized(value)
+            is BaseObjectCreationExpressionSyntax
+                or CollectionExpressionSyntax
+        && !_semantic.GetConversion(value).IsUserDefined;
 
     private static ExpressionSyntax? Unparenthesized(ExpressionSyntax? value) =>
         value is ParenthesizedExpressionSyntax parenthesized

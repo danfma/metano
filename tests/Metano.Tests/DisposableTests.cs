@@ -539,6 +539,36 @@ public class DisposableTests
     }
 
     [Test]
+    public async Task DisposeGuard_IsKeptForACreationThroughAUserDefinedConversion()
+    {
+        var result = TranspileHelper.Transpile(
+            Resources
+                + """
+                [Transpile]
+                public sealed class Wrapper
+                {
+                    public static implicit operator Res?(Wrapper w) => null;
+                }
+
+                [Transpile]
+                public static class Uses
+                {
+                    public static void Run()
+                    {
+                        using Res? declared = new Wrapper();
+                        using (Res? statement = (new Wrapper())) { }
+                    }
+                }
+                """
+        );
+
+        var output = result["uses.ts"];
+
+        await Assert.That(output).Contains("declared?.dispose();");
+        await Assert.That(output).Contains("statement?.dispose();");
+    }
+
+    [Test]
     public async Task CrossPackageImplementer_IsTestedAndDisposed()
     {
         var files = TranspileHelper.TranspileWithLibrary(
