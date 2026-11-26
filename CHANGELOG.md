@@ -4,6 +4,15 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 4.0.2
+
+_2026-11-26_
+
+
+### ⚡ Performance
+
+* lower expression temporaries without immediately invoked functions ([#824](https://github.com/danfma/metano/issues/824)) ([e1d3739](https://github.com/danfma/metano/commit/e1d373994bb355a8c1e42cef8816a633d6cfe439)), closes [#804](https://github.com/danfma/metano/issues/804)
+
 ## 4.0.1
 
 _2026-11-26_
