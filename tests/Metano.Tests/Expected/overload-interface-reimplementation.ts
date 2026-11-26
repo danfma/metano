@@ -2,8 +2,6 @@ import { isBool, isInt32, isString } from "metano-runtime";
 import type { IR } from "./ir.js";
 
 export class X implements IR {
-  constructor() { }
-
   rX(x: number): number {
     return 1;
   }
@@ -90,8 +88,6 @@ import { isInt32, isString } from "metano-runtime";
 import type { IR } from "./ir.js";
 
 export class Bn implements IR {
-  constructor() { }
-
   rX(x: number): number {
     return 1;
   }
@@ -144,8 +140,6 @@ import type { IB } from "./ib.js";
 import type { IR } from "./ir.js";
 
 export class Y implements IR, IB {
-  constructor() { }
-
   rX(x: number): number {
     return 1;
   }

@@ -5,11 +5,11 @@ import { HBase } from "./h-base.js";
 let HMid$rt: ClassType<HMid> | undefined;
 
 export class HMid extends HBase {
-  constructor(
-    a: number,
-    readonly b: number,
-  ) {
+  declare readonly b: number;
+
+  constructor(a: number, b: number) {
     super(a);
+    this.b = b;
   }
 
   static override get $runtimeType(): ClassType<HMid> {

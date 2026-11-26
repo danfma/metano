@@ -62,7 +62,7 @@ import { Point$runtimeType, isPoint, type Point } from "./point.js";
 import { isTagged } from "./tagged.js";
 
 export class Probe {
-  constructor() { }
+  private constructor() { }
 
   static isPoint(o: Object): boolean {
     return isPoint(o);

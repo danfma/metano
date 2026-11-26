@@ -1,8 +1,6 @@
 import { isBool, isInt32, isString } from "metano-runtime";
 
 export abstract class Op {
-  constructor() { }
-
   abstract runX(x: number): number;
 
   abstract runS(s: string): number;

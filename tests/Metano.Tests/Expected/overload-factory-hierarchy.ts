@@ -6,7 +6,7 @@ export class Money {
   protected static readonly byMoneyCents = /* @__PURE__ */ Symbol("Money(int cents)");
   protected static readonly byMoneyCode = /* @__PURE__ */ Symbol("Money(string code)");
   protected static readonly byMoneyId = /* @__PURE__ */ Symbol("Money(long id)");
-  readonly how: string = "";
+  declare readonly how: string;
 
   constructor(overload: typeof Money.byMoneyAmount, amount: Decimal);
   constructor(overload: typeof Money.byMoneyCents, cents: number);
@@ -188,7 +188,7 @@ import { Receipt } from "./receipt.js";
 export class GiftReceipt extends Receipt {
   protected static readonly byGiftReceiptAmount = /* @__PURE__ */ Symbol("GiftReceipt(string amount)");
   protected static readonly byGiftReceiptCents = /* @__PURE__ */ Symbol("GiftReceipt(int cents)");
-  readonly note: string = "";
+  declare readonly note: string;
 
   constructor(overload: typeof GiftReceipt.byGiftReceiptAmount, amount: string);
   constructor(overload: typeof GiftReceipt.byGiftReceiptCents, cents: number);
@@ -198,6 +198,7 @@ export class GiftReceipt extends Receipt {
     if (typeof args[0] === "symbol" && args[0] === GiftReceipt.byGiftReceiptAmount) {
       const amount = args[1] as string;
       super(Receipt.byReceiptCents, amount.length);
+      this.note = "";
       this.note = amount;
 
       return;
@@ -206,6 +207,7 @@ export class GiftReceipt extends Receipt {
     if (typeof args[0] === "symbol" && args[0] === GiftReceipt.byGiftReceiptCents) {
       const cents = args[1] as number;
       super(Receipt.byReceiptCents, cents);
+      this.note = "";
 
       return;
     }
@@ -213,6 +215,7 @@ export class GiftReceipt extends Receipt {
     if (args.length === 1 && isString(args[0])) {
       const amount = args[0] as string;
       super(Receipt.byReceiptCents, amount.length);
+      this.note = "";
       this.note = amount;
 
       return;
@@ -221,6 +224,7 @@ export class GiftReceipt extends Receipt {
     if (args.length === 1 && isInt32(args[0])) {
       const cents = args[0] as number;
       super(Receipt.byReceiptCents, cents);
+      this.note = "";
 
       return;
     }

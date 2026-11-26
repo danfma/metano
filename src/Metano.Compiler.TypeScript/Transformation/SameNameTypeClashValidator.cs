@@ -55,7 +55,46 @@ internal sealed class SameNameTypeClashValidator(TypeScriptTransformContext cont
             DiagnosticCodes.ImportedNameClash,
             $"'{name}' names both '{first.ToDisplayString()}' and "
                 + $"'{second.Type.ToDisplayString()}' in '{fileName}'; the bare name is "
-                + "ambiguous and binds one module. Rename one of the two with [Name(\"...\")].",
+                + "ambiguous and binds one module. "
+                + RenameHint(first, second.Type),
             second.Location
         );
+
+    /// <summary>
+    /// The fix MS0070 names (#776): rename one of the two types with <c>[Name]</c>,
+    /// with a suggested name for the one a rename fits best — a static class,
+    /// usually a factory beside its generic (<c>Signal</c> → <c>Signals</c>), else
+    /// the type with more type parameters (<c>Box&lt;T1, T2&gt;</c> → <c>Box2</c>),
+    /// else the second type, prefixed by its namespace's last segment
+    /// (<c>Nb.R23</c> → <c>NbR23</c>). The types are never merged or renamed
+    /// automatically.
+    /// </summary>
+    private static string RenameHint(INamedTypeSymbol first, INamedTypeSymbol second)
+    {
+        var renamed = TypeToRename(first, second);
+
+        return $"Rename one of them with [Name(\"...\")], for example "
+            + $"[Name(\"{SuggestedName(renamed)}\")] on '{renamed.ToDisplayString()}'.";
+    }
+
+    private static INamedTypeSymbol TypeToRename(INamedTypeSymbol first, INamedTypeSymbol second)
+    {
+        if (first.IsStatic != second.IsStatic)
+            return first.IsStatic ? first : second;
+
+        return first.Arity > second.Arity ? first : second;
+    }
+
+    private static string SuggestedName(INamedTypeSymbol type)
+    {
+        if (type.IsStatic)
+            return type.Name + "s";
+
+        if (type.Arity > 0)
+            return type.Name + type.Arity;
+
+        return type.ContainingNamespace is { IsGlobalNamespace: false } ns
+            ? ns.Name + type.Name
+            : type.Name + "2";
+    }
 }

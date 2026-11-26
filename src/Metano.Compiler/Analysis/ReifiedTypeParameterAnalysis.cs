@@ -1046,6 +1046,9 @@ public sealed class ReifiedTypeParameterAnalysis
             if (IsMappedBclException(named))
                 return true;
 
+            if (IsRuntimeDeclaredInterface(named))
+                return true;
+
             if (
                 SymbolHelper.HasAttribute(named, "PlainObjectAttribute")
                 && named.TypeArguments.Length > 0
@@ -1074,6 +1077,14 @@ public sealed class ReifiedTypeParameterAnalysis
             return SymbolHelper.IsTranspilable(def, wide, def.ContainingAssembly)
                 && !SymbolHelper.HasIgnore(def, _target);
         }
+
+        /// <summary>
+        /// An interface the target runtime declares with its descriptor (FR-111); Dart
+        /// declares none.
+        /// </summary>
+        private bool IsRuntimeDeclaredInterface(INamedTypeSymbol named) =>
+            _target is not TargetLanguage.Dart
+            && BclExportReader.IsRuntimeDeclaredInterface(named, _compilation);
 
         private static bool IsPrimitiveWithDescriptor(INamedTypeSymbol named) =>
             named.SpecialType switch

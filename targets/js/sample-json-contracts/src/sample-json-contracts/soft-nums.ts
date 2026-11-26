@@ -14,12 +14,17 @@ import { Color$runtimeType, type Color } from "./color.js";
 let SoftNums$rt: ClassType<SoftNums> | undefined;
 
 export class SoftNums {
-  constructor(
-    readonly n: number | null,
-    readonly d: Decimal | null,
-    readonly x: number | null,
-    readonly c: Color | null,
-  ) {}
+  declare readonly n: number | null;
+  declare readonly d: Decimal | null;
+  declare readonly x: number | null;
+  declare readonly c: Color | null;
+
+  constructor(n: number | null, d: Decimal | null, x: number | null, c: Color | null) {
+    this.n = n;
+    this.d = d;
+    this.x = x;
+    this.c = c;
+  }
 
   static get $runtimeType(): ClassType<SoftNums> {
     return (SoftNums$rt ??= {

@@ -2,8 +2,6 @@ import { Temporal } from "@js-temporal/polyfill";
 import { durationFromTicks, durationTicks, plainDateTime, plainDateTimeFromTicks, plainDateTimeTicks } from "metano-runtime";
 
 export class Clock {
-  constructor() { }
-
   ticks(span: Temporal.Duration, moment: Temporal.PlainDateTime): bigint {
     return BigInt.asIntN(64, BigInt.asIntN(64, durationTicks(span) + plainDateTimeTicks(moment)) + 10000000n);
   }

@@ -150,7 +150,7 @@ public class MemberNameEscapeTests
         );
 
         var output = result["reader.ts"];
-        await Assert.That(output).Contains("new_: number = 0;");
+        await Assert.That(output).Contains("this.new_ = 0;");
         await Assert.That(output).Contains("return s.default_;");
         await Assert.That(output).Contains("return s?.default_ ?? null;");
         await Assert.That(output).Contains("return s.delete_;");

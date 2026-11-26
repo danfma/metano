@@ -9,8 +9,6 @@ import { Point } from "./point.js";
 import type { Profile } from "./profile.js";
 
 export class Lookups {
-  constructor() { }
-
   first(xs: List<number>): number {
     return linq(xs, firstOrDefault(undefined, 0));
   }

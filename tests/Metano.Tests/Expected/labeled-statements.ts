@@ -1,5 +1,5 @@
 export class Jumps {
-  constructor() { }
+  private constructor() { }
 
   static scan(a: number[]): number {
     let n = 0;
@@ -62,9 +62,9 @@ export class Jumps {
             break dispatch;
           }
 
-          log = (log ?? "") + step;
+          log += step;
         }
-        log = (log ?? "") + "!";
+        log += "!";
         break;
       default:
         log = "default";

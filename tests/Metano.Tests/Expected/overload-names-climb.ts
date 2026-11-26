@@ -1,12 +1,9 @@
 import { List } from "metano-runtime/system/collections";
-import { isInt32 } from "metano-runtime";
 import type { A } from "./a.js";
 import type { B } from "./b.js";
-import { Decimal } from "./numerics/decimal.js";
+import type { Decimal } from "./numerics/decimal.js";
 
 export class Climbs {
-  constructor() { }
-
   kNumericsDecimal(d: Decimal): number {
     return 1;
   }
@@ -15,13 +12,8 @@ export class Climbs {
     return 2;
   }
 
-  k(d: Decimal): number;
-  k(...args: unknown[]): number {
-    if (args.length === 1 && args[0] instanceof Decimal) {
-      return this.kNumericsDecimal(args[0] as Decimal);
-    }
-
-    throw new Error("No matching overload for k");
+  k(d: Decimal): number {
+    return this.kNumericsDecimal(d);
   }
 
   jNumericsDecimalInt32(d: Decimal, n: number): number {
@@ -32,13 +24,8 @@ export class Climbs {
     return 2;
   }
 
-  j(d: Decimal, n: number): number;
-  j(...args: unknown[]): number {
-    if (args.length === 2 && args[0] instanceof Decimal && isInt32(args[1])) {
-      return this.jNumericsDecimalInt32(args[0] as Decimal, args[1] as number);
-    }
-
-    throw new Error("No matching overload for j");
+  j(d: Decimal, n: number): number {
+    return this.jNumericsDecimalInt32(d, n);
   }
 
   mListOfAId(ids: List<A.Id>): number {
@@ -49,12 +36,7 @@ export class Climbs {
     return 2;
   }
 
-  m(ids: List<A.Id>): number;
-  m(...args: unknown[]): number {
-    if (args.length === 1 && args[0] instanceof List) {
-      return this.mListOfAId(args[0] as List<A.Id>);
-    }
-
-    throw new Error("No matching overload for m");
+  m(ids: List<A.Id>): number {
+    return this.mListOfAId(ids);
   }
 }

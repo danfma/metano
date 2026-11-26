@@ -2,8 +2,8 @@
 import { Widget } from "../widget.js";
 
 export class Column extends Widget {
-  private readonly _gap: number;
-  private readonly _children: Widget[];
+  private declare readonly _gap: number;
+  private declare readonly _children: Widget[];
 
   constructor(gap: number, children: Widget[]) {
     super();

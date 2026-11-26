@@ -66,8 +66,6 @@ public class OverloadDirectCallExclusionTests
                     import { Shape } from "./shape.js";
 
                     export class Caller {
-                      constructor() { }
-
                       calls(): number {
                         return (Shape.pickX(1) + Shape.pickS("a")) | 0;
                       }
@@ -100,8 +98,6 @@ public class OverloadDirectCallExclusionTests
                 ExpectedCaller(
                     """
                     export class Caller {
-                      constructor() { }
-
                       calls(): number {
                         return (Shape.pick(1) + Shape.pick("a")) | 0;
                       }
@@ -134,8 +130,6 @@ public class OverloadDirectCallExclusionTests
                     import { Shape } from "./shape.js";
 
                     export class Caller {
-                      constructor() { }
-
                       calls(): number {
                         return (Shape.pickX(1) + Shape.pickS("a")) | 0;
                       }
@@ -168,8 +162,6 @@ public class OverloadDirectCallExclusionTests
                     import { Shape } from "./shape.js";
 
                     export class Caller {
-                      constructor() { }
-
                       calls(): number {
                         return (Shape.pickX(1) + Shape.pickS("a")) | 0;
                       }
@@ -205,8 +197,6 @@ public class OverloadDirectCallExclusionTests
                     import { Shape } from "./shape.js";
 
                     export class Caller {
-                      constructor() { }
-
                       calls(): number {
                         return (Shape.pick(1) + Shape.pick("a")) | 0;
                       }
@@ -240,8 +230,6 @@ public class OverloadDirectCallExclusionTests
                 ExpectedCaller(
                     """
                     export class Caller {
-                      constructor() { }
-
                       calls(s: ((value: number) => number) & ((value: string) => number)): number {
                         return (s(1) + s("a")) | 0;
                       }

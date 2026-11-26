@@ -1,8 +1,6 @@
 import { Scale } from "./scale.js";
 
 export class Caller {
-  constructor() { }
-
   timesTwo(): number {
     return new Scale().applyF(2);
   }

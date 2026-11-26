@@ -2,8 +2,11 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 import { Clip } from "./clip.js";
 
 export class ImageClip extends Clip {
-  constructor(readonly path: string, seconds: number) {
+  declare readonly path: string;
+
+  constructor(path: string, seconds: number) {
     super(seconds);
+    this.path = path;
   }
 
   override equals(other: any): boolean {

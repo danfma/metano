@@ -36,7 +36,7 @@ public class DelegateEventTests
         var output = result["counter.ts"];
         // Field: nullable delegate
         await Assert.That(output).Contains("countChanged:");
-        await Assert.That(output).Contains("| null = null");
+        await Assert.That(output).Contains("this.countChanged = null;");
         // $add method
         await Assert.That(output).Contains("countChanged$add(handler:");
         await Assert.That(output).Contains("delegateAdd(");

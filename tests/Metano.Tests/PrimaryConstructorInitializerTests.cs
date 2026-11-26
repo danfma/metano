@@ -58,10 +58,12 @@ public class PrimaryConstructorInitializerTests
 
         await Assert
             .That(derived)
-            .Contains("super((seed + 1) | 0);\n    this.double = Math.imul(seed, 2);");
+            .Contains(
+                "super((seed + 1) | 0);\n    this.double = 0;\n    this.double = Math.imul(seed, 2);"
+            );
 
         await Assert.That(derived).DoesNotContain("private readonly _seed");
-        await Assert.That(result["base.ts"]).Contains("constructor(readonly value: number) { }");
+        await Assert.That(result["base.ts"]).Contains("constructor(value: number) {");
     }
 
     [Test]
@@ -80,7 +82,7 @@ public class PrimaryConstructorInitializerTests
         await Assert
             .That(result["scaled.ts"])
             .Contains(
-                "constructor(readonly factor: number) {\n    this.double = Math.imul(factor, 2);\n  }"
+                "constructor(factor: number) {\n    this.factor = factor;\n    this.double = Math.imul(factor, 2);\n  }"
             );
     }
 
@@ -142,6 +144,6 @@ public class PrimaryConstructorInitializerTests
             """
         );
 
-        await Assert.That(result["tally.ts"]).Contains("private _count: number = 3;");
+        await Assert.That(result["tally.ts"]).Contains("this._count = 3;");
     }
 }

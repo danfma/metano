@@ -87,9 +87,9 @@ public class SwitchPatternTranspileTests
     }
 
     [Test]
-    public async Task IsNotNull_GeneratesNegatedLooseEquality()
+    public async Task IsNotNull_GeneratesLooseInequality()
     {
-        // `is not null` lowers to `!(value == null)` so the negation also
+        // `is not null` lowers to `value != null` so the loose inequality also
         // excludes `undefined`. Pairs with `IsNull_GeneratesLooseEquality`
         // — both sides of the C# pattern collapse to the same loose
         // comparison on the TS side.
@@ -108,7 +108,7 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["checker.ts"];
-        await Assert.That(output).Contains("!(value == null)");
+        await Assert.That(output).Contains("return value != null;");
     }
 
     [Test]
@@ -941,9 +941,7 @@ public class SwitchPatternTranspileTests
             """
         );
 
-        await Assert
-            .That(result["geo/toggle.ts"])
-            .Contains("constructor(readonly default_: boolean)");
+        await Assert.That(result["geo/toggle.ts"]).Contains("constructor(default_: boolean)");
 
         await Assert.That(result["geo/toggle.ts"]).Contains("this.default_ === other.default_");
         await Assert.That(result["geo/toggles.ts"]).Contains("t != null && t.default_ === true");
@@ -1003,7 +1001,7 @@ public class SwitchPatternTranspileTests
         );
 
         var output = result["slugged.ts"];
-        await Assert.That(output).Contains("private _slug: string = \"\";");
+        await Assert.That(output).Contains("this._slug = \"\";");
         await Assert.That(output).Contains("set slug(value: string) {");
         await Assert.That(diagnostics.Where(d => d.Code == "MS0001")).IsEmpty();
     }

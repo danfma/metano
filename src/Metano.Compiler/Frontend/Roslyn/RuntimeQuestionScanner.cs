@@ -126,6 +126,7 @@ internal sealed class RuntimeQuestionScanner
         {
             case IFieldSymbol or IPropertySymbol or IEventSymbol when !member.IsImplicitlyDeclared:
                 ScanCode(member, MemberContributedCode.Initializers);
+                RecordUninitializedStructStorage(member);
                 break;
             case IMethodSymbol method when !method.IsImplicitlyDeclared:
                 ScanCode(method, MemberContributedCode.Executable);
@@ -261,6 +262,9 @@ internal sealed class RuntimeQuestionScanner
             case ICollectionExpressionOperation:
                 RecordCollectionConstruction(operation.Type, operation.Syntax);
                 break;
+            case IDefaultValueOperation defaultValue when HasZeroValueFactory(defaultValue):
+                Record(IrRuntimeQuestionKind.StructDefault, defaultValue.Type, operation.Syntax);
+                break;
             case IInvocationOperation invocation:
                 InspectInvocation(invocation);
                 break;
@@ -282,6 +286,48 @@ internal sealed class RuntimeQuestionScanner
                 break;
         }
     }
+
+    private bool HasZeroValueFactory(IDefaultValueOperation defaultValue) =>
+        defaultValue.Type is INamedTypeSymbol named
+        && IrTypeRefMapper.HasZeroValueFactory(named, _target);
+
+    /// <summary>
+    /// An instance field or auto-property without an initializer starts at its
+    /// type's <c>default</c>, which for a struct of this compilation that
+    /// declares a constructor is the struct's own zero value: the same
+    /// question as a <c>default(S)</c> expression (W10-10).
+    /// </summary>
+    private void RecordUninitializedStructStorage(ISymbol member)
+    {
+        if (
+            member.IsStatic
+            || UninitializedStorageType(member) is not INamedTypeSymbol named
+            || !SymbolEqualityComparer.Default.Equals(
+                named.ContainingAssembly,
+                _compilation.Assembly
+            )
+            || !IrTypeRefMapper.HasZeroValueFactory(named, _target)
+            || member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is not { } site
+        )
+            return;
+
+        Record(IrRuntimeQuestionKind.StructDefault, named, site);
+    }
+
+    private static ITypeSymbol? UninitializedStorageType(ISymbol member) =>
+        member switch
+        {
+            IFieldSymbol { IsConst: false } field
+                when field.DeclaringSyntaxReferences.All(reference =>
+                    reference.GetSyntax() is VariableDeclaratorSyntax { Initializer: null }
+                ) => field.Type,
+            IPropertySymbol property
+                when property.DeclaringSyntaxReferences.All(reference =>
+                    reference.GetSyntax()
+                        is PropertyDeclarationSyntax { Initializer: null, ExpressionBody: null }
+                ) => property.Type,
+            _ => null,
+        };
 
     private void RecordCollectionBase(INamedTypeSymbol baseType, Location location)
     {

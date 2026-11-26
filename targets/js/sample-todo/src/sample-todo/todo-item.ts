@@ -5,11 +5,15 @@ import type { Priority } from "./priority.js";
 let TodoItem$rt: ClassType<TodoItem> | undefined;
 
 export class TodoItem {
-  constructor(
-    readonly title: string,
-    readonly completed: boolean = false,
-    readonly priority: Priority = "medium",
-  ) {}
+  declare readonly title: string;
+  declare readonly completed: boolean;
+  declare readonly priority: Priority;
+
+  constructor(title: string, completed: boolean = false, priority: Priority = "medium") {
+    this.title = title;
+    this.completed = completed;
+    this.priority = priority;
+  }
 
   static get $runtimeType(): ClassType<TodoItem> {
     return (TodoItem$rt ??= {

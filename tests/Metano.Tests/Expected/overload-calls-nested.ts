@@ -1,8 +1,6 @@
 import { isBool, isInt32, isString } from "metano-runtime";
 
 class Owner$Maker {
-  constructor() { }
-
   make(): Owner {
     return Owner.fromCode("made");
   }
@@ -12,7 +10,7 @@ export class Owner {
   protected static readonly byOwnerId = /* @__PURE__ */ Symbol("Owner(int id)");
   protected static readonly byOwnerCode = /* @__PURE__ */ Symbol("Owner(string code)");
   protected static readonly byOwnerFlag = /* @__PURE__ */ Symbol("Owner(bool flag)");
-  readonly how: string = "";
+  declare readonly how: string;
 
   constructor(overload: typeof Owner.byOwnerId, id: number);
   /** @internal */

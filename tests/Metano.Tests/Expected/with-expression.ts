@@ -1,7 +1,13 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Coord {
-  constructor(readonly x: number, readonly y: number) { }
+  declare readonly x: number;
+  declare readonly y: number;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
 
   static moveX(coord: Coord, dx: number): Coord {
     return coord.with({ x: (coord.x + dx) | 0 });

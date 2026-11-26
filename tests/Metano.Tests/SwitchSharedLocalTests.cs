@@ -56,7 +56,7 @@ public class SwitchSharedLocalTests
                 import { isString } from "metano-runtime";
 
                 export class Picker {
-                  constructor() { }
+                  private constructor() { }
 
                   static constant(k: number): number {
                     {

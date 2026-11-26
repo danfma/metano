@@ -56,7 +56,8 @@ internal static partial class IrToTsClassBridge
     /// <summary>
     /// Lowers a list of IR base / interface references into TS heritage
     /// entries. Drops named refs flagged <c>IsTranspilable: false</c>
-    /// (e.g. <c>[Ignore]</c> or unmapped BCL interfaces) and rewrites
+    /// (e.g. <c>[Ignore]</c> or unmapped BCL interfaces), except an interface
+    /// the runtime declares (<c>IDisposable</c>, FR-111), and rewrites
     /// the array shorthand <c>T[]</c> (produced when a base maps
     /// through <see cref="IrArrayTypeRef"/> for collection-like BCL
     /// types) into <c>Array&lt;T&gt;</c>: TypeScript rejects
@@ -72,7 +73,12 @@ internal static partial class IrToTsClassBridge
 
         foreach (var reference in refs)
         {
-            if (reference is IrNamedTypeRef { Semantics.IsTranspilable: false })
+            if (
+                reference is IrNamedTypeRef
+                {
+                    Semantics: { IsTranspilable: false, IsRuntimeDeclared: false }
+                }
+            )
                 continue;
 
             var mapped = IrToTsTypeMapper.Map(reference);
@@ -109,6 +115,30 @@ internal static partial class IrToTsClassBridge
     /// no value — the caller emits the field without an initializer (TS leaves
     /// a reference field <c>undefined</c>).
     /// </summary>
+    /// <summary>
+    /// The value an instance field or auto-property without an initializer
+    /// starts at: <see cref="ComputeDefaultInitializer"/>, else the zero value
+    /// of a struct of this compilation that declares a constructor, read from
+    /// its <c>$default()</c> factory (#802, W10-10); <c>null</c> when the
+    /// target has none.
+    /// </summary>
+    public static TsExpression? InstanceStorageDefault(IrTypeRef type) =>
+        ComputeDefaultInitializer(type)
+        ?? (
+            type
+                is IrNamedTypeRef
+                {
+                    Origin: null,
+                    TypeArguments: null or { Count: 0 },
+                    Semantics: { HasZeroValueFactory: true, Kind: not IrNamedTypeKind.Branded },
+                }
+                ? IrToTsExpressionBridge.Map(
+                    new IrNewExpression(type, []) { IsStructDefault = true },
+                    IrToTsBridgeContext.For(null)
+                )
+                : null
+        );
+
     public static TsExpression? ComputeDefaultInitializer(IrTypeRef type) =>
         IrDefaultValues.KindOf(type) switch
         {

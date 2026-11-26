@@ -38,6 +38,13 @@ public enum IrRuntimeQuestionKind
     /// (spec 011 FR-008).
     /// </summary>
     CollectionConstruction,
+
+    /// <summary>
+    /// A <c>default</c> / <c>default(T)</c> of a struct that declares a constructor
+    /// (#802): a target whose zero value comes from a factory of the struct reaches
+    /// the struct from it. It asks nothing at runtime.
+    /// </summary>
+    StructDefault,
 }
 
 /// <summary>The shape of a questioned type, as far as a runtime question cares.</summary>

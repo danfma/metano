@@ -1,9 +1,11 @@
 import { List, fromEnd, type IList, type IReadOnlyList } from "metano-runtime/system/collections";
 
 export class Sequences {
-  private readonly _items: List<number> = List.of<number>([7, 8, 9]);
+  declare private readonly _items: List<number>;
 
-  constructor() { }
+  constructor() {
+    this._items = List.of<number>([7, 8, 9]);
+  }
 
   lastOfArray(values: number[]): number {
     return fromEnd(values, 1);

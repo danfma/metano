@@ -59,9 +59,10 @@ internal static partial class IrToTsClassBridge
         // Auto-property — no custom bodies, render as field.
         if (!hasGetterBody && !hasSetterBody)
         {
-            var initializer = prop.Initializer is { } init
-                ? IrToTsExpressionBridge.Map(init, context)
-                : ComputeDefaultInitializer(prop.Type);
+            var (initializer, store) = prop.Initializer is { } init
+                ? MapInitializer(init, prop.IsStatic, context)
+                : (StorageDefault(prop.Type, prop.IsStatic), null);
+
             return
             [
                 new TsFieldMember(
@@ -72,7 +73,8 @@ internal static partial class IrToTsClassBridge
                     Static: prop.IsStatic,
                     Accessibility: accessibility,
                     DefinitelyAssigned: prop.Semantics?.IsRequired == true,
-                    JSDoc: jsdoc
+                    JSDoc: jsdoc,
+                    StoreInitializer: store
                 ),
             ];
         }
@@ -182,9 +184,9 @@ internal static partial class IrToTsClassBridge
         var storage = PerClassBackingFields.StorageAccess(fieldName);
         var writable = prop.Accessors is not IrPropertyAccessors.GetOnly;
 
-        var initializer = prop.Initializer is { } init
-            ? IrToTsExpressionBridge.Map(init, context)
-            : ComputeDefaultInitializer(prop.Type);
+        var (initializer, store) = prop.Initializer is { } init
+            ? MapInitializer(init, prop.IsStatic, context)
+            : (StorageDefault(prop.Type, prop.IsStatic), null);
 
         var members = new List<TsClassMember>
         {
@@ -194,7 +196,8 @@ internal static partial class IrToTsClassBridge
                 initializer,
                 Readonly: !writable,
                 Accessibility: TsAccessibility.Private,
-                DefinitelyAssigned: prop.Semantics?.IsRequired == true
+                DefinitelyAssigned: prop.Semantics?.IsRequired == true,
+                StoreInitializer: store
             ),
             new TsGetterMember(
                 name,
@@ -434,12 +437,13 @@ internal static partial class IrToTsClassBridge
         // When the field captures a constructor parameter (DI shape) the
         // assignment moves to the ctor body — emit the field with no
         // initializer here so the value is set exactly once.
-        var initializer =
+        var (initializer, store) =
             field.Initializer is not null && !field.IsCapturedByCtor
-                ? IrToTsExpressionBridge.Map(field.Initializer, context)
-                : null;
+                ? MapInitializer(field.Initializer, field.IsStatic, context)
+                : (null, null);
+
         if (!field.IsCapturedByCtor)
-            initializer ??= ComputeDefaultInitializer(field.Type);
+            initializer ??= StorageDefault(field.Type, field.IsStatic);
 
         var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(field.Visibility);
 
@@ -451,7 +455,45 @@ internal static partial class IrToTsClassBridge
             Static: field.IsStatic,
             Accessibility: accessibility,
             DefinitelyAssigned: field.IsRequired,
-            JSDoc: jsdoc
+            JSDoc: jsdoc,
+            StoreInitializer: store
         );
+    }
+
+    private static TsExpression? StorageDefault(IrTypeRef type, bool isStatic) =>
+        isStatic ? ComputeDefaultInitializer(type) : InstanceStorageDefault(type);
+
+    /// <summary>
+    /// A member's C# initializer as its class field holds it, and as the constructor
+    /// stores it (W10-12). An instance initializer runs as a constructor statement
+    /// (<see cref="InstanceFieldStoreLowering"/>), so it is lowered over temporaries of a
+    /// statement list, as a method body is (<c>($t = s, …)</c>), not over immediately
+    /// invoked functions; when it assigns any, the store form carries their declarations
+    /// and the class field, kept only where no constructor stores the member, wraps them
+    /// in one arrow. A static initializer keeps the class-field form.
+    /// </summary>
+    private static (TsExpression Initializer, TsStoreInitializer? Store) MapInitializer(
+        IrExpression initializer,
+        bool isStatic,
+        IrToTsBridgeContext context
+    )
+    {
+        if (isStatic)
+            return (IrToTsExpressionBridge.Map(initializer, context), null);
+
+        var (value, temporaries) = TsTemporaries.AroundExpression(context, scoped =>
+            IrToTsExpressionBridge.Map(initializer, scoped)
+        );
+
+        if (temporaries.Count == 0)
+            return (value, null);
+
+        var classField = TsImmediateInvocation.Of(
+            [],
+            [.. temporaries, new TsReturnStatement(value)],
+            isAsync: false
+        );
+
+        return (classField, new TsStoreInitializer(value, temporaries));
     }
 }

@@ -1,8 +1,6 @@
 import { HashSet, List } from "metano-runtime/system/collections";
 
 export class Letters {
-  constructor() { }
-
   of(text: string): List<string> {
     return List.of<string>([...text.split("")]);
   }

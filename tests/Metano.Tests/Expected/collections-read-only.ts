@@ -2,7 +2,7 @@ import { List, ReadOnlyList, asReadOnly, type IList, type IReadOnlyList } from "
 import { arrayLength, formatBoolean } from "metano-runtime";
 
 export class Views {
-  constructor() { }
+  private constructor() { }
 
   static wrap(list: List<number>): ReadOnlyList<number> {
     return asReadOnly(list);

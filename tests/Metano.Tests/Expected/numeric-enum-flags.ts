@@ -8,7 +8,7 @@ export const Perms = {
 export type Perms = number & { readonly __enum?: "Perms" };
 
 export class Access {
-  constructor() { }
+  private constructor() { }
 
   static grant(): Perms {
     let p = Perms.Read | Perms.Write;

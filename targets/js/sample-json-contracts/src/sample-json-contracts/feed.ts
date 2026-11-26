@@ -6,7 +6,11 @@ import type { Page } from "./page.js";
 let Feed$rt: ClassType<Feed> | undefined;
 
 export class Feed {
-  constructor(readonly latest: Page<EpisodeSummary>) {}
+  declare readonly latest: Page<EpisodeSummary>;
+
+  constructor(latest: Page<EpisodeSummary>) {
+    this.latest = latest;
+  }
 
   static get $runtimeType(): ClassType<Feed> {
     return (Feed$rt ??= {

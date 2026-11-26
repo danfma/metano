@@ -646,6 +646,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 _diagnostics
             );
 
+        ApplyStrictModeEscape(
+            transpilableTypes,
+            typeNamesBySymbol,
+            transpilableTypesDict,
+            nameRenames
+        );
+
         // Build the explicit per-compilation context that replaces TypeMapper statics.
         // Omit the optional misses sink so the context provisions a ConcurrentHashSet;
         // the context always owns its CrossPackageDependencyLedger. Both are thread-safe
@@ -679,6 +686,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var (erasableFunctionExports, synthesizedAliasesByFile) = BuildNoContainerFunctionExports(
             transpilableTypes,
             transpilableTypesDict,
+            typeNamesBySymbol,
             ir.BclExports,
             ir.ExternalImports,
             ir.CrossAssemblyOrigins,
@@ -1586,8 +1594,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             .Types.SelectMany(Context.NestedTypes.ModuleLevelNamesUnder)
             .ToHashSet(StringComparer.Ordinal);
 
+        var previousConstructorScope = ConstructorScopeAliases.FileScope;
+
         try
         {
+            ConstructorScopeAliases.FileScope = ConstructorScopeNamesOf(group.Types, irCache);
+
             foreach (var type in group.Types)
             {
                 if (BuildTypeStatements(type, statements, lowering, irCache))
@@ -1631,6 +1643,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             IrToTsTypeMapper.UsingAliases = previousAliases;
             ModuleLocalNaming.FileScope = previousFileScope;
+            ConstructorScopeAliases.FileScope = previousConstructorScope;
         }
     }
 
@@ -1892,13 +1905,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     /// <summary>
     /// Accumulates the runtime requirements for <paramref name="type"/> and every nested
-    /// type the target emits into the same file. Nested companion variants are emitted into
-    /// the parent's file by <see cref="TransformNestedTypes"/>, so the helpers their bodies
-    /// use (e.g. <c>valueEquals</c> for a non-strict variant field) must be imported there
-    /// too. Recursion is bounded by type-nesting depth and gated by
-    /// <see cref="ShouldEmitNestedType"/> so a nested type the backend does not emit never
-    /// contributes a spurious requirement. Runtime collection stays a target concern because
-    /// only the target knows which nested types share the parent's file.
+    /// type the target emits into the same file (<see cref="TypeAndEmittedNested"/>).
+    /// Nested companion variants are emitted into the parent's file by
+    /// <see cref="TransformNestedTypes"/>, so the helpers their bodies use (e.g.
+    /// <c>valueEquals</c> for a non-strict variant field) must be imported there too.
+    /// Runtime collection stays a target concern because only the target knows which
+    /// nested types share the parent's file.
     /// </summary>
     private void ScanTypeAndEmittedNested(
         INamedTypeSymbol type,
@@ -1906,12 +1918,35 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IDictionary<INamedTypeSymbol, IrTypeDeclaration> irCache
     )
     {
+        foreach (var emitted in TypeAndEmittedNested(type))
+        {
+            var typeIr = ExtractIrForRequirementScan(emitted, irCache);
+
+            if (typeIr is not null)
+                acc.UnionWith(IrRuntimeRequirementScanner.Scan(typeIr));
+
+            if (SymbolHelper.IsJsonSerializerContext(emitted))
+                acc.UnionWith(
+                    new JsonSerializerContextTransformer(Context).RuntimeRequirementsOf(emitted)
+                );
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="type"/> and every nested type the target emits into its file.
+    /// Recursion is bounded by type-nesting depth and gated by
+    /// <see cref="ShouldEmitNestedType"/> so a nested type the backend does not emit is
+    /// never visited.
+    /// </summary>
+    private IEnumerable<INamedTypeSymbol> TypeAndEmittedNested(INamedTypeSymbol type)
+    {
         // [Import]/[Ignore] types are discoverable but emit no declaration (BuildTypeStatements
         // skips them). The recursion gate ShouldEmitNestedType lets an [Import] nested variant
         // through (it is still IsTranspilable), so this guard is what drops it — without it a
         // non-emitted variant's fields would pull a spurious runtime import.
         if (SymbolHelper.HasImport(type) || SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript))
-            return;
+            yield break;
+
         // Synthetic top-level entry points are wrapped in a class but emitted as
         // module-level code by EmitTopLevelStatements; the IR class extraction would
         // produce an irrelevant shape, so skip it.
@@ -1919,22 +1954,31 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.EntryPoint is not null
             && SymbolEqualityComparer.Default.Equals(type, ir.EntryPoint.ContainingType)
         )
-            return;
+            yield break;
 
-        var typeIr = ExtractIrForRequirementScan(type, irCache);
-        if (typeIr is not null)
-            foreach (var req in IrRuntimeRequirementScanner.Scan(typeIr))
-                acc.Add(req);
+        yield return type;
 
-        if (SymbolHelper.IsJsonSerializerContext(type))
-            acc.UnionWith(
-                new JsonSerializerContextTransformer(Context).RuntimeRequirementsOf(type)
-            );
-
-        foreach (var nested in type.GetTypeMembers())
-            if (ShouldEmitNestedType(nested))
-                ScanTypeAndEmittedNested(nested, acc, irCache);
+        foreach (var nested in type.GetTypeMembers().Where(ShouldEmitNestedType))
+        foreach (var emitted in TypeAndEmittedNested(nested))
+            yield return emitted;
     }
+
+    /// <summary>
+    /// The names the constructor scopes of every class this file emits bind, so an
+    /// imported binding they shadow takes one alias across the file
+    /// (<see cref="ConstructorScopeAliases.FileScope"/>, W10-10).
+    /// </summary>
+    private HashSet<string> ConstructorScopeNamesOf(
+        IReadOnlyList<INamedTypeSymbol> types,
+        IDictionary<INamedTypeSymbol, IrTypeDeclaration> irCache
+    ) =>
+        types
+            .SelectMany(TypeAndEmittedNested)
+            .Where(type => type.TypeKind is TypeKind.Class or TypeKind.Struct)
+            .Select(type => ExtractIrForRequirementScan(type, irCache))
+            .OfType<IrClassDeclaration>()
+            .SelectMany(ConstructorScopeAliases.BoundNamesOf)
+            .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
     /// A JsonSerializerContext is emitted by <see cref="JsonSerializerContextTransformer"/>
@@ -2504,6 +2548,38 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             siblings.Add(stripped);
             RewriteTranspilableTypeEntry(transpilableTypesDict, current, stripped);
             nameRenames[current] = stripped;
+        }
+    }
+
+    /// <summary>
+    /// A top-level type named like a strict-mode reserved word
+    /// (<c>class @implements</c>) is declared under a module-level binding, an
+    /// identifier position, so it takes the escaped name (<c>implements_</c>) in
+    /// the same dictionaries the interface-prefix strip rewrites. A <c>[Name]</c>
+    /// override wins.
+    /// </summary>
+    private static void ApplyStrictModeEscape(
+        IReadOnlyList<INamedTypeSymbol> transpilableTypes,
+        Dictionary<string, string> typeNamesBySymbol,
+        Dictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
+        Dictionary<string, string> nameRenames
+    )
+    {
+        foreach (var type in transpilableTypes.Where(t => t.ContainingType is null))
+        {
+            var key = type.GetCrossAssemblyOriginKey();
+
+            if (
+                !typeNamesBySymbol.TryGetValue(key, out var current)
+                || current != type.Name
+                || TypeScriptTransformContext.EscapedOwnName(type) is var escaped
+                    && escaped == current
+            )
+                continue;
+
+            typeNamesBySymbol[key] = escaped;
+            RewriteTranspilableTypeEntry(transpilableTypesDict, current, escaped);
+            nameRenames[current] = escaped;
         }
     }
 
@@ -3341,6 +3417,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     ) BuildNoContainerFunctionExports(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
         IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
+        IReadOnlyDictionary<string, string> typeNamesBySymbol,
         IReadOnlyDictionary<string, IrBclExport> bclExports,
         IReadOnlyDictionary<string, IrExternalImport> externalImports,
         IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
@@ -3353,6 +3430,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var reservedNames = BuildReservedImportNames(
             transpilableTypes,
             transpilableTypesDict,
+            typeNamesBySymbol,
             bclExports,
             externalImports
         );
@@ -3368,7 +3446,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             if (!SymbolHelper.IsContainerless(type))
                 continue;
 
-            if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
+            if (
+                TypeScriptTransformContext.TranspilableTypeOf(
+                    transpilableTypesDict,
+                    typeNamesBySymbol,
+                    type
+                )
+                is not { } typeRef
+            )
                 continue;
 
             var barrelClaims = moduleFunctionClaims.ClaimedNamesOf(type);
@@ -3615,6 +3700,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private static IReadOnlyDictionary<string, ReservedImportName> BuildReservedImportNames(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
         IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
+        IReadOnlyDictionary<string, string> typeNamesBySymbol,
         IReadOnlyDictionary<string, IrBclExport> bclExports,
         IReadOnlyDictionary<string, IrExternalImport> externalImports
     )
@@ -3627,8 +3713,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 continue;
             if (SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript))
                 continue;
-            if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
+
+            if (
+                TypeScriptTransformContext.TranspilableTypeOf(
+                    transpilableTypesDict,
+                    typeNamesBySymbol,
+                    type
+                )
+                is not { } typeRef
+            )
                 continue;
+
             reserved[typeRef.TsName] = new ReservedImportName(
                 ReservedImportKind.TranspilableType,
                 type.ToDisplayString(),

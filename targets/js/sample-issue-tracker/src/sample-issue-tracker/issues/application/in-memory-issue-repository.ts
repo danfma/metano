@@ -25,9 +25,11 @@ import { IIssueRepository$runtimeType, type IIssueRepository } from "./i-issue-r
 let InMemoryIssueRepository$rt: ClassType<InMemoryIssueRepository> | undefined;
 
 export class InMemoryIssueRepository implements IIssueRepository {
-  private readonly _issues: List<Issue> = List.of<Issue>([]);
+  private declare readonly _issues: List<Issue>;
 
-  constructor() {}
+  constructor() {
+    this._issues = List.of<Issue>([]);
+  }
 
   static get $runtimeType(): ClassType<InMemoryIssueRepository> {
     return (InMemoryIssueRepository$rt ??= {
@@ -77,7 +79,7 @@ export class InMemoryIssueRepository implements IIssueRepository {
   }
 
   async existsAsync(id: IssueId): Promise<boolean> {
-    return !((await this.getByIdAsync(id)) == null);
+    return (await this.getByIdAsync(id)) != null;
   }
 
   listBySprintAsync(sprintKey: string): Promise<IReadOnlyList<Issue>> {

@@ -8,8 +8,6 @@ import type { Size } from "./size.js";
 import type { UserId } from "./user-id.js";
 
 export class Comparisons {
-  constructor() { }
-
   records(p: Point, q: Point | null): boolean {
     return valueEquals(p, q);
   }

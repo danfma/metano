@@ -41,9 +41,11 @@ export interface UpdateTodoDto {
 }
 
 export class TodoStore {
-  private readonly _items: List<StoredTodo> = List.of<StoredTodo>([]);
+  private declare readonly _items: List<StoredTodo>;
 
-  constructor() {}
+  constructor() {
+    this._items = List.of<StoredTodo>([]);
+  }
 
   all(): IReadOnlyList<StoredTodo> {
     return linq(
@@ -77,11 +79,11 @@ export class TodoStore {
 
     let item = existing.item;
 
-    if (!(patch.title == null)) {
+    if (patch.title != null) {
       item = item.with({ title: patch.title });
     }
 
-    if (!(patch.priority == null)) {
+    if (patch.priority != null) {
       item = item.with({
         priority:
           patch.priority ??
@@ -89,7 +91,7 @@ export class TodoStore {
       });
     }
 
-    if (!(patch.completed == null)) {
+    if (patch.completed != null) {
       item = item.with({
         completed:
           patch.completed ??

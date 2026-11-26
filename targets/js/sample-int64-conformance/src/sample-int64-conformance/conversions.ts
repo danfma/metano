@@ -186,7 +186,7 @@ export function unsignedGreaterThanInt(left: bigint, right: number): boolean {
 }
 
 export class DecimalConversions {
-  constructor() { }
+  private constructor() { }
 
   static toDecimal(value: bigint): Decimal {
     return new Decimal(value.toString());

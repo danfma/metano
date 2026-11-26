@@ -92,7 +92,7 @@ public class FieldTranspileTests
         );
 
         var output = result["config.ts"];
-        await Assert.That(output).Contains("maxRetries: number = 3");
+        await Assert.That(output).Contains("this.maxRetries = 3");
         // public is default in TS, shouldn't be printed
         await Assert.That(output).DoesNotContain("public maxRetries");
     }
@@ -108,9 +108,9 @@ public class FieldTranspileTests
         );
 
         var output = result["simple.ts"];
-        // Auto-property backing fields should NOT appear as separate fields
-        // Only the constructor param should exist
-        var fieldCount = output.Split("x:").Length - 1;
+        // The positional property is declared once, with no separate
+        // auto-property backing field.
+        var fieldCount = output.Split("readonly x:").Length - 1;
         await Assert.That(fieldCount).IsEqualTo(1);
     }
 }

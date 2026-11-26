@@ -4,8 +4,6 @@ import type { ClassType } from "metano-runtime";
 let Shape$rt: ClassType<Shape> | undefined;
 
 export abstract class Shape {
-  constructor() {}
-
   static get $runtimeType(): ClassType<Shape> {
     return (Shape$rt ??= {
       kind: "class",

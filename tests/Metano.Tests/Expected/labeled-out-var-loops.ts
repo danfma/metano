@@ -1,5 +1,5 @@
 export class Cursor {
-  constructor() { }
+  private constructor() { }
 
   static tryNext(a: number[], i: number): readonly [found: boolean, v: number] {
     let v: number;

@@ -179,3 +179,12 @@ public class LNest
 
 /// <summary>A record base a consumer derives from; its text chains across packages (baseline FR-094).</summary>
 public record LPrintBase(string Name);
+
+/// <summary>A cross-package type emitted with a lowercase name, read by a shadowed initializer (W10-10).</summary>
+[Name("gadget")]
+public class LGadget
+{
+    public int V = 3;
+
+    public static int Make() => 9;
+}

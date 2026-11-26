@@ -3,7 +3,7 @@ import { isInt32, isString } from "metano-runtime";
 export abstract class Shape {
   protected static readonly byShapeScale = /* @__PURE__ */ Symbol("Shape(int scale)");
   protected static readonly byShapeName = /* @__PURE__ */ Symbol("Shape(string name)");
-  readonly scale: number = 0;
+  declare readonly scale: number;
 
   protected constructor(overload: typeof Shape.byShapeScale, scale: number);
   protected constructor(overload: typeof Shape.byShapeName, name: string);

@@ -1651,6 +1651,97 @@ Product requirements added after the migration (normative; each one is traced by
   `es2024`) avoids. This is a documented limitation of the pair of versions, not of the
   runtime; removing it needs the polyfill, or a design that changes the Temporal-typed
   public API (see the issue).
+- **FR-108** (instance field shape, #795, #787 N4/N11, #801, decisions W10-1 / W10-1a / W10-1b /
+  W10-10): An
+  instance field of an emitted TypeScript class, including an auto-property's storage, an
+  event's backing field and a promoted record or primary-constructor parameter, MUST be a
+  type-only declaration (`declare readonly x: number;`), and every constructor path MUST run
+  one synthesized store per such field (its head store), right after `super(...)` and the
+  runtime type-argument slot, in
+  the constructor that runs the C# initializers (not one chaining with `: this(...)`): first
+  the promoted members in parameter order, then every other field in declaration order with its
+  C# initializer, its default, its captured parameter, or `undefined!` when it has none. The
+  own keys are therefore created in declaration order on every path. The head store is the
+  only synthesized one, not the only write: an initializer that reads a captured
+  primary-constructor parameter runs after the captured-field stores, so its field's head store
+  is the default and the initializer stores it again, and a field the constructor body assigns
+  outside the trailing run below keeps its head store before the body's. A field without an
+  initializer whose type is a struct of the compilation that declares a constructor stores the
+  struct's zero value (`Pt.$default()`, #802); any other value type with no TypeScript default
+  (a date or time, a tuple, a type parameter, a generic or `[InlineWrapper]` struct, a struct of
+  another package) keeps `undefined!` and reports MS0001 as a warning at the member unless every
+  declared constructor assigns it. A trailing run of fields
+  without an initializer (or with a literal one) that every constructor assigns first, in
+  declaration order, before any code can observe the instance (no `this` or `base` in the
+  stored values) stores only that body assignment, in a class without a base class (a base
+  constructor runs first and may publish `this`), including a member an explicit constructor
+  promotes when every field after it qualifies too. Left as class fields: static, abstract and
+  `override` fields (`declare override` is TS1243), `#private` fields, and the type-info caches
+  of a JSON serializer context (`private _account?: TypeSpec<Account>;`). A static class MUST
+  emit `private constructor() { }`; a class that declares no constructor and has nothing to run
+  in one emits none. An imported binding that a constructor parameter, promoted parameter or local
+  (an `out var` designation included) shadows is read under an import alias inside the
+  constructor and its initializers
+  (`import { compute, compute as compute$1 }`), whether it is a function or a type (a static
+  receiver, a `new` callee, an `instanceof` operand, an enum member receiver); the alias of a
+  name is the same in every class of a file; parameters are never renamed (their names
+  are API). One that the module itself declares cannot be aliased and reports MS0001. A parameter of an explicit
+  constructor is promoted only to an auto-property its body initializes from it
+  (`Name = name;`, #801) in its leading run of plain stores to the instance whose values never
+  read it (after a `return`, a read of the member or a store through another receiver, the
+  property keeps its default store); a computed property keeps its getter. Consumers compiling the output with
+  Babel's `preset-typescript` need `allowDeclareFields`. Tests:
+  `tests/Metano.Tests/InstanceFieldStoreTests.cs`, conformance `FieldStoreProbes` and
+  `ConstructorShadowProbes`.
+- **FR-109** (strict-mode output without avoidable noise, #787, #794, #796, #798, #791, #802,
+  decisions W10-2 / W10-2a / W10-3 / W10-3a / W10-3b / W10-4 / W10-4a / W10-11): The TypeScript
+  output MUST type-check under `--strict` and MUST NOT carry guards, annotations or assertions
+  that neither .NET semantics nor the type checker need, without ever dropping a guard on
+  Roslyn's flow state alone:
+  1. *Emission noise (#787).* A nullable array element read is bare (`a[i] as T | null`); an
+     empty catch whose variable is unused takes the optional binding (`catch {`); a catch
+     variable binds straight from the caught value (`const error = toException(e$)`); a string
+     `const` field or local (constant interpolations and `char` concatenation included) folds
+     to its value; `else if` chains print flat and `is not null` prints `x != null`.
+  2. *Concatenation guard (#787 N2).* A string compound append keeps the `?? ""` guard on its
+     target unless the target is a `var` local whose initializer and every assignment are
+     string expressions that cannot yield `null`: a literal, an interpolation, or the built-in
+     concatenation. A user-defined `operator +` (an operator method, even one whose result
+     reads as `string`) is not one, and neither is a deconstruction, `out` / `ref` argument or
+     `??=` write.
+  3. *Null-forgiving literals (#794).* `null!` / `default!` converted to a non-nullable
+     reference type keeps the assertion (`null!`), decided from the destination's declared
+     type (a field, property, local or parameter symbol, a parameter, a return type), never
+     from its flow state: a store to a non-nullable member inside a constructor or after a null
+     test keeps it. An explicitly typed local initialized so keeps its annotation. A local is
+     judged by its emitted declaration: a store to a `var` local keeps `null!` unless that
+     declaration is annotated `T | null` (rule 4), so a deconstructed or pattern-declared local
+     always keeps it.
+  4. *Local annotations and narrowing (#796, #798).* A `var` reference local is annotated
+     `T | null` only when a later assignment has a maybe-null value (a suppressed `null!` is
+     not one). A carried `!` is left out
+     where TypeScript narrows by itself (the right operand of `&&`, the true branch of an `if`
+     or conditional guarded by a null test of the same local with no assignment between), and
+     kept on a captured, reassigned `let` read inside a lambda or local function.
+  5. *Strict-mode names (#791).* Identifier positions (locals, parameters, labels, top-level
+     functions and classes) escape the strict-mode words (`implements`, `interface`, `let`,
+     `package`, `private`, `protected`, `public`, `static`, `yield`, `await`, `eval`,
+     `arguments`) with a trailing `_`; member names keep them, and a promoted parameter so
+     named is declared as a field stored from the escaped parameter. A top-level type keeps
+     its escaped name in every position that names it: its declaration, its static overload
+     dispatcher's receiver, the names derived from it (constructor selectors, factories), and
+     a derived class or caller in another package. A `[Name]` override is used as written.
+     Dart rejects its reserved words in member positions too, so the Dart target escapes them
+     in identifier and member positions alike, at the declaration and every use; every member
+     is escaped (fields, properties and methods, promoted or not), not only promoted record
+     members, because Dart rejects the bare word in any of them (supervisor decision, wave 10).
+  6. *Struct defaults (#802).* `default` / `default(S)` of a struct that declares a
+     constructor is the struct's zero value, `S.$default()`, in every position, parameter
+     defaults included, on a target that declares one; Dart keeps the placeholder and its
+     `MS0001` warning.
+  Tests: `tests/Metano.Tests/EmissionNoiseTests.cs`, `NullForgivingLiteralTests.cs`,
+  `NullTestNarrowingTests.cs`, `StrictModeReservedWordTests.cs`, `StructDefaultTests.cs`;
+  conformance `EmissionNoiseProbes`, `StrictWordClassProbes`, `StructDefaultProbes`.
 - **FR-099** (placeholder severity, wave 9 decisions W9-13 / W9-13a): An unsupported construct
   whose emission replaces executable code with a placeholder — a `/* TODO … */` marker, a dropped
   statement or expression, a read that yields nothing instead of the value — MUST report `MS0001`
@@ -1766,6 +1857,71 @@ Product requirements added after the migration (normative; each one is traced by
   type keeps its existing once-per-group `MS0063`.
   Dispatchers that also dispatch to a synthesized member and the static groups of a branded
   companion object apply the delegate test but drop nothing.
+
+- **FR-110** (C# 14 extension properties and indexers, the extension-member model of #156,
+  #523, decision W10-6): A property or indexer declared in a C# 14 `extension` block MUST run its
+  accessors at every use. The TypeScript target emits each accessor as an exported function of
+  the extension class's module: a property `P` as `p$get(receiver)` / `p$set(receiver, value)`
+  (a static one without the receiver), an indexer as `item$get(receiver, ...indices)` /
+  `item$set(receiver, ...indices, value)`, its base name being the indexer's metadata name (an
+  `[IndexerName("Slot")]` gives `slot$get` / `slot$set`; a `[Name]` replaces it). Two indexers
+  of one extension class with the same metadata name (`this[int]` beside `this[string]`, W10-6a)
+  report `MS0001` (warning) at each one without a `[Name]`; a `[Name("byKey")]` on such an
+  indexer pins its suffix as spec 013 FR-005 pins an overload's (`itemByKey$get`). Each name is
+  registered in the project-wide extension-helper registry, so a consumer imports it from the
+  class's module and two classes exporting one name report `MS0021`; a consumer of a referenced
+  package imports it, like the package's extension methods, from that package (#766: every
+  extension-helper call names its container with the container's cross-assembly origin). A read calls the getter, a
+  plain assignment the setter. A compound assignment, `++` / `--` and `??=` read the current
+  value through the getter and store through the setter, evaluating the receiver and then each
+  index once, in source order (an impure one, `xs[i++] += 1`, is assigned to a temporary declared
+  at the head of the enclosing statement list, `($t = i++, item$set(xs, $t, item$get(xs, $t) + 1))`,
+  with no immediately invoked function, W10-6a; only where no statement list exists, a static
+  field initializer, it stays the scoped arrow form, while an instance initializer, a constructor
+  statement, declares its temporaries in a block around its store, W10-12); a `Nullable<T>` accessor stores the
+  lifted value (`null` stays `null`), a `bool?` `&=` / `|=` / `^=` stores the three-valued
+  result a `bool?` field stores, and `??=` calls the setter only when the current value is
+  `null` (`item$get(b, i) ?? item$set(b, i, v)`). Where the value of the assignment or increment
+  is used, it is the stored value (the previous one for a postfix increment), as in C#. The
+  getter may be called again inside a lifted store (getters are assumed side-effect free).
+  Tests: `tests/Metano.Tests/ExtensionIndexerTests.cs`, `ExtensionPropertySetterTests.cs`,
+  `CrossPackageExtensionAccessorTests.cs`; conformance rows `ExtensionIndexerProbes.*`,
+  `CrossPackageExtensionProbes.*`.
+
+- **FR-111** (`IDisposable` and `using`, #800, decision W10-9, TypeScript; amends FR-099's
+  `using` declaration source for TypeScript):
+  1. `System.IDisposable` maps to the `metano-runtime` interface `IDisposable` with the single
+     member `dispose(): void`; `Dispose()` calls lower to `dispose()`. The runtime exports
+     `IDisposable$runtimeType`. No `Symbol.dispose` alias is emitted (stable Safari has none, and
+     JS `using` wraps a dispose-time error in `SuppressedError`, unlike .NET).
+  2. A transpiled class, struct or interface that implements or extends `IDisposable` keeps it
+     in its `implements` / `extends` clause and in its descriptor's `interfaces` /
+     `baseInterfaces`. `is`, `as`, type patterns, overload dispatch, `typeof` and reified type
+     arguments test it nominally, like a transpiled interface: a value with a `dispose` method
+     whose class does not implement the interface is not `IDisposable`. The general rule: an
+     interface bound by `[ExportFromBcl]` to `metano-runtime` is declared by the runtime, which
+     exports `<ExportedName>$runtimeType` beside it (`IrNamedTypeSemantics.IsRuntimeDeclared`);
+     an interface a user maps to another package keeps its 3.2.0 behaviour (decision W10-9a).
+  3. `using (decl) body`, `using (expr) body` and `using` declarations lower to `try`/`finally`
+     that calls `dispose()` on each resource in reverse acquisition order, skips a `null`
+     resource (`r?.dispose()`, omitted only for a non-nullable value type or an initializer
+     that is an object or collection creation, never from flow state, decision W10-9a), runs
+     on every exit (normal, `return`,
+     `break`/`continue`, exception, an iterator abandoned early), and lets an exception thrown
+     by `dispose()` replace the pending one. An expression resource is held by a temporary
+     (`$using0`). A `using` declaration wraps the rest of its scope; several declarators nest
+     left to right, so a later initializer that throws still disposes the earlier resources. No
+     `Symbol.dispose`, `using` syntax or runtime helper is emitted.
+  4. An explicit `IDisposable.Dispose()` is emitted as `dispose()`. When another member of the
+     type or a base class already claims that name, it is dropped only if it forwards to that
+     member unchanged (one call on `this` passing its parameters in order, to a `public` or
+     `internal` member); otherwise `MS0031` is reported.
+  5. Not supported (`MS0001`, error): `await using` and `IAsyncDisposable`; a `using` over a
+     type whose `Dispose` the target does not emit (a BCL resource such as
+     `IEnumerator<T>`); a `using` declaration directly in a module entry point body.
+  6. Dart: `using` reports `MS0001`; `IDisposable` is not emitted in heritage clauses.
+  Tests: `tests/Metano.Tests/DisposableTests.cs`,
+  `targets/js/metano-runtime/test/system/disposable.test.ts`; conformance `DisposableProbes`.
 
 ### Key Entities
 

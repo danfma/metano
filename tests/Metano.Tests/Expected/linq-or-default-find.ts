@@ -4,8 +4,6 @@ import { Level } from "./level.js";
 import type { Person } from "./person.js";
 
 export class Finders {
-  constructor() { }
-
   found(xs: List<number>): number {
     return xs.find((x: number) => x > 100, 0);
   }

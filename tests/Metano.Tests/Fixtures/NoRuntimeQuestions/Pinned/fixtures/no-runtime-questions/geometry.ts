@@ -4,7 +4,7 @@ import { Priority } from "./priority.js";
 import { TodoItem } from "./todo-item.js";
 
 export class Geometry {
-  constructor() { }
+  private constructor() { }
 
   static distance(a: Point, b: Point): number {
     return (absInt32((a.x - b.x) | 0) + absInt32((a.y - b.y) | 0)) | 0;

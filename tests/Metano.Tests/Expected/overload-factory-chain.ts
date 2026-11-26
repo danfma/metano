@@ -3,7 +3,7 @@ import { isInt32 } from "metano-runtime";
 export class Temp {
   protected static readonly byTempA = /* @__PURE__ */ Symbol("Temp(int a)");
   protected static readonly byTempDefault = /* @__PURE__ */ Symbol("Temp()");
-  readonly a: number = 0;
+  declare readonly a: number;
 
   constructor(overload: typeof Temp.byTempA, a: number);
   constructor(overload: typeof Temp.byTempDefault);
@@ -12,6 +12,7 @@ export class Temp {
   constructor(...args: unknown[]) {
     if (typeof args[0] === "symbol" && args[0] === Temp.byTempA) {
       const a = args[1] as number;
+      this.a = 0;
       this.a = a;
 
       return;
@@ -22,6 +23,7 @@ export class Temp {
 
       {
         const a = __chain0Arg0;
+        this.a = 0;
         this.a = a;
       }
 
@@ -30,6 +32,7 @@ export class Temp {
 
     if (args.length === 1 && isInt32(args[0])) {
       const a = args[0] as number;
+      this.a = 0;
       this.a = a;
 
       return;
@@ -40,6 +43,7 @@ export class Temp {
 
       {
         const a = __chain0Arg0;
+        this.a = 0;
         this.a = a;
       }
 

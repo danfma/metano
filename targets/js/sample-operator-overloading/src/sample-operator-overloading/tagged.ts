@@ -7,7 +7,7 @@ export class Tagged<T> {
   protected static readonly byTaggedValueLabel = /* @__PURE__ */ Symbol(
     "Tagged(T value, string label)",
   );
-  readonly kind: string;
+  declare readonly kind: string;
 
   constructor(overload: typeof Tagged.byTaggedValue, value: T);
   constructor(overload: typeof Tagged.byTaggedCode, code: number);

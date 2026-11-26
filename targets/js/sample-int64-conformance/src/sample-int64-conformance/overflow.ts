@@ -3,12 +3,15 @@ import { checkedInt64, checkedUInt64, remInt64, type ClassType } from "metano-ru
 let Counter$rt: ClassType<Counter> | undefined;
 
 export class Counter {
-  private readonly _slots: bigint[];
-  private _field: bigint = 0n;
-  private _slotReads: number = 0;
-  total: bigint = 0n;
+  declare private readonly _slots: bigint[];
+  declare private _field: bigint;
+  declare private _slotReads: number;
+  declare total: bigint;
 
   constructor(seed: bigint) {
+    this._slots = undefined!;
+    this._field = 0n;
+    this._slotReads = 0;
     this._field = seed;
     this._slots = [0n, seed];
     this.total = seed;

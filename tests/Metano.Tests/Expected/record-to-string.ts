@@ -1,7 +1,13 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Item {
-  constructor(readonly name: string, readonly qty: number) { }
+  declare readonly name: string;
+  declare readonly qty: number;
+
+  constructor(name: string, qty: number) {
+    this.name = name;
+    this.qty = qty;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.name === other.name && this.qty === other.qty;

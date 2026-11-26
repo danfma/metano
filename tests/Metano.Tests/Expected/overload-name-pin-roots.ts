@@ -9,8 +9,6 @@ import { isInt32 } from "metano-runtime";
 import type { IShape } from "./i-shape.js";
 
 export class Square implements IShape {
-  constructor() { }
-
   areaWH(w: number, h: number): number {
     return Math.imul(w, h);
   }
@@ -37,8 +35,6 @@ export class Square implements IShape {
 import { isInt32, isString } from "metano-runtime";
 
 export class Counter {
-  constructor() { }
-
   addOne(x: number): number {
     return x;
   }
@@ -90,8 +86,6 @@ import type { Counter } from "./counter.js";
 import type { IShape } from "./i-shape.js";
 
 export class Use {
-  constructor() { }
-
   run(shape: IShape, counter: Counter): number {
     return (shape.areaSide(2) + counter.addOne(3)) | 0;
   }

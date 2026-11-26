@@ -22,7 +22,7 @@ public class ReservedWordMemberNameTests
             """
         )["btn.ts"];
 
-        await Assert.That(output).Contains("constructor(readonly of_: number) { }");
+        await Assert.That(output).Contains("constructor(of_: number) {");
         await Assert.That(output).DoesNotContain("readonly of:");
     }
 
@@ -40,8 +40,8 @@ public class ReservedWordMemberNameTests
             .That(output)
             .Contains(
                 """
-                  readonly of: number;
-                  readonly new: number;
+                  declare readonly of: number;
+                  declare readonly new: number;
 
                   constructor(of_: number, new_: number) {
                     this.of = of_;
@@ -80,8 +80,8 @@ public class ReservedWordMemberNameTests
 
         await Assert.That(result["i-has.ts"]).Contains("readonly default: number;");
         await Assert.That(result["has.ts"]).Contains("get default(): number {");
-        await Assert.That(result["fld.ts"]).Contains("default: number = 3;");
-        await Assert.That(result["fld.ts"]).Contains("of: number = 0;");
+        await Assert.That(result["fld.ts"]).Contains("this.default = 3;");
+        await Assert.That(result["fld.ts"]).Contains("this.of = 0;");
         await Assert.That(result["opt.ts"]).Contains("readonly new: number;");
         await Assert.That(result["opt.ts"]).Contains("readonly default: string;");
         await Assert.That(result["use-opt.ts"]).Contains("return { new: 4, default: \"d\" };");

@@ -131,9 +131,7 @@ public class ExceptionTranspileTests
             .That(output)
             .Contains("export class QuotaExceededException extends Exception {");
 
-        await Assert
-            .That(output)
-            .Contains("constructor(message: string, readonly limit: number) {");
+        await Assert.That(output).Contains("constructor(message: string, limit: number) {");
 
         await Assert.That(output).Contains("super(message);");
         await Assert.That(output).Contains("describe(): string {");
@@ -254,6 +252,7 @@ public class ExceptionTranspileTests
                           const message = __chain1Arg0;
                           const code = __chain1Arg1;
                           super(message);
+                          this.code = 0;
                           this.code = code;
                         }
                       }
@@ -288,6 +287,7 @@ public class ExceptionTranspileTests
             .Contains(
                 "this.#baseMessage = Object.hasOwn(this, \"message\") ? this.message : super.message;"
             );
+
         await Assert.That(output).Contains("Reflect.deleteProperty(this, \"message\");");
         await Assert.That(output).Contains("get message(): string {");
     }
@@ -361,11 +361,13 @@ public class ExceptionTranspileTests
         var output = result["detailed-exception.ts"];
 
         await Assert.That(output).Contains("super(detail);");
+
         await Assert
             .That(output)
             .Contains(
                 "this.#baseMessage = Object.hasOwn(this, \"message\") ? this.message : super.message;"
             );
+
         await Assert.That(output).Contains("return \"custom: \" + this.#baseMessage;");
     }
 

@@ -3,8 +3,6 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 abstract class ShotSource$Base {
   abstract readonly kind: "Fresh" | "Reused";
 
-  constructor() { }
-
   static get Fresh(): typeof ShotSource$Fresh {
     return ShotSource$Fresh;
   }
@@ -84,8 +82,11 @@ class ShotSource$Fresh extends ShotSource {
 }
 
 class ShotSource$Reused extends ShotSource {
-  constructor(readonly from: number) {
+  declare readonly from: number;
+
+  constructor(from: number) {
     super();
+    this.from = from;
   }
 
   override get kind(): "Reused" {

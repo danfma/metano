@@ -141,9 +141,11 @@ internal static class RuntimeQuestionFacts
     /// <summary>
     /// The types the targets lower to a primitive descriptor: the C# special
     /// types, <c>Guid</c>, <c>BigInteger</c> and the temporal types.
+    /// <c>System.IDisposable</c> is a special type but an ordinary interface,
+    /// tested by its descriptor where a target declares one (FR-111).
     /// </summary>
     private static bool IsPrimitiveLike(INamedTypeSymbol type) =>
-        type.SpecialType is not SpecialType.None
+        type.SpecialType is not (SpecialType.None or SpecialType.System_IDisposable)
         || type.ToDisplayString()
             is "System.Guid"
                 or "System.Numerics.BigInteger"

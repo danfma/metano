@@ -46,7 +46,7 @@ export function bigFromSingle(value: number): bigint {
 }
 
 export class DecimalBigIntegerConversions {
-  constructor() { }
+  private constructor() { }
 
   static bigToDecimal(value: bigint): Decimal {
     return new Decimal(decimalTextFromBigInteger(value));

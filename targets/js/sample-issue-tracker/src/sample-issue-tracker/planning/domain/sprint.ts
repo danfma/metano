@@ -8,14 +8,24 @@ import type { IssueId } from "../../issues/domain/issue-id.js";
 let Sprint$rt: ClassType<Sprint> | undefined;
 
 export class Sprint {
-  private readonly _plannedIssues: HashSet<IssueId> = new HashSet<IssueId>();
+  declare readonly key: string;
+  declare name: string;
+  declare startDate: Temporal.PlainDate;
+  declare endDate: Temporal.PlainDate;
+  private declare readonly _plannedIssues: HashSet<IssueId>;
 
   constructor(
-    readonly key: string,
-    public name: string,
-    public startDate: Temporal.PlainDate,
-    public endDate: Temporal.PlainDate,
-  ) {}
+    key: string,
+    name: string,
+    startDate: Temporal.PlainDate,
+    endDate: Temporal.PlainDate,
+  ) {
+    this.key = key;
+    this.name = name;
+    this.startDate = startDate;
+    this.endDate = endDate;
+    this._plannedIssues = new HashSet<IssueId>();
+  }
 
   static get $runtimeType(): ClassType<Sprint> {
     return (Sprint$rt ??= {

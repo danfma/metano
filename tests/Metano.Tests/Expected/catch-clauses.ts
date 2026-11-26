@@ -7,9 +7,11 @@ let AppException$rt: ClassType<AppException> | undefined;
 
 export class AppException extends Exception {
   override readonly name: string = "AppException";
+  declare readonly code: number;
 
-  constructor(message: string, readonly code: number) {
+  constructor(message: string, code: number) {
     super(message ?? "Exception of type 'AppException' was thrown.");
+    this.code = code;
     this.code = code;
   }
 
@@ -73,10 +75,13 @@ export class NotFoundException extends AppException {
 }
 
 export class Handlers {
-  private readonly _log: List<string> = new List<string>();
-  verbose: boolean = false;
+  declare private readonly _log: List<string>;
+  declare verbose: boolean;
 
-  constructor() { }
+  constructor() {
+    this._log = new List<string>();
+    this.verbose = false;
+  }
 
   work(kind: string): void {
     if (kind === "missing") {
@@ -346,8 +351,7 @@ export class Handlers {
     try {
       this.work(kind);
     } catch (e$) {
-      const e0 = toException(e$);
-      const e = e0;
+      const e = toException(e$);
       this._log.add(e instanceof AppException ? "app" : "other");
       throw e$;
     }

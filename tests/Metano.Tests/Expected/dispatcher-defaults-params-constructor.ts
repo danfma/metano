@@ -3,7 +3,7 @@ import { isInt32, isString } from "metano-runtime";
 export class Opt {
   protected static readonly byOptA = /* @__PURE__ */ Symbol("Opt(int a)");
   protected static readonly byOptSRest = /* @__PURE__ */ Symbol("Opt(string s, params int[] rest)");
-  readonly log: string = "";
+  declare readonly log: string;
 
   constructor(overload: typeof Opt.byOptA, a?: number);
   constructor(overload: typeof Opt.byOptSRest, s: string, ...rest: number[]);

@@ -1,7 +1,7 @@
 import { intDiv } from "metano-runtime";
 
 export class Quotients {
-  constructor() { }
+  private constructor() { }
 
   static average(total: number, count: number): number {
     return intDiv(total, count);

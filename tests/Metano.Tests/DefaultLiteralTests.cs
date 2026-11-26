@@ -104,14 +104,12 @@ public class DefaultLiteralTests
     }
 
     /// <summary>
-    /// A type no expression spells (a struct that declares a constructor, a
-    /// <c>[StringEnum]</c> without a zero member) reports
-    /// <c>MS0001</c> and keeps the placeholder; a struct that declares none is
-    /// <c>new Point()</c>, as a parameter default is.
+    /// A type no expression spells (a <c>[StringEnum]</c> without a zero
+    /// member) reports <c>MS0001</c> and keeps the placeholder; a struct that
+    /// declares none is <c>new Point()</c>, as a parameter default is, and one
+    /// that declares a constructor reads its zero-value factory (#802).
     /// </summary>
     [Test]
-    [Arguments("Sized s = default; return s;", "Sized")]
-    [Arguments("var s = default(Sized); return s;", "Sized")]
     [Arguments("Tone t = default; return t;", "Tone")]
     public async Task TypeWithoutALiteralDefault_ReportsAndKeepsThePlaceholder(
         string body,
@@ -205,8 +203,8 @@ public class DefaultLiteralTests
 
         await Assert.That(holder).Contains("const a = new ZGen<number>();");
         await Assert.That(holder).Contains("const z = new ZOdd();");
-        await Assert.That(files["z-odd.ts"]).Contains("id: UUID = UUID.empty;");
-        await Assert.That(files["z-odd.ts"]).Contains("c: string = \"\\u0000\";");
+        await Assert.That(files["z-odd.ts"]).Contains("this.id = UUID.empty;");
+        await Assert.That(files["z-odd.ts"]).Contains("this.c = \"\\u0000\";");
 
         await Assert
             .That(Warnings(diagnostics))

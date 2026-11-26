@@ -81,6 +81,13 @@ public sealed record IrExtractionContext(
     internal bool HasAssignmentInTestForm => Target != Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
+    /// Whether the target declares <c>System.IDisposable</c>, so a <c>using</c>
+    /// statement or declaration lowers to the <c>try</c>/<c>finally</c> the C#
+    /// specification defines it as (FR-111). Dart declares none and keeps MS0001.
+    /// </summary>
+    internal bool LowersUsingStatements => DisposableInterfaces.IsDeclaredBy(Target);
+
+    /// <summary>
     /// Whether the target's BCL collections are its native ones (Dart until
     /// spec 011 FR-038, D28): such a target gets the pre-011c lowering of every
     /// collection construct (the 2.x element-access reads, writes and
@@ -120,6 +127,16 @@ public sealed record IrExtractionContext(
     /// that prints every type (Dart): nothing is reported.
     /// </summary>
     public Func<INamedTypeSymbol, string?>? UnprintableTextReason { get; init; }
+
+    /// <summary>
+    /// Whether the target gives a struct that declares a constructor a zero
+    /// value of its own (#802), so <c>default(S)</c> lowers to a struct-default
+    /// construction (<see cref="Metano.Compiler.IR.IrNewExpression.IsStructDefault"/>):
+    /// TypeScript reads it from the struct's <c>$default()</c> factory. <c>false</c>,
+    /// the default, for a target with no such value: <c>default(S)</c> keeps the
+    /// placeholder and its MS0001 warning (Dart).
+    /// </summary>
+    public bool EmitsStructZeroValue { get; init; }
 
     /// <summary>
     /// <see cref="KeepsNativeCollections"/> for a code path that holds only the
@@ -243,9 +260,11 @@ public sealed record IrExtractionContext(
     /// named arguments or a formatted value, or answers for an exception
     /// construction or type test, and a C# default value is a constant,
     /// <c>default</c> or a parameterless struct construction, which holds
-    /// none of them.
+    /// none of them. <see cref="EmitsStructZeroValue"/> is kept: a <c>default</c>
+    /// parameter value of a struct is exactly the zero value it answers for.
     /// </summary>
-    public IrExtractionContext ForConstantDefault() => new(OriginResolver);
+    public IrExtractionContext ForConstantDefault() =>
+        new(OriginResolver) { EmitsStructZeroValue = EmitsStructZeroValue };
 
     /// <summary>Shape-only extraction: no resolver, compilation or target.</summary>
     public static IrExtractionContext Empty { get; } = new();

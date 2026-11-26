@@ -183,7 +183,7 @@ public static class Wave5Fix1Probes
             "|",
             Probe(() => IsA<(int, string)>("x")),
             Probe(() => IsA<KeyValuePair<string, int>>("s")),
-            Probe(() => IsA<IDisposable>("s")),
+            Probe(() => IsA<IFormattable>("s")),
             Probe(() => IsA<int[]>(new string[] { "a" })),
             Probe(() => IsA<Func<int>>(g)),
             Probe(() => IsA<System.Text.StringBuilder>("str")),
@@ -194,7 +194,7 @@ public static class Wave5Fix1Probes
     public static string UndescribableReifiedNullsReturnFalse() =>
         string.Join(
             "|",
-            Probe(() => IsA<IDisposable>(null!)),
+            Probe(() => IsA<IFormattable>(null!)),
             Probe(() => IsA<(int, string)>(null!)),
             Probe(() => IsA<Func<int>>(null!)),
             Probe(() => IsA<int[]>(null!)),

@@ -23,7 +23,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 ///   <item>Other transpilable types in the project (subpath imports via <see cref="PathNaming"/>)</item>
 /// </list>
 /// </summary>
-public sealed class ImportCollector(
+public sealed partial class ImportCollector(
     TypeScriptTransformContext context,
     IReadOnlySet<IrRuntimeRequirement>? irRuntimeRequirements = null,
     IReadOnlyDictionary<string, IrTranspilableTypeRef>? sameNameBindings = null
@@ -239,8 +239,10 @@ public sealed class ImportCollector(
 
         if (isOwnFile)
         {
-            referencedTypes.Remove(currentType.Name);
             referencedTypes.Remove(tsTypeName);
+
+            if (!NamesAnotherProjectType(currentType.Name, currentType))
+                referencedTypes.Remove(currentType.Name);
         }
 
         referencedTypes.Remove($"is{tsTypeName}"); // own guard — don't import
@@ -860,7 +862,12 @@ public sealed class ImportCollector(
             sink
         );
 
-        return new CollectedImports(MergeImportsByPath(stampedImports), helperAliases);
+        return new CollectedImports(
+            MergeImportsByPath(
+                WithReferenceAliases(stampedImports, sink.ReferenceAliases, statements)
+            ),
+            helperAliases
+        );
     }
 
     /// <summary>
@@ -1855,7 +1862,12 @@ public sealed class ImportCollector(
                 CollectFromStatements(tryStmt.Body, sink);
 
                 if (tryStmt.Catch is { } handler)
-                    CollectInScope([handler.Parameter], handler.Body, [], sink);
+                    CollectInScope(
+                        handler.Parameter is { } parameter ? [parameter] : [],
+                        handler.Body,
+                        [],
+                        sink
+                    );
 
                 if (tryStmt.Finally is { } finallyBody)
                     CollectFromStatements(finallyBody, sink);
@@ -1966,6 +1978,16 @@ public sealed class ImportCollector(
     /// The project type a bare type name in this file refers to: the symbol-resolved
     /// binding when another project type prints under the same name (#743).
     /// </summary>
+    /// <summary>
+    /// Whether <paramref name="name"/> binds a project type other than
+    /// <paramref name="type"/>: a <c>[Name]</c>-renamed type's C# name may be
+    /// another type's emitted name (<c>[Name("Signals")] static class Signal</c>
+    /// beside <c>Signal&lt;T&gt;</c>), which the file then imports rather than
+    /// dropping as a reference to itself (#776).
+    /// </summary>
+    private bool NamesAnotherProjectType(string name, INamedTypeSymbol type) =>
+        ProjectTypeNamed(name) is { } named && named.Key != type.GetCrossAssemblyOriginKey();
+
     private IrTranspilableTypeRef? ProjectTypeNamed(string name) =>
         _sameNameBindings.GetValueOrDefault(name)
         ?? _context.TranspilableTypes.GetValueOrDefault(name);
@@ -2074,6 +2096,9 @@ public sealed class ImportCollector(
                 break;
             case TsModuleExportReference exportReference:
                 RecordModuleExport(sink.OwnersByModuleExport, exportReference);
+                break;
+            case TsAliasedReference aliased:
+                CollectFromAliasedReference(aliased, sink);
                 break;
             case TsRuntimeHelperReference helper:
                 if (helper.Module is TsRuntimeHelperReference.LinqPipeModule)
@@ -2484,6 +2509,9 @@ internal sealed class ImportCollectionSink(
 
     public Dictionary<string, SortedSet<string>> OwnersByModuleExport { get; } =
         ownersByModuleExport;
+
+    /// <summary>The alias each shadowed imported name is read under (W10-1b).</summary>
+    public Dictionary<string, string> ReferenceAliases { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Whether <paramref name="name"/> is bound by an enclosing function, block,

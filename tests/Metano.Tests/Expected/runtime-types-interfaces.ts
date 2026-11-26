@@ -5,8 +5,6 @@ import { ITagged$runtimeType, type ITagged } from "./i-tagged.js";
 let Badge$rt: ClassType<Badge> | undefined;
 
 export class Badge implements ITagged {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Badge> {
     return (Badge$rt ??= {
       kind: "class",
@@ -53,8 +51,6 @@ import { IPet$runtimeType, type IPet } from "./i-pet.js";
 let Dog$rt: ClassType<Dog> | undefined;
 
 export class Dog implements IPet {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Dog> {
     return (Dog$rt ??= {
       kind: "class",
@@ -179,7 +175,7 @@ import { IPet$runtimeType, type IPet } from "./i-pet.js";
 import { ITagged$runtimeType } from "./i-tagged.js";
 
 export class Keeper {
-  constructor() { }
+  private constructor() { }
 
   static isNamed(o: Object): boolean {
     return isType(o, INamed$runtimeType);
@@ -262,8 +258,6 @@ export class Puppy extends Dog {
 import type { IUnasked } from "./i-unasked.js";
 
 export class Rock implements IUnasked {
-  constructor() { }
-
   get x(): number {
     return 1;
   }

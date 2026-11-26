@@ -4,8 +4,6 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let IBase$rt: ClassType<IBase> | undefined;
 
 export abstract class IBase {
-  constructor() {}
-
   static get $runtimeType(): ClassType<IBase> {
     return (IBase$rt ??= {
       kind: "class",

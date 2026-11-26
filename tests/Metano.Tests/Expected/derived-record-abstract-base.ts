@@ -1,7 +1,11 @@
 import { HashCode, copyRecordWith, formatDouble, valueEquals } from "metano-runtime";
 
 export abstract class Clip {
-  constructor(readonly seconds: number) { }
+  declare readonly seconds: number;
+
+  constructor(seconds: number) {
+    this.seconds = seconds;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && valueEquals(this.seconds, other.seconds);

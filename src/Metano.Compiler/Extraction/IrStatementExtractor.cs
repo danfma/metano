@@ -14,7 +14,7 @@ namespace Metano.Compiler.Extraction;
 /// Unsupported kinds produce <see cref="IrUnsupportedStatement"/> placeholders
 /// so callers can detect partial support and fall back to legacy emission.
 /// </summary>
-public sealed class IrStatementExtractor(
+public sealed partial class IrStatementExtractor(
     SemanticModel semanticModel,
     IrExtractionContext context,
     LocalBindingNames? inheritedLocalNames = null
@@ -168,12 +168,18 @@ public sealed class IrStatementExtractor(
     /// <c>out</c>-argument calls in this same list — the scope C# gives an
     /// <c>out var</c> declared in an expression statement, a declaration, a
     /// <c>return</c>, an <c>if</c> condition — or, for a loop, inside the loop.
+    /// A lowered <c>using</c> declaration wraps the rest of the list in its
+    /// <c>try</c> (<see cref="ExtractUpToUsingDeclaration"/>).
     /// </summary>
-    private List<IrStatement> ExtractStatementSequence(IEnumerable<StatementSyntax> source)
-    {
-        var extracted = source.SelectMany(ExtractStatementInScope).ToList();
+    private List<IrStatement> ExtractStatementSequence(IReadOnlyList<StatementSyntax> source) =>
+        LowerStatementSequence(ExtractUpToUsingDeclaration(source));
 
-        return extracted
+    /// <summary>
+    /// Runs <see cref="ExpressionVariableLowering"/> over one scope's extracted
+    /// statements, each with the statements that follow it.
+    /// </summary>
+    private List<IrStatement> LowerStatementSequence(List<IrStatement> extracted) =>
+        extracted
             .SelectMany(
                 (stmt, index) =>
                     IrStatementSpans.Inherit(
@@ -182,7 +188,6 @@ public sealed class IrStatementExtractor(
                     )
             )
             .ToList();
-    }
 
     /// <summary>
     /// The body of an <c>if</c> branch or a loop. A non-block embedded
@@ -335,19 +340,14 @@ public sealed class IrStatementExtractor(
 
     /// <summary>
     /// The declarators of a local declaration. A <c>using</c> declaration
-    /// (<c>using var x = r;</c>) disposes its value at the end of the scope,
-    /// which no target emits yet, so it reports the dropped call.
+    /// (<c>using var x = r;</c>) reaches here only when it is not lowered
+    /// (<see cref="ExtractUpToUsingDeclaration"/>): its value would never be
+    /// disposed, so it reports the dropped call.
     /// </summary>
     private List<IrStatement> ExtractLocalDeclaration(LocalDeclarationStatementSyntax local)
     {
         if (local.UsingKeyword.IsKind(SyntaxKind.UsingKeyword))
-        {
-            DroppedCodeDiagnostics.Report(
-                "The C# using declaration is not supported by the transpiler: its value would "
-                    + "never be disposed at the end of the scope.",
-                local.GetLocation()
-            );
-        }
+            ReportUnloweredUsingDeclaration(local);
 
         return ExtractDeclarators(local.Declaration, local.IsConst);
     }
@@ -396,6 +396,7 @@ public sealed class IrStatementExtractor(
                 _expressions.Extract(ds.Condition)
             ),
             TryStatementSyntax ts => ExtractTry(ts),
+            UsingStatementSyntax resource => ExtractUsing(resource),
             SwitchStatementSyntax sw => ExtractSwitch(sw),
             BreakStatementSyntax jump => new IrBreakStatement(jump.Name?.Identifier.ValueText),
             ContinueStatementSyntax jump => new IrContinueStatement(
@@ -780,7 +781,7 @@ public sealed class IrStatementExtractor(
     )
     {
         var initializer = variable.Initializer is not null
-            ? _expressions.Extract(variable.Initializer.Value)
+            ? ExtractLocalInitializer(variable.Initializer.Value, isConst)
             : null;
 
         return new IrVariableDeclaration(
@@ -788,9 +789,23 @@ public sealed class IrStatementExtractor(
             DeclaredLocalType(declaration, variable),
             initializer,
             IsConst: isConst,
-            InferredType: InferredLocalType(declaration, variable)
+            InferredType: InferredLocalType(declaration, variable),
+            AssignedMaybeNull: MaybeNullLocalAssignments.AnyAfterDeclaration(
+                _semantic,
+                declaration,
+                variable
+            )
         );
     }
+
+    /// <summary>
+    /// The initializer of a local: a string <c>const</c> folds to the literal Roslyn
+    /// computed (<c>"a" + "b"</c> is <c>"ab"</c>, an interpolation of constants too).
+    /// </summary>
+    private IrExpression ExtractLocalInitializer(ExpressionSyntax value, bool isConst) =>
+        isConst && _semantic.GetConstantValue(value) is { HasValue: true, Value: string folded }
+            ? new IrLiteral(folded, IrLiteralKind.String)
+            : _expressions.Extract(value);
 
     /// <summary>The inferred type of a <c>var</c> local; <c>null</c> for any other.</summary>
     private IrTypeRef? InferredLocalType(

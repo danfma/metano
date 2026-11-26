@@ -126,3 +126,4 @@ W9N1Probes.tupleLinq                   #746  W9-N1 (needs design): LINQ Distinct
 W9N1Probes.tupleListIndexOf            #746  W9-N1 (needs design): List<(int, string)>.IndexOf / Contains compare tuples by reference (.NET: 1,False); MS0001 on each use
 StringComparisonProbes.cultureCompareSigns  none  the .NET recording runs with InvariantGlobalization (culture comparisons are ordinal); the runtime uses ICU collation, as .NET with ICU does (a < A < B)
 StringComparisonProbes.cultureIgnoreCaseWidthPairs  none  the .NET recording runs with InvariantGlobalization (U+3000 vs space is ordinal-unequal); the runtime answers as .NET with ICU does (TT0|TT0|)
+StrictWordCallProbes.varConcatRefArgument  #788  a `ref` argument to a user method does not write the local back in the target (pre-existing; unrelated to the string guard)

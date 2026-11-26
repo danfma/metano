@@ -4,8 +4,6 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let UFail$rt: ClassType<UFail> | undefined;
 
 export class UFail {
-  constructor() {}
-
   static get $runtimeType(): ClassType<UFail> {
     return (UFail$rt ??= {
       kind: "class",

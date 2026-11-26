@@ -19,7 +19,7 @@ public class QueueStackTests
         );
 
         var output = result["buffer.ts"];
-        await Assert.That(output).Contains("_items: Queue<string> = new Queue<string>()");
+        await Assert.That(output).Contains("this._items = new Queue<string>()");
     }
 
     [Test]
@@ -68,7 +68,7 @@ public class QueueStackTests
         );
 
         var output = result["history.ts"];
-        await Assert.That(output).Contains("_items: Stack<string> = new Stack<string>()");
+        await Assert.That(output).Contains("this._items = new Stack<string>()");
     }
 
     [Test]

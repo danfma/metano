@@ -1,8 +1,6 @@
 import { isBool, isInt32, isString } from "metano-runtime";
 
 export class Box {
-  constructor() { }
-
   fInt32$1(a: number): number {
     return a;
   }

@@ -2,8 +2,6 @@ import { checkedInt32, checkedNarrow, checkedNarrowNumber, checkedUInt32, int32F
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Narrowing {
-  constructor() { }
-
   intToUInt(x: number): number {
     return x >>> 0;
   }

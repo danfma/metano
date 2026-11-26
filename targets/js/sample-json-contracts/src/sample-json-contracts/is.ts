@@ -5,8 +5,11 @@ import { IBase } from "./i-base.js";
 let IS$rt: ClassType<IS> | undefined;
 
 export class IS extends IBase {
-  constructor(readonly y: number) {
+  declare readonly y: number;
+
+  constructor(y: number) {
     super();
+    this.y = y;
   }
 
   static override get $runtimeType(): ClassType<IS> {

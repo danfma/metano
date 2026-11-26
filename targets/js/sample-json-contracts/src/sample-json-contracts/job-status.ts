@@ -9,8 +9,6 @@ let JobStatus$rt: ClassType<JobStatus$Base> | undefined;
 abstract class JobStatus$Base {
   abstract readonly kind: "JobQueued" | "JobRunning" | "JobCompleted" | "JobError";
 
-  constructor() {}
-
   static get $runtimeType(): ClassType<JobStatus$Base> {
     return (JobStatus$rt ??= {
       kind: "class",

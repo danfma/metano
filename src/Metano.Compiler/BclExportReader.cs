@@ -14,6 +14,14 @@ namespace Metano.Compiler;
 /// </summary>
 public static class BclExportReader
 {
+    /// <summary>
+    /// The one package that declares each interface it is bound to by
+    /// <c>[ExportFromBcl]</c> together with its runtime descriptor
+    /// (<c>&lt;ExportedName&gt;$runtimeType</c>) beside it (FR-111, decision W10-9a). An
+    /// interface a user maps to another package keeps its 3.2.0 behaviour.
+    /// </summary>
+    public const string RuntimeDeclaringPackage = "metano-runtime";
+
     private static readonly ConditionalWeakTable<
         Compilation,
         IReadOnlyDictionary<string, IrBclExport>
@@ -25,6 +33,20 @@ public static class BclExportReader
     /// <summary>Whether an <c>[ExportFromBcl]</c> in scope binds <paramref name="type"/>.</summary>
     public static bool IsExported(INamedTypeSymbol type, Compilation compilation) =>
         Read(compilation).ContainsKey(ExportKey(type));
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is an interface an <c>[ExportFromBcl]</c> binds to
+    /// <see cref="RuntimeDeclaringPackage"/>, which declares it with its runtime descriptor
+    /// (<c>System.IDisposable</c>). A target that binds no export ignores the fact.
+    /// </summary>
+    public static bool IsRuntimeDeclaredInterface(INamedTypeSymbol type, Compilation compilation) =>
+        type.TypeKind is TypeKind.Interface
+        && Read(compilation).TryGetValue(ExportKey(type), out var export)
+        && IsRuntimeDeclaringPackage(export.FromPackage);
+
+    /// <summary>Whether <paramref name="package"/> is <see cref="RuntimeDeclaringPackage"/>.</summary>
+    public static bool IsRuntimeDeclaringPackage(string package) =>
+        string.Equals(package, RuntimeDeclaringPackage, StringComparison.Ordinal);
 
     private static IReadOnlyDictionary<string, IrBclExport> Build(Compilation compilation)
     {

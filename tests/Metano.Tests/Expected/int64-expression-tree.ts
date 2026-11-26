@@ -3,8 +3,6 @@ import { linq, toList, where } from "metano-runtime/system/linq";
 import type { Row } from "./row.js";
 
 export class Rows {
-  constructor() { }
-
   filter(rows: Iterable<Row>, cap: bigint, limit: number): List<Row> {
     return linq(rows, where((r: Row) => r.size > cap && r.count < 5n && BigInt(r.count) === 2n && r.weight > Number(cap) && r.size < limit && ((receiver$temp$0) => receiver$temp$0 != null && receiver$temp$0 > 10n)(r.optional == null ? null : BigInt.asIntN(64, r.optional + BigInt(r.count))), {
       tree: {

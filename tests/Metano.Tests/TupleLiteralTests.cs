@@ -566,26 +566,18 @@ public class TupleLiteralTests
 
         await Assert.That(output).Contains("static sequenced(s: Source): boolean {");
 
-        await Assert
-            .That(output)
-            .Contains(
-                "return (() => {\n      s.next();\n      s.other();\n\n      return false;\n    })();"
-            );
+        await Assert.That(output).Contains("return (s.next(), s.other(), false);");
 
         await Assert.That(output).Contains("static plainSequenced(s: Source): boolean {");
 
-        await Assert
-            .That(output)
-            .Contains(
-                "return (() => {\n      s.nextPlain();\n      s.other();\n\n      return false;\n    })();"
-            );
+        await Assert.That(output).Contains("return (s.nextPlain(), s.other(), false);");
 
         await Assert.That(output).Contains("static guarded(s: Source): boolean | null {");
 
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : (() => {\n      s.other();\n\n      return false;\n    })())(s.next());"
+                "return (($receiver) => $receiver == null ? null : (s.other(), false))(s.next());"
             );
 
         await Assert.That(output).Contains("static letBound(s: Source): boolean {");

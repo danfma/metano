@@ -188,7 +188,7 @@ export function uIntFieldCompound(start: number, mask: number): number {
 let FlagSet$rt: ClassType<FlagSet> | undefined;
 
 export class FlagSet {
-  value: number = 0;
+  declare value: number;
 
   constructor(value: number) {
     this.value = value;

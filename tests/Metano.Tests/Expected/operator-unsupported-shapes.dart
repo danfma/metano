@@ -8,15 +8,15 @@ class Uses {
     var g = Flag(0);
     var t = '';
     if (f) {
-      t = (t ?? '') + 'a';
+      t += 'a';
     }
     while (g) {
-      t = (t ?? '') + 'x';
+      t += 'x';
     }
-    t = (t ?? '') + (f ? 'c' : 'd');
+    t += f ? 'c' : 'd';
     // TODO: unsupported IR statement IrForStatement
     do {
-      t = (t ?? '') + 'z';
+      t += 'z';
     } while (g);
     var both = f && g;
     var either = f || g;

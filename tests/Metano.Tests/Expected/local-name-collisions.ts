@@ -1,8 +1,6 @@
 import { isInt32, toException } from "metano-runtime";
 
 export class Collisions {
-  constructor() { }
-
   static paramVsLocal(total: number): number {
     const total$1 = 10;
 
@@ -37,8 +35,7 @@ export class Collisions {
     try {
       ex = 1;
     } catch (e$) {
-      const e0 = toException(e$);
-      const ex$1 = e0;
+      const ex$1 = toException(e$);
 
       return (ex + ex$1.message.length) | 0;
     }

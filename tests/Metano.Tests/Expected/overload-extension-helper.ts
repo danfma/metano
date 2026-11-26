@@ -27,8 +27,6 @@ import { twiceInt32, twiceString } from "./ext.js";
 import type { Item } from "./item.js";
 
 export class Use {
-  constructor() { }
-
   a(item: Item): number {
     return twiceInt32(item, 1);
   }

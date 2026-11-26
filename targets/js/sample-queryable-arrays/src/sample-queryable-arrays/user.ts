@@ -4,11 +4,15 @@ import { HashCode, copyRecordWith, formatBoolean, type ClassType } from "metano-
 let User$rt: ClassType<User> | undefined;
 
 export class User {
-  constructor(
-    readonly name: string,
-    readonly age: number,
-    readonly active: boolean,
-  ) {}
+  declare readonly name: string;
+  declare readonly age: number;
+  declare readonly active: boolean;
+
+  constructor(name: string, age: number, active: boolean) {
+    this.name = name;
+    this.age = age;
+    this.active = active;
+  }
 
   static get $runtimeType(): ClassType<User> {
     return (User$rt ??= {

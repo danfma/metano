@@ -10,7 +10,11 @@ import {
 let GBase$rt: ClassType<GBase<unknown>> | undefined;
 
 export abstract class GBase<T> {
-  constructor(readonly value: T) {}
+  declare readonly value: T;
+
+  constructor(value: T) {
+    this.value = value;
+  }
 
   static get $runtimeType(): ClassType<GBase<unknown>> {
     return (GBase$rt ??= {

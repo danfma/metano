@@ -5,11 +5,11 @@ import { Token, type TokenKind } from "./token.js";
 let TextToken$rt: ClassType<TextToken> | undefined;
 
 export class TextToken extends Token {
-  constructor(
-    kind: TokenKind,
-    readonly text: string,
-  ) {
+  declare readonly text: string;
+
+  constructor(kind: TokenKind, text: string) {
     super(kind);
+    this.text = text;
   }
 
   static override get $runtimeType(): ClassType<TextToken> {

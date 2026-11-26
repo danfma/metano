@@ -229,12 +229,12 @@ public class IrToTsBodyBridgeTests
     }
 
     [Test]
-    public async Task NotPattern_LowersToNegation()
+    public async Task NotPattern_LowersToLooseInequality()
     {
-        // `is not null` wraps the loose-equality constant test so the
-        // negation also excludes `undefined` on the JS side.
+        // `is not null` flips the loose-equality constant test to `!=` so it
+        // also excludes `undefined` on the JS side.
         var ts = PrintMethodFromIr("bool NotNull(object? x) => x is not null;");
-        await Assert.That(ts).Contains("!(x == null)");
+        await Assert.That(ts).Contains("return x != null;");
     }
 
     [Test]

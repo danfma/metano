@@ -25,8 +25,6 @@ export function pick(...args: unknown[]): any {
 import { pickV, pickVN } from "./greets.js";
 
 export class Caller {
-  constructor() { }
-
   static one(): string {
     return pickV<string>("a");
   }

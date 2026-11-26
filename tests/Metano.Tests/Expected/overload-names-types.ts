@@ -3,8 +3,6 @@ import { isInt32, isInt64, isString, isUInt32, isUInt64 } from "metano-runtime";
 import { Point } from "./point.js";
 
 export class Names {
-  constructor() { }
-
   addXY(x: number, y: number): number {
     return (x + y) | 0;
   }
@@ -145,13 +143,8 @@ export class Names {
     return 2;
   }
 
-  sum(xs: number[]): number;
-  sum(...args: unknown[]): number {
-    if (args.length === 1 && Array.isArray(args[0])) {
-      return this.sumInt32Array(args[0] as number[]);
-    }
-
-    throw new Error("No matching overload for sum");
+  sum(xs: number[]): number {
+    return this.sumInt32Array(xs);
   }
 
   hInt32OrNull(maybe: number | null): string {

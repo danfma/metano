@@ -431,9 +431,10 @@ public class IndexAndRangeTests
 
     /// <summary>
     /// A collection access that needs temporaries, in a position with no
-    /// statement list to declare them in (a field initializer), reports MS0001
-    /// at the access itself (spec 011 contracts/runtime-collections.md §
-    /// Indexer compound assignments).
+    /// statement list to declare them in (a static field initializer), reports
+    /// MS0001 at the access itself (spec 011 contracts/runtime-collections.md §
+    /// Indexer compound assignments). An instance initializer is a constructor
+    /// statement, so it lowers (W10-12).
     /// </summary>
     [Test]
     public async Task CollectionAccessWithoutStatementList_ReportsAtTheAccess()
@@ -451,13 +452,13 @@ public class IndexAndRangeTests
 
                 private static readonly IList<int> Shared = new List<int> { 1, 2, 3 };
 
-                private readonly int _last = Shared[^Next()];
+                private static readonly int _last = Shared[^Next()];
 
-                private readonly int _count = Items[..^Next()].Count;
+                private static readonly int _count = Items[..^Next()].Count;
 
-                private readonly int _bumped = Shared[Next()] += 1;
+                private static readonly int _bumped = Shared[Next()] += 1;
 
-                private readonly int _stored = Items[Next()] = 5;
+                private static readonly int _stored = Items[Next()] = 5;
 
                 private static int Next() => _next++;
             }
@@ -471,6 +472,45 @@ public class IndexAndRangeTests
             .ToList();
 
         await Assert.That(lines).IsEquivalentTo(new int?[] { 14, 16, 18, 20 });
+    }
+
+    [Test]
+    public async Task CollectionAccessInAnInstanceInitializer_UsesStoreTemporaries()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public class Holder
+            {
+                private static int _next;
+
+                private static readonly IList<int> Shared = new List<int> { 1, 2, 3 };
+
+                public int Bumped = Shared[Next()] += 1;
+
+                private static int Next() => _next++;
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsFalse();
+
+        await Assert
+            .That(files["holder.ts"])
+            .Contains(
+                """
+                  constructor() {
+                    {
+                      let $i, $o;
+                      this.bumped = ($i = Holder.next(), Holder.shared.set($i, $o = (Holder.shared.get($i) + 1) | 0), $o);
+                    }
+                  }
+                """
+            );
     }
 
     private static async Task AssertSingleUnsupported(

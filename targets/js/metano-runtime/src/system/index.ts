@@ -41,3 +41,4 @@ export * from "./char-members.ts";
 export * from "./string-builder.ts";
 export * from "./lazy.ts";
 export * from "./task-completion-source.ts";
+export * from "./disposable.ts";

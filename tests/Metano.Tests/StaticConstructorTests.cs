@@ -175,7 +175,7 @@ public class StaticConstructorTests
         )["derived.ts"];
 
         await Assert.That(output).Contains("Derived.#$init();\n    super();");
-        await Assert.That(output).Contains("a: number = 1;");
+        await Assert.That(output).Contains("this.a = 1;");
     }
 
     [Test]

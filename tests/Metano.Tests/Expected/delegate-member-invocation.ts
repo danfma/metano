@@ -1,7 +1,7 @@
 import { Holder } from "./holder.js";
 
 export class Calls {
-  constructor() { }
+  private constructor() { }
 
   static run(maybe: Holder | null): number {
     const holder = new Holder(1);

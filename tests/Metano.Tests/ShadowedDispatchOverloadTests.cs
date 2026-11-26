@@ -7,10 +7,16 @@ namespace Metano.Tests;
 /// #778: a dispatcher branch whose runtime test repeats an earlier branch's
 /// can never run, so the dispatcher drops it (and its signature) and the
 /// overload is reported at its declaration with the fast path hand-written
-/// TypeScript must call. The fast path itself stays.
+/// TypeScript must call. The fast path itself stays. A dispatcher left with
+/// one overload is a typed forwarder (#799).
 /// </summary>
 public class ShadowedDispatchOverloadTests
 {
+    /// <summary>The fix a class or constructor overload's report names (#799).</summary>
+    internal const string PinRemedy =
+        " Pin it with [Name(\"…\")] to give it a stable name that every consumer, a "
+        + "metadata-only one included, binds to; a pinned overload is not reported.";
+
     private const string Source = """
         using System;
         using Metano.Interop;
@@ -27,7 +33,7 @@ public class ShadowedDispatchOverloadTests
 
     private const string ExpectedReactivity = """
         export class Reactivity {
-          constructor() { }
+          private constructor() { }
 
           static rootFuncOfActionT<T>(body: (arg: () => void) => T): T {
             return body(() => {
@@ -39,13 +45,8 @@ public class ShadowedDispatchOverloadTests
             });
           }
 
-          static root<T>(body: (arg: () => void) => T): T;
-          static root(...args: unknown[]): any {
-            if (args.length === 1 && typeof args[0] === "function") {
-              return Reactivity.rootFuncOfActionT(args[0] as any);
-            }
-
-            throw new Error("No matching overload for root");
+          static root<T>(body: (arg: () => void) => T): T {
+            return Reactivity.rootFuncOfActionT<T>(body);
           }
 
           static lengthJsArrayOfInt32(items: number[]): number {
@@ -56,13 +57,8 @@ public class ShadowedDispatchOverloadTests
             return 2;
           }
 
-          static length(items: number[]): number;
-          static length(...args: unknown[]): number {
-            if (args.length === 1 && Array.isArray(args[0])) {
-              return Reactivity.lengthJsArrayOfInt32(args[0] as number[]);
-            }
-
-            throw new Error("No matching overload for length");
+          static length(items: number[]): number {
+            return Reactivity.lengthJsArrayOfInt32(items);
           }
         }
 
@@ -95,6 +91,7 @@ public class ShadowedDispatchOverloadTests
                     + "'Reactivity.Root<T>(Func<Action, T>)' in the TypeScript dispatcher 'root', "
                     + "which therefore leaves it out. C# call sites bind to it directly; "
                     + "hand-written TypeScript must call 'Reactivity.rootActionOfAction'."
+                    + PinRemedy
             );
 
         await Assert
@@ -104,6 +101,7 @@ public class ShadowedDispatchOverloadTests
                     + "'Reactivity.Length(JsArray<int>)' in the TypeScript dispatcher 'length', "
                     + "which therefore leaves it out. C# call sites bind to it directly; "
                     + "hand-written TypeScript must call 'Reactivity.lengthInt32Array'."
+                    + PinRemedy
             );
     }
 
@@ -139,7 +137,7 @@ public class ShadowedDispatchOverloadTests
             .Single(d => d.Code == DiagnosticCodes.AmbiguousRuntimeDispatch)
             .Message;
 
-        await Assert.That(message).EndsWith("must call 'pickFuncOfStringInt32'.");
+        await Assert.That(message).EndsWith("must call 'pickFuncOfStringInt32'." + PinRemedy);
         await Assert.That(files["picker.ts"]).DoesNotContain("this.pickFuncOfStringInt32(args");
         await Assert.That(files["picker.ts"]).Contains("pickFuncOfStringInt32(f:");
     }
@@ -192,7 +190,7 @@ public class ShadowedDispatchOverloadTests
         var output = files["probes.ts"];
 
         await Assert.That(output).DoesNotContain("args[0].length");
-        await Assert.That(output).Contains("return Probes.runFuncOfInt32T(args[0] as any);");
+        await Assert.That(output).Contains("return Probes.runFuncOfInt32T<T>(body);");
 
         var driver = """
             import { Probes } from "./probes.ts";
@@ -206,7 +204,7 @@ public class ShadowedDispatchOverloadTests
         await Assert.That(await RunWithBun(output, driver)).IsEqualTo("42,2");
     }
 
-    private static async Task<string> RunWithBun(string probes, string driver)
+    internal static async Task<string> RunWithBun(string probes, string driver)
     {
         var root = Directory.CreateTempSubdirectory("metano-778-").FullName;
 
@@ -291,7 +289,7 @@ public class ShadowedDispatchOverloadTests
             .Message;
 
         await Assert.That(message).StartsWith("Overload 'Same.Same(Action<int>)'");
-        await Assert.That(message).EndsWith("must call 'Same.fromActionOfInt32'.");
+        await Assert.That(message).EndsWith("must call 'Same.fromActionOfInt32'." + PinRemedy);
     }
 
     private const string ArityRangeSource = """

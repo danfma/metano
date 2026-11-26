@@ -2,8 +2,11 @@ import { HashCode, copyRecordWith, formatDouble, valueEquals } from "metano-runt
 import { Shape } from "./shape.js";
 
 export class Circle extends Shape {
-  constructor(x: number, y: number, readonly radius: number) {
+  declare readonly radius: number;
+
+  constructor(x: number, y: number, radius: number) {
     super(x, y);
+    this.radius = radius;
   }
 
   area(): number {

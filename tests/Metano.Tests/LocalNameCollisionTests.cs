@@ -163,7 +163,7 @@ public class LocalNameCollisionTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("const ex$1 = e0;");
+        await Assert.That(output).Contains("const ex$1 = toException(e$);");
         await Assert.That(output).Contains("ex + ex$1");
     }
 

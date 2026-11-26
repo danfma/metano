@@ -15,7 +15,7 @@ import type { IIssueRepository } from "./i-issue-repository.js";
 let IssueService$rt: ClassType<IssueService> | undefined;
 
 export class IssueService {
-  private readonly _repository: IIssueRepository;
+  private declare readonly _repository: IIssueRepository;
 
   constructor(repository: IIssueRepository) {
     this._repository = repository;

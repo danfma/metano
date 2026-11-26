@@ -133,13 +133,23 @@ internal static class OverloadGroupNaming
                                 (parameter, spelled) => parameter with { Parameter = spelled }
                             )
                             .ToList(),
-                        OverloadName = new IrOverloadName(suffixes[index]),
+                        OverloadName = new IrOverloadName(suffixes[index])
+                        {
+                            IsPinned = IsPinnedConstructor(constructor.Symbol, target),
+                        },
                         SignatureText = OverloadSignatureText.Of(constructor.Symbol),
                         DeclarationOrdinal = index,
                     }
             )
             .ToList();
     }
+
+    /// <summary>
+    /// Whether a valid <c>[Name]</c> pins the suffix of a constructor overload
+    /// for <paramref name="target"/> (FR-005); a constructor anchors on no root.
+    /// </summary>
+    public static bool IsPinnedConstructor(IMethodSymbol constructor, TargetLanguage? target) =>
+        OverloadSuffixPin.Of(constructor, target)?.Suffix is not null;
 
     private static IReadOnlyList<IrParameter> WithNamingSpellings(
         IMethodSymbol symbol,

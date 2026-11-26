@@ -4,12 +4,12 @@ import { Renderer } from "../views/renderer.js";
 import type { ICounterView } from "./i-counter-view.js";
 
 export class CounterPresenter {
-  private _state: Counter;
-  private readonly _view: ICounterView;
+  private declare _state: Counter;
+  private declare readonly _view: ICounterView;
 
   constructor(view: ICounterView, initialState: Counter) {
-    this._view = view;
     this._state = initialState;
+    this._view = view;
   }
 
   startApplication(containerName: string): void {

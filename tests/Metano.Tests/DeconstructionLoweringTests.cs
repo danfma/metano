@@ -68,7 +68,13 @@ public class DeconstructionLoweringTests
         import { Decimal } from "metano-runtime/system/decimal";
 
         export class Point {
-          constructor(readonly x: number, readonly y: number) { }
+          declare readonly x: number;
+          declare readonly y: number;
+
+          constructor(x: number, y: number) {
+            this.x = x;
+            this.y = y;
+          }
 
           equals(other: any): boolean {
             return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.x === other.x && this.y === other.y;
@@ -96,8 +102,6 @@ public class DeconstructionLoweringTests
         }
 
         export class Pair {
-          constructor() { }
-
           deconstruct(): readonly [first: number, second: string] {
             let first: number;
             let second: string;
@@ -109,13 +113,19 @@ public class DeconstructionLoweringTests
         }
 
         export class Holder {
-          field: number = 0;
-          prop: number = 0;
-          items: number[] = new Array<number>(3).fill(0);
-          private _a: number = 1;
-          private _b: number = 2;
+          declare field: number;
+          declare prop: number;
+          declare items: number[];
+          declare private _a: number;
+          declare private _b: number;
 
-          constructor() { }
+          constructor() {
+            this.field = 0;
+            this.prop = 0;
+            this.items = new Array<number>(3).fill(0);
+            this._a = 1;
+            this._b = 2;
+          }
 
           swap(): void {
             const $part0 = this._b;
@@ -126,7 +136,7 @@ public class DeconstructionLoweringTests
         }
 
         export class Shapes {
-          constructor() { }
+          private constructor() { }
 
           static run(body: (arg: () => void) => [number, () => void]): [number, () => void] {
             return body(() => {

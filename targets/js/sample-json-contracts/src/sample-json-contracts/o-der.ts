@@ -5,11 +5,13 @@ import { OBase } from "./o-base.js";
 let ODer$rt: ClassType<ODer> | undefined;
 
 export class ODer extends OBase {
-  readonly x: number = 0;
-  private name$ODer_qoo6r7: string = "";
+  declare readonly x: number;
+  private declare name$ODer_qoo6r7: string;
 
   constructor() {
     super();
+    this.x = 0;
+    this.name$ODer_qoo6r7 = "";
   }
 
   static override get $runtimeType(): ClassType<ODer> {

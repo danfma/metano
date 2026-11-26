@@ -208,6 +208,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 diagnostics
             );
 
+            DisposableImplementationValidator.Validate(
+                compilation,
+                assemblyWideTranspile,
+                target,
+                generatedSources,
+                diagnostics
+            );
+
             ValidateJsxRenderablePositions(compilation, assemblyWideTranspile, target, diagnostics);
         }
 
@@ -507,9 +515,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
     /// <summary>
     /// Projects every current-assembly top-level transpilable type to an
-    /// <see cref="IrTranspilableTypeRef"/> and indexes it under both its
-    /// C# source name and its target-facing TS name (when
-    /// <c>[Name(target, …)]</c> diverges). Lets the backend resolve a
+    /// <see cref="IrTranspilableTypeRef"/> and indexes it under its
+    /// target-facing TS name and, when <c>[Name(target, …)]</c> diverges and
+    /// no other type is emitted under it, its C# source name. Lets the backend resolve a
     /// bare identifier walked out of the generated AST into emit
     /// metadata — origin key, namespace, on-disk file name, string-enum
     /// flag — without going back to the Roslyn symbol table. Current
@@ -526,22 +534,23 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var map = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
+        var renamed = new List<(string SourceName, IrTranspilableTypeRef Entry)>();
         var currentAssembly = compilation.Assembly;
 
         void Register(INamedTypeSymbol type)
         {
             var tsName = SymbolHelper.GetNameOverride(type, target) ?? type.Name;
             var entry = TranspilableTypeProjection.Of(type, tsName);
-            // Last-wins on bare-identifier collision — matches the legacy
+            // Last-wins on emitted-name collision — matches the legacy
             // `_transpilableTypeMap[...] = ...` assignments the target side
             // ran inline. Two top-level types in different namespaces with
-            // the same simple name, or an alias that shadows another type's
-            // source name, stay resolvable (to whichever registered last)
-            // instead of silently dropping the second entry. A target that
-            // needs the exact type resolves the symbol instead (#743).
-            map[type.Name] = entry;
+            // the same simple name stay resolvable (to whichever registered
+            // last) instead of silently dropping the second entry. A target
+            // that needs the exact type resolves the symbol instead (#743).
+            map[tsName] = entry;
+
             if (tsName != type.Name)
-                map[tsName] = entry;
+                renamed.Add((type.Name, entry));
         }
 
         CollectTopLevelTypes(currentAssembly.GlobalNamespace, type =>
@@ -556,6 +565,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             && TryGetTopLevelEntryPoint(compilation, out _, out var programType)
         )
             Register(programType);
+
+        // A renamed type is also reachable by its C# name, unless another type
+        // is emitted under that name: `[Name("Pair")] Box<T1, T2>` beside
+        // `Box<T>`, or `[Name("Signals")] static class Signal` beside
+        // `Signal<T>`, must not take the emitted `Box` / `Signal` away (#776).
+        foreach (var (sourceName, entry) in renamed)
+            map.TryAdd(sourceName, entry);
 
         return map;
     }

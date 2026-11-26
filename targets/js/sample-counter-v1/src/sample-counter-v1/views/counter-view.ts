@@ -2,10 +2,13 @@
 import type { ICounterView } from "../presenters/i-counter-view.js";
 
 export class CounterView implements ICounterView {
-  private _text: HTMLSpanElement | null = null;
-  onButtonClick: (() => void) | null = null;
+  private declare _text: HTMLSpanElement | null;
+  declare onButtonClick: (() => void) | null;
 
-  constructor() {}
+  constructor() {
+    this._text = null;
+    this.onButtonClick = null;
+  }
 
   render(container: HTMLElement): void {
     const root = document.createElement("div");

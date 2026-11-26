@@ -4,7 +4,9 @@ import type { ClassType } from "metano-runtime";
 let Box$rt: ClassType<Box<unknown>> | undefined;
 
 export class Box<T> {
-  constructor(readonly value: T) {
+  declare readonly value: T;
+
+  constructor(value: T) {
     this.value = value;
   }
 
@@ -55,9 +57,11 @@ import { HashCode, valueEquals, type ClassType } from "metano-runtime";
 let Meter$rt: ClassType<Meter> | undefined;
 
 export class Meter {
-  value: number = 0;
+  declare value: number;
 
-  constructor() { }
+  constructor() {
+    this.value = 0;
+  }
 
   static get $runtimeType(): ClassType<Meter> {
     return (Meter$rt ??= {
@@ -124,7 +128,7 @@ import { Mode$runtimeType } from "./mode.js";
 import type { Token } from "./token.js";
 
 export class Reflect {
-  constructor() { }
+  private constructor() { }
 
   private static next(): number {
     return 1;
@@ -161,8 +165,6 @@ import type { ClassType } from "metano-runtime";
 let Token$rt: ClassType<Token> | undefined;
 
 export class Token {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Token> {
     return (Token$rt ??= {
       kind: "class",

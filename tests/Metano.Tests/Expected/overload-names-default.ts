@@ -1,8 +1,6 @@
 import { isInt32 } from "metano-runtime";
 
 export class Clock {
-  constructor() { }
-
   nowTick(tick: number): number {
     return tick;
   }

@@ -218,9 +218,7 @@ public class CollectionExpressionTests
 
         await Assert
             .That(result["holder.ts"])
-            .Contains(
-                "private readonly _empty: Dictionary<string, number> = new Dictionary<string, number>();"
-            );
+            .Contains("this._empty = new Dictionary<string, number>();");
 
         await Assert.That(result["holder.ts"]).DoesNotContain("new Map(...");
     }
@@ -254,8 +252,6 @@ public class CollectionExpressionTests
                 import { HashSet } from "metano-runtime/system/collections";
 
                 export class Holder {
-                  constructor() { }
-
                   ids(more: bigint[]): HashSet<bigint> {
                     return HashSet.of<bigint>([1n, 2n, ...more]);
                   }

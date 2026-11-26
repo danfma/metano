@@ -4,10 +4,13 @@ import { averageInt64, averageNullableInt64, count, linq, maxInt64Of, maxNullabl
 import type { Item } from "./item.js";
 
 export class Collections {
-  private _cursor: number = 0;
-  slots: bigint[] = new Array<bigint>(4).fill(0n);
+  declare private _cursor: number;
+  declare slots: bigint[];
 
-  constructor() { }
+  constructor() {
+    this._cursor = 0;
+    this.slots = new Array<bigint>(4).fill(0n);
+  }
 
   next(): number {
     return ((this._cursor = (this._cursor + 1) | 0) - 1) | 0;

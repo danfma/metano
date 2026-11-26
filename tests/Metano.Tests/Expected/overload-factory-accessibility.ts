@@ -7,7 +7,7 @@ export class Acct {
   protected static readonly byAcctFlag = /* @__PURE__ */ Symbol("Acct(bool flag)");
   protected static readonly byAcctRate = /* @__PURE__ */ Symbol("Acct(double rate)");
   protected static readonly byAcctTag = /* @__PURE__ */ Symbol("Acct(char tag)");
-  readonly how: string = "";
+  declare readonly how: string;
 
   constructor(overload: typeof Acct.byAcctId, id: number);
   /** @internal */

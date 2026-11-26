@@ -7,7 +7,11 @@ import type { IssueActivity } from "./issue-activity.js";
 let ActivityFeed$rt: ClassType<ActivityFeed> | undefined;
 
 export class ActivityFeed {
-  constructor(readonly entries: IReadOnlyDictionary<bigint, IssueActivity>) {}
+  declare readonly entries: IReadOnlyDictionary<bigint, IssueActivity>;
+
+  constructor(entries: IReadOnlyDictionary<bigint, IssueActivity>) {
+    this.entries = entries;
+  }
 
   static get $runtimeType(): ClassType<ActivityFeed> {
     return (ActivityFeed$rt ??= {

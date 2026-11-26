@@ -2,8 +2,6 @@ import { clampDecimal, clampInt64, clampNumber } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Clamps {
-  constructor() { }
-
   int(v: number): number {
     return clampNumber(v, 0, 10);
   }

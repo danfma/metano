@@ -4,7 +4,11 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let HolderInt$rt: ClassType<HolderInt> | undefined;
 
 export class HolderInt {
-  constructor(readonly n: number) {}
+  declare readonly n: number;
+
+  constructor(n: number) {
+    this.n = n;
+  }
 
   static get $runtimeType(): ClassType<HolderInt> {
     return (HolderInt$rt ??= {

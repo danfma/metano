@@ -1,7 +1,11 @@
 import { HashCode, absInt32, copyRecordWith, formatDouble, isFloat64, isInt32, valueEquals, valueHashCode } from "metano-runtime";
 
 export class RTol {
-  constructor(readonly v: number) { }
+  declare readonly v: number;
+
+  constructor(v: number) {
+    this.v = v;
+  }
 
   equalsOtherTol(other: RTol, tol: number): boolean {
     return Math.abs(other.v - this.v) <= tol;
@@ -50,7 +54,13 @@ export class RTol {
 }
 
 export class QWith {
-  constructor(readonly a: number, readonly b: string) { }
+  declare readonly a: number;
+  declare readonly b: string;
+
+  constructor(a: number, b: string) {
+    this.a = a;
+    this.b = b;
+  }
 
   withA(a: number): QWith {
     return new QWith(a, this.b);
@@ -100,7 +110,7 @@ export class QWith {
 }
 
 export class QHashM {
-  v: number = 0;
+  declare v: number;
 
   constructor(v: number) {
     this.v = v;
@@ -137,7 +147,11 @@ export class QHashM {
 }
 
 export abstract class ABase {
-  constructor(readonly v: number) { }
+  declare readonly v: number;
+
+  constructor(v: number) {
+    this.v = v;
+  }
 
   equalsOtherTol(other: ABase, tol: number): boolean {
     return false;
@@ -202,8 +216,11 @@ export abstract class ABase {
 }
 
 export class ADer extends ABase {
-  constructor(v: number, readonly k: number) {
+  declare readonly k: number;
+
+  constructor(v: number, k: number) {
     super(v);
+    this.k = k;
   }
 
   override equalsOtherTol(o: ABase, t: number): boolean {
@@ -242,7 +259,11 @@ export class ADer extends ABase {
 }
 
 export class HTop {
-  constructor(readonly a: number) { }
+  declare readonly a: number;
+
+  constructor(a: number) {
+    this.a = a;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.a === other.a;
@@ -269,8 +290,11 @@ export class HTop {
 }
 
 export class HMid extends HTop {
-  constructor(a: number, readonly b: number) {
+  declare readonly b: number;
+
+  constructor(a: number, b: number) {
     super(a);
+    this.b = b;
   }
 
   equalsOSlack(o: HMid, slack: number): boolean {
@@ -323,8 +347,11 @@ export class HMid extends HTop {
 }
 
 export class HLow extends HMid {
-  constructor(a: number, b: number, readonly c: number) {
+  declare readonly c: number;
+
+  constructor(a: number, b: number, c: number) {
     super(a, b);
+    this.c = c;
   }
 
   override equalsByValue(other: any): boolean {
@@ -355,7 +382,7 @@ export class HLow extends HMid {
 }
 
 export class UObjEq {
-  x: number = 0;
+  declare x: number;
 
   constructor(x: number) {
     this.x = x;
@@ -395,14 +422,18 @@ export class UObjEq {
 }
 
 export class UBoth {
-  constructor(readonly v: number) { }
+  declare readonly v: number;
+
+  constructor(v: number) {
+    this.v = v;
+  }
 
   equalsOTol(o: UBoth, tol: number): boolean {
     return Math.abs(o.v - this.v) <= tol;
   }
 
   equalsO(o: UBoth | null): boolean {
-    return !(o == null) && o.v === this.v;
+    return o != null && o.v === this.v;
   }
 
   equalsByValue(other: unknown): boolean {
@@ -446,7 +477,11 @@ export class UBoth {
 }
 
 export class NEq {
-  constructor(readonly v: number) { }
+  declare readonly v: number;
+
+  constructor(v: number) {
+    this.v = v;
+  }
 
   equalsOTol(o: NEq, tol: number): boolean {
     return Math.abs(o.v - this.v) <= tol;
@@ -495,7 +530,11 @@ export class NEq {
 }
 
 export class NHash {
-  constructor(readonly v: number) { }
+  declare readonly v: number;
+
+  constructor(v: number) {
+    this.v = v;
+  }
 
   hashCodeSeed(seed: number): number {
     return (this.v + seed) | 0;
@@ -540,7 +579,13 @@ export class NHash {
 }
 
 export class NWith {
-  constructor(readonly a: number, readonly b: number) { }
+  declare readonly a: number;
+  declare readonly b: number;
+
+  constructor(a: number, b: number) {
+    this.a = a;
+    this.b = b;
+  }
 
   withA(a: number): NWith {
     return new NWith(a, this.b);
@@ -590,7 +635,7 @@ export class NWith {
 }
 
 export class SEqOnly {
-  x: number = 0;
+  declare x: number;
 
   constructor(x: number) {
     this.x = x;
@@ -606,7 +651,7 @@ export class SEqOnly {
 }
 
 export class SEqJoin {
-  x: number = 0;
+  declare x: number;
 
   constructor(x: number) {
     this.x = x;
@@ -652,7 +697,7 @@ export class SEqJoin {
 }
 
 export class SExpl {
-  x: number = 0;
+  declare x: number;
 
   constructor(x: number) {
     this.x = x;
@@ -671,7 +716,11 @@ export class SExpl {
 }
 
 export class HZero {
-  constructor(readonly v: number) { }
+  declare readonly v: number;
+
+  constructor(v: number) {
+    this.v = v;
+  }
 
   hashCodeDefault(): number {
     return 99;
@@ -711,7 +760,7 @@ export class HZero {
 }
 
 export class Pt {
-  x: number = 0;
+  declare x: number;
 
   constructor(x: number) {
     this.x = x;
@@ -730,7 +779,7 @@ export class Pt {
 }
 
 export class JoinUse {
-  constructor() { }
+  private constructor() { }
 
   static near(a: RTol, b: RTol): boolean {
     return a.equalsOtherTol(b, 0.1) && a.equalsByValue(b);

@@ -2,7 +2,7 @@ import { throwError } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Money {
-  cents: number = 0;
+  declare cents: number;
 
   constructor(cents: number) {
     this.cents = cents;

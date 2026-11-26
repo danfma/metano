@@ -2,7 +2,7 @@ import { valueEquals } from "metano-runtime";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Uses {
-  constructor() { }
+  private constructor() { }
 
   static fromInt(i: number): Decimal {
     return new Decimal(i + 0);

@@ -8,9 +8,13 @@ import { TodoItem } from "./todo-item.js";
 let TodoList$rt: ClassType<TodoList> | undefined;
 
 export class TodoList {
-  private readonly _items: List<TodoItem> = List.of<TodoItem>([]);
+  declare readonly name: string;
+  private declare readonly _items: List<TodoItem>;
 
-  constructor(readonly name: string) {}
+  constructor(name: string) {
+    this.name = name;
+    this._items = List.of<TodoItem>([]);
+  }
 
   static get $runtimeType(): ClassType<TodoList> {
     return (TodoList$rt ??= {

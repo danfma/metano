@@ -4,9 +4,13 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let InitRec$rt: ClassType<InitRec> | undefined;
 
 export class InitRec {
-  readonly note: string | null = null;
+  declare readonly a: number;
+  declare readonly note: string | null;
 
-  constructor(readonly a: number) {}
+  constructor(a: number) {
+    this.a = a;
+    this.note = null;
+  }
 
   static get $runtimeType(): ClassType<InitRec> {
     return (InitRec$rt ??= {

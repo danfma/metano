@@ -1,8 +1,6 @@
 import { isInt32 } from "metano-runtime";
 
 export class Repo<T> {
-  constructor() { }
-
   putCount(count: number): string {
     return "count";
   }
@@ -41,8 +39,6 @@ export class StrRepo extends Repo<string> {
 import { isInt32 } from "metano-runtime";
 
 export class Box<T> {
-  constructor() { }
-
   fInt32(a: number): string {
     return "int";
   }

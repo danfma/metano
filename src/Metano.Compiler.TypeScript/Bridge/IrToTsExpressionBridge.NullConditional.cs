@@ -162,7 +162,7 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// The chain's final <c>a?.[i]</c> without the check of
-    /// <see cref="CheckedElementRead"/> (<c>!</c>, or <c>?? null</c> for a
+    /// <see cref="CheckedElementRead"/> (<c>!</c>, or a cast for a
     /// nullable element): a native chain ends in <c>undefined</c> where the
     /// receiver is null and is normalized to <c>null</c> as a whole, and an
     /// <c>!</c> there would strip the <c>undefined</c> of the short-circuit
@@ -172,12 +172,7 @@ public static partial class IrToTsExpressionBridge
         step switch
         {
             TsPostfixUnaryExpression { Operator: "!", Operand: TsElementAccess element } => element,
-            TsBinaryExpression
-            {
-                Operator: "??",
-                Left: TsElementAccess element,
-                Right: TsLiteral
-            } => element,
+            TsCastExpression { Expression: TsElementAccess element } => element,
             _ => step,
         };
 

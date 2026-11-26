@@ -12,12 +12,22 @@ import {
 let OperationResult$rt: ClassType<OperationResult<unknown>> | undefined;
 
 export class OperationResult<T> {
+  declare readonly success: boolean;
+  declare readonly value: T | null;
+  declare readonly errorCode: string | null;
+  declare readonly errorMessage: string | null;
+
   constructor(
-    readonly success: boolean,
-    readonly value: T | null,
-    readonly errorCode: string | null = null,
-    readonly errorMessage: string | null = null,
-  ) {}
+    success: boolean,
+    value: T | null,
+    errorCode: string | null = null,
+    errorMessage: string | null = null,
+  ) {
+    this.success = success;
+    this.value = value;
+    this.errorCode = errorCode;
+    this.errorMessage = errorMessage;
+  }
 
   static get $runtimeType(): ClassType<OperationResult<unknown>> {
     return (OperationResult$rt ??= {
@@ -35,7 +45,7 @@ export class OperationResult<T> {
   }
 
   get hasValue(): boolean {
-    return this.success && !(this.value == null);
+    return this.success && this.value != null;
   }
 
   static ok<T>(value: T): OperationResult<T> {

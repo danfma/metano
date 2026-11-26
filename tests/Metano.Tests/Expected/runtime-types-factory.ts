@@ -1,7 +1,5 @@
 // geometry/blob.ts
 export class Blob {
-  constructor() { }
-
   get size(): number {
     return 1;
   }
@@ -79,7 +77,7 @@ import { Shapes } from "./shapes.js";
 import { Square } from "./square.js";
 
 export class Program {
-  constructor() { }
+  private constructor() { }
 
   static describe(kind: string): string {
     let $s;
@@ -104,8 +102,6 @@ import type { ClassType } from "metano-runtime";
 let Shape$rt: ClassType<Shape> | undefined;
 
 export abstract class Shape {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Shape> {
     return (Shape$rt ??= {
       kind: "class",
@@ -128,7 +124,7 @@ import type { Shape } from "./shape.js";
 import { Square } from "./square.js";
 
 export class Shapes {
-  constructor() { }
+  private constructor() { }
 
   static create(kind: string): Shape {
     return kind === "c" ? new Circle() : new Square();

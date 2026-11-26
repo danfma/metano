@@ -4,9 +4,11 @@ import type { ClassType } from "metano-runtime";
 let Box$rt: ClassType<Box<unknown>> | undefined;
 
 export class Box<T> {
-  value: T | null = null;
+  declare value: T | null;
 
-  constructor() { }
+  constructor() {
+    this.value = null;
+  }
 
   static get $runtimeType(): ClassType<Box<unknown>> {
     return (Box$rt ??= {
@@ -31,9 +33,11 @@ import { HashCode, defaultEquals, type ClassType } from "metano-runtime";
 let Cell$rt: ClassType<Cell<unknown>> | undefined;
 
 export class Cell<T> {
-  readonly value: T;
+  declare readonly value: T;
 
-  constructor() { }
+  constructor() {
+    this.value = undefined!;
+  }
 
   static get $runtimeType(): ClassType<Cell<unknown>> {
     return (Cell$rt ??= {
@@ -74,8 +78,6 @@ import type { ClassType } from "metano-runtime";
 let Gift$rt: ClassType<Gift> | undefined;
 
 export class Gift {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Gift> {
     return (Gift$rt ??= {
       kind: "class",
@@ -106,10 +108,13 @@ import type { ClassType } from "metano-runtime";
 let Pair$rt: ClassType<Pair<unknown, unknown>> | undefined;
 
 export class Pair<TFirst, TSecond> {
-  first: TFirst | null = null;
-  second: TSecond | null = null;
+  declare first: TFirst | null;
+  declare second: TSecond | null;
 
-  constructor() { }
+  constructor() {
+    this.first = null;
+    this.second = null;
+  }
 
   static get $runtimeType(): ClassType<Pair<unknown, unknown>> {
     return (Pair$rt ??= {
@@ -136,7 +141,7 @@ import { Gift } from "./gift.js";
 import { Pair } from "./pair.js";
 
 export class Probe {
-  constructor() { }
+  private constructor() { }
 
   static ofInt(): RuntimeType {
     return specialize(Box.$runtimeType, [Int32Type]);

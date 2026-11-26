@@ -1,8 +1,6 @@
 import { absInt64, bigMulInt64, bigMulUInt64, clampInt64, clampUInt64, divRemInt64, divRemUInt64, maxInt64, maxUInt64, minInt64, minUInt64, signInt64 } from "metano-runtime";
 
 export class Statics {
-  constructor() { }
-
   abs(l: bigint): bigint {
     return BigInt.asIntN(64, absInt64(l) + absInt64(l));
   }

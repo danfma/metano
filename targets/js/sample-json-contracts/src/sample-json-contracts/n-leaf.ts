@@ -5,12 +5,11 @@ import { NMid } from "./n-mid.js";
 let NLeaf$rt: ClassType<NLeaf> | undefined;
 
 export class NLeaf extends NMid {
-  constructor(
-    a: number,
-    b: number,
-    readonly c: number,
-  ) {
+  declare readonly c: number;
+
+  constructor(a: number, b: number, c: number) {
     super(a, b);
+    this.c = c;
   }
 
   static override get $runtimeType(): ClassType<NLeaf> {

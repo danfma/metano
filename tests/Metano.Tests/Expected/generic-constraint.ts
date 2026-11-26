@@ -2,7 +2,11 @@ import { HashCode, copyRecordWith, defaultEquals, objectText } from "metano-runt
 import type { IEntity } from "./i-entity.js";
 
 export class Repo<T extends IEntity> {
-  constructor(readonly item: T) { }
+  declare readonly item: T;
+
+  constructor(item: T) {
+    this.item = item;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && defaultEquals(this.item, other.item);

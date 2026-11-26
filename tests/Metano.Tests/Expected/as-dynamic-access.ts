@@ -1,8 +1,6 @@
 import type { Holder } from "./holder.js";
 
 export class Access {
-  constructor() { }
-
   all(h: Holder, maybe: Holder | null): void {
     const read = (h as any).count;
     const extra = (h as any).Extra;

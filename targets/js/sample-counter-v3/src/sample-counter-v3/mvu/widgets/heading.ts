@@ -3,13 +3,13 @@ import { formatDouble } from "metano-runtime";
 import { Widget } from "../widget.js";
 
 export class Heading extends Widget {
-  private readonly _level: number;
-  private readonly _content: string;
+  private declare readonly _level: number;
+  private declare readonly _content: string;
 
   constructor(content: string, level: number = 1) {
     super();
-    this._content = content;
     this._level = level;
+    this._content = content;
   }
 
   override render(): HTMLElement {

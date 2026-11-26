@@ -4,17 +4,22 @@ import type { ClassType } from "metano-runtime";
 let Account$rt: ClassType<Account> | undefined;
 
 export class Account {
-  name: string = "";
+  declare name: string;
 
   /** @internal */
-  version: number = 0;
+  declare version: number;
 
   /** @internal */
-  id: string = "";
+  declare id: string;
 
-  hits: number = 0;
+  declare hits: number;
 
-  constructor() {}
+  constructor() {
+    this.name = "";
+    this.version = 0;
+    this.id = "";
+    this.hits = 0;
+  }
 
   static get $runtimeType(): ClassType<Account> {
     return (Account$rt ??= {

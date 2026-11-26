@@ -309,7 +309,7 @@ public class ConstNamingConsistencyTests
             """
         )["sample.ts"];
 
-        await Assert.That(output).Contains("const ex = e0;");
+        await Assert.That(output).Contains("const ex = toException(e$);");
         await Assert.That(output).Contains("return ex.message;");
         await Assert.That(output).DoesNotContain("(Ex)");
         await Assert.That(output).DoesNotContain("Ex.message");

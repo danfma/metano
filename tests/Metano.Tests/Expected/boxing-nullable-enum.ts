@@ -2,7 +2,7 @@ import { box, boxNullable } from "metano-runtime";
 import { Color$runtimeType, type Color } from "./color.js";
 
 export class Probe {
-  constructor() { }
+  private constructor() { }
 
   static identifier(maybe: Color | null): Object {
     return maybe === null ? null : box(maybe, Color$runtimeType);

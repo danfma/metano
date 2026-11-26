@@ -155,13 +155,17 @@ internal static class IrToTsRuntimeTypeReferences
     /// Whether a named type has a descriptor TypeScript can name: a class,
     /// record, struct, interface or enum that is neither a plain object, a
     /// branded wrapper nor a <c>[JsTuple]</c>, and that the analysis did not
-    /// report as undescribable in <paramref name="reachability"/>.
+    /// report as undescribable in <paramref name="reachability"/>; or an
+    /// interface the runtime declares with its descriptor (FR-111).
     /// </summary>
     public static bool IsDescribable(
         IrNamedTypeRef named,
         RuntimeTypeReachabilityResult reachability
     )
     {
+        if (named.Semantics is { IsRuntimeDeclared: true })
+            return true;
+
         if (
             named.Semantics
             is not { IsTranspilable: true, IsExternal: false, IsIgnored: false }

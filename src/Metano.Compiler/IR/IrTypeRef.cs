@@ -233,9 +233,26 @@ public sealed record IrNamedTypeSemantics(
     public bool HasExplicitParameterlessCtor { get; init; }
 
     /// <summary>
+    /// Whether the referenced type is a transpiled struct with a runtime class
+    /// that declares a constructor (the complement of
+    /// <see cref="IsDefaultConstructible"/> among such structs): its zero value
+    /// cannot be built by a parameterless construction, so a backend reads it
+    /// from the struct's own zero value (#802).
+    /// </summary>
+    public bool HasZeroValueFactory { get; init; }
+
+    /// <summary>
     /// The referenced type is a C# 15 <c>closed</c> class (spec 010 FR-C1).
     /// </summary>
     public bool IsClosed { get; init; }
+
+    /// <summary>
+    /// The referenced interface is not transpiled but the target runtime declares it: an
+    /// <c>[ExportFromBcl]</c> binds it to a package export (<c>System.IDisposable</c> →
+    /// <c>metano-runtime</c>'s <c>IDisposable</c>), which carries its runtime descriptor
+    /// beside it (FR-111). A backend treats it like an interface of a referenced library.
+    /// </summary>
+    public bool IsRuntimeDeclared { get; init; }
 }
 
 /// <summary>

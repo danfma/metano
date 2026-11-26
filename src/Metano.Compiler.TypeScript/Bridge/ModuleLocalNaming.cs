@@ -52,11 +52,25 @@ internal static class ModuleLocalNaming
         var collapsing = Math.Max(privateNestedSegments, FileScopePrefixLength(segments));
 
         if (collapsing < 2 || segments.Length < collapsing)
-            return dottedName;
+            return EscapeRoot(dottedName);
 
         var collapsed = string.Join(Separator, segments.Take(collapsing));
 
         return string.Join(".", segments.Skip(collapsing).Prepend(collapsed));
+    }
+
+    /// <summary>
+    /// The first segment of a dotted reference is the module-level binding, an
+    /// identifier position that escapes a strict-mode reserved word like a
+    /// declaration does (<c>implements</c> → <c>implements_</c>).
+    /// </summary>
+    private static string EscapeRoot(string dottedName)
+    {
+        var dot = dottedName.IndexOf('.');
+        var root = dot < 0 ? dottedName : dottedName[..dot];
+
+        return Transformation.TypeScriptNaming.EscapeIfReserved(root)
+            + (dot < 0 ? "" : dottedName[dot..]);
     }
 
     /// <summary>

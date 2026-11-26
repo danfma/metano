@@ -1,5 +1,5 @@
 export class Numbers {
-  constructor() { }
+  private constructor() { }
 
   static isBroken(v: number): boolean {
     return Number.isNaN(v) || (Math.abs(v) === Infinity);

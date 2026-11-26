@@ -83,7 +83,7 @@ public class InheritanceTranspileTests
         var childTs = result["app/child.ts"];
         // Forwarded base params stay in the signature (C# order) as plain
         // params; only own params become parameter properties.
-        await Assert.That(childTs).Contains("constructor(name: string, readonly age: number)");
+        await Assert.That(childTs).Contains("constructor(name: string, age: number)");
         await Assert.That(childTs).Contains("super(name)");
     }
 
@@ -223,7 +223,7 @@ public class InheritanceTranspileTests
         );
 
         var c = result["app/c.ts"];
-        await Assert.That(c).Contains("constructor(readonly z: number, x: number, y: number) {");
+        await Assert.That(c).Contains("constructor(z: number, x: number, y: number) {");
         await Assert.That(c).Contains("super(x, y);");
         await Assert.That(c).Contains("super.equals(other) && this.z === other.z");
         await Assert.That(c).Contains("return copyRecordWith<C>(this, overrides);");
@@ -248,7 +248,7 @@ public class InheritanceTranspileTests
         );
 
         var child = result["app/child.ts"];
-        await Assert.That(child).Contains("constructor(readonly age: number) {");
+        await Assert.That(child).Contains("constructor(age: number) {");
         await Assert.That(child).Contains("super(\"fixed\");");
         await Assert.That(child).Contains("super.equals(other) && this.age === other.age");
     }
@@ -273,7 +273,7 @@ public class InheritanceTranspileTests
         );
 
         var child = result["app/child.ts"];
-        await Assert.That(child).Contains("constructor(readonly name: string) {");
+        await Assert.That(child).Contains("constructor(name: string) {");
         await Assert.That(child).Contains("super();");
     }
 
@@ -296,7 +296,7 @@ public class InheritanceTranspileTests
         );
 
         var child = result["app/child.ts"];
-        await Assert.That(child).Contains("constructor(title: string, readonly rank: number) {");
+        await Assert.That(child).Contains("constructor(title: string, rank: number) {");
         await Assert.That(child).Contains("super.equals(other) && this.rank === other.rank");
         await Assert.That(result["app/base.ts"]).Contains("this.label === other.label");
     }

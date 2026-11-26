@@ -13,7 +13,8 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// factories, method fast paths, operator fast paths, the inherited instance
 /// members, then the inherited statics. An anchored overload takes its root's
 /// name (FR-025) and claims nothing. A taken name takes <c>$</c> until free
-/// and reports <c>MS0067</c>;
+/// and reports <c>MS0067</c>, except a name a <c>[Name]</c> pins, which never
+/// moves and reports <c>MS0068</c> (FR-019);
 /// a constructor overload's selector and factory are claimed per suffix, so
 /// they stay aligned (<c>fromCents$</c> / <c>byMoneyCents$</c>). A factory that
 /// meets an inherited factory keeps its name when FR-026 allows it
@@ -159,6 +160,12 @@ internal sealed class TsOverloadClaimPass
         var suffix = DispatchedOverload.SuffixOf(overload);
         var firstCollision = ConstructorCollisionOf(ConstructorNamesOf(suffix, suffix, factory));
 
+        if (IsPinned(overload.OverloadName))
+        {
+            ClaimPinnedConstructor(overload, factory, suffix, firstCollision);
+            return;
+        }
+
         var claimed = TsFreeName.FirstFree(suffix, candidate =>
             ConstructorCollisionOf(ConstructorNamesOf(suffix, candidate, factory)) is not null
         );
@@ -169,6 +176,34 @@ internal sealed class TsOverloadClaimPass
 
         if (firstCollision is not null)
             ReportRenamedConstructor(overload, firstCollision, names);
+    }
+
+    /// <summary>
+    /// A pinned constructor keeps the selector and factory its pin names
+    /// (FR-019): a metadata-only consumer calls them without seeing the
+    /// type's non-public members, so a collision is an error at the holder,
+    /// never a <c>$</c> rename.
+    /// </summary>
+    private void ClaimPinnedConstructor(
+        IrConstructorDeclaration overload,
+        TsFactorySignature? factory,
+        string suffix,
+        TsCollision? collision
+    )
+    {
+        RecordConstructor(overload, ConstructorNamesOf(suffix, suffix, factory), factory);
+
+        if (collision is null)
+            return;
+
+        var signature = DispatchedOverload.SignatureOf(overload);
+
+        ReportPinnedCollision(
+            collision,
+            signature,
+            isStatic: true,
+            new OverloadDeclarationSite(signature, overload.DeclarationOrdinal)
+        );
     }
 
     /// <summary>
@@ -582,6 +617,22 @@ internal sealed class TsOverloadClaimPass
         var candidate = baseName + DispatchedOverload.SuffixOf(overload);
         var firstCollision = FastPathCollisionOf(candidate, isStatic);
 
+        if (IsPinned(overload.OverloadName))
+        {
+            if (firstCollision is not null)
+                ReportPinnedCollision(
+                    firstCollision,
+                    DispatchedOverload.SignatureOf(overload),
+                    isStatic,
+                    new OverloadDeclarationSite(
+                        overload.Name,
+                        Signature: DispatchedOverload.SignatureOf(overload)
+                    )
+                );
+
+            return candidate;
+        }
+
         var claimed = TsFreeName.FirstFree(candidate, name =>
             HolderOfFastPath(name, isStatic) is not null
         );
@@ -707,6 +758,42 @@ internal sealed class TsOverloadClaimPass
         );
 
     /// <summary>
+    /// <c>MS0068</c> for a pinned name another member holds (FR-005, FR-019):
+    /// reported at that member when the class declares it, else at the pinned
+    /// overload. A pinned name never moves, so the user renames one of them.
+    /// </summary>
+    private void ReportPinnedCollision(
+        TsCollision collision,
+        string signature,
+        bool isStatic,
+        OverloadDeclarationSite pinnedSite
+    )
+    {
+        var userMembers = isStatic ? _userMembers.Statics : _userMembers.Instances;
+
+        var holderName =
+            collision.Holder is { Kind: TsClaimedMemberKind.User } holder
+            && holder.DeclaredBy == TypeName
+                ? userMembers.GetValueOrDefault(collision.Candidate)
+                : null;
+
+        var site = holderName is null ? pinnedSite : new OverloadDeclarationSite(holderName);
+
+        _findings.Add(
+            new TsClaimFinding(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.OverloadFastPathHijacked,
+                $"{collision.Kind} '{TypeName}.{collision.Candidate}' of '{signature}', which "
+                    + $"[Name] pins, collides with {DescriptionOf(collision.Holder)}; a pinned "
+                    + "name never takes '$', because consumers that read the type from metadata "
+                    + "call it without seeing non-public members: rename that member or change "
+                    + "the pin (spec 013 FR-005, FR-019).",
+                site
+            )
+        );
+    }
+
+    /// <summary>
     /// <c>MS0067</c>. Its reason — 1 for a user member, 2 for an earlier
     /// synthesized name, 3 for an inherited instance member — is the holder
     /// the message names, not a separate field.
@@ -729,6 +816,8 @@ internal sealed class TsOverloadClaimPass
     private TsClaimedMember? HolderOfStatic(string name, bool includeInherited) =>
         _statics.GetValueOrDefault(name)
         ?? (includeInherited ? Inherited.GetValueOrDefault(name) : null);
+
+    private static bool IsPinned(IrOverloadName? name) => name is { IsPinned: true };
 
     private Dictionary<string, TsClaimedMember> TableOf(bool isStatic) =>
         isStatic ? _statics : _instances;

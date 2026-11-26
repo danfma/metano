@@ -5,7 +5,11 @@ import type { Dictionary } from "metano-runtime/system/collections";
 let GuidMapHolder$rt: ClassType<GuidMapHolder> | undefined;
 
 export class GuidMapHolder {
-  constructor(readonly byId: Dictionary<UUID, string>) {}
+  declare readonly byId: Dictionary<UUID, string>;
+
+  constructor(byId: Dictionary<UUID, string>) {
+    this.byId = byId;
+  }
 
   static get $runtimeType(): ClassType<GuidMapHolder> {
     return (GuidMapHolder$rt ??= {

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Metano.Annotations;
 using Metano.Compiler;
@@ -144,7 +145,7 @@ public sealed class TypeScriptTransformContext(
 
         foreach (var type in EnumerateTopLevelStaticTypes(CurrentAssembly.GlobalNamespace))
         {
-            if (!TranspilableTypes.TryGetValue(type.Name, out var ownerRef))
+            if (TranspilableTypeOf(TranspilableTypes, TypeNamesBySymbol, type) is not { } ownerRef)
                 continue;
 
             foreach (var member in type.GetMembers())
@@ -267,8 +268,15 @@ public sealed class TypeScriptTransformContext(
                 Register(operatorName, op, ownerRef, map, firstClaim, reportDiagnostic);
                 break;
 
-            case IPropertySymbol prop
-                when prop.DeclaredAccessibility == Accessibility.Public && !prop.IsIndexer:
+            // An extension property, or an extension indexer
+            // (`extension(R r) { public T this[int i] { … } }`), whose reads
+            // lower to `count$get(self)` / `item$get(self, index)` and writes
+            // to `count$set(self, value)` / `item$set(self, index, value)`. An
+            // indexer's helper base name is its metadata name
+            // (`IrExtensionConventions.AccessorBaseName`: the `[IndexerName]`
+            // override when present, default `Item`), so the registry keys
+            // agree with the helper names emitted by `IrModuleFunctionExtractor`.
+            case IPropertySymbol prop when prop.DeclaredAccessibility == Accessibility.Public:
                 Register(
                     ResolvePropertyHelperName(prop),
                     prop,
@@ -277,6 +285,7 @@ public sealed class TypeScriptTransformContext(
                     firstClaim,
                     reportDiagnostic
                 );
+
                 if (prop.SetMethod is not null)
                 {
                     Register(
@@ -288,36 +297,7 @@ public sealed class TypeScriptTransformContext(
                         reportDiagnostic
                     );
                 }
-                break;
 
-            // Extension indexer (`extension(R r) { public T this[int i] { … } }`).
-            // Reads lower to `item$get(self, index)` and writes to
-            // `item$set(self, index, value)` — the helper base name comes
-            // from the indexer symbol's <c>Name</c> (Roslyn already rewrites
-            // it to the <c>[IndexerName]</c> override when present, default
-            // <c>"Item"</c>), so the registry keys agree with the helper
-            // names emitted by `IrModuleFunctionExtractor`.
-            case IPropertySymbol indexer
-                when indexer.DeclaredAccessibility == Accessibility.Public && indexer.IsIndexer:
-                Register(
-                    ResolvePropertyHelperName(indexer),
-                    indexer,
-                    ownerRef,
-                    map,
-                    firstClaim,
-                    reportDiagnostic
-                );
-                if (indexer.SetMethod is not null)
-                {
-                    Register(
-                        ResolvePropertySetterHelperName(indexer),
-                        indexer,
-                        ownerRef,
-                        map,
-                        firstClaim,
-                        reportDiagnostic
-                    );
-                }
                 break;
         }
     }
@@ -343,16 +323,22 @@ public sealed class TypeScriptTransformContext(
             : null;
 
     private static string ResolvePropertyHelperName(IPropertySymbol property) =>
-        (
-            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
-            ?? TypeScriptNaming.ToCamelCase(property.Name)
-        ) + IrExtensionConventions.PropertyGetterSuffix;
+        AccessorHelperBaseName(property) + IrExtensionConventions.PropertyGetterSuffix;
 
     private static string ResolvePropertySetterHelperName(IPropertySymbol property) =>
-        (
-            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
-            ?? TypeScriptNaming.ToCamelCase(property.Name)
-        ) + IrExtensionConventions.PropertySetterSuffix;
+        AccessorHelperBaseName(property) + IrExtensionConventions.PropertySetterSuffix;
+
+    /// <summary>
+    /// The emitted base name of an extension property's or indexer's helpers:
+    /// its <c>[Name]</c> when that renames the whole helper, else the camelCased
+    /// <see cref="IrExtensionConventions.AccessorBaseName"/> (which carries the
+    /// suffix a <c>[Name]</c> pins on an indexer sharing its name with another).
+    /// </summary>
+    private static string AccessorHelperBaseName(IPropertySymbol property) =>
+        IrExtensionConventions.WholeHelperNameOverride(property, TargetLanguage.TypeScript)
+        ?? TypeScriptNaming.ToCamelCase(
+            IrExtensionConventions.AccessorBaseName(property, TargetLanguage.TypeScript)
+        );
 
     /// <summary>
     /// Records <paramref name="ownerRef"/> as the import target for
@@ -435,6 +421,18 @@ public sealed class TypeScriptTransformContext(
 
     public IReadOnlyDictionary<string, IrExternalImport> ExternalImportMap { get; } =
         externalImportMap;
+
+    /// <summary>
+    /// Where each name a class's constructor scope binds is declared (its
+    /// parameter, else the constructor), keyed by the emitted class name: the
+    /// import collector reports an unaliasable shadowed read there (W10-1b).
+    /// Concurrent: classes are emitted in parallel.
+    /// </summary>
+    public ConcurrentDictionary<
+        (string ClassName, string Name),
+        Location
+    > ConstructorScopeBindings { get; } = new();
+
     public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
     public IReadOnlyDictionary<string, string> TypeNamesBySymbol { get; } = typeNamesBySymbol;
     public IReadOnlySet<string> GuardableTypeKeys { get; } = guardableTypeKeys;
@@ -555,6 +553,9 @@ public sealed class TypeScriptTransformContext(
     /// the early setup phase of <c>TypeTransformer.TransformAll</c>
     /// where the context does not yet exist; in every other call site
     /// prefer the instance method so future changes stay in one place.
+    /// A name that is still the C# name takes the strict-mode escape
+    /// (<see cref="EscapedOwnName"/>), so a type from a referenced package
+    /// resolves to the name its own package declared it under.
     /// </summary>
     internal static string ResolveTsName(
         IReadOnlyDictionary<string, string>? typeNamesBySymbol,
@@ -562,8 +563,31 @@ public sealed class TypeScriptTransformContext(
     ) =>
         typeNamesBySymbol is not null
         && typeNamesBySymbol.TryGetValue(type.GetCrossAssemblyOriginKey(), out var name)
+        && name != type.Name
             ? name
-            : type.Name;
+            : EscapedOwnName(type);
+
+    /// <summary>
+    /// The C# name of <paramref name="type"/> as its module declares it: a
+    /// top-level type is a module-level binding, an identifier position, so a
+    /// strict-mode reserved word is escaped (<c>class let</c> → <c>let_</c>,
+    /// #791); a nested type is reached as a member and keeps its name. The
+    /// producer's declaration and every consumer, in any package, read this rule.
+    /// </summary>
+    internal static string EscapedOwnName(INamedTypeSymbol type) =>
+        type.ContainingType is null ? TypeScriptNaming.EscapeIfReserved(type.Name) : type.Name;
+
+    /// <summary>
+    /// The project-type entry of <paramref name="type"/>, looked up by its emitted
+    /// name: a <c>[Name]</c>-renamed type's C# name may be another type's emitted
+    /// name (<c>[Name("Signals")] static class Signal</c> beside <c>Signal&lt;T&gt;</c>,
+    /// #776), so a lookup by <see cref="ISymbol.Name"/> could find the other type.
+    /// </summary>
+    internal static IrTranspilableTypeRef? TranspilableTypeOf(
+        IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypes,
+        IReadOnlyDictionary<string, string>? typeNamesBySymbol,
+        INamedTypeSymbol type
+    ) => transpilableTypes.GetValueOrDefault(ResolveTsName(typeNamesBySymbol, type));
 
     /// <summary>
     /// The identifier <paramref name="type"/> is declared under in its TypeScript
@@ -646,6 +670,7 @@ public sealed class TypeScriptTransformContext(
         {
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
+            EmitsStructZeroValue = true,
             HasExceptionRuntimeClass = ExceptionClasses.HasRuntimeClass,
             UnprintableTextReason = TsUnprintableText.ReasonOf,
             EmittedMemberName = IrToTsNamingPolicy.DeclaredNameOf,

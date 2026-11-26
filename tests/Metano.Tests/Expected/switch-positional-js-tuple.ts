@@ -1,7 +1,7 @@
 import type { Pair } from "./pair.js";
 
 export class Pairs {
-  constructor() { }
+  private constructor() { }
 
   static of(pair: Pair): string {
     {

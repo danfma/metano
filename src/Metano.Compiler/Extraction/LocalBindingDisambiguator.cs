@@ -139,7 +139,7 @@ internal static class LocalBindingDisambiguator
 
         var collector = new BindingCollector(semantic, naming, policy);
         var bindings = statements.SelectMany(collector.Collect).ToList();
-        var calledNames = CalledFunctionNames(statements, semantic, policy);
+        var calledNames = CalledFunctionNames(statements, semantic, policy, naming);
 
         return Disambiguate(bindings, statements[0], naming, calledNames);
     }
@@ -239,7 +239,7 @@ internal static class LocalBindingDisambiguator
             return LocalBindingNames.Empty;
 
         var collector = new BindingCollector(model, naming, context.GroupingPolicy);
-        var calledNames = CalledFunctionNames(roots, model, context.GroupingPolicy);
+        var calledNames = CalledFunctionNames(roots, model, context.GroupingPolicy, naming);
 
         return Disambiguate(
             roots.SelectMany(collector.Collect).ToList(),
@@ -253,15 +253,18 @@ internal static class LocalBindingDisambiguator
     /// The bare function names the flattened calls under <paramref name="roots"/> spell
     /// (<see cref="IrParameterNaming.FlattenedNamesCalledIn"/>): a local of one of these
     /// names would shadow the function it calls (<c>var helper = 1; Ext.Helper(helper)</c>
-    /// → <c>helper(helper)</c>), so it yields its name like a colliding binding does.
+    /// → <c>helper(helper)</c>), so it yields its name like a colliding binding does. A name the target escapes as an
+    /// identifier (<c>package</c> → <c>package_</c>) counts under both spellings.
     /// </summary>
     private static IReadOnlySet<string> CalledFunctionNames(
         IEnumerable<SyntaxNode> roots,
         SemanticModel model,
-        OverloadGroupingPolicy policy
+        OverloadGroupingPolicy policy,
+        LocalNaming naming
     ) =>
         roots
             .SelectMany(root => IrParameterNaming.FlattenedNamesCalledIn(root, model, policy))
+            .SelectMany(name => new[] { name, naming.EmitLocalName(name) })
             .ToHashSet(StringComparer.Ordinal);
 
     private static LocalBindingNames Disambiguate(

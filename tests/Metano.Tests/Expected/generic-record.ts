@@ -1,7 +1,13 @@
 import { HashCode, copyRecordWith, defaultEquals, formatBoolean, objectText } from "metano-runtime";
 
 export class Result<T> {
-  constructor(readonly value: T, readonly success: boolean) { }
+  declare readonly value: T;
+  declare readonly success: boolean;
+
+  constructor(value: T, success: boolean) {
+    this.value = value;
+    this.success = success;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && defaultEquals(this.value, other.value) && this.success === other.success;

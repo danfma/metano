@@ -47,8 +47,6 @@ export function thrice(...args: unknown[]): number {
 import { thriceS, thriceX, twiceS, twiceX } from "./greets.js";
 
 export class Caller {
-  constructor() { }
-
   static direct(): number {
     return twiceX(21);
   }

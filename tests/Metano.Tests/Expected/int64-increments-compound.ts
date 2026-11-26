@@ -1,14 +1,21 @@
 import { checkedInt32, checkedInt64 } from "metano-runtime";
 
 export class Counter {
-  private _field: bigint = 0n;
-  private _cursor: number = 0;
-  total: bigint = 0n;
-  unsigned: bigint = 0n;
-  maybe: bigint | null = null;
-  slots: bigint[] = [1n, 2n, 3n];
+  declare private _field: bigint;
+  declare private _cursor: number;
+  declare total: bigint;
+  declare unsigned: bigint;
+  declare maybe: bigint | null;
+  declare slots: bigint[];
 
-  constructor() { }
+  constructor() {
+    this._field = 0n;
+    this._cursor = 0;
+    this.total = 0n;
+    this.unsigned = 0n;
+    this.maybe = null;
+    this.slots = [1n, 2n, 3n];
+  }
 
   next(): number {
     return ((this._cursor = (this._cursor + 1) | 0) - 1) | 0;

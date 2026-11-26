@@ -170,7 +170,7 @@ public static class IrModuleFunctionExtractor
             .ToList();
 
         return new IrModuleFunction(
-            Name: prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+            Name: IrExtensionConventions.GetterName(prop, context.Target),
             Parameters: parameters,
             ReturnType: IrTypeRefMapper.Map(prop.Type, originResolver),
             Body: body,
@@ -309,6 +309,8 @@ public static class IrModuleFunctionExtractor
                     if (indexerSymbol.DeclaredAccessibility != Accessibility.Public)
                         continue;
 
+                    ReportUnnamedSiblingIndexer(indexerSymbol, context);
+
                     var indexerGetter = ConvertExtensionIndexerGetter(
                         indexerSymbol,
                         indexerSyntax,
@@ -330,6 +332,59 @@ public static class IrModuleFunctionExtractor
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// Reports <c>MS0001</c> at an extension indexer that shares its metadata
+    /// name with another indexer of its extension class (<c>this[int]</c>
+    /// beside <c>this[string]</c>) without a <c>[Name]</c>: the helpers of
+    /// both would be one module function (<c>item$get</c>). A <c>[Name]</c> on
+    /// each pins its suffix (<see cref="IrExtensionConventions.PinnedIndexerSuffix"/>).
+    /// </summary>
+    private static void ReportUnnamedSiblingIndexer(
+        IPropertySymbol indexer,
+        IrExtractionContext context
+    )
+    {
+        if (
+            !IrExtensionConventions.SiblingIndexersOf(indexer).Any()
+            || IrExtensionConventions.PinnedIndexerSuffix(indexer, context.Target) is not null
+        )
+            return;
+
+        ExtractionDiagnostics.Report(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"The extension indexer '{indexer.ToDisplayString()}' shares its helper name "
+                    + "with another indexer of "
+                    + $"'{indexer.ContainingType.ContainingType.Name}': add a "
+                    + "[Name(\"...\")] to each of them to name their functions (#523).",
+                indexer.Locations.FirstOrDefault()
+            )
+        );
+    }
+
+    /// <summary>
+    /// The attributes an extension indexer's helper carries: the indexer's,
+    /// without the <c>[Name]</c> that only pins its suffix
+    /// (<see cref="IrExtensionConventions.PinnedIndexerSuffix"/>), which the
+    /// helper's name already holds.
+    /// </summary>
+    private static IReadOnlyList<IrAttribute>? IndexerHelperAttributes(
+        IPropertySymbol indexer,
+        IrExtractionContext context
+    )
+    {
+        var attributes = IrAttributeExtractor.Extract(indexer);
+
+        if (
+            attributes is null
+            || IrExtensionConventions.PinnedIndexerSuffix(indexer, context.Target) is null
+        )
+            return attributes;
+
+        return attributes.Where(a => a.Name != IrAttribute.NameOverrideAttributeName).ToList();
     }
 
     /// <summary>
@@ -374,13 +429,13 @@ public static class IrModuleFunctionExtractor
         );
 
         return new IrModuleFunction(
-            Name: indexer.Name + IrExtensionConventions.PropertyGetterSuffix,
+            Name: IrExtensionConventions.GetterName(indexer, context.Target),
             Parameters: parameters,
             ReturnType: IrTypeRefMapper.Map(indexer.Type, originResolver),
             Body: body,
             Semantics: new IrMethodSemantics(false, false, IsExtension: true, false, null),
             TypeParameters: null,
-            Attributes: IrAttributeExtractor.Extract(indexer)
+            Attributes: IndexerHelperAttributes(indexer, context)
         );
     }
 
@@ -432,13 +487,13 @@ public static class IrModuleFunctionExtractor
         parameters.Add(new IrParameter("value", IrTypeRefMapper.Map(indexer.Type, originResolver)));
 
         return new IrModuleFunction(
-            Name: indexer.Name + IrExtensionConventions.PropertySetterSuffix,
+            Name: IrExtensionConventions.SetterName(indexer, context.Target),
             Parameters: parameters,
             ReturnType: new IrPrimitiveTypeRef(IrPrimitive.Void),
             Body: body,
             Semantics: new IrMethodSemantics(false, false, IsExtension: true, false, null),
             TypeParameters: null,
-            Attributes: IrAttributeExtractor.Extract(indexer)
+            Attributes: IndexerHelperAttributes(indexer, context)
         );
     }
 
@@ -538,7 +593,7 @@ public static class IrModuleFunctionExtractor
             return null;
 
         return new IrModuleFunction(
-            Name: prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+            Name: IrExtensionConventions.GetterName(prop, context.Target),
             Parameters: [receiver],
             ReturnType: IrTypeRefMapper.Map(prop.Type, originResolver),
             Body: body,
@@ -593,7 +648,7 @@ public static class IrModuleFunctionExtractor
         );
 
         return new IrModuleFunction(
-            Name: prop.Name + IrExtensionConventions.PropertySetterSuffix,
+            Name: IrExtensionConventions.SetterName(prop, context.Target),
             Parameters: [receiver, valueParameter],
             ReturnType: new IrPrimitiveTypeRef(IrPrimitive.Void),
             Body: body,
@@ -763,7 +818,7 @@ public static class IrModuleFunctionExtractor
             return null;
 
         return new IrModuleFunction(
-            Name: prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+            Name: IrExtensionConventions.GetterName(prop, context.Target),
             Parameters: [],
             ReturnType: IrTypeRefMapper.Map(prop.Type, originResolver),
             Body: body,
@@ -813,7 +868,7 @@ public static class IrModuleFunctionExtractor
         );
 
         return new IrModuleFunction(
-            Name: prop.Name + IrExtensionConventions.PropertySetterSuffix,
+            Name: IrExtensionConventions.SetterName(prop, context.Target),
             Parameters: [valueParameter],
             ReturnType: new IrPrimitiveTypeRef(IrPrimitive.Void),
             Body: body,

@@ -175,7 +175,8 @@ public class Int64DispatchGuardTests
     /// <c>Mixed.H(UId)</c> and keeps its slot, so the branded arm never
     /// captures the plain <c>long</c> call. The branded wrapper tests its
     /// underlying long (spec 011 FR-022), the same test, so the dispatcher
-    /// drops its unreachable arm (#778) and keeps its fast path.
+    /// drops its unreachable arm (#778) and keeps its fast path; left with the
+    /// <c>long</c> overload alone, it is a typed forwarder (#799).
     /// </summary>
     [Test]
     public async Task Siblings_BrandedNeighborKeepsDeclarationOrder()
@@ -184,17 +185,8 @@ public class Int64DispatchGuardTests
 
         var output = files["mixed.ts"];
 
-        var longBranch = output.IndexOf("isInt64(args[0])", StringComparison.Ordinal);
-
-        var brandedBranch = output.IndexOf(
-            "isInt64(args[0])",
-            longBranch + 1,
-            StringComparison.Ordinal
-        );
-
-        await Assert.That(longBranch).IsGreaterThan(-1);
-        await Assert.That(output).Contains("return this.hL(args[0] as bigint);");
-        await Assert.That(brandedBranch).IsEqualTo(-1);
+        await Assert.That(output).Contains("h(l: bigint): string {\n    return this.hL(l);");
+        await Assert.That(output).DoesNotContain("isInt64(args[0])");
         await Assert.That(output).Contains("hU(u: UId): string {");
     }
 

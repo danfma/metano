@@ -14,10 +14,13 @@ import { Currency$runtimeType, type Currency } from "./currency.js";
 import { NoSameMoneyCurrencyException } from "./no-same-money-currency-exception.js";
 
 export class Money {
-  constructor(
-    readonly cents: bigint,
-    readonly currency: Currency,
-  ) {}
+  declare readonly cents: bigint;
+  declare readonly currency: Currency;
+
+  constructor(cents: bigint, currency: Currency) {
+    this.cents = cents;
+    this.currency = currency;
+  }
 
   static __add(left: Money, right: Money): Money {
     Money.expectSameCurrency(left, right);

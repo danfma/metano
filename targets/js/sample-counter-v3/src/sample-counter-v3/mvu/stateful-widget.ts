@@ -4,10 +4,11 @@ import type { BuildContext } from "./build-context.js";
 import { Widget } from "./widget.js";
 
 export abstract class StatefulWidget<TState> extends Widget {
-  private _context: BuildContext<TState> | null = null;
+  private declare _context: BuildContext<TState> | null;
 
   constructor() {
     super();
+    this._context = null;
   }
 
   abstract initial(): TState;

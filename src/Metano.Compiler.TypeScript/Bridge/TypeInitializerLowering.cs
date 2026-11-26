@@ -16,7 +16,6 @@ namespace Metano.Compiler.TypeScript.Bridge;
 internal sealed record TypeInitializerTarget(
     string ClassName,
     string TypeName,
-    bool HasBaseClass,
     bool IsStruct,
     ImplicitDefaultConstruction ImplicitDefault
 );

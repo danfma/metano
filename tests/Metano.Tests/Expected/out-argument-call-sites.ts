@@ -3,12 +3,17 @@ import { throwError, tryParseInt32 } from "metano-runtime";
 import { KeyNotFoundException } from "metano-runtime/system/exceptions/key-not-found-exception";
 
 export class Glossary {
-  private readonly _words: Dictionary<string, string> = new Dictionary<string, string>();
-  private readonly _counts: Dictionary<string, number> = new Dictionary<string, number>();
-  private readonly _notes: IReadOnlyDictionary<string, string | null> = new Dictionary<string, string | null>();
-  private _last: number = 0;
+  declare private readonly _words: Dictionary<string, string>;
+  declare private readonly _counts: Dictionary<string, number>;
+  declare private readonly _notes: IReadOnlyDictionary<string, string | null>;
+  declare private _last: number;
 
-  constructor() { }
+  constructor() {
+    this._words = (new Dictionary<string, string>());
+    this._counts = (new Dictionary<string, number>());
+    this._notes = (new Dictionary<string, string | null>());
+    this._last = 0;
+  }
 
   translate(key: string): string {
     const [$found0, text] = this._words.tryGetValue(key, null);

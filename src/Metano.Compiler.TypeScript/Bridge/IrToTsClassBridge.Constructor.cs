@@ -131,16 +131,12 @@ internal static partial class IrToTsClassBridge
 
     /// <summary>
     /// Builds the TS constructor-parameter list for the primary constructor,
-    /// one entry per C# parameter in declaration order so positional call
-    /// sites (<c>new T(a, b)</c>, the JSON factory) line up with the emitted
-    /// signature. Promoted parameters
-    /// become TS parameter properties (see
-    /// <see cref="BuildPromotedCtorParam"/>); every other parameter — those
-    /// forwarded to the base constructor (<c>record ImageClip(string Path,
-    /// double Seconds) : Clip(Seconds)</c>), DI-captured ones, or ones only
-    /// read by the body — stays a plain parameter with
-    /// <see cref="TsAccessibility.None"/> so it neither redeclares an
-    /// inherited property nor leaks a public member.
+    /// one plain parameter per C# parameter in declaration order so positional
+    /// call sites (<c>new T(a, b)</c>, the JSON factory) line up with the
+    /// emitted signature. A promoted parameter is passed through its member's
+    /// name (<see cref="PromotedParameterName"/>); the member is a declared
+    /// field the constructor stores (W10-1), not a parameter property, which
+    /// TypeScript would define as a class field.
     /// <para>
     /// <paramref name="resolveType"/> takes the IR parameter and yields the
     /// TS type — the caller routes this through <see cref="TypeMapper"/> so
@@ -158,11 +154,15 @@ internal static partial class IrToTsClassBridge
             return [];
 
         return ctor
-            .Parameters.Select(p =>
+            .Parameters.Select(p => new TsConstructorParam(
                 IsPromoted(p)
-                    ? BuildPromotedCtorParam(p, resolveType, context)
-                    : BuildPlainCtorParam(p, resolveType, context)
-            )
+                    ? PromotedParameterName(p)
+                    : IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
+                resolveType(p),
+                Accessibility: TsAccessibility.None,
+                DefaultValue: ResolveCtorParamDefault(p, context),
+                Rest: p.Parameter.IsRestParams
+            ))
             .ToList();
     }
 
@@ -197,7 +197,7 @@ internal static partial class IrToTsClassBridge
     /// property. It is declared as a field, assigned from the escaped parameter
     /// (<c>new_</c>), and keeps its public name (#404).
     /// </summary>
-    internal static bool HasReservedPromotedName(IrConstructorParameter p) =>
+    private static bool HasReservedPromotedName(IrConstructorParameter p) =>
         IsPromoted(p) && TypeScriptNaming.EscapeIfReserved(PromotedName(p)) != PromotedName(p);
 
     /// <summary>
@@ -209,79 +209,9 @@ internal static partial class IrToTsClassBridge
             ? IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
             : PromotedName(p);
 
-    /// <summary>
-    /// Lowers one promoted parameter: the promoted property's accessibility,
-    /// the readonly flag (init-only or get-only ⇒ readonly), the
-    /// target-resolved <c>[Name]</c> override (or camelCased parameter name
-    /// as a fallback), and the declared default value when present.
-    /// </summary>
-    private static TsConstructorParam BuildPromotedCtorParam(
-        IrConstructorParameter p,
-        Func<IrConstructorParameter, TsType> resolveType,
-        IrToTsBridgeContext context
-    )
-    {
-        var name = PromotedParameterName(p);
-        var tsType = resolveType(p);
-        var defaultValue = ResolveCtorParamDefault(p, context);
-
-        // TypeScript forbids combining a parameter-property modifier
-        // (`readonly` / `public`) with the rest prefix (`...`). For a
-        // record positional `params T[]` slot, drop the modifiers and
-        // emit the rest form; the field declaration + body assignment
-        // are synthesized separately by the class emitter so the
-        // promoted shape is preserved at the surface. (#152)
-        if (
-            p.Parameter.IsRestParams
-            || context.ClassFields.FieldOf(p.Parameter.Name) is not null
-            || HasReservedPromotedName(p)
-        )
-        {
-            return new TsConstructorParam(
-                name,
-                tsType,
-                Readonly: false,
-                Accessibility: TsAccessibility.None,
-                DefaultValue: defaultValue,
-                Rest: p.Parameter.IsRestParams
-            );
-        }
-
-        var isReadonly = p.Promotion is IrParameterPromotion.ReadonlyProperty;
-        var (accessibility, jsdoc) = PromotedMemberVisibility(p);
-
-        return new TsConstructorParam(
-            name,
-            tsType,
-            isReadonly,
-            accessibility,
-            defaultValue,
-            JSDoc: jsdoc
-        );
-    }
-
     /// <summary>The TypeScript visibility of a promoted member: its property's.</summary>
     internal static TsMemberVisibility PromotedMemberVisibility(IrConstructorParameter p) =>
         IrToTsVisibilityMapper.Map(p.PromotedVisibility ?? IrVisibility.Public);
-
-    /// <summary>
-    /// Lowers one non-promoted parameter to a plain TS parameter (no
-    /// parameter-property modifier). Its name matches what
-    /// <see cref="BuildSimpleConstructor"/> reads for DI-captured
-    /// assignments and what the base-initializer arguments reference.
-    /// </summary>
-    private static TsConstructorParam BuildPlainCtorParam(
-        IrConstructorParameter p,
-        Func<IrConstructorParameter, TsType> resolveType,
-        IrToTsBridgeContext context
-    ) =>
-        new(
-            IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
-            resolveType(p),
-            Accessibility: TsAccessibility.None,
-            DefaultValue: ResolveCtorParamDefault(p, context),
-            Rest: p.Parameter.IsRestParams
-        );
 
     /// <summary>
     /// Lowers a constructor parameter's default value to TS. The general
@@ -308,22 +238,6 @@ internal static partial class IrToTsClassBridge
         return IrToTsExpressionBridge.Map(d, context);
     }
 
-    /// <summary>
-    /// Lowers the single-constructor case (no overload dispatch) into a
-    /// <see cref="TsConstructor"/>. The caller pre-resolves the parameter
-    /// list (<see cref="BuildPrimaryCtorParams"/>) and the optional
-    /// <c>super(...)</c> argument list. The body is composed in canonical order:
-    /// <list type="number">
-    ///   <item><c>super(args)</c> (after any argument temporaries) when
-    ///     <paramref name="baseCall"/> is non-null;</item>
-    ///   <item>one <c>this.&lt;capturedField&gt; = &lt;paramName&gt;</c>
-    ///     assignment per captured parameter (resolved from
-    ///     <see cref="IrConstructorParameter.CapturedFieldName"/>);</item>
-    ///   <item>any explicit body statements lowered via the IR statement
-    ///     bridge (omitted when the IR carries no body — record-style and
-    ///     primary-ctor classes don't have one).</item>
-    /// </list>
-    /// </summary>
     /// <summary>
     /// The base-constructor call of <paramref name="ctor"/>: the role-mapped
     /// arguments of its runtime class when the base is a BCL exception (see
@@ -411,6 +325,21 @@ internal static partial class IrToTsClassBridge
         );
     }
 
+    /// <summary>
+    /// Lowers the single-constructor case (no overload dispatch) into a
+    /// <see cref="TsConstructor"/>. The caller pre-resolves the parameter
+    /// list (<see cref="BuildPrimaryCtorParams"/>) and the optional
+    /// <c>super(...)</c> argument list. The body is composed in canonical order:
+    /// <list type="number">
+    ///   <item><c>super(args)</c> (after any argument temporaries) when
+    ///     <paramref name="baseCall"/> is non-null;</item>
+    ///   <item>the type-argument slot of a reified generic class;</item>
+    ///   <item>the instance field stores (<see cref="FieldStoresOf"/>);</item>
+    ///   <item>any explicit body statements lowered via the IR statement
+    ///     bridge (omitted when the IR carries no body — record-style and
+    ///     primary-ctor classes don't have one).</item>
+    /// </list>
+    /// </summary>
     public static TsConstructor BuildSimpleConstructor(
         IrConstructorDeclaration? ir,
         IReadOnlyList<TsConstructorParam> tsCtorParams,
@@ -433,93 +362,55 @@ internal static partial class IrToTsClassBridge
         if (typeArgumentSlot is not null)
             body.Add(BuildSlotDefineProperty(typeArgumentSlot));
 
-        if (ir is not null)
-        {
-            body.AddRange(BuildCapturedAssignments(ir));
+        body.Add(
+            ir is null
+                ? new TsInstanceFieldStores([], [])
+                : FieldStoresOf(ir, p => new TsFieldStoreBinding(
+                    context.ClassFields.FieldOf(p.Parameter.Name) ?? PromotedName(p),
+                    new TsIdentifier(PromotedParameterName(p))
+                ))
+        );
 
-            // Promoted `params T[]` slots can't carry the parameter-property
-            // modifier (TS forbids `readonly ...x: T[]`), nor can a member named
-            // like a reserved word (#404), so the field is declared separately
-            // by the class emitter and the value is copied across in the ctor
-            // body. (#152)
-            foreach (var p in ir.Parameters)
-            {
-                var backingField = context.ClassFields.FieldOf(p.Parameter.Name);
-
-                if (
-                    (
-                        !p.Parameter.IsRestParams
-                        && backingField is null
-                        && !HasReservedPromotedName(p)
-                    )
-                    || p.Promotion is IrParameterPromotion.None
-                )
-                    continue;
-
-                body.Add(ThisAssignment(backingField ?? PromotedName(p), PromotedParameterName(p)));
-            }
-
-            // Explicit ctor body statements (a non-record ctor with body
-            // beyond captured-param assignments) — append after the
-            // synthesized super + captured assignments so the resulting body
-            // matches the source order.
-            if (ir.Body is { Count: > 0 } explicitBody)
-                body.AddRange(IrToTsStatementBridge.MapBody(explicitBody, context));
-        }
+        if (ir?.Body is { Count: > 0 } explicitBody)
+            body.AddRange(IrToTsStatementBridge.MapBody(explicitBody, context));
 
         return new TsConstructor(tsCtorParams, body);
     }
 
     /// <summary>
-    /// One <c>this.&lt;capturedField&gt; = &lt;paramName&gt;</c> per parameter a
-    /// field initializer captures (DI-style). The parameter binding uses the
-    /// local policy; the captured field it writes uses the data-member rule
-    /// (camelCase, reserved words escaped). A [Name] override on the captured
-    /// field is not consulted here.
+    /// The field stores of a constructor that runs the C# initializers, with
+    /// the members its parameters set: each promoted member
+    /// (<paramref name="promotedBinding"/>, in parameter order; none when it is
+    /// <c>null</c>, as the members keep their own declarations) and each field
+    /// a parameter is captured into (DI-style; the parameter binding uses the
+    /// local policy, the captured field the data-member rule — camelCase,
+    /// reserved words escaped — without a [Name] override).
     /// </summary>
-    public static IEnumerable<TsStatement> BuildCapturedAssignments(
-        IrConstructorDeclaration ctor
+    public static TsInstanceFieldStores FieldStoresOf(
+        IrConstructorDeclaration ctor,
+        Func<IrConstructorParameter, TsFieldStoreBinding>? promotedBinding
     ) =>
-        ctor.Parameters.SelectMany(p =>
-            p.CapturedFieldName is { } capturedField
-                ?
-                [
-                    ThisAssignment(
-                        IrToTsNamingPolicy.ToDeclaredDataMemberName(
-                            capturedField,
-                            attributes: null
-                        ),
-                        IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
-                    ),
-                ]
-                : Array.Empty<TsStatement>()
+        new(
+            promotedBinding is null
+                ? []
+                : [.. ctor.Parameters.Where(IsPromoted).Select(promotedBinding)],
+            [.. ctor.Parameters.Where(p => p.CapturedFieldName is not null).Select(CapturedBinding)]
         );
 
     /// <summary>
-    /// One <c>this.&lt;member&gt; = &lt;paramName&gt;</c> per promoted
-    /// parameter: what a parameter property does implicitly, spelled out for
-    /// a constructor whose parameters cannot be parameter properties (a branch
-    /// of the overload dispatcher).
+    /// The binding of a dispatcher branch's promoted member: the branch reads
+    /// the parameter under the local policy.
     /// </summary>
-    public static IEnumerable<TsStatement> BuildPromotedAssignments(
-        IrConstructorDeclaration ctor
-    ) =>
-        ctor
-            .Parameters.Where(IsPromoted)
-            .Select(p =>
-                ThisAssignment(
-                    PromotedName(p),
-                    IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
-                )
-            );
-
-    private static TsExpressionStatement ThisAssignment(string member, string parameter) =>
+    public static TsFieldStoreBinding PromotedBranchBinding(IrConstructorParameter p) =>
         new(
-            new TsBinaryExpression(
-                new TsPropertyAccess(new TsIdentifier("this"), member),
-                "=",
-                new TsIdentifier(parameter)
-            )
+            PromotedName(p),
+            new TsIdentifier(IrToTsNamingPolicy.ToParameterName(p.Parameter.Name))
+        );
+
+    private static TsFieldStoreBinding CapturedBinding(IrConstructorParameter p) =>
+        new(
+            IrToTsNamingPolicy.ToDeclaredDataMemberName(p.CapturedFieldName!, attributes: null),
+            new TsIdentifier(IrToTsNamingPolicy.ToParameterName(p.Parameter.Name))
         );
 }
 

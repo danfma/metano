@@ -13,8 +13,6 @@ export function getStr(self: Reading, s: string): number {
 import { getNum, type Reading } from "./reading.js";
 
 export class Use {
-  constructor() { }
-
   run(r: Reading): number {
     return getNum(r, 1);
   }

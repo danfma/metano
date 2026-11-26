@@ -10,7 +10,11 @@ import {
 let Clip$rt: ClassType<Clip> | undefined;
 
 export abstract class Clip {
-  constructor(readonly seconds: number) {}
+  declare readonly seconds: number;
+
+  constructor(seconds: number) {
+    this.seconds = seconds;
+  }
 
   static get $runtimeType(): ClassType<Clip> {
     return (Clip$rt ??= {

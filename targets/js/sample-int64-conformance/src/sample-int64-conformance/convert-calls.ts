@@ -94,7 +94,7 @@ export function convertToBoolean(value: bigint): boolean {
 }
 
 export class DecimalConvertCalls {
-  constructor() { }
+  private constructor() { }
 
   static convertFromDecimal(value: Decimal): bigint {
     return convertDecimalToInt64(value);

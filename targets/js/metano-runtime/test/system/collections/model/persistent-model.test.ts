@@ -153,7 +153,7 @@ describe("the persistent-collection model", () => {
       runPersistentModel(tipListSubject(true), createSeededRandom(seed), options);
       runPersistentModel(copySetSubject, createSeededRandom(seed), options);
       runPersistentModel(copyDictionarySubject, createSeededRandom(seed), options);
-    });
+    }, 30_000);
   }
 
   test("rejects a subject whose versions alias the shared storage", () => {

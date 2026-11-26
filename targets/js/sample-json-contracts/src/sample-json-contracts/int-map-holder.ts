@@ -5,7 +5,11 @@ import type { Dictionary } from "metano-runtime/system/collections";
 let IntMapHolder$rt: ClassType<IntMapHolder> | undefined;
 
 export class IntMapHolder {
-  constructor(readonly byKey: Dictionary<number, string>) {}
+  declare readonly byKey: Dictionary<number, string>;
+
+  constructor(byKey: Dictionary<number, string>) {
+    this.byKey = byKey;
+  }
 
   static get $runtimeType(): ClassType<IntMapHolder> {
     return (IntMapHolder$rt ??= {

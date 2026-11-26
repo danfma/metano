@@ -45,7 +45,8 @@ public sealed record IrVariableDeclaration(
     IrExpression? Initializer,
     bool IsConst = false,
     bool AssignedInWhenGuard = false,
-    IrTypeRef? InferredType = null
+    IrTypeRef? InferredType = null,
+    bool AssignedMaybeNull = false
 ) : IrStatement;
 
 /// <summary>

@@ -8,7 +8,7 @@ export class PriceRule {
   protected static readonly byPriceRuleCodeTiers = /* @__PURE__ */ Symbol(
     "PriceRule(string code, params int[] tiers)",
   );
-  readonly description: string;
+  declare readonly description: string;
 
   constructor(overload: typeof PriceRule.byPriceRulePercent, percent?: number);
   constructor(overload: typeof PriceRule.byPriceRuleCodeTiers, code: string, ...tiers: number[]);

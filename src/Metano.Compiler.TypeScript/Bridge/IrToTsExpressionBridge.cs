@@ -66,7 +66,50 @@ public static partial class IrToTsExpressionBridge
     /// fall back to the raw lowering when no entry matches. Without a registry the
     /// bridge emits raw <c>receiver.member</c> / <c>receiver.method(args)</c>.
     /// </summary>
-    internal static TsExpression Map(IrExpression expression, IrToTsBridgeContext context)
+    internal static TsExpression Map(IrExpression expression, IrToTsBridgeContext context) =>
+        context.ShadowedImports.IsEmpty || expression is IrIdentifier
+            ? MapUnshadowed(expression, context)
+            : AliasedIfShadowed(MapUnshadowed(expression, context), context);
+
+    /// <summary>
+    /// A read of an imported binding a constructor parameter or local shadows,
+    /// spelled under its alias (<see cref="IrToTsBridgeContext.ShadowedImports"/>):
+    /// a module export or a cross-package export. A bare identifier is a local
+    /// as often as an import, so only a flattened module member is aliased as
+    /// one (<see cref="AliasedModuleMemberIfShadowed"/>).
+    /// </summary>
+    private static TsExpression AliasedIfShadowed(
+        TsExpression lowered,
+        IrToTsBridgeContext context
+    ) =>
+        ImportedNameOf(lowered) is { } name
+        && context.ShadowedImports.TryGetValue(name, out var alias)
+            ? new TsAliasedReference(lowered, name, alias)
+            : lowered;
+
+    private static string? ImportedNameOf(TsExpression lowered) =>
+        lowered switch
+        {
+            TsModuleExportReference export => export.Name,
+            TsTypeReference packageExport => packageExport.Name,
+            _ => null,
+        };
+
+    /// <summary>
+    /// The flattened module member <paramref name="reference"/> (a bare
+    /// containerless function or variable, or a module export) under its alias
+    /// when a constructor parameter or local shadows its name.
+    /// </summary>
+    private static TsExpression AliasedModuleMemberIfShadowed(
+        TsExpression reference,
+        IrToTsBridgeContext context
+    ) =>
+        reference is TsIdentifier { Name: var name }
+        && context.ShadowedImports.TryGetValue(name, out var alias)
+            ? new TsAliasedReference(reference, name, alias)
+            : AliasedIfShadowed(reference, context);
+
+    private static TsExpression MapUnshadowed(IrExpression expression, IrToTsBridgeContext context)
     {
         if (
             NeedsStaticCallGuard(expression.BoundStaticCall)
@@ -709,16 +752,17 @@ public static partial class IrToTsExpressionBridge
     /// Under <c>noUncheckedIndexedAccess</c> <c>a[i]</c> is
     /// <c>T | undefined</c>, which does not type-check where C# has a
     /// <c>T</c> (a throw replaces the missing element there): <c>a[i]!</c>
-    /// for a <c>T</c> element, and <c>(a[i] ?? null)</c> for a nullable one,
-    /// whose own <c>null</c> a <c>!</c> would strip from the type (#670).
+    /// for a <c>T</c> element, and <c>a[i] as T | null</c> for a nullable one,
+    /// whose own <c>null</c> a <c>!</c> would strip from the type (#670). The
+    /// nullable read is bare at run time: an out-of-range <c>undefined</c> is
+    /// not turned into a <c>null</c> where .NET throws (#787).
     /// </summary>
     private static TsExpression CheckedElementRead(TsExpression read, IrTypeRef? collectionType) =>
         collectionType switch
         {
-            IrArrayTypeRef when IsNullableElement(collectionType) => new TsBinaryExpression(
+            IrArrayTypeRef { ElementType: IrNullableTypeRef element } => new TsCastExpression(
                 read,
-                "??",
-                new TsLiteral("null")
+                IrToTsTypeMapper.Map(element)
             ),
             IrArrayTypeRef or IrPrimitiveTypeRef { Primitive: IrPrimitive.String } =>
                 new TsPostfixUnaryExpression(read, "!"),
@@ -929,7 +973,10 @@ public static partial class IrToTsExpressionBridge
             && FlattensToModuleMember(containerless)
             && ma.Target is IrTypeReference container
         )
-            return ModuleMemberReference(containerless, memberName, container);
+            return AliasedModuleMemberIfShadowed(
+                ModuleMemberReference(containerless, memberName, container),
+                context
+            );
 
         return new TsPropertyAccess(loweredTarget, memberName);
     }
@@ -1044,10 +1091,15 @@ public static partial class IrToTsExpressionBridge
     /// The value-position reference to a type name. A cross-package type lowers to a
     /// <see cref="TsTypeReference"/> — printed exactly like the bare identifier — so
     /// the import collector sees the origin the file must import it from; every other
-    /// type stays a plain <see cref="TsIdentifier"/>.
+    /// type stays a plain <see cref="TsIdentifier"/>. Inside a constructor scope that
+    /// binds the name, the reference reads under its import alias
+    /// (<see cref="ConstructorScopeAliases.AliasedTypeValue"/>).
     /// </summary>
     internal static TsExpression TypeValueReference(string name, TsTypeOrigin? origin) =>
-        origin is null ? new TsIdentifier(name) : new TsTypeReference(name, origin);
+        ConstructorScopeAliases.AliasedTypeValue(
+            origin is null ? new TsIdentifier(name) : new TsTypeReference(name, origin),
+            name
+        );
 
     /// <summary>
     /// A <c>base.M(...)</c> whose member no emitted base declares (#506):
@@ -1094,6 +1146,15 @@ public static partial class IrToTsExpressionBridge
             tpl.Template,
             tpl.ExternalImports
         );
+
+        if (!context.ShadowedImports.IsEmpty)
+        {
+            (text, externalImports) = TsImportFacadeBinding.Unshadowed(
+                text,
+                externalImports,
+                context.ShadowedImports
+            );
+        }
 
         var template = new TsTemplate(
             text,
@@ -1498,7 +1559,8 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        var helperName = method.EmittedName ?? TypeScriptNaming.ToCamelCase(method.MemberName);
+        var helperName = method.EmittedName
+            ?? IrToTsNamingPolicy.ToFunctionIdentifier(method.MemberName);
 
         return new TsCallExpression(
             ModuleExportReference(helperName, method.CompanionOwner),
@@ -2179,12 +2241,57 @@ public static partial class IrToTsExpressionBridge
         var value = Map(let.Value, context);
 
         return TryFoldPlainObjectInitializer(let, value, context)
+            ?? TryMapLetInline(let, value, context)
             ?? TsImmediateInvocation.Of(
                 [new TsImmediateBinding(IrToTsNamingPolicy.ToLocalName(let.Name), value)],
                 ReturningBody(let.Body, context),
                 isAsync: IrEvaluationTraits.ContainsAwait(let.Body)
             );
     }
+
+    /// <summary>
+    /// <see cref="IrLetExpression"/> as <c>(name = value, body)</c> over a
+    /// temporary declared at the head of the enclosing statement list
+    /// (<see cref="TsTemporaries"/>), with no immediately invoked function
+    /// (rule 1a, W10-6a): the value is evaluated once, before the body, as the
+    /// IIFE's argument is. Only for a store temporary
+    /// (<see cref="IrLetExpression.IsStoreTemporary"/>), where a statement list exists and no closure
+    /// in the value or the body could capture the temporary, which every
+    /// evaluation of the statement reassigns; <c>null</c> otherwise.
+    /// </summary>
+    private static TsExpression? TryMapLetInline(
+        IrLetExpression let,
+        TsExpression value,
+        IrToTsBridgeContext context
+    )
+    {
+        if (
+            !let.IsStoreTemporary
+            || context.Temporaries is not { } temporaries
+            || ContainsClosure(let.Value)
+            || ContainsClosure(let.Body)
+        )
+            return null;
+
+        var name = IrToTsNamingPolicy.ToLocalName(let.Name);
+
+        if (temporaries.TryDeclareExactly(name) is not { } temporary)
+            return null;
+
+        IReadOnlyList<IrExpression> body = let.Body is IrSequenceExpression sequence
+            ? [.. sequence.Effects, sequence.Result]
+            : [let.Body];
+
+        return new TsParenthesized(
+            body.Select(part => Map(part, context))
+                .Prepend(new TsBinaryExpression(temporary, "=", value))
+                .Aggregate((left, right) => new TsBinaryExpression(left, ",", right))
+        );
+    }
+
+    private static bool ContainsClosure(IrExpression expression) =>
+        expression is IrLambdaExpression
+        || IrNodeChildren.ExpressionsOf(expression).Any(ContainsClosure);
 
     /// <summary>
     /// Folds an object-initialized <c>[PlainObject]</c> construction —
@@ -2257,17 +2364,18 @@ public static partial class IrToTsExpressionBridge
             : null;
 
     /// <summary>
-    /// Lowers <see cref="IrSequenceExpression"/> outside a let-binding to a
-    /// parameterless IIFE whose body runs the effects and returns the result.
+    /// Lowers <see cref="IrSequenceExpression"/> outside a let-binding to the
+    /// comma expression <c>(effect, …, result)</c>.
     /// </summary>
     private static TsExpression MapSequence(
         IrSequenceExpression sequence,
         IrToTsBridgeContext context
     ) =>
-        TsImmediateInvocation.Of(
-            [],
-            ReturningBody(sequence, context),
-            isAsync: IrEvaluationTraits.ContainsAwait(sequence)
+        new TsParenthesized(
+            sequence
+                .Effects.Append(sequence.Result)
+                .Select(part => Map(part, context))
+                .Aggregate((left, right) => new TsBinaryExpression(left, ",", right))
         );
 
     /// <summary>
@@ -2746,7 +2854,13 @@ public static partial class IrToTsExpressionBridge
         // The access maps first, so its own lowerings — the containerless
         // flatten that turns `Greets.Twice` into the bare imported helper —
         // still apply; only the member name swaps for the claimed fast path.
-        return MapNullTolerant(access, context) switch
+        var mapped = MapNullTolerant(access, context) switch
+        {
+            TsAliasedReference aliased => aliased.Reference,
+            var other => other,
+        };
+
+        TsExpression callee = mapped switch
         {
             TsPropertyAccess property => new TsPropertyAccess(
                 boundReceiver ?? property.Object,
@@ -2761,6 +2875,10 @@ public static partial class IrToTsExpressionBridge
             TsTypeReference packageExport => new TsTypeReference(fastPath, packageExport.Origin),
             _ => new TsIdentifier(fastPath),
         };
+
+        return context.ShadowedImports.IsEmpty
+            ? callee
+            : AliasedModuleMemberIfShadowed(callee, context);
     }
 
     /// <summary>

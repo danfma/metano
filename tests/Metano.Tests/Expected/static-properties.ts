@@ -3,9 +3,11 @@ export class Settings {
   static readonly count: number = 3;
   static title: string = "x";
   static plain: number = 0;
-  readonly instance: number = 7;
+  declare readonly instance: number;
 
-  constructor() { }
+  constructor() {
+    this.instance = 7;
+  }
 
   static get level(): number {
     return Settings._level;

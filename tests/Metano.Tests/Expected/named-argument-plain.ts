@@ -6,7 +6,7 @@ import type { Op } from "./op.js";
 import { Trace } from "./trace.js";
 
 export class PlainCalls {
-  constructor() { }
+  private constructor() { }
 
   static extensionOneSensitive(e: Engine): number {
     return scale(e, 4, Trace.next("p"));

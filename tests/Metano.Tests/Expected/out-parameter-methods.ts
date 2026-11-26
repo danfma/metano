@@ -4,9 +4,11 @@ import type { ILookup } from "./i-lookup.js";
 import type { Item } from "./item.js";
 
 export class Catalog implements ILookup {
-  private readonly _items: Dictionary<string, Item> = new Dictionary<string, Item>();
+  declare private readonly _items: Dictionary<string, Item>;
 
-  constructor() { }
+  constructor() {
+    this._items = (new Dictionary<string, Item>());
+  }
 
   tryFind(key: string): readonly [found: true, item: Item] | readonly [found: false, item: Item | null] {
     let item: Item | null;

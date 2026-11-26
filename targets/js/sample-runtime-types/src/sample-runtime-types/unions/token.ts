@@ -23,7 +23,11 @@ export const TokenKind$runtimeType: EnumType<TokenKind> = {
 let Token$rt: ClassType<Token> | undefined;
 
 export abstract class Token {
-  constructor(readonly kind: TokenKind) {}
+  declare readonly kind: TokenKind;
+
+  constructor(kind: TokenKind) {
+    this.kind = kind;
+  }
 
   static get $runtimeType(): ClassType<Token> {
     return (Token$rt ??= {

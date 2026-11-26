@@ -1,9 +1,11 @@
 import { valueHashCode } from "metano-runtime";
 
 export class Box {
-  v: number = 0;
+  declare v: number;
 
-  constructor() { }
+  constructor() {
+    this.v = 0;
+  }
 
   equals(other: Object | null): boolean {
     let b: Box;

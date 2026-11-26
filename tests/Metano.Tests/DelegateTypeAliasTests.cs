@@ -99,7 +99,7 @@ public class DelegateTypeAliasTests
 
         var button = result["app/button.ts"];
         await Assert.That(button).Contains("import type { ClickHandler }");
-        await Assert.That(button).Contains("onClick: ClickHandler | null = null");
+        await Assert.That(button).Contains("this.onClick = null");
     }
 
     [Test]
@@ -319,6 +319,6 @@ public class DelegateTypeAliasTests
             .That(output)
             .Contains("import type { Handler } from \"@scope/lib/my-lib/events\"");
 
-        await Assert.That(output).Contains("callback: Handler | null = null");
+        await Assert.That(output).Contains("this.callback = null");
     }
 }

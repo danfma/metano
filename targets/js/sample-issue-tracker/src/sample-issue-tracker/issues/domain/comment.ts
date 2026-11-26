@@ -13,12 +13,22 @@ import { UserId } from "../../shared-kernel/user-id.js";
 let Comment$rt: ClassType<Comment> | undefined;
 
 export class Comment {
+  declare readonly authorId: UserId;
+  declare readonly message: string;
+  declare readonly createdAt: Temporal.ZonedDateTime;
+  declare readonly isSystem: boolean;
+
   constructor(
-    readonly authorId: UserId,
-    readonly message: string,
-    readonly createdAt: Temporal.ZonedDateTime,
-    readonly isSystem: boolean = false,
-  ) {}
+    authorId: UserId,
+    message: string,
+    createdAt: Temporal.ZonedDateTime,
+    isSystem: boolean = false,
+  ) {
+    this.authorId = authorId;
+    this.message = message;
+    this.createdAt = createdAt;
+    this.isSystem = isSystem;
+  }
 
   static get $runtimeType(): ClassType<Comment> {
     return (Comment$rt ??= {

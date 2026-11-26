@@ -201,11 +201,14 @@ public abstract record IrRuntimeTypeTest
             : test;
 
     /// <summary>
-    /// An interface has a runtime identity only where the compilation emits
-    /// it: a transpiled interface that is neither external nor ignored.
+    /// An interface has a runtime identity only where something emits it: a
+    /// transpiled interface that is neither external nor ignored, or one the
+    /// target runtime declares (FR-111).
     /// </summary>
     private static IrRuntimeTypeTest OfInterface(IrNamedTypeSemantics semantics) =>
-        semantics is { IsTranspilable: true, IsExternal: false, IsIgnored: false }
+        semantics
+            is { IsTranspilable: true, IsExternal: false, IsIgnored: false }
+                or { IsRuntimeDeclared: true }
             ? new NominalInterface()
             : new None();
 

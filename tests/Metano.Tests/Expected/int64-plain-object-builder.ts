@@ -1,7 +1,7 @@
 import type { SnowflakeDto } from "./snowflake-dto.js";
 
 export class Builder {
-  constructor() { }
+  private constructor() { }
 
   static makeConst(): SnowflakeDto {
     return {

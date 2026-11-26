@@ -206,8 +206,7 @@ public static partial class IrToTsExpressionBridge
                 RelationalOpToken(rel.Operator),
                 Map(rel.Value, context)
             ),
-            IrLogicalPattern { Operator: IrLogicalOp.Not } notPat => new TsUnaryExpression(
-                "!",
+            IrLogicalPattern { Operator: IrLogicalOp.Not } notPat => NegatedTest(
                 BuildPatternTest(value, notPat.Left, context)
             ),
             IrLogicalPattern { Operator: IrLogicalOp.And } and => new TsBinaryExpression(
@@ -228,6 +227,25 @@ public static partial class IrToTsExpressionBridge
             IrPositionalPattern pos => BuildPositionalPatternTest(value, pos, context),
             _ => MapUnsupported(new IrUnsupportedExpression($"Pattern:{pattern.GetType().Name}")),
         };
+
+    /// <summary>
+    /// The negation of a pattern test: an equality test flips its operator
+    /// (<c>x == null</c> becomes <c>x != null</c>, <c>is not null</c>), any
+    /// other test is wrapped in <c>!</c>.
+    /// </summary>
+    private static TsExpression NegatedTest(TsExpression test) =>
+        test is TsBinaryExpression { Operator: "==" or "===" or "!=" or "!==" } equality
+            ? equality with
+            {
+                Operator = equality.Operator switch
+                {
+                    "==" => "!=",
+                    "===" => "!==",
+                    "!=" => "==",
+                    _ => "===",
+                },
+            }
+            : new TsUnaryExpression("!", test);
 
     /// <summary>
     /// <see cref="BuildPatternTest"/>, or <c>null</c> for a pattern that

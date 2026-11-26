@@ -13,7 +13,7 @@ import { Base } from "./base.js";
 import { Calls } from "./calls.js";
 
 export class Shop {
-  constructor() { }
+  private constructor() { }
 
   static make(): Base {
     return (($arg1, $arg0) => Base.fromAB($arg0, $arg1))(Calls.f(), Calls.f());

@@ -6,10 +6,11 @@ import { Shape } from "./shape.js";
 let Circle$rt: ClassType<Circle> | undefined;
 
 export class Circle extends Shape implements IHasArea {
-  readonly radius: number = 1;
+  declare readonly radius: number;
 
   constructor() {
     super();
+    this.radius = 1;
   }
 
   static override get $runtimeType(): ClassType<Circle> {
