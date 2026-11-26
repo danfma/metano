@@ -19,8 +19,10 @@ namespace Metano.Compiler.TypeScript.Analysis;
 ///   dispatch of an interface or an enum (TypeScript tests those through
 ///   <c>isType</c> / <c>asType</c> / <c>castTo</c> with the descriptor),
 ///   <c>typeof(X)</c>, a <c>GetType()</c> receiver under the receiver rules,
-///   <c>[EmitRuntimeType]</c>, every public type of an <c>[EmitPackage]</c>
-///   library, and every transpiled exception class. A class test, pattern,
+///   <c>[EmitRuntimeType]</c>, every emitted type of an <c>[EmitPackage]</c>
+///   library (an internal type reached by W9-9 included: a descendant of a
+///   public class would otherwise inherit its base's descriptor and answer
+///   its interfaces wrongly), and every transpiled exception class. A class test, pattern,
 ///   cast or dispatch renders <c>instanceof</c> or <c>castTo(x, Ctor)</c>
 ///   and reaches nothing.</item>
 ///   <item>The receiver rules: a class or struct <c>C</c> reaches <c>C</c> and
@@ -132,7 +134,8 @@ internal sealed partial class RuntimeTypeReachability
             if (
                 type.IsException
                 || HasEmitRuntimeType(type.Symbol)
-                || ((assemblyForcesAll || isLibrary) && IsPublic(type.Symbol))
+                || assemblyForcesAll
+                || isLibrary
             )
                 Reach(type);
         }

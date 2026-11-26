@@ -33,6 +33,19 @@ public static class IrVisibilityMapper
             ? IrVisibility.ProtectedInternal
             : Map(member.DeclaredAccessibility);
 
+    /// <summary>
+    /// <see cref="MapMember(ISymbol)"/>, except that an <c>internal</c> member an
+    /// explicit implementation of a public interface member relies on (it claims the
+    /// name that implementation forwards to) is <see cref="IrVisibility.Public"/>:
+    /// it satisfies the interface contract, so it is not internal API (#819).
+    /// </summary>
+    public static IrVisibility MapMember(ISymbol member, IrExtractionContext context) =>
+        MapMember(member) is IrVisibility.Internal
+        && context.Compilation is { } compilation
+        && InterfaceContractClaims.IsRelied(member, compilation, context.Target)
+            ? IrVisibility.Public
+            : MapMember(member);
+
     private static ISymbol RootDeclarationOf(ISymbol member)
     {
         var current = member;
