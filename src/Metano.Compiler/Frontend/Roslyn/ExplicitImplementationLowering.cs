@@ -1,4 +1,5 @@
 using Metano.Annotations;
+using Metano.Compiler.Extraction;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.Frontend.Roslyn;
@@ -37,7 +38,9 @@ public enum ExplicitImplementationFate
     /// assembly), and another member already claims its name — the idiomatic
     /// <c>IEnumerator IEnumerable.GetEnumerator() =&gt; GetEnumerator();</c> bridge.
     /// The bridge only forwards to the member that keeps the name, so it is dropped
-    /// silently, as explicit methods always were before #278.
+    /// silently, as explicit methods always were before #278. An explicit
+    /// <c>IDisposable.Dispose()</c> on a target that declares the interface is superseded
+    /// only when it is a pure forwarder to the claiming member (FR-111).
     /// </summary>
     Superseded,
 
@@ -46,7 +49,8 @@ public enum ExplicitImplementationFate
     /// the type (or of a base class) already claims the interface member's name with
     /// the same static-ness, so declaring it would either collide or silently reroute
     /// calls through the interface. It is dropped and the frontend reports
-    /// <c>MS0031</c>.
+    /// <c>MS0031</c>. So is an explicit <c>IDisposable.Dispose()</c> that does not forward to
+    /// the member claiming its name, on a target that declares the interface (FR-111).
     /// </summary>
     Conflicting,
 }
@@ -70,8 +74,9 @@ public sealed record ExplicitImplementation(
 /// <summary>
 /// Decides how an explicit interface implementation is lowered. The class extractor
 /// uses it to drop or rename the member and the frontend validator uses it to report
-/// <c>MS0031</c>, so both agree on the same decision. It reads Roslyn symbols only and
-/// is target-agnostic.
+/// <c>MS0031</c>, so both agree on the same decision. It reads Roslyn symbols — and the
+/// body of an explicit <c>IDisposable.Dispose()</c> that may be a forwarder — and is
+/// target-agnostic but for the targets that declare <c>IDisposable</c> (FR-111).
 /// <para>
 /// The conflict check compares emitted names (the <c>[Name]</c> override for the
 /// target, otherwise the C# name) case-insensitively. That is a conservative premise:
@@ -102,7 +107,7 @@ public static class ExplicitImplementationLowering
             return new(member, interfaceMember, dropped);
 
         var claiming = FindClaimingMember(member, interfaceMember, target);
-        var fate = FateFor(claiming, interfaceMember.ContainingType);
+        var fate = FateFor(member, claiming, interfaceMember.ContainingType, target);
 
         return new(member, interfaceMember, fate, claiming);
     }
@@ -167,21 +172,36 @@ public static class ExplicitImplementationLowering
 
     /// <summary>
     /// Declarable under the interface name when nothing claims it; otherwise a
-    /// conflict for interfaces of the transpiled contract and a silent drop for the
-    /// rest.
+    /// conflict for interfaces of the transpiled contract, and a silent drop for the
+    /// rest — except <c>System.IDisposable</c> on a target that declares it, whose
+    /// explicit <c>Dispose</c> is dropped only when it forwards to the claiming member
+    /// and conflicts otherwise (FR-111).
     /// </summary>
     private static ExplicitImplementationFate FateFor(
+        ISymbol member,
         ISymbol? claiming,
-        INamedTypeSymbol interfaceType
+        INamedTypeSymbol interfaceType,
+        TargetLanguage? target
     )
     {
         if (claiming is null)
             return ExplicitImplementationFate.EmittedUnderInterfaceName;
 
-        return IsInTranspiledContract(interfaceType)
-            ? ExplicitImplementationFate.Conflicting
-            : ExplicitImplementationFate.Superseded;
+        if (IsInTranspiledContract(interfaceType))
+            return ExplicitImplementationFate.Conflicting;
+
+        if (IsDeclaredDisposable(interfaceType, target))
+            return ForwardingImplementations.IsSatisfiedThrough(member, claiming)
+                ? ExplicitImplementationFate.Superseded
+                : ExplicitImplementationFate.Conflicting;
+
+        return ExplicitImplementationFate.Superseded;
     }
+
+    private static bool IsDeclaredDisposable(
+        INamedTypeSymbol interfaceType,
+        TargetLanguage? target
+    ) => DisposableInterfaces.IsDeclaredBy(target) && DisposableInterfaces.Is(interfaceType);
 
     private static ISymbol? FindClaimingMember(
         ISymbol member,

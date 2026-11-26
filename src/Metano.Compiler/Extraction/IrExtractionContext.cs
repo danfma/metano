@@ -81,6 +81,13 @@ public sealed record IrExtractionContext(
     internal bool HasAssignmentInTestForm => Target != Metano.Annotations.TargetLanguage.Dart;
 
     /// <summary>
+    /// Whether the target declares <c>System.IDisposable</c>, so a <c>using</c>
+    /// statement or declaration lowers to the <c>try</c>/<c>finally</c> the C#
+    /// specification defines it as (FR-111). Dart declares none and keeps MS0001.
+    /// </summary>
+    internal bool LowersUsingStatements => DisposableInterfaces.IsDeclaredBy(Target);
+
+    /// <summary>
     /// Whether the target's BCL collections are its native ones (Dart until
     /// spec 011 FR-038, D28): such a target gets the pre-011c lowering of every
     /// collection construct (the 2.x element-access reads, writes and

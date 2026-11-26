@@ -577,8 +577,8 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
 
     /// <summary>
     /// The descriptors of <paramref name="interfaces"/> that exist: the reached
-    /// interfaces of this compilation and those of referenced libraries, as
-    /// thunks, deduplicated, in declaration order.
+    /// interfaces of this compilation, those of referenced libraries and those
+    /// the runtime declares, as thunks, deduplicated, in declaration order.
     /// </summary>
     private TsArrayLiteral Thunks(IEnumerable<INamedTypeSymbol> interfaces, string site) =>
         new([
@@ -593,8 +593,14 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
     private bool HasDescriptor(INamedTypeSymbol iface) =>
         SymbolEqualityComparer.Default.Equals(iface.ContainingAssembly, _context.CurrentAssembly)
             ? IsReached(iface)
-            : iface.ContainingAssembly.HasTranspileAssembly()
-                && iface.DeclaredAccessibility is Accessibility.Public;
+            : (
+                iface.ContainingAssembly.HasTranspileAssembly()
+                && iface.DeclaredAccessibility is Accessibility.Public
+            ) || IsRuntimeDeclared(iface);
+
+    /// <summary>An interface the runtime declares with its descriptor (FR-111).</summary>
+    private bool IsRuntimeDeclared(INamedTypeSymbol iface) =>
+        ReferenceTo(iface) is IrNamedTypeRef { Semantics.IsRuntimeDeclared: true };
 
     private TsExpression? DescriptorOf(INamedTypeSymbol type, string site) =>
         IrToTsRuntimeTypeReferences.Of(ReferenceTo(type), site, RuntimeTypes);

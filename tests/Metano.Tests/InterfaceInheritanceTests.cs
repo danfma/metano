@@ -230,7 +230,7 @@ public class InterfaceInheritanceTests
             using System;
 
             [Transpile]
-            public interface ICustom : IDisposable
+            public interface ICustom : IComparable
             {
                 void DoWork();
             }
@@ -239,7 +239,7 @@ public class InterfaceInheritanceTests
 
         var output = result["i-custom.ts"];
         await Assert.That(output).Contains("interface ICustom");
-        await Assert.That(output).DoesNotContain("extends IDisposable");
+        await Assert.That(output).DoesNotContain("extends IComparable");
     }
 
     [Test]

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Compiler.Frontend.Roslyn;
@@ -101,6 +102,9 @@ internal sealed class ExplicitImplementationValidator
         );
         var conflictingMember = conflict.ClaimingMember ?? throw new UnreachableException();
 
+        if (DisposableInterfaces.Is(interfaceMember.ContainingType))
+            return DisposeConflictDiagnostic(member, interfaceMember, conflictingMember);
+
         return new MetanoDiagnostic(
             MetanoDiagnosticSeverity.Error,
             DiagnosticCodes.ExplicitImplementationConflict,
@@ -113,4 +117,35 @@ internal sealed class ExplicitImplementationValidator
             member.Locations.FirstOrDefault()
         );
     }
+
+    /// <summary>
+    /// An explicit <c>IDisposable.Dispose()</c> beside a member that already claims its
+    /// name and runs another body: .NET keeps two bodies, the target one slot (FR-111).
+    /// </summary>
+    private static MetanoDiagnostic DisposeConflictDiagnostic(
+        ISymbol member,
+        ISymbol interfaceMember,
+        ISymbol conflictingMember
+    ) =>
+        new(
+            MetanoDiagnosticSeverity.Error,
+            DiagnosticCodes.ExplicitImplementationConflict,
+            $"Explicit implementation 'IDisposable.{interfaceMember.Name}' on "
+                + $"'{member.ContainingType.Name}' cannot be declared as '{interfaceMember.Name}': "
+                + $"'{conflictingMember.ContainingType.Name}.{conflictingMember.Name}' already "
+                + "claims the name and the explicit body does not just forward to it (or that "
+                + "member is not public or internal). "
+                + ForwardingHint(interfaceMember, conflictingMember),
+            member.Locations.FirstOrDefault()
+        );
+
+    /// <summary>
+    /// The fix to suggest: a forwarder only to a parameterless claimer, the one call a pure
+    /// forwarder can make; a renaming otherwise.
+    /// </summary>
+    private static string ForwardingHint(ISymbol interfaceMember, ISymbol conflictingMember) =>
+        conflictingMember is IMethodSymbol { Parameters.Length: 0 }
+            ? "Rename one of them, or make the explicit one forward to it ('void IDisposable."
+                + $"{interfaceMember.Name}() => {conflictingMember.Name}();')."
+            : "Rename one of them.";
 }
