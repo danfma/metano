@@ -1675,6 +1675,49 @@ Product requirements added after the migration (normative; each one is traced by
   (`Name = name;`, #801); a computed property keeps its getter. Consumers compiling the output with
   Babel's `preset-typescript` need `allowDeclareFields`. Tests:
   `tests/Metano.Tests/InstanceFieldStoreTests.cs`, conformance `FieldStoreProbes`.
+- **FR-109** (strict-mode output without avoidable noise, #787, #794, #796, #798, #791, #802,
+  decisions W10-2 / W10-2a / W10-3 / W10-3a / W10-3b / W10-4 / W10-4a / W10-11): The TypeScript
+  output MUST type-check under `--strict` and MUST NOT carry guards, annotations or assertions
+  that neither .NET semantics nor the type checker need, without ever dropping a guard on
+  Roslyn's flow state alone:
+  1. *Emission noise (#787).* A nullable array element read is bare (`a[i] as T | null`); an
+     empty catch whose variable is unused takes the optional binding (`catch {`); a catch
+     variable binds straight from the caught value (`const error = toException(e$)`); a string
+     `const` field or local (constant interpolations and `char` concatenation included) folds
+     to its value; `else if` chains print flat and `is not null` prints `x != null`.
+  2. *Concatenation guard (#787 N2).* A string compound append keeps the `?? ""` guard on its
+     target unless the target is a `var` local whose initializer and every assignment are
+     string expressions that cannot yield `null`: a literal, an interpolation, or the built-in
+     concatenation. A user-defined `operator +` (an operator method, even one whose result
+     reads as `string`) is not one, and neither is a deconstruction, `out` / `ref` argument or
+     `??=` write.
+  3. *Null-forgiving literals (#794).* `null!` / `default!` converted to a non-nullable
+     reference type keeps the assertion (`null!`), decided from the destination's declared
+     type (a field, property, local or parameter symbol, a parameter, a return type), never
+     from its flow state: a store to a non-nullable member inside a constructor or after a null
+     test keeps it. An explicitly typed local initialized so keeps its annotation.
+  4. *Local annotations and narrowing (#796, #798).* A `var` reference local is annotated
+     `T | null` only when a later assignment has a maybe-null value. A carried `!` is left out
+     where TypeScript narrows by itself (the right operand of `&&`, the true branch of an `if`
+     or conditional guarded by a null test of the same local with no assignment between), and
+     kept on a captured, reassigned `let` read inside a lambda or local function.
+  5. *Strict-mode names (#791).* Identifier positions (locals, parameters, labels, top-level
+     functions and classes) escape the strict-mode words (`implements`, `interface`, `let`,
+     `package`, `private`, `protected`, `public`, `static`, `yield`, `await`, `eval`,
+     `arguments`) with a trailing `_`; member names keep them, and a promoted parameter so
+     named is declared as a field stored from the escaped parameter. A top-level type keeps
+     its escaped name in every position that names it: its declaration, its static overload
+     dispatcher's receiver, the names derived from it (constructor selectors, factories), and
+     a derived class or caller in another package. A `[Name]` override is used as written.
+     Dart rejects its reserved words in member positions too, so the Dart target escapes them
+     in identifier and member positions alike, at the declaration and every use.
+  6. *Struct defaults (#802).* `default` / `default(S)` of a struct that declares a
+     constructor is the struct's zero value, `S.$default()`, in every position, parameter
+     defaults included, on a target that declares one; Dart keeps the placeholder and its
+     `MS0001` warning.
+  Tests: `tests/Metano.Tests/EmissionNoiseTests.cs`, `NullForgivingLiteralTests.cs`,
+  `NullTestNarrowingTests.cs`, `StrictModeReservedWordTests.cs`, `StructDefaultTests.cs`;
+  conformance `EmissionNoiseProbes`, `StrictWordClassProbes`, `StructDefaultProbes`.
 - **FR-099** (placeholder severity, wave 9 decisions W9-13 / W9-13a): An unsupported construct
   whose emission replaces executable code with a placeholder — a `/* TODO … */` marker, a dropped
   statement or expression, a read that yields nothing instead of the value — MUST report `MS0001`
