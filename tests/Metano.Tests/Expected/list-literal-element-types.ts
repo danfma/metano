@@ -161,11 +161,9 @@ export class Lists {
     const coalesced = given ?? List.of<number | null>([1]);
     const switched = kind === 0 ? List.of<number | null>([1]) : List.of<number | null>([2, 3]);
     const block = () => List.of<number | null>([1]);
-    const holder = ((receiver$temp$0) => {
-      receiver$temp$0.items = List.of<number | null>([1]);
-
-      return receiver$temp$0;
-    })(new Holder());
+    const receiver$temp$0 = new Holder();
+    receiver$temp$0.items = List.of<number | null>([1]);
+    const holder = receiver$temp$0;
     const lists = List.of<List<number | null>>([List.of<number | null>([1])]);
     parenthesized.add(null);
     coalesced.add(null);

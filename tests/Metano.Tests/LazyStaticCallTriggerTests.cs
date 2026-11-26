@@ -25,8 +25,12 @@ public class LazyStaticCallTriggerTests
             """
         )["calls.ts"];
 
-        await Assert.That(output).Contains("LazyInline.$initialize();");
-        await Assert.That(output).Contains("})(Calls.next())");
+        await Assert
+            .That(output)
+            .Contains(
+                "($arg0 = Calls.next(), LazyInline.$initialize(), ($value = $arg0, ($value + $value) | 0))"
+            );
+
         await Assert.That(output).DoesNotContain("Calls.next() + Calls.next()");
     }
 
@@ -59,11 +63,12 @@ public class LazyStaticCallTriggerTests
             """
         )["calls.ts"];
 
-        await Assert.That(output).Contains("LazyMapped.$initialize();");
+        await Assert.That(output).Contains("($arg0 = Calls.next(), LazyMapped.$initialize(), ");
         await Assert.That(output).Contains("$arg0 + $arg0");
         await Assert.That(output).Contains("Math.abs($arg0)");
+        await Assert.That(output).Contains("($arg0 = \"x\", LazyMapped.$initialize(), $arg0)");
         await Assert.That(output).DoesNotContain("LazyMapped.Math");
-        await Assert.That(output).Contains("})(Calls.next())");
+        await Assert.That(output).DoesNotContain("})(");
     }
 
     [Test]
@@ -83,9 +88,15 @@ public class LazyStaticCallTriggerTests
             """
         )["calls.ts"];
 
-        await Assert.That(output.Split("LazyRecord.$initialize();").Length).IsEqualTo(4);
-        await Assert.That(output).Contains("})(value, null)");
-        await Assert.That(output).Contains("})(null, null)");
+        await Assert.That(output.Split("LazyRecord.$initialize(),").Length).IsEqualTo(4);
+
+        await Assert
+            .That(output)
+            .Contains("($arg0 = value, $arg1 = null, LazyRecord.$initialize(), ");
+
+        await Assert
+            .That(output)
+            .Contains("($arg0 = null, $arg1 = null, LazyRecord.$initialize(), ");
     }
 
     [Test]
@@ -103,9 +114,11 @@ public class LazyStaticCallTriggerTests
             """
         )["calls.ts"];
 
-        await Assert.That(output).Contains("if ($arg0 != null && $arg1 != null)");
-        await Assert.That(output).Contains("LazyValue.$initialize();");
-        await Assert.That(output).Contains("})(left, right)");
+        await Assert
+            .That(output)
+            .Contains(
+                "($arg0 = left, $arg1 = right, $arg0 != null && $arg1 != null && LazyValue.$initialize(), "
+            );
     }
 
     [Test]

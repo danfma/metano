@@ -109,7 +109,7 @@ public class CollectionExpressionTargetTests
 
         await Assert
             .That(body[..body.IndexOf("\n  }", StringComparison.Ordinal)])
-            .Contains("throw new Error(\"Unsupported expression: CollectionExpression\")");
+            .Contains("throwError(new Error(\"Unsupported expression: CollectionExpression\"))");
     }
 
     [Test]

@@ -144,7 +144,8 @@ export function nullableIteratedStop(a: number, b: number): bigint {
         if ($c && ($l._version !== $v || $a.length !== $n)) throwModified();
         if ($i === $n) break;
         const pair$element = $a[$i]!;
-        const pair = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(pair$element ?? throwError(new InvalidOperationException("Nullable object must have a value.")));
+        const receiver$temp$0 = pair$element ?? throwError(new InvalidOperationException("Nullable object must have a value."));
+        const pair = [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint];
         count = (count + 1) | 0;
         total = BigInt.asIntN(64, total + pair[0]);
       }
@@ -251,8 +252,9 @@ export function literalCastNarrowedChecked(a: bigint): number {
 }
 
 export function literalCastKeepsTheMissingTuple(a: number): bigint {
+  let receiver$temp$0;
   const missing = () => null;
-  const wide = [((receiver$temp$0) => receiver$temp$0 == null ? null : [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(missing()), BigInt(a)] as [[bigint, bigint] | null, bigint];
+  const wide = [(receiver$temp$0 = missing(), receiver$temp$0 == null ? null : [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint]), BigInt(a)] as [[bigint, bigint] | null, bigint];
 
   return wide[0] == null ? wide[1] : -1n;
 }
@@ -287,46 +289,56 @@ export function literalCastWithDefault(a: number): bigint {
 }
 
 export function castLiteralInitializedSum(a: bigint): bigint {
-  const wide = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number]);
+  const receiver$temp$0 = [Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number];
+  const wide = [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint];
 
   return BigInt.asIntN(64, wide[0] + wide[1]);
 }
 
 export function castLiteralArgumentSum(a: bigint): bigint {
+  let receiver$temp$0;
   const sum = (pair: [bigint, bigint]) => BigInt.asIntN(64, pair[0] + pair[1]);
 
-  return sum(((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number]));
+  return sum((receiver$temp$0 = [Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number], [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint]));
 }
 
 export function castLiteralReturnedSum(a: bigint): bigint {
-  const narrowed = () => ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number]);
+  const narrowed = () => {
+    const receiver$temp$0 = [Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number];
+
+    return [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint];
+  };
   const wide = narrowed();
 
   return BigInt.asIntN(64, wide[0] + wide[1]);
 }
 
 export function castLiteralNullableSum(a: bigint): bigint {
-  const wide = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number]);
+  const receiver$temp$0 = [Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number];
+  const wide = [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint];
   let pair: [bigint, bigint];
 
   return wide != null && (pair = wide, true) ? BigInt.asIntN(64, pair[0] + pair[1]) : -1n;
 }
 
 export function castLiteralElementSum(a: bigint): bigint {
-  const pairs = List.of<[bigint, bigint]>([((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number])]);
+  let receiver$temp$0;
+  const pairs = List.of<[bigint, bigint]>([(receiver$temp$0 = [Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number], [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])]);
 
   return BigInt.asIntN(64, pairs.get(0)[0] + pairs.get(0)[1]);
 }
 
 export function castLiteralConditionalSum(a: bigint): bigint {
-  const wide = a > 0n ? ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number]) : [5n, 6n] as [bigint, bigint];
+  let receiver$temp$0;
+  const wide = a > 0n ? (receiver$temp$0 = [Number(BigInt.asIntN(32, a)), Number(BigInt.asIntN(32, a))] as [number, number], [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint]) : [5n, 6n] as [bigint, bigint];
 
   return BigInt.asIntN(64, wide[0] + wide[1]);
 }
 
 export function castLocalTupleSum(a: bigint): bigint {
   const source = [a, a] as [bigint, bigint];
-  const wide = ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])([Number(BigInt.asIntN(32, source[0])), Number(BigInt.asIntN(32, source[1]))] as [number, number]);
+  const receiver$temp$0 = [Number(BigInt.asIntN(32, source[0])), Number(BigInt.asIntN(32, source[1]))] as [number, number];
+  const wide = [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint];
 
   return BigInt.asIntN(64, wide[0] + wide[1]);
 }

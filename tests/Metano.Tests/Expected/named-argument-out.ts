@@ -14,13 +14,15 @@ export class OutCalls {
   }
 
   static outFirstReordered(o: OutHost): number {
-    const [r, x] = (($arg1, $arg0) => o.outFirst($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [r, x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.outFirst($arg0, $arg1));
 
     return (Math.imul(r, 100) + x) | 0;
   }
 
   static outMid(o: OutHost): number {
-    const [r, x] = (($arg1, $arg0) => o.outMid($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [r, x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.outMid($arg0, $arg1));
 
     return (Math.imul(r, 100) + x) | 0;
   }
@@ -32,13 +34,15 @@ export class OutCalls {
   }
 
   static outLast(o: OutHost): number {
-    const [ok, x] = (($arg1, $arg0) => o.tryLast($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [ok, x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.tryLast($arg0, $arg1));
 
     return ok ? x : -1;
   }
 
   static ifHead(o: OutHost): number {
-    const [$found0, x] = (($arg1, $arg0) => o.tryMid($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [$found0, x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.tryMid($arg0, $arg1));
 
     if ($found0) {
       return x;
@@ -48,7 +52,8 @@ export class OutCalls {
   }
 
   static ifHeadLast(o: OutHost): number {
-    const [$found0, x] = (($arg1, $arg0) => o.tryLast($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [$found0, x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.tryLast($arg0, $arg1));
 
     if ($found0) {
       return x;
@@ -83,13 +88,15 @@ export class OutCalls {
   }
 
   static voidOutReordered(o: OutHost): number {
-    const [x] = (($arg1, $arg0) => o.voidOut($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.voidOut($arg0, $arg1));
 
     return x;
   }
 
   static twoOuts(o: OutHost): number {
-    const [r, x, y] = (($arg1, $arg0) => o.two($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [r, x, y] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.two($arg0, $arg1));
 
     return (Math.imul(r, 100) + Math.imul(x, 10) + y) | 0;
   }
@@ -144,7 +151,8 @@ export class OverloadedOutCalls {
   }
 
   static firstReordered(o: Overloaded): number {
-    const [r, x] = (($arg1, $arg0) => o.firstOutOfInt32Int32Int32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [r, x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.firstOutOfInt32Int32Int32($arg0, $arg1));
 
     return (Math.imul(r, 1000) + x) | 0;
   }
@@ -156,13 +164,15 @@ export class OverloadedOutCalls {
   }
 
   static midReordered(o: Overloaded): number {
-    const [r, x] = (($arg1, $arg0) => o.midInt32OutOfInt32Int32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [r, x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.midInt32OutOfInt32Int32($arg0, $arg1));
 
     return (Math.imul(r, 1000) + x) | 0;
   }
 
   static lastReordered(o: Overloaded): number {
-    const [r, x] = (($arg1, $arg0) => o.lastInt32Int32OutOfInt32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [r, x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), o.lastInt32Int32OutOfInt32($arg0, $arg1));
 
     return (Math.imul(r, 1000) + x) | 0;
   }
@@ -174,7 +184,8 @@ export class OverloadedOutCalls {
   }
 
   static staticReordered(): number {
-    const [r, x] = (($arg1, $arg0) => Overloaded.sharedOutOfInt32Int32Int32($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
+    let $arg1, $arg0;
+    const [r, x] = ($arg1 = Trace.next("p"), $arg0 = Trace.next("q"), Overloaded.sharedOutOfInt32Int32Int32($arg0, $arg1));
 
     return (Math.imul(r, 1000) + x) | 0;
   }

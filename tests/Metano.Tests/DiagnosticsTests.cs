@@ -61,7 +61,10 @@ public class DiagnosticsTests
             .Select(d => d.Severity);
 
         await Assert.That(severities).Contains(MetanoDiagnosticSeverity.Warning);
-        await Assert.That(output["calc.ts"]).Contains("throw new Error(\"Unsupported expression");
+
+        await Assert
+            .That(output["calc.ts"])
+            .Contains("throwError(new Error(\"Unsupported expression");
     }
 
     [Test]

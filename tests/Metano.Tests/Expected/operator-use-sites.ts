@@ -14,14 +14,11 @@ export class Uses {
   }
 
   static store(m: Money, arr: Money[], i: number): bigint {
+    let receiver$temp$0, receiver$temp$1;
     m = Money.__add(m, Money.__implicitFromInt32(2));
     m = Money.__increment(m);
-    const before = ((receiver$temp$0) => {
-      m = Money.__increment(receiver$temp$0);
-
-      return receiver$temp$0;
-    })(m);
-    ((receiver$temp$1) => arr[receiver$temp$1] = Money.__add(arr[receiver$temp$1]!, m))(((i = (i + 1) | 0) - 1) | 0);
+    const before = (receiver$temp$0 = m, m = Money.__increment(receiver$temp$0), receiver$temp$0);
+    (receiver$temp$1 = ((i = (i + 1) | 0) - 1) | 0, arr[receiver$temp$1] = Money.__add(arr[receiver$temp$1]!, m));
 
     return Money.__toInt64(before);
   }

@@ -53,6 +53,17 @@ public static class IrReferencedNames
         IEnumerable<string> names
     ) => Any(statements, names, IsIdentifierOrEmittedNameIn);
 
+    /// <summary>
+    /// Whether a lambda nested in <paramref name="expression"/> reads the
+    /// identifier <paramref name="name"/>: a closure that may run after the
+    /// expression has been evaluated again, so a binding it reads needs its
+    /// own scope per evaluation.
+    /// </summary>
+    public static bool IsReadByAClosure(IrExpression expression, string name) =>
+        expression is IrLambdaExpression lambda
+            ? AnyIn(lambda.Body, [name])
+            : IrNodeChildren.ExpressionsOf(expression).Any(child => IsReadByAClosure(child, name));
+
     private static bool Any(IrExpression expression, IEnumerable<string> names, NodeMatch match)
     {
         var wanted = names.ToHashSet(StringComparer.Ordinal);

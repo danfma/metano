@@ -120,18 +120,18 @@ export function capturedCompoundChecked(start: number, amount: number): number {
 
 export function receiverEvaluatedOnce(start: number, amount: number): number {
   const source = new NarrowSource(start);
-  ((receiver$temp$0) => receiver$temp$0.value = (receiver$temp$0.value + amount) & 0xFF)(source.next());
+  const receiver$temp$0 = source.next();
+  receiver$temp$0.value = (receiver$temp$0.value + amount) & 0xFF;
 
   return (Math.imul(source.evaluations, 1000) + source.value) | 0;
 }
 
 export function receiverIncrementedOnce(start: number): number {
-  const source = ((receiver$temp$0) => {
-    receiver$temp$0.signed = start;
-
-    return receiver$temp$0;
-  })(new NarrowSource(0));
-  const previous = ((receiver$temp$1) => (((receiver$temp$1.signed = ((receiver$temp$1.signed + 1) << 24) >> 24) - 1) << 24) >> 24)(source.next());
+  const receiver$temp$0 = new NarrowSource(0);
+  receiver$temp$0.signed = start;
+  const source = receiver$temp$0;
+  const receiver$temp$1 = source.next();
+  const previous = (((receiver$temp$1.signed = ((receiver$temp$1.signed + 1) << 24) >> 24) - 1) << 24) >> 24;
 
   return (Math.imul(source.evaluations, 1000) + (previous ^ source.signed)) | 0;
 }
@@ -332,40 +332,37 @@ export function receiverShiftedRight(start: number, count: number): string {
 
 export function receiverShiftedRightLogical(start: number, count: number): string {
   const cells = new ShiftCells(start);
-  ((receiver$temp$0) => receiver$temp$0.signed = (receiver$temp$0.signed >>> count) | 0)(cells.next());
+  const receiver$temp$0 = cells.next();
+  receiver$temp$0.signed = (receiver$temp$0.signed >>> count) | 0;
 
   return `${cells.signed}|${cells.evaluations}`;
 }
 
 export function receiverUnsignedShiftedRight(start: number, count: number): string {
-  const cells = ((receiver$temp$0) => {
-    receiver$temp$0.unsigned = start;
-
-    return receiver$temp$0;
-  })(new ShiftCells(0));
+  const receiver$temp$0 = new ShiftCells(0);
+  receiver$temp$0.unsigned = start;
+  const cells = receiver$temp$0;
   cells.next().unsigned >>>= count;
 
   return `${cells.unsigned}|${cells.evaluations}`;
 }
 
 export function receiverUnsignedShiftedLeft(start: number, count: number): string {
-  const cells = ((receiver$temp$0) => {
-    receiver$temp$0.unsigned = start;
-
-    return receiver$temp$0;
-  })(new ShiftCells(0));
-  ((receiver$temp$1) => receiver$temp$1.unsigned = (receiver$temp$1.unsigned << count) >>> 0)(cells.next());
+  const receiver$temp$0 = new ShiftCells(0);
+  receiver$temp$0.unsigned = start;
+  const cells = receiver$temp$0;
+  const receiver$temp$1 = cells.next();
+  receiver$temp$1.unsigned = (receiver$temp$1.unsigned << count) >>> 0;
 
   return `${cells.unsigned}|${cells.evaluations}`;
 }
 
 export function receiverByteShiftedLeft(start: number, count: number): string {
-  const cells = ((receiver$temp$0) => {
-    receiver$temp$0.small = start;
-
-    return receiver$temp$0;
-  })(new ShiftCells(0));
-  ((receiver$temp$1) => receiver$temp$1.small = (receiver$temp$1.small << count) & 0xFF)(cells.next());
+  const receiver$temp$0 = new ShiftCells(0);
+  receiver$temp$0.small = start;
+  const cells = receiver$temp$0;
+  const receiver$temp$1 = cells.next();
+  receiver$temp$1.small = (receiver$temp$1.small << count) & 0xFF;
 
   return `${cells.small}|${cells.evaluations}`;
 }
@@ -407,11 +404,9 @@ export async function receiverShiftedByAwaitedCount(start: number, count: number
 }
 
 export function receiverUnsignedElementShiftedRight(start: number, count: number): string {
-  const cells = ((receiver$temp$0) => {
-    receiver$temp$0.unsignedSlots = [start, start];
-
-    return receiver$temp$0;
-  })(new ShiftCells(0));
+  const receiver$temp$0 = new ShiftCells(0);
+  receiver$temp$0.unsignedSlots = [start, start];
+  const cells = receiver$temp$0;
   let index = 0;
   cells.next().unsignedSlots[((index = (index + 1) | 0) - 1) | 0]! >>>= count;
 
@@ -419,33 +414,27 @@ export function receiverUnsignedElementShiftedRight(start: number, count: number
 }
 
 export function receiverUnsignedPropertyShiftedRight(start: number, count: number): string {
-  const cells = ((receiver$temp$0) => {
-    receiver$temp$0.unsigned = start;
-
-    return receiver$temp$0;
-  })(new ShiftCells(0));
+  const receiver$temp$0 = new ShiftCells(0);
+  receiver$temp$0.unsigned = start;
+  const cells = receiver$temp$0;
   cells.next().trackedUnsigned >>>= count;
 
   return `${cells.unsigned}|${cells.evaluations}|${cells.reads}|${cells.writes}`;
 }
 
 export async function receiverUnsignedShiftedRightByAwaitedCount(start: number, count: number): Promise<string> {
-  const cells = ((receiver$temp$0) => {
-    receiver$temp$0.unsigned = start;
-
-    return receiver$temp$0;
-  })(new ShiftCells(0));
+  const receiver$temp$0 = new ShiftCells(0);
+  receiver$temp$0.unsigned = start;
+  const cells = receiver$temp$0;
   cells.next().unsigned >>>= await Promise.resolve(count);
 
   return `${cells.unsigned}|${cells.evaluations}`;
 }
 
 export function unsignedShiftedRightValue(start: number, count: number): string {
-  const cells = ((receiver$temp$0) => {
-    receiver$temp$0.unsigned = start;
-
-    return receiver$temp$0;
-  })(new ShiftCells(0));
+  const receiver$temp$0 = new ShiftCells(0);
+  receiver$temp$0.unsigned = start;
+  const cells = receiver$temp$0;
   const value = cells.next().unsigned >>>= count;
 
   return `${value}|${cells.unsigned}|${cells.evaluations}`;

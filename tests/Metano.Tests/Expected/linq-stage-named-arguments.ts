@@ -75,27 +75,39 @@ export class Stages {
   }
 
   twoEffects(xs: List<number>): number {
-    return linq(xs, (($arg1, $arg0) => aggregate($arg0, $arg1))(this.adder(), this.next()));
+    let $arg1, $arg0;
+
+    return linq(xs, ($arg1 = this.adder(), $arg0 = this.next(), aggregate($arg0, $arg1)));
   }
 
   computedReads(xs: List<number>): number {
-    return linq(xs, (($arg1, $arg0) => aggregate($arg0, $arg1))(this.fn, this.seed));
+    let $arg1, $arg0;
+
+    return linq(xs, ($arg1 = this.fn, $arg0 = this.seed, aggregate($arg0, $arg1)));
   }
 
   midPipe(xs: List<number>): List<number> {
-    return linq(xs, where((x: number) => x > 0), (($arg1, $arg0) => zip($arg0, $arg1))(this.adder(), this.others()), select((x: number) => (x + 1) | 0), toList());
+    let $arg1, $arg0;
+
+    return linq(xs, where((x: number) => x > 0), ($arg1 = this.adder(), $arg0 = this.others(), zip($arg0, $arg1)), select((x: number) => (x + 1) | 0), toList());
   }
 
   first(xs: List<number>): number {
-    return linq(xs, (($arg1, $arg0) => firstOrDefault($arg0, $arg1))(this.next(), this.matcher()));
+    let $arg1, $arg0;
+
+    return linq(xs, ($arg1 = this.next(), $arg0 = this.matcher(), firstOrDefault($arg0, $arg1)));
   }
 
   last(xs: List<number>): number {
-    return linq(xs, (($arg1, $arg0) => lastOrDefault($arg0, $arg1))(this.next(), this.matcher()));
+    let $arg1, $arg0;
+
+    return linq(xs, ($arg1 = this.next(), $arg0 = this.matcher(), lastOrDefault($arg0, $arg1)));
   }
 
   single(xs: List<number>): number {
-    return linq(xs, (($arg1, $arg0) => singleOrDefault($arg0, $arg1))(this.next(), this.matcher()));
+    let $arg1, $arg0;
+
+    return linq(xs, ($arg1 = this.next(), $arg0 = this.matcher(), singleOrDefault($arg0, $arg1)));
   }
 
   defaultOnly(xs: List<number>): number {
@@ -103,11 +115,15 @@ export class Stages {
   }
 
   nullConditional(xs: List<number> | null): number | null {
-    return xs == null ? null : linq(xs, (($arg1, $arg0) => aggregate($arg0, $arg1))(this.adder(), this.next()));
+    let $arg1, $arg0;
+
+    return xs == null ? null : linq(xs, ($arg1 = this.adder(), $arg0 = this.next(), aggregate($arg0, $arg1)));
   }
 
   async afterAwait(): Promise<number> {
-    return linq(await this.load(), (($arg1, $arg0) => aggregate($arg0, $arg1))(this.adder(), await this.nextAsync()));
+    let $arg1, $arg0;
+
+    return linq(await this.load(), ($arg1 = this.adder(), $arg0 = await this.nextAsync(), aggregate($arg0, $arg1)));
   }
 
   queryableZip(q: Iterable<number>): List<number> {

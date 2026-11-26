@@ -717,7 +717,7 @@ public class OutArgumentTranspileTests
     }
 
     [Test]
-    public async Task InitializerAndBaseArgument_BindInAnImmediatelyInvokedArrow()
+    public async Task InitializerBindsInItsStoreBlock_BaseArgumentInAnArrow()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -744,11 +744,10 @@ public class OutArgumentTranspileTests
             .That(output)
             .Contains(
                 """
-                    this._width = (() => {
+                    {
                       const [$found0, w] = tryParseInt32("12");
-
-                      return $found0 ? w : 0;
-                    })();
+                      this._width = $found0 ? w : 0;
+                    }
                 """
             );
 

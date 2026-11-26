@@ -13,21 +13,17 @@ export class Factory {
   }
 
   build(capacity: number): number {
-    const point = ((receiver$temp$0) => {
-      receiver$temp$0.x = (this.seed + 1) | 0;
-      Object.assign(receiver$temp$0, { y: 2 });
-      receiver$temp$0.inner.z = 3;
-      receiver$temp$0.inner.items.add(4);
-      receiver$temp$0.inner.items.add(5);
-
-      return receiver$temp$0;
-    })(Point.fromSeed(this.seed));
-    const tag = ((receiver$temp$1) => {
-      Object.assign(receiver$temp$1, { name: "u" });
-      Object.assign(receiver$temp$1, { weight: 1 });
-
-      return receiver$temp$1;
-    })(new Tag("t"));
+    const receiver$temp$0 = Point.fromSeed(this.seed);
+    receiver$temp$0.x = (this.seed + 1) | 0;
+    (receiver$temp$0 as { y: typeof receiver$temp$0.y }).y = 2;
+    receiver$temp$0.inner.z = 3;
+    receiver$temp$0.inner.items.add(4);
+    receiver$temp$0.inner.items.add(5);
+    const point = receiver$temp$0;
+    const receiver$temp$1 = new Tag("t");
+    (receiver$temp$1 as { name: typeof receiver$temp$1.name }).name = "u";
+    (receiver$temp$1 as { weight: typeof receiver$temp$1.weight }).weight = 1;
+    const tag = receiver$temp$1;
     const list = List.of<number>([1, 2]);
     const sized = (List.withCapacity<number>(capacity)).initAdd([3]);
     const typed = List.of<string>(["a"]);
@@ -40,12 +36,10 @@ export class Factory {
     ]);
     const set = HashSet.of<string>(["x", "y"]);
     const nested = List.of<List<number>>([List.of<number>([1]), List.of<number>([2])]);
-    const bag = ((receiver$temp$2) => {
-      receiver$temp$2.add("a");
-      receiver$temp$2.add("b", 2);
-
-      return receiver$temp$2;
-    })(new Bag());
+    const receiver$temp$2 = new Bag();
+    receiver$temp$2.add("a");
+    receiver$temp$2.add("b", 2);
+    const bag = receiver$temp$2;
 
     return (point.x + tag.weight + list.count + sized.count + typed.count + byIndex.count + byAdd.count + set.count + nested.count + this._defaults.count) | 0;
   }

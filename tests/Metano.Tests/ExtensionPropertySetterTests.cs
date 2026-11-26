@@ -83,17 +83,16 @@ public class ExtensionPropertySetterTests
         );
 
         var output = result["app/caller.ts"];
-        // Receiver Pick() should appear exactly once — assigned inline to a
-        // temporary that both the read and the write reference, with no IIFE
-        // (W10-6a).
+        // Receiver Pick() should appear exactly once — bound to a temporary
+        // that both the read and the write reference, with no IIFE (W13-1).
         var pickOccurrences = CountOccurrences(output, "this.pick()");
         await Assert.That(pickOccurrences).IsEqualTo(1);
 
         await Assert
             .That(output)
             .Contains(
-                "(receiver$temp$0 = this.pick(), count$set(receiver$temp$0, "
-                    + "(count$get(receiver$temp$0) + 1) | 0));"
+                "const receiver$temp$0 = this.pick();\n"
+                    + "    count$set(receiver$temp$0, (count$get(receiver$temp$0) + 1) | 0);"
             );
 
         await Assert.That(output).DoesNotContain("=>");
@@ -291,8 +290,9 @@ public class ExtensionPropertySetterTests
         await Assert
             .That(output)
             .Contains(
-                "const v = (receiver$temp$0 = (count$get(c) + 2) | 0, count$set(c, receiver$temp$0), "
-                    + "receiver$temp$0);"
+                "const receiver$temp$0 = (count$get(c) + 2) | 0;\n"
+                    + "    count$set(c, receiver$temp$0);\n"
+                    + "    const v = receiver$temp$0;"
             );
     }
 
@@ -311,8 +311,9 @@ public class ExtensionPropertySetterTests
             .Contains(
                 """
                     {
-                      let receiver$temp$0;
-                      this.total = (receiver$temp$0 = (count$get(Caller.shared) + 2) | 0, count$set(Caller.shared, receiver$temp$0), receiver$temp$0);
+                      const receiver$temp$0 = (count$get(Caller.shared) + 2) | 0;
+                      count$set(Caller.shared, receiver$temp$0);
+                      this.total = receiver$temp$0;
                     }
                 """
             );
@@ -337,8 +338,9 @@ public class ExtensionPropertySetterTests
             .That(output)
             .Contains(
                 """
-                      let receiver$temp$0;
-                      this.y = (receiver$temp$0 = (count$get(Caller.shared) + s.length) | 0, count$set(Caller.shared, receiver$temp$0), receiver$temp$0);
+                      const receiver$temp$0 = (count$get(Caller.shared) + s.length) | 0;
+                      count$set(Caller.shared, receiver$temp$0);
+                      this.y = receiver$temp$0;
                 """
             );
     }

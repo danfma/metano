@@ -16,7 +16,9 @@ export class Shop {
   private constructor() { }
 
   static make(): Base {
-    return (($arg1, $arg0) => Base.fromAB($arg0, $arg1))(Calls.f(), Calls.f());
+    let $arg1, $arg0;
+
+    return ($arg1 = Calls.f(), $arg0 = Calls.f(), Base.fromAB($arg0, $arg1));
   }
 
   static plain(x: number): Base {

@@ -824,20 +824,23 @@ export class NarrowCells {
   }
 
   addToCell(amount: number): number {
-    ((receiver$temp$0) => this._cells[receiver$temp$0] = (this._cells[receiver$temp$0]! + amount) & 0xFFFF)(this.nextCell());
+    const receiver$temp$0 = this.nextCell();
+    this._cells[receiver$temp$0] = (this._cells[receiver$temp$0]! + amount) & 0xFFFF;
 
     return this._cellReads === 1 ? this._cells[1]! : NarrowCells.notReadOnce;
   }
 
   incrementCell(): number {
-    const previous = ((receiver$temp$0) => ((this._cells[receiver$temp$0] = (this._cells[receiver$temp$0]! + 1) & 0xFFFF) - 1) & 0xFFFF)(this.nextCell());
+    const receiver$temp$0 = this.nextCell();
+    const previous = ((this._cells[receiver$temp$0] = (this._cells[receiver$temp$0]! + 1) & 0xFFFF) - 1) & 0xFFFF;
 
     return this._cellReads === 1 ? previous ^ this._cells[1]! : NarrowCells.notReadOnce;
   }
 
   shiftCellChecked(count: number): number {
     {
-      ((receiver$temp$0) => this._cells[receiver$temp$0] = checkedNarrowNumber(this._cells[receiver$temp$0]! << count, 16, false))(this.nextCell());
+      const receiver$temp$0 = this.nextCell();
+      this._cells[receiver$temp$0] = checkedNarrowNumber(this._cells[receiver$temp$0]! << count, 16, false);
     }
 
     return this._cells[1]!;

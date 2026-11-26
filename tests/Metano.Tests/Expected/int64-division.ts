@@ -112,6 +112,7 @@ export class Divide {
 
   members(m: bigint): void {
     this.total = divInt64(this.total, m);
-    ((receiver$temp$0) => this.slots[receiver$temp$0] = remInt64(this.slots[receiver$temp$0]!, m))(this.next());
+    const receiver$temp$0 = this.next();
+    this.slots[receiver$temp$0] = remInt64(this.slots[receiver$temp$0]!, m);
   }
 }

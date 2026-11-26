@@ -51,7 +51,9 @@ export function flag(b: boolean | null): string {
 }
 
 export function widened(t: [number, number] | null): [bigint, bigint] {
-  return ((receiver$temp$0) => [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint])(t ?? throwError(new InvalidOperationException("Nullable object must have a value.")));
+  const receiver$temp$0 = t ?? throwError(new InvalidOperationException("Nullable object must have a value."));
+
+  return [BigInt(receiver$temp$0[0]), BigInt(receiver$temp$0[1])] as [bigint, bigint];
 }
 
 export function wrappedCast(x: number): number {

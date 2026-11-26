@@ -59,12 +59,8 @@ export function readyForReview(issues: IReadOnlyList<Issue>, limit: number): IRe
     issues,
     where(
       (issue: Issue) =>
-        ((issue: Issue) =>
-          issue.status === IssueStatus.InProgress || issue.status === IssueStatus.InReview)(
-          issue,
-        ) &&
-        ((issue: Issue) =>
-          issue.priority === IssuePriority.High || issue.priority === IssuePriority.Urgent)(issue),
+        (issue.status === IssueStatus.InProgress || issue.status === IssueStatus.InReview) &&
+        (issue.priority === IssuePriority.High || issue.priority === IssuePriority.Urgent),
     ),
     take(limit),
     toList(),

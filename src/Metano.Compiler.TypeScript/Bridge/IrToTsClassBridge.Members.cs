@@ -466,11 +466,12 @@ internal static partial class IrToTsClassBridge
     /// <summary>
     /// A member's C# initializer as its class field holds it, and as the constructor
     /// stores it (W10-12). An instance initializer runs as a constructor statement
-    /// (<see cref="InstanceFieldStoreLowering"/>), so it is lowered over temporaries of a
-    /// statement list, as a method body is (<c>($t = s, …)</c>), not over immediately
-    /// invoked functions; when it assigns any, the store form carries their declarations
-    /// and the class field, kept only where no constructor stores the member, wraps them
-    /// in one arrow. A static initializer keeps the class-field form.
+    /// (<see cref="InstanceFieldStoreLowering"/>), so it is lowered as a statement's
+    /// value is (<see cref="IrToTsStatementBridge.MapStatementValue"/>): its bindings
+    /// hoisted before the store and its temporaries declared there, with no immediately
+    /// invoked function (W13-1). The class field is kept only where no constructor
+    /// stores the member (the stub of an unsupported constructor), and there an arrow
+    /// invoked once runs the prelude. A static initializer keeps the class-field form.
     /// </summary>
     private static (TsExpression Initializer, TsStoreInitializer? Store) MapInitializer(
         IrExpression initializer,
@@ -481,19 +482,17 @@ internal static partial class IrToTsClassBridge
         if (isStatic)
             return (IrToTsExpressionBridge.Map(initializer, context), null);
 
-        var (value, temporaries) = TsTemporaries.AroundExpression(context, scoped =>
-            IrToTsExpressionBridge.Map(initializer, scoped)
-        );
+        var (value, prelude) = IrToTsStatementBridge.MapStatementValue(initializer, context);
 
-        if (temporaries.Count == 0)
+        if (prelude.Count == 0)
             return (value, null);
 
         var classField = TsImmediateInvocation.Of(
             [],
-            [.. temporaries, new TsReturnStatement(value)],
+            [.. prelude, new TsReturnStatement(value)],
             isAsync: false
         );
 
-        return (classField, new TsStoreInitializer(value, temporaries));
+        return (classField, new TsStoreInitializer(value, prelude));
     }
 }

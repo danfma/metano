@@ -54,11 +54,22 @@ public static partial class IrToTsExpressionBridge
         IrLetExpression let,
         IrToTsBridgeContext context
     ) =>
+        BoundAsCastDescriptorOf(let, context) is { } descriptor
+            ? AsTypeCall(Map(let.Value, context), descriptor)
+            : null;
+
+    /// <summary>
+    /// The runtime descriptor <see cref="TryMapBoundAsCast"/> passes to
+    /// <c>asType</c>, or <c>null</c> when the binding is not such an <c>as</c>.
+    /// </summary>
+    private static TsExpression? BoundAsCastDescriptorOf(
+        IrLetExpression let,
+        IrToTsBridgeContext context
+    ) =>
         let.Body is IrConditionalExpression { AsTarget: not null } asCast
         && AsOperandOf(asCast) is IrIdentifier { Name: var bound }
         && bound == let.Name
-        && AsTypeDescriptorOf(asCast, context) is { } descriptor
-            ? AsTypeCall(Map(let.Value, context), descriptor)
+            ? AsTypeDescriptorOf(asCast, context)
             : null;
 
     private static IrExpression? AsOperandOf(IrConditionalExpression asCast) =>

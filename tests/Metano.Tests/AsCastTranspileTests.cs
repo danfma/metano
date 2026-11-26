@@ -87,8 +87,8 @@ public class AsCastTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0 instanceof Person "
-                    + "? receiver$temp$0 : null)(Casts.next());"
+                "const receiver$temp$0 = Casts.next();\n\n"
+                    + "    return receiver$temp$0 instanceof Person ? receiver$temp$0 : null;"
             );
     }
 

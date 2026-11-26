@@ -105,13 +105,10 @@ export class InMemoryIssueRepository implements IIssueRepository {
       this._issues,
       where(
         (issue: Issue) =>
-          ((issue: Issue) =>
-            ((issue: Issue) =>
-              ((issue: Issue) => status == null || issue.status === status)(issue) &&
-              ((issue: Issue) => priority == null || issue.priority === priority)(issue))(issue) &&
-            ((issue: Issue) => assigneeId == null || issue.assigneeId === assigneeId)(issue))(
-            issue,
-          ) && ((issue: Issue) => sprintKey == null || issue.sprintKey === sprintKey)(issue),
+          (status == null || issue.status === status) &&
+          (priority == null || issue.priority === priority) &&
+          (assigneeId == null || issue.assigneeId === assigneeId) &&
+          (sprintKey == null || issue.sprintKey === sprintKey),
       ),
       orderByDescending((issue: Issue) => issue.priority),
       thenBy((issue: Issue) => issue.title),

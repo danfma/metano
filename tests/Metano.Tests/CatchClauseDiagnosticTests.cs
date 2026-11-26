@@ -177,7 +177,7 @@ public class CatchClauseDiagnosticTests
 
         await Assert
             .That(files["handler.ts"])
-            .Contains("throw new Error(\"Unsupported expression: CatchFilterVariable\");");
+            .Contains("throwError(new Error(\"Unsupported expression: CatchFilterVariable\"))");
     }
 
     [Test]

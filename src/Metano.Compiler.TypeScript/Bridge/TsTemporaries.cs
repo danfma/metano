@@ -8,14 +8,21 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// for the expressions in it that assign them inline, in a comma expression
 /// at their original position (spec 011 contracts/runtime-collections.md §
 /// Indexer compound assignments): each site takes distinct names, so a nested
-/// site never shares a temporary with an enclosing one. A C# identifier cannot
-/// contain <c>$</c>, so no temporary collides with a user name.
+/// site never shares a temporary with an enclosing one (<c>$r</c>, <c>$r1</c>;
+/// <c>$arg0</c>, <c>$arg0_1</c> for a stem that ends in a digit). A C#
+/// identifier cannot contain <c>$</c>, so no temporary collides with a user name.
 /// </summary>
 internal sealed class TsTemporaries
 {
     private readonly List<string> _names = [];
 
     private readonly List<TsVariableDeclaration> _typed = [];
+
+    private readonly HashSet<string> _claimed = new(StringComparer.Ordinal);
+
+    private readonly Dictionary<(object Node, string Role), TsIdentifier> _temporariesByNode = new(
+        NodeRoleComparer.Instance
+    );
 
     private readonly System.Collections.Immutable.ImmutableHashSet<string> _reserved;
 
@@ -37,22 +44,6 @@ internal sealed class TsTemporaries
         var mapped = map(context with { Temporaries = temporaries });
 
         return [.. temporaries.Declarations(), .. mapped];
-    }
-
-    /// <summary>
-    /// Lowers one expression through <paramref name="map"/> with a fresh scope of
-    /// temporaries, for a statement the caller places: the expression and the
-    /// declarations of the temporaries it assigns (none when it assigns none).
-    /// </summary>
-    public static (TsExpression Value, IReadOnlyList<TsStatement> Declarations) AroundExpression(
-        IrToTsBridgeContext context,
-        Func<IrToTsBridgeContext, TsExpression> map
-    )
-    {
-        var temporaries = new TsTemporaries(context.ReservedLocals);
-        var mapped = map(context with { Temporaries = temporaries });
-
-        return (mapped, [.. temporaries.Declarations()]);
     }
 
     /// <summary>
@@ -88,6 +79,18 @@ internal sealed class TsTemporaries
     }
 
     /// <summary>
+    /// The temporary of the lowering of <paramref name="node"/> (one per
+    /// <paramref name="role"/> when it binds several): made by
+    /// <paramref name="make"/> (declared or claimed) the first time, the same one
+    /// when the node is lowered again (a lowering that tries one form, drops it and
+    /// maps the node once more), so no temporary is declared that nothing assigns.
+    /// </summary>
+    public TsIdentifier TemporaryFor(object node, Func<TsIdentifier> make, string role = "") =>
+        _temporariesByNode.TryGetValue((node, role), out var temporary)
+            ? temporary
+            : _temporariesByNode[(node, role)] = make();
+
+    /// <summary>
     /// The temporary <paramref name="name"/> exactly, declared untyped, or
     /// <c>null</c> when that name is taken here.
     /// </summary>
@@ -99,6 +102,45 @@ internal sealed class TsTemporaries
         _names.Add(name);
 
         return new TsIdentifier(name);
+    }
+
+    /// <summary>
+    /// Claims the name <paramref name="name"/> exactly for a binding the statement
+    /// list declares itself, in place (<c>const name = value;</c>), so no temporary
+    /// takes it; <c>false</c> when that name is taken here.
+    /// </summary>
+    public bool TryClaimExactly(string name)
+    {
+        if (IsTaken(null)(name))
+            return false;
+
+        _claimed.Add(name);
+
+        return true;
+    }
+
+    /// <summary>
+    /// A new name after <paramref name="stem"/> that no temporary of this list
+    /// takes, not declared yet: a lowering names its binding before it knows
+    /// whether it assigns it (<see cref="DeclareClaimed"/>) or drops it.
+    /// </summary>
+    public TsIdentifier Claim(string stem, IReadOnlySet<string>? alsoReserved = null)
+    {
+        var name = Allocate(stem, alsoReserved);
+
+        _claimed.Add(name);
+
+        return new TsIdentifier(name);
+    }
+
+    /// <summary>Whether <paramref name="name"/> is claimed here and not declared yet.</summary>
+    public bool HoldsClaim(string name) => _claimed.Contains(name);
+
+    /// <summary>Declares a name <see cref="Claim"/> returned, untyped.</summary>
+    public void DeclareClaimed(TsIdentifier claimed)
+    {
+        if (_claimed.Remove(claimed.Name))
+            _names.Add(claimed.Name);
     }
 
     /// <summary>
@@ -125,7 +167,7 @@ internal sealed class TsTemporaries
         var suffix =
             name.Length == stem.Length
                 ? 0
-                : int.Parse(name[stem.Length..], CultureInfo.InvariantCulture);
+                : int.Parse(name[stem.Length..].TrimStart('_'), CultureInfo.InvariantCulture);
 
         _usesByStem[stem] = suffix + 1;
 
@@ -142,6 +184,7 @@ internal sealed class TsTemporaries
             _reserved.Contains(name)
             || alsoReserved?.Contains(name) == true
             || _names.Contains(name)
+            || _claimed.Contains(name)
             || _typed.Exists(declaration => declaration.Name == name);
 
     private static string FreeName(string stem, IReadOnlySet<string> reserved, int start) =>
@@ -151,7 +194,10 @@ internal sealed class TsTemporaries
     {
         for (var index = start; ; index++)
         {
-            var name = index == 0 ? stem : $"{stem}{index}";
+            var name =
+                index == 0 ? stem
+                : char.IsAsciiDigit(stem[^1]) ? $"{stem}_{index}"
+                : $"{stem}{index}";
 
             if (!isTaken(name))
                 return name;
@@ -172,4 +218,19 @@ internal sealed class TsTemporaries
     }
 
     private TsRawStatement Declaration() => new($"let {string.Join(", ", _names)};");
+}
+
+/// <summary>Compares an IR node by identity and its role by ordinal text.</summary>
+file sealed class NodeRoleComparer : IEqualityComparer<(object Node, string Role)>
+{
+    public static readonly NodeRoleComparer Instance = new();
+
+    public bool Equals((object Node, string Role) x, (object Node, string Role) y) =>
+        ReferenceEquals(x.Node, y.Node) && string.Equals(x.Role, y.Role, StringComparison.Ordinal);
+
+    public int GetHashCode((object Node, string Role) key) =>
+        HashCode.Combine(
+            System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(key.Node),
+            StringComparer.Ordinal.GetHashCode(key.Role)
+        );
 }

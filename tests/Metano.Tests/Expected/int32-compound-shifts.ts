@@ -70,14 +70,17 @@ export class Cells {
   }
 
   logicalShiftKeepsTheBinding(h: Cells, n: number): void {
-    ((receiver$temp$0) => receiver$temp$0.signed = (receiver$temp$0.signed >>> n) | 0)(h.next());
+    const receiver$temp$0 = h.next();
+    receiver$temp$0.signed = (receiver$temp$0.signed >>> n) | 0;
   }
 
   unsignedLeftShiftKeepsTheBinding(h: Cells, n: number): void {
-    ((receiver$temp$0) => receiver$temp$0.unsigned = (receiver$temp$0.unsigned << n) >>> 0)(h.next());
+    const receiver$temp$0 = h.next();
+    receiver$temp$0.unsigned = (receiver$temp$0.unsigned << n) >>> 0;
   }
 
   narrowLeftShiftKeepsTheBinding(h: Cells, n: number): void {
-    ((receiver$temp$0) => receiver$temp$0.small = (receiver$temp$0.small << n) & 0xFF)(h.next());
+    const receiver$temp$0 = h.next();
+    receiver$temp$0.small = (receiver$temp$0.small << n) & 0xFF;
   }
 }

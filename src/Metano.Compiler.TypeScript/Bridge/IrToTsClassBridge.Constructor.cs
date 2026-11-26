@@ -278,20 +278,40 @@ internal static partial class IrToTsClassBridge
         if (PassesNothingToBase(baseArguments, selector, keepsBaseMessage))
             return null;
 
-        var loweredArguments = baseArguments
-            .Select(argument => IrToTsExpressionBridge.MapArgument(argument, context))
-            .ToList();
+        // The arguments run before `super(...)`, as statements of the constructor
+        // there may: the temporaries they assign inline are declared ahead of it.
+        // An argument that binds `out` locals keeps the arrow extraction wraps it
+        // in (ExtractStandalone): hoisting its statements ahead of `super` would
+        // run them before the arguments to its left.
+        IReadOnlyList<TsExpression> loweredArguments = [];
+
+        var temporaries = TsTemporaries.Around(context, scoped =>
+        {
+            loweredArguments =
+            [
+                .. baseArguments.Select(argument =>
+                    IrToTsExpressionBridge.MapArgument(argument, scoped)
+                ),
+            ];
+
+            return [];
+        });
 
         var ordered = TsEvaluationOrder.Bind(
             IrToTsExpressionBridge.WithoutNullRestArray(baseArguments, loweredArguments),
             ctor.BaseOverload?.EvaluationOrder ?? ctor.BaseEvaluationOrder,
-            BaseArgumentPrefix
+            BaseArgumentPrefix,
+            context: null
         );
 
         return new TsBaseConstructorCall(
-            ordered
-                .Bindings.Select(binding => new TsVariableDeclaration(binding.Name, binding.Value))
-                .ToList(),
+            [
+                .. temporaries,
+                .. ordered.Bindings.Select(binding => new TsVariableDeclaration(
+                    binding.Name,
+                    binding.Value
+                )),
+            ],
             selector is null ? ordered.Arguments : [selector, .. ordered.Arguments],
             keepsBaseMessage
         );
@@ -416,13 +436,14 @@ internal static partial class IrToTsClassBridge
 
 /// <summary>
 /// A lowered base-constructor call: <paramref name="Temporaries"/> to declare
-/// before <c>super(...)</c> (arguments evaluated in source order), the
+/// before <c>super(...)</c> (the temporaries its arguments assign inline, and
+/// the arguments bound to be evaluated in source order), the
 /// <c>super</c> <paramref name="Arguments"/>, and whether the class keeps its
 /// base message (overrides <c>Message</c>), which appends the capture of the
 /// native message right after <c>super</c>.
 /// </summary>
 public sealed record TsBaseConstructorCall(
-    IReadOnlyList<TsVariableDeclaration> Temporaries,
+    IReadOnlyList<TsStatement> Temporaries,
     IReadOnlyList<TsExpression> Arguments,
     bool KeepsBaseMessage = false
 )

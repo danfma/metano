@@ -184,7 +184,7 @@ public class LinqStageNamedArgumentTests
 
         await Assert
             .That(files["stages.ts"])
-            .Contains("throw new Error(\"Unsupported expression: UnsupportedLinqOverload\");");
+            .Contains("throwError(new Error(\"Unsupported expression: UnsupportedLinqOverload\"))");
     }
 
     /// <summary>

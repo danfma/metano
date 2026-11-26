@@ -65,7 +65,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : twice($receiver.items))(order?.next);"
+                "return ($receiver = order?.next, $receiver == null ? null : twice($receiver.items));"
             );
     }
 
@@ -129,7 +129,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : total$get($receiver))(order?.next);"
+                "return ($receiver = order?.next, $receiver == null ? null : total$get($receiver));"
             );
     }
 
@@ -188,13 +188,13 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return value == null ? null : ((receiver$temp$0) => receiver$temp$0[receiver$temp$0.length - 1]!)(stringSubstring(value, 1));"
+                "return value == null ? null : (receiver$temp$0 = stringSubstring(value, 1), receiver$temp$0[receiver$temp$0.length - 1]!);"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "return value == null ? null : ((receiver$temp$0) => receiver$temp$0.slice(1, receiver$temp$0.length - 1))(stringSubstring(value, 1));"
+                "return value == null ? null : (receiver$temp$0 = stringSubstring(value, 1), receiver$temp$0.slice(1, receiver$temp$0.length - 1));"
             );
     }
 
@@ -214,13 +214,13 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : fromEnd($receiver, 1))(find(items));"
+                "return ($receiver = find(items), $receiver == null ? null : fromEnd($receiver, 1));"
             );
 
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : $receiver.slice(0, $receiver.length - 1))(find(items));"
+                "return ($receiver = find(items), $receiver == null ? null : $receiver.slice(0, $receiver.length - 1));"
             );
 
         await Assert.That(output).Contains("return order.getNext()?.items.fromEnd(1) ?? null;");
@@ -240,7 +240,7 @@ public class NullConditionalMappingTranspileTests
         await Assert
             .That(output)
             .Contains(
-                "return (($receiver) => $receiver == null ? null : $receiver.next?.items.fromEnd(1) ?? null)(order.getNext());"
+                "return ($receiver = order.getNext(), $receiver == null ? null : $receiver.next?.items.fromEnd(1) ?? null);"
             );
     }
 

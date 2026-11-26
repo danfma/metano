@@ -132,14 +132,18 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0)(o.nextQty()))(o.nextQty());"
+                "const receiver$temp$0 = o.nextQty();\n"
+                    + "  const receiver$temp$1 = o.nextQty();\n\n"
+                    + "  return receiver$temp$0 == null || receiver$temp$1 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0;"
             );
 
         // The left operand is bound too, so it is read before the call runs.
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0)(o.count()))(a);"
+                "const receiver$temp$0 = a;\n"
+                    + "  const receiver$temp$1 = o.count();\n\n"
+                    + "  return receiver$temp$0 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0;"
             );
 
         // A side-effecting left operand keeps the access on the right from
@@ -147,7 +151,9 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 == null || receiver$temp$1 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0)(p?.qty ?? null))(o.nextQty());"
+                "const receiver$temp$0 = o.nextQty();\n"
+                    + "  const receiver$temp$1 = p?.qty ?? null;\n\n"
+                    + "  return receiver$temp$0 == null || receiver$temp$1 == null ? null : (receiver$temp$0 + receiver$temp$1) | 0;"
             );
     }
 
@@ -161,7 +167,8 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => receiver$temp$0 == null ? null : (receiver$temp$0 + 1) | 0)(await t);"
+                "const receiver$temp$0 = await t;\n\n"
+                    + "  return receiver$temp$0 == null ? null : (receiver$temp$0 + 1) | 0;"
             );
     }
 
@@ -226,13 +233,11 @@ public class LiftedNullableOperatorTests
             """
         );
 
-        await Assert.That(output).Contains("(receiver$temp$0) => receiver$temp$0.qty = ");
+        await Assert.That(output).Contains("const receiver$temp$0 = o.self();");
 
         await Assert
             .That(output)
             .Contains("receiver$temp$0.qty == null ? null : (receiver$temp$0.qty + 1) | 0");
-
-        await Assert.That(output).Contains("(o.self())");
     }
 
     [Test]
@@ -425,7 +430,9 @@ public class LiftedNullableOperatorTests
         await Assert
             .That(output)
             .Contains(
-                "return ((receiver$temp$0) => ((receiver$temp$1) => receiver$temp$0 ?? receiver$temp$1)(o.count()))(a);"
+                "const receiver$temp$0 = a;\n"
+                    + "  const receiver$temp$1 = o.count();\n\n"
+                    + "  return receiver$temp$0 ?? receiver$temp$1;"
             );
 
         await Assert.That(output).Contains("return (o == null ? null : o.qty ?? 0) ?? -1;");

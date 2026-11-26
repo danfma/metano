@@ -7,7 +7,9 @@ export class Caller {
   }
 
   ordered(): number {
-    return (($recv, $arg1, $arg0) => $recv.applyFD($arg0, $arg1))(this.get(), Log.g(), Log.f());
+    let $recv, $arg1, $arg0;
+
+    return ($recv = this.get(), $arg1 = Log.g(), $arg0 = Log.f(), $recv.applyFD($arg0, $arg1));
   }
 
   plain(): number {

@@ -404,7 +404,7 @@ public class Int64BclMappingTests
 
         await Assert
             .That(files["ordered.ts"])
-            .Contains("throw new Error(\"Unsupported expression: UnsupportedLinqOverload\");");
+            .Contains("throwError(new Error(\"Unsupported expression: UnsupportedLinqOverload\"))");
     }
 
     /// <summary>

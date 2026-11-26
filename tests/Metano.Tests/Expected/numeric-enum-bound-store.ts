@@ -95,32 +95,56 @@ export class Box {
   }
 
   static compound(boxes: Box[], value: Box, ints: I[], bytes: B[], flags: F[], longs: L[]): void {
-    ((receiver$temp$0) => receiver$temp$0.mode = ((receiver$temp$0.mode + 1) | 0) as I)(boxes[0]!);
-    ((receiver$temp$1) => receiver$temp$1.mode = ((receiver$temp$1.mode - 2) | 0) as I)(Box.get(value));
-    ((receiver$temp$2) => ints[receiver$temp$2] = ((ints[receiver$temp$2]! + 1) | 0) as I)(Box.idx());
-    ((receiver$temp$3) => receiver$temp$3.narrow = ((receiver$temp$3.narrow + 1) & 0xFF) as B)(boxes[0]!);
-    ((receiver$temp$4) => receiver$temp$4.narrow = ((receiver$temp$4.narrow - 2) & 0xFF) as B)(Box.get(value));
-    ((receiver$temp$5) => bytes[receiver$temp$5] = ((bytes[receiver$temp$5]! + 1) & 0xFF) as B)(Box.idx());
-    ((receiver$temp$6) => receiver$temp$6.flags = (receiver$temp$6.flags + 1) | 0)(boxes[0]!);
-    ((receiver$temp$7) => receiver$temp$7.flags = (receiver$temp$7.flags - 2) | 0)(Box.get(value));
-    ((receiver$temp$8) => flags[receiver$temp$8] = (flags[receiver$temp$8]! + 1) | 0)(Box.idx());
-    ((receiver$temp$9) => receiver$temp$9.wide = BigInt.asIntN(64, receiver$temp$9.wide + 1n) as L)(boxes[0]!);
-    ((receiver$temp$10) => receiver$temp$10.wide = BigInt.asIntN(64, receiver$temp$10.wide - 2n) as L)(Box.get(value));
-    ((receiver$temp$11) => longs[receiver$temp$11] = BigInt.asIntN(64, longs[receiver$temp$11]! + 1n) as L)(Box.idx());
+    const receiver$temp$0 = boxes[0]!;
+    receiver$temp$0.mode = ((receiver$temp$0.mode + 1) | 0) as I;
+    const receiver$temp$1 = Box.get(value);
+    receiver$temp$1.mode = ((receiver$temp$1.mode - 2) | 0) as I;
+    const receiver$temp$2 = Box.idx();
+    ints[receiver$temp$2] = ((ints[receiver$temp$2]! + 1) | 0) as I;
+    const receiver$temp$3 = boxes[0]!;
+    receiver$temp$3.narrow = ((receiver$temp$3.narrow + 1) & 0xFF) as B;
+    const receiver$temp$4 = Box.get(value);
+    receiver$temp$4.narrow = ((receiver$temp$4.narrow - 2) & 0xFF) as B;
+    const receiver$temp$5 = Box.idx();
+    bytes[receiver$temp$5] = ((bytes[receiver$temp$5]! + 1) & 0xFF) as B;
+    const receiver$temp$6 = boxes[0]!;
+    receiver$temp$6.flags = (receiver$temp$6.flags + 1) | 0;
+    const receiver$temp$7 = Box.get(value);
+    receiver$temp$7.flags = (receiver$temp$7.flags - 2) | 0;
+    const receiver$temp$8 = Box.idx();
+    flags[receiver$temp$8] = (flags[receiver$temp$8]! + 1) | 0;
+    const receiver$temp$9 = boxes[0]!;
+    receiver$temp$9.wide = BigInt.asIntN(64, receiver$temp$9.wide + 1n) as L;
+    const receiver$temp$10 = Box.get(value);
+    receiver$temp$10.wide = BigInt.asIntN(64, receiver$temp$10.wide - 2n) as L;
+    const receiver$temp$11 = Box.idx();
+    longs[receiver$temp$11] = BigInt.asIntN(64, longs[receiver$temp$11]! + 1n) as L;
   }
 
   static increment(boxes: Box[], value: Box, ints: I[], bytes: B[], flags: F[], longs: L[]): void {
-    ((receiver$temp$0) => receiver$temp$0.mode = ((receiver$temp$0.mode + 1) | 0) as I)(boxes[0]!);
-    ((receiver$temp$1) => receiver$temp$1.mode = ((receiver$temp$1.mode + 1) | 0) as I)(Box.get(value));
-    ((receiver$temp$2) => ints[receiver$temp$2] = ((ints[receiver$temp$2]! + 1) | 0) as I)(Box.idx());
-    ((receiver$temp$3) => receiver$temp$3.narrow = ((receiver$temp$3.narrow + 1) & 0xFF) as B)(boxes[0]!);
-    ((receiver$temp$4) => receiver$temp$4.narrow = ((receiver$temp$4.narrow + 1) & 0xFF) as B)(Box.get(value));
-    ((receiver$temp$5) => bytes[receiver$temp$5] = ((bytes[receiver$temp$5]! + 1) & 0xFF) as B)(Box.idx());
-    ((receiver$temp$6) => receiver$temp$6.flags = (receiver$temp$6.flags + 1) | 0)(boxes[0]!);
-    ((receiver$temp$7) => receiver$temp$7.flags = (receiver$temp$7.flags + 1) | 0)(Box.get(value));
-    ((receiver$temp$8) => flags[receiver$temp$8] = (flags[receiver$temp$8]! + 1) | 0)(Box.idx());
-    ((receiver$temp$9) => receiver$temp$9.wide = BigInt.asIntN(64, receiver$temp$9.wide + 1n) as L)(boxes[0]!);
-    ((receiver$temp$10) => receiver$temp$10.wide = BigInt.asIntN(64, receiver$temp$10.wide + 1n) as L)(Box.get(value));
-    ((receiver$temp$11) => longs[receiver$temp$11] = BigInt.asIntN(64, longs[receiver$temp$11]! + 1n) as L)(Box.idx());
+    const receiver$temp$0 = boxes[0]!;
+    receiver$temp$0.mode = ((receiver$temp$0.mode + 1) | 0) as I;
+    const receiver$temp$1 = Box.get(value);
+    receiver$temp$1.mode = ((receiver$temp$1.mode + 1) | 0) as I;
+    const receiver$temp$2 = Box.idx();
+    ints[receiver$temp$2] = ((ints[receiver$temp$2]! + 1) | 0) as I;
+    const receiver$temp$3 = boxes[0]!;
+    receiver$temp$3.narrow = ((receiver$temp$3.narrow + 1) & 0xFF) as B;
+    const receiver$temp$4 = Box.get(value);
+    receiver$temp$4.narrow = ((receiver$temp$4.narrow + 1) & 0xFF) as B;
+    const receiver$temp$5 = Box.idx();
+    bytes[receiver$temp$5] = ((bytes[receiver$temp$5]! + 1) & 0xFF) as B;
+    const receiver$temp$6 = boxes[0]!;
+    receiver$temp$6.flags = (receiver$temp$6.flags + 1) | 0;
+    const receiver$temp$7 = Box.get(value);
+    receiver$temp$7.flags = (receiver$temp$7.flags + 1) | 0;
+    const receiver$temp$8 = Box.idx();
+    flags[receiver$temp$8] = (flags[receiver$temp$8]! + 1) | 0;
+    const receiver$temp$9 = boxes[0]!;
+    receiver$temp$9.wide = BigInt.asIntN(64, receiver$temp$9.wide + 1n) as L;
+    const receiver$temp$10 = Box.get(value);
+    receiver$temp$10.wide = BigInt.asIntN(64, receiver$temp$10.wide + 1n) as L;
+    const receiver$temp$11 = Box.idx();
+    longs[receiver$temp$11] = BigInt.asIntN(64, longs[receiver$temp$11]! + 1n) as L;
   }
 }

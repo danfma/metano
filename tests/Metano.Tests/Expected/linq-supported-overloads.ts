@@ -4,7 +4,7 @@ import { Decimal } from "metano-runtime/system/decimal";
 
 export class Supported {
   where(xs: List<number>): Object {
-    return linq(xs, where((x: number, i: any) => ((x: number) => x > 1)(x) && ((x: number, i: number) => i > 0)(x, i)));
+    return linq(xs, where((x: number, i: any) => x > 1 && i > 0));
   }
 
   select(xs: List<number>): Object {

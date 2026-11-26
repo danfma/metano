@@ -127,17 +127,16 @@ public class ExtensionIndexerTests
         );
 
         var output = result["app/caller.ts"];
-        // Receiver Pick() should appear exactly once — assigned inline to a
-        // temporary declared at the head of the body, with no IIFE (W10-6a).
+        // Receiver Pick() should appear exactly once — bound to a temporary
+        // declared before the statement, with no IIFE (W13-1).
         var pickOccurrences = CountOccurrences(output, "this.pick()");
         await Assert.That(pickOccurrences).IsEqualTo(1);
-        await Assert.That(output).Contains("let receiver$temp$0;");
 
         await Assert
             .That(output)
             .Contains(
-                "(receiver$temp$0 = this.pick(), item$set(receiver$temp$0, 0, "
-                    + "(item$get(receiver$temp$0, 0) + 1) | 0));"
+                "const receiver$temp$0 = this.pick();\n"
+                    + "    item$set(receiver$temp$0, 0, (item$get(receiver$temp$0, 0) + 1) | 0);"
             );
 
         await Assert.That(output).DoesNotContain("=>");
@@ -354,8 +353,7 @@ public class ExtensionIndexerTests
     {
         var output = TranspileNullableBag("public void Run(Bag bag, int i) { bag[i++] += 1; }");
 
-        await Assert.That(output).Contains("let receiver$temp$0;");
-        await Assert.That(CountOccurrences(output, "receiver$temp$0 = ")).IsEqualTo(1);
+        await Assert.That(CountOccurrences(output, "const receiver$temp$0 = ")).IsEqualTo(1);
         await Assert.That(output).DoesNotContain("=>");
     }
 
@@ -369,8 +367,9 @@ public class ExtensionIndexerTests
         await Assert
             .That(output)
             .Contains(
-                "const x = (receiver$temp$0 = item$get(bag, 0), item$set(bag, 0, receiver$temp$0 "
-                    + "== null ? null : (receiver$temp$0! + 1) | 0), receiver$temp$0);"
+                "const receiver$temp$0 = item$get(bag, 0);\n"
+                    + "    item$set(bag, 0, receiver$temp$0 == null ? null : (receiver$temp$0! + 1) | 0);\n"
+                    + "    const x = receiver$temp$0;"
             );
 
         await Assert.That(output).DoesNotContain("=>");

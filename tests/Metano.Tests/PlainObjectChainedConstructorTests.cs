@@ -56,6 +56,7 @@ public class PlainObjectChainedConstructorTests
         )["use-pair.ts"];
 
         await Assert.That(output).Contains("UsePair.next()");
-        await Assert.That(output).Contains("({ a: receiver$temp$0, b: receiver$temp$0 })");
+        await Assert.That(output).Contains("const receiver$temp$0 = UsePair.next();");
+        await Assert.That(output).Contains("return { a: receiver$temp$0, b: receiver$temp$0 };");
     }
 }

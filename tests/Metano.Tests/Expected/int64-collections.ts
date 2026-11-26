@@ -23,7 +23,8 @@ export class Collections {
   write(values: bigint[], l: bigint): void {
     values[Number(l)] = 1n;
     values[Number(l)] = BigInt.asIntN(64, values[Number(l)]! + 2n);
-    ((receiver$temp$0) => values[receiver$temp$0] = BigInt.asIntN(64, values[receiver$temp$0]! * 3n))(this.next());
+    const receiver$temp$0 = this.next();
+    values[receiver$temp$0] = BigInt.asIntN(64, values[receiver$temp$0]! * 3n);
     this.slots[Number(l)] = BigInt.asIntN(64, this.slots[Number(l)]! + 1n);
   }
 

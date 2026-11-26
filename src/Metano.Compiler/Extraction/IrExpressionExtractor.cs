@@ -820,8 +820,7 @@ public sealed partial class IrExpressionExtractor
     private IrExpression BindOnce(
         IrExpression value,
         bool isReusable,
-        Func<IrExpression, IrExpression> build,
-        bool isStoreTemporary = false
+        Func<IrExpression, IrExpression> build
     )
     {
         if (isReusable)
@@ -829,10 +828,7 @@ public sealed partial class IrExpressionExtractor
 
         var tempName = NextReceiverTempName();
 
-        return new IrLetExpression(tempName, value, build(new IrIdentifier(tempName)))
-        {
-            IsStoreTemporary = isStoreTemporary,
-        };
+        return new IrLetExpression(tempName, value, build(new IrIdentifier(tempName)));
     }
 
     /// <summary>
@@ -4713,7 +4709,7 @@ public sealed partial class IrExpressionExtractor
 
         var receiver = Extract(targetSyntax.Expression);
 
-        return BindStoreReceiverOnce(receiver, recv =>
+        return BindReceiverOnce(receiver, recv =>
             StoreIncrementThroughSetter(
                 node,
                 Accessor(getterName, emittedGetterName, [new IrArgument(recv)]),
@@ -4745,19 +4741,15 @@ public sealed partial class IrExpressionExtractor
             return store(step(current));
 
         if (node is PrefixUnaryExpressionSyntax)
-            return BindOnce(
-                step(current),
-                isReusable: false,
-                next => new IrSequenceExpression([store(next)], next),
-                isStoreTemporary: true
-            );
+            return BindOnce(step(current), isReusable: false, next => new IrSequenceExpression(
+                [store(next)],
+                next
+            ));
 
-        return BindOnce(
-            current,
-            isReusable: false,
-            previous => new IrSequenceExpression([store(step(previous))], previous),
-            isStoreTemporary: true
-        );
+        return BindOnce(current, isReusable: false, previous => new IrSequenceExpression(
+            [store(step(previous))],
+            previous
+        ));
     }
 
     /// <summary>

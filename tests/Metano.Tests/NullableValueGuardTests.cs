@@ -223,7 +223,7 @@ public class NullableValueGuardTests
     public async Task WholeTupleCast_KeepsTheGuard() =>
         await Assert
             .That(BodyOf("widened(t: [number, number] | null): [bigint, bigint]"))
-            .Contains($"(t{Guard})");
+            .Contains($"const receiver$temp$0 = t{Guard};");
 
     [Test]
     public async Task ValueWrappedWhereItIsWritten_IsReadBare()

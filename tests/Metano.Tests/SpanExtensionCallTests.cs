@@ -273,7 +273,7 @@ public class SpanExtensionCallTests
 
         await Assert
             .That(files["calls.ts"])
-            .Contains("throw new Error(\"Unsupported expression: UnloweredSpanCall\");");
+            .Contains("throwError(new Error(\"Unsupported expression: UnloweredSpanCall\"))");
     }
 
     /// <summary>
