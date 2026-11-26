@@ -57,11 +57,17 @@ export function issuesForAssignee(
 export function readyForReview(issues: IReadOnlyList<Issue>, limit: number): IReadOnlyList<Issue> {
   return linq(
     issues,
-    where(
-      (issue: Issue) =>
-        (issue.status === IssueStatus.InProgress || issue.status === IssueStatus.InReview) &&
-        (issue.priority === IssuePriority.High || issue.priority === IssuePriority.Urgent),
-    ),
+    where((issue: Issue) => {
+      let $issue: Issue;
+      let $issue1: Issue;
+
+      return (
+        (($issue = issue),
+        $issue.status === IssueStatus.InProgress || $issue.status === IssueStatus.InReview) &&
+        (($issue1 = issue),
+        $issue1.priority === IssuePriority.High || $issue1.priority === IssuePriority.Urgent)
+      );
+    }),
     take(limit),
     toList(),
   );

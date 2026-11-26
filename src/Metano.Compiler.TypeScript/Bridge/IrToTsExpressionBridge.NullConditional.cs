@@ -136,29 +136,9 @@ public static partial class IrToTsExpressionBridge
         var loweredReceiver = MapNullTolerant(access.Receiver, context);
         var repeatsReceiver = IrEvaluationTraits.IsReusableNullConditionalReceiver(access.Receiver);
 
-        var bindsInline =
-            !repeatsReceiver
-            && context.Temporaries is not null
-            && !IsConditionalReceiverReadByAClosure(access.WhenNotNull);
-
-        var receiverReference =
-            repeatsReceiver ? loweredReceiver
-            : bindsInline
-                ? context.Temporaries!.TemporaryFor(access, () =>
-                    context.Temporaries.Claim(ConditionalReceiverParameter, context.ReservedLocals)
-                )
-            : new TsIdentifier(ConditionalReceiverParameter);
-
-        // A receiver bound by an arrow is read inside it, where no temporary of
-        // the enclosing statement list may be read: the steps declare none.
-        var stepsContext =
-            repeatsReceiver || bindsInline ? context : context with { Temporaries = null };
-
-        var whenNotNull = MapWithConditionalReceiver(
-            access.WhenNotNull,
-            receiverReference,
-            stepsContext
-        );
+        var (receiverReference, whenNotNull, receiverName, bindsInline) = repeatsReceiver
+            ? RepeatConditionalReceiver(access, loweredReceiver, context)
+            : BindConditionalReceiver(access, context);
 
         // A step that lowers to the receiver itself (a `[Branded]` value read,
         // `slug?.Value`) needs no guard: a null receiver is null.
@@ -176,7 +156,7 @@ public static partial class IrToTsExpressionBridge
 
         return new LoweredNullConditional(
             loweredReceiver,
-            repeatsReceiver ? null : ((TsIdentifier)receiverReference).Name,
+            receiverName,
             whenNotNull,
             optionalChain,
             MayYieldUndefined: !isReceiverItself || LowersToOptionalChain(access.Receiver),
@@ -184,25 +164,64 @@ public static partial class IrToTsExpressionBridge
         );
     }
 
-    /// <summary>
-    /// Whether a lambda in <paramref name="whenNotNull"/> reads the access's own
-    /// receiver; a placeholder inside a nested access's
-    /// <see cref="IrNullConditionalAccess.WhenNotNull"/> belongs to that access.
-    /// </summary>
-    private static bool IsConditionalReceiverReadByAClosure(IrExpression whenNotNull) =>
-        whenNotNull switch
-        {
-            IrLambdaExpression lambda => lambda
-                .Body.SelectMany(ExpressionsWithin)
-                .Any(read => IrEvaluationTraits.CountConditionalReceiverReads(read) > 0),
-            IrNullConditionalAccess nested => IsConditionalReceiverReadByAClosure(nested.Receiver),
-            _ => IrNodeChildren.ExpressionsOf(whenNotNull).Any(IsConditionalReceiverReadByAClosure),
-        };
+    /// <summary>The steps of an access over a receiver they may repeat.</summary>
+    private static (
+        TsExpression Reference,
+        TsExpression WhenNotNull,
+        string? ReceiverName,
+        bool BindsInline
+    ) RepeatConditionalReceiver(
+        IrNullConditionalAccess access,
+        TsExpression loweredReceiver,
+        IrToTsBridgeContext context
+    ) =>
+        (
+            loweredReceiver,
+            MapWithConditionalReceiver(access.WhenNotNull, loweredReceiver, context),
+            null,
+            false
+        );
 
-    private static IEnumerable<IrExpression> ExpressionsWithin(IrStatement statement) =>
-        IrNodeChildren
-            .ExpressionsOf(statement)
-            .Concat(IrNodeChildren.StatementsOf(statement).SelectMany(ExpressionsWithin));
+    /// <summary>
+    /// The steps of an access whose receiver must evaluate once, over the name that
+    /// holds it: a temporary of the statement list (<c>$receiver</c>, …), unless no
+    /// list encloses the access or a function in the lowered steps reads it
+    /// (<see cref="CapturesABinding"/>); then the parameter of an arrow invoked on
+    /// the spot, with steps lowered again so they declare no temporary of the
+    /// enclosing list, which would be read inside the arrow.
+    /// </summary>
+    private static (
+        TsExpression Reference,
+        TsExpression WhenNotNull,
+        string? ReceiverName,
+        bool BindsInline
+    ) BindConditionalReceiver(IrNullConditionalAccess access, IrToTsBridgeContext context)
+    {
+        if (context.Temporaries is { } temporaries)
+        {
+            var temporary = temporaries.TemporaryFor(access, () =>
+                temporaries.Claim(ConditionalReceiverParameter, context.ReservedLocals)
+            );
+
+            var steps = MapWithConditionalReceiver(access.WhenNotNull, temporary, context);
+
+            if (!CapturesABinding([steps], [temporary.Name]))
+                return (temporary, steps, temporary.Name, true);
+        }
+
+        var parameter = new TsIdentifier(ConditionalReceiverParameter);
+
+        var arrowSteps = MapWithConditionalReceiver(
+            access.WhenNotNull,
+            parameter,
+            context with
+            {
+                Temporaries = null,
+            }
+        );
+
+        return (parameter, arrowSteps, parameter.Name, false);
+    }
 
     /// <summary>
     /// Native <c>?.</c> replaces a bound receiver only at the chain's root,

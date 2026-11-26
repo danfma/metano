@@ -67,6 +67,75 @@ public class NcHolder
     public int Sum => Own.V + Own.W + Bag.Sum();
 }
 
+public class NcBase
+{
+    public NcBase(NcBox box) => Base = box.V;
+
+    public NcBase(int value) => Base = value;
+
+    public int Base { get; }
+}
+
+public class NcInitializedBases : NcBase
+{
+    public NcInitializedBases(int p)
+        : base(new NcBox { V = p }) => Kept = new NcBox { V = p + 1 };
+
+    public NcBox Kept { get; }
+}
+
+public class NcOverloadedInitializedBases : NcBase
+{
+    public NcOverloadedInitializedBases(int p)
+        : base(new NcBox { V = p }) => Kept = new NcBox { V = p + 1 };
+
+    public NcOverloadedInitializedBases(string s)
+        : base(new NcBox { V = s.Length }) => Kept = new NcBox { V = s.Length * 2 };
+
+    public NcBox Kept { get; }
+}
+
+public static class NcOrder
+{
+    public static readonly NcLog Log = new();
+
+    public static int G(int v) => Log.Note($"g{v}", v);
+
+    public static int F(int a, int b) => a * 10 + b;
+}
+
+public class NcReorderedBases : NcBase
+{
+    public NcReorderedBases()
+        : base(NcOrder.F(b: NcOrder.G(1), a: NcOrder.G(2))) =>
+        Q = NcOrder.F(b: NcOrder.G(3), a: NcOrder.G(4));
+
+    public NcReorderedBases(bool flag)
+        : base(NcOrder.F(b: NcOrder.G(5), a: NcOrder.G(6))) =>
+        Q = flag ? NcOrder.F(b: NcOrder.G(7), a: NcOrder.G(8)) : 0;
+
+    public int Q { get; }
+}
+
+public static class NcInline
+{
+    [Metano.Annotations.Inline]
+    public static int Inc(int value) => ++value;
+
+    [Metano.Annotations.Inline]
+    public static Func<int> Later(int value) => NcCapture.Later(value + 0);
+}
+
+public static class NcCapture
+{
+    private static int _next;
+
+    [Metano.Annotations.Emit("(() => $0)")]
+    public static Func<int> Later(int value) => () => value;
+
+    public static int Next() => ++_next;
+}
+
 public static class NcBoxExtensions
 {
     public static int Doubled(this NcBox box) => box.V * 2;
@@ -81,6 +150,13 @@ public static class NoClosureTemporaryProbes
     private static NcBox MakeBox(int v) => new NcBox { V = v, W = v + 1 };
 
     private static int Total(NcBag bag) => bag.Sum();
+
+    private static int Push(List<Func<int>> readers, Func<int> reader)
+    {
+        readers.Add(reader);
+
+        return readers.Count;
+    }
 
     public static string StatementPositions()
     {
@@ -289,6 +365,44 @@ public static class NoClosureTemporaryProbes
         var absent = log.Note<NcBox?>("absent", null)?.Doubled();
 
         return $"{present}|{absent?.ToString() ?? "null"}|{log}";
+    }
+
+    public static string BaseCallAndBodyInitializers()
+    {
+        var simple = new NcInitializedBases(3);
+        var byNumber = new NcOverloadedInitializedBases(4);
+        var byText = new NcOverloadedInitializedBases("abc");
+
+        return $"{simple.Base}{simple.Kept.V}|{byNumber.Base}{byNumber.Kept.V}|{byText.Base}{byText.Kept.V}";
+    }
+
+    public static string BaseCallAndBodyReorderedArguments()
+    {
+        var plain = new NcReorderedBases();
+        var flagged = new NcReorderedBases(true);
+
+        return $"{plain.Base}/{plain.Q}|{flagged.Base}/{flagged.Q}|{NcOrder.Log}";
+    }
+
+    public static string InlineMutatingASameNamedLocal()
+    {
+        var value = 1;
+        var r = NcInline.Inc(value);
+
+        return (value * 10 + r).ToString();
+    }
+
+    public static string ClosureFromAnEmitTemplateOverAnInlinedParameter()
+    {
+        var readers = new List<Func<int>>();
+
+        for (var i = 0; i < 3; i++)
+            readers.Add(NcInline.Later(NcCapture.Next()));
+
+        // A loop condition is evaluated in the enclosing statement list.
+        while (Push(readers, NcInline.Later(NcCapture.Next())) < 6) { }
+
+        return string.Join(",", readers.Select(reader => reader()));
     }
 
     public static string CaseGuardsReadingDesignators()

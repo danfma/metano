@@ -76,9 +76,26 @@ public static partial class IrToTsExpressionBridge
         )
             return false;
 
-        var names = bindings.Select(binding => binding.Name).ToHashSet(StringComparer.Ordinal);
+        return !CapturesABinding(readers, bindings.Select(binding => binding.Name));
+    }
 
-        return !readers.Any(reader => TsClosureReads.AnyIn(reader, names));
+    /// <summary>
+    /// The one rule for whether a value bound once may be a temporary of the
+    /// statement list: not when a function created in its lowered
+    /// <paramref name="readers"/> reads one of <paramref name="names"/>
+    /// (<see cref="TsClosureReads"/> — arrows, and templates or inline code that
+    /// spell one). A temporary is reassigned by every evaluation, so such a
+    /// function kept from an earlier one would read the later value; the binding
+    /// then needs a scope of its own per evaluation, an arrow invoked on the spot.
+    /// </summary>
+    private static bool CapturesABinding(
+        IEnumerable<TsExpression> readers,
+        IEnumerable<string> names
+    )
+    {
+        var wanted = names.ToHashSet(StringComparer.Ordinal);
+
+        return readers.Any(reader => TsClosureReads.AnyIn(reader, wanted));
     }
 
     /// <summary>The comma expression <c>(first, …, last)</c>.</summary>

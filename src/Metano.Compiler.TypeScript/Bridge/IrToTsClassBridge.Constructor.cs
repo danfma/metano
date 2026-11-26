@@ -279,23 +279,14 @@ internal static partial class IrToTsClassBridge
             return null;
 
         // The arguments run before `super(...)`, as statements of the constructor
-        // there may: the temporaries they assign inline are declared ahead of it.
-        // An argument that binds `out` locals keeps the arrow extraction wraps it
-        // in (ExtractStandalone): hoisting its statements ahead of `super` would
-        // run them before the arguments to its left.
-        IReadOnlyList<TsExpression> loweredArguments = [];
-
-        var temporaries = TsTemporaries.Around(context, scoped =>
-        {
-            loweredArguments =
-            [
-                .. baseArguments.Select(argument =>
-                    IrToTsExpressionBridge.MapArgument(argument, scoped)
-                ),
-            ];
-
-            return [];
-        });
+        // there may: the temporaries they assign inline belong to the constructor
+        // body's scope (its caller opens it), declared once ahead of `super`. An
+        // argument that binds `out` locals keeps the arrow extraction wraps it in
+        // (ExtractStandalone): hoisting its statements ahead of `super` would run
+        // them before the arguments to its left.
+        var loweredArguments = baseArguments
+            .Select(argument => IrToTsExpressionBridge.MapArgument(argument, context))
+            .ToList();
 
         var ordered = TsEvaluationOrder.Bind(
             IrToTsExpressionBridge.WithoutNullRestArray(baseArguments, loweredArguments),
@@ -306,7 +297,6 @@ internal static partial class IrToTsClassBridge
 
         return new TsBaseConstructorCall(
             [
-                .. temporaries,
                 .. ordered.Bindings.Select(binding => new TsVariableDeclaration(
                     binding.Name,
                     binding.Value
@@ -348,11 +338,14 @@ internal static partial class IrToTsClassBridge
     /// <summary>
     /// Lowers the single-constructor case (no overload dispatch) into a
     /// <see cref="TsConstructor"/>. The caller pre-resolves the parameter
-    /// list (<see cref="BuildPrimaryCtorParams"/>) and the optional
-    /// <c>super(...)</c> argument list. The body is composed in canonical order:
+    /// list (<see cref="BuildPrimaryCtorParams"/>) and supplies the optional
+    /// <c>super(...)</c> call, which <paramref name="resolveBaseCall"/> lowers in
+    /// the constructor's scope of temporaries: the base call and the body share
+    /// it, so its declarations come once, ahead of <c>super</c>. The body is
+    /// composed in canonical order:
     /// <list type="number">
-    ///   <item><c>super(args)</c> (after any argument temporaries) when
-    ///     <paramref name="baseCall"/> is non-null;</item>
+    ///   <item><c>super(args)</c> (after any argument temporaries) when the
+    ///     resolved base call is non-null;</item>
     ///   <item>the type-argument slot of a reified generic class;</item>
     ///   <item>the instance field stores (<see cref="FieldStoresOf"/>);</item>
     ///   <item>any explicit body statements lowered via the IR statement
@@ -363,9 +356,26 @@ internal static partial class IrToTsClassBridge
     public static TsConstructor BuildSimpleConstructor(
         IrConstructorDeclaration? ir,
         IReadOnlyList<TsConstructorParam> tsCtorParams,
-        TsBaseConstructorCall? baseCall,
+        Func<IrToTsBridgeContext, TsBaseConstructorCall?> resolveBaseCall,
         IrToTsBridgeContext context,
         string? typeArgumentSlot = null
+    ) =>
+        new(
+            tsCtorParams,
+            TsTemporaries.Around(context, scoped =>
+                SimpleConstructorBody(ir, resolveBaseCall(scoped), scoped, typeArgumentSlot)
+            )
+        );
+
+    /// <summary>
+    /// The statements of a single constructor, in the scope of temporaries its base
+    /// call and its body share (see <see cref="BuildSimpleConstructor"/>).
+    /// </summary>
+    private static IReadOnlyList<TsStatement> SimpleConstructorBody(
+        IrConstructorDeclaration? ir,
+        TsBaseConstructorCall? baseCall,
+        IrToTsBridgeContext context,
+        string? typeArgumentSlot
     )
     {
         var body = new List<TsStatement>();
@@ -392,9 +402,9 @@ internal static partial class IrToTsClassBridge
         );
 
         if (ir?.Body is { Count: > 0 } explicitBody)
-            body.AddRange(IrToTsStatementBridge.MapBody(explicitBody, context));
+            body.AddRange(IrToTsStatementBridge.MapInScope(explicitBody, context));
 
-        return new TsConstructor(tsCtorParams, body);
+        return body;
     }
 
     /// <summary>

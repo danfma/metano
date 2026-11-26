@@ -32,24 +32,29 @@ internal static class TsEvaluationOrder
         if (order is null)
             return new TsOrderedArguments([], arguments);
 
-        var names = Enumerable
-            .Range(0, arguments.Count)
-            .Select(position => NameOf(prefix + position, context))
-            .ToList();
-
         // A trailing null `params` array was dropped from the lowered
         // arguments (a rest parameter cannot take it), so its position binds
-        // nothing.
-        var bindings = order
+        // nothing. Only a bound position claims a name; any other passes its
+        // argument in place.
+        var bound = order
             .Where(position => position < arguments.Count)
-            .Select(position => new TsImmediateBinding(
-                names[position].Name,
-                Unspread(arguments[position])
+            .Select(position => (Position: position, Name: NameOf(prefix + position, context)))
+            .ToList();
+
+        var bindings = bound
+            .Select(binding => new TsImmediateBinding(
+                binding.Name.Name,
+                Unspread(arguments[binding.Position])
             ))
             .ToList();
 
+        var names = bound.ToDictionary(binding => binding.Position, binding => binding.Name);
+
         var passed = arguments
-            .Select((argument, position) => Respread(argument, names[position]))
+            .Select(
+                (argument, position) =>
+                    names.TryGetValue(position, out var name) ? Respread(argument, name) : argument
+            )
             .ToList();
 
         return new TsOrderedArguments(bindings, passed);

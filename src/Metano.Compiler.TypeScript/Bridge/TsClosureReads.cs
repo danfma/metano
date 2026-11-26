@@ -22,6 +22,12 @@ internal static class TsClosureReads
 
     private static readonly string AstNamespace = typeof(TsExpression).Namespace!;
 
+    /// <summary><c>function</c> as a word, not inside a name (<c>functionName</c>).</summary>
+    private static readonly System.Text.RegularExpressions.Regex FunctionKeyword = new(
+        @"(?<![\w$])function(?![\w$])",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant
+    );
+
     /// <summary>Whether a function created in <paramref name="root"/> reads one of <paramref name="names"/>.</summary>
     public static bool AnyIn(TsExpression root, IReadOnlySet<string> names) =>
         names.Count > 0 && Reads(root, insideFunction: false, names);
@@ -51,8 +57,7 @@ internal static class TsClosureReads
         };
 
     private static bool SpellsFunction(string text) =>
-        text.Contains("=>", StringComparison.Ordinal)
-        || text.Contains("function", StringComparison.Ordinal);
+        text.Contains("=>", StringComparison.Ordinal) || FunctionKeyword.IsMatch(text);
 
     private static IEnumerable<object> ChildrenOf(object node) =>
         ChildPropertiesByType

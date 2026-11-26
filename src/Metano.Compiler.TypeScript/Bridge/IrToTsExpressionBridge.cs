@@ -1200,9 +1200,6 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapCall(IrCallExpression call, IrToTsBridgeContext context)
     {
-        if (InvokedLambdaBodyOverItsOwnNames(call) is { } body)
-            return Map(body, context);
-
         // TS doesn't support named arguments at the call site — the receiver's
         // parameter list defines positional order. At this layer we drop the
         // argument names and lower each value; reordering / default-filling
@@ -2093,7 +2090,7 @@ public static partial class IrToTsExpressionBridge
             ),
             lambda.ReifiedTypeParameters
         );
-        var body = MapLambdaBody(lambda, context);
+        var body = MapLambdaBody(lambda, WithoutShadowedBindings(lambda, context));
         // Named function expression: emitted when the lambda is the
         // lowered body of a directly-recursive [Inline] method (#194).
         // The internal name lets the body call itself without relying
@@ -2271,9 +2268,11 @@ public static partial class IrToTsExpressionBridge
 
     /// <summary>
     /// The comma form of <see cref="MapLetExpression"/>, or <c>null</c> where it
-    /// does not apply. The temporary keeps the binding's name unless another
-    /// temporary of the list holds it; then it takes a fresh one, which the body
-    /// reads through <see cref="IrToTsBridgeContext.BoundElements"/>.
+    /// does not apply: outside a statement list, or when a function in the lowered
+    /// body reads the binding (<see cref="CapturesABinding"/>). The temporary keeps
+    /// the binding's name unless another temporary of the list holds it; then it
+    /// takes a fresh one, which the body reads through
+    /// <see cref="IrToTsBridgeContext.BoundElements"/>.
     /// </summary>
     private static TsExpression? TryMapLetInline(
         IrLetExpression let,
@@ -2281,13 +2280,15 @@ public static partial class IrToTsExpressionBridge
         IrToTsBridgeContext context
     )
     {
-        if (context.Temporaries is not { } temporaries || IsReadByAClosure(let))
+        if (context.Temporaries is not { } temporaries)
             return null;
 
         var name = IrToTsNamingPolicy.ToLocalName(let.Name);
 
         var temporary = temporaries.TemporaryFor(let, () =>
-            temporaries.TryDeclareExactly(name) ?? temporaries.Declare(name, context.ReservedLocals)
+            temporaries.TryClaimExactly(name)
+                ? new TsIdentifier(name)
+                : temporaries.Claim(name, context.ReservedLocals)
         );
 
         var bodyContext =
@@ -2302,19 +2303,15 @@ public static partial class IrToTsExpressionBridge
             ? [.. sequence.Effects, sequence.Result]
             : [let.Body];
 
-        return Sequence([
-            new TsBinaryExpression(temporary, "=", value),
-            .. body.Select(part => Map(part, bodyContext)),
-        ]);
-    }
+        var parts = body.Select(part => Map(part, bodyContext)).ToList();
 
-    /// <summary>
-    /// Whether a closure in the body reads the binding: one temporary per
-    /// statement list is reassigned by every evaluation, so a closure created by
-    /// an earlier one would read the later value.
-    /// </summary>
-    private static bool IsReadByAClosure(IrLetExpression let) =>
-        IrReferencedNames.IsReadByAClosure(let.Body, let.Name);
+        if (CapturesABinding(parts, [temporary.Name]))
+            return null;
+
+        temporaries.DeclareClaimed(temporary);
+
+        return Sequence([new TsBinaryExpression(temporary, "=", value), .. parts]);
+    }
 
     /// <summary>
     /// <see cref="IrLetExpression"/> as an IIFE (see <see cref="TsImmediateInvocation.Of"/>),

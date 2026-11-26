@@ -246,14 +246,15 @@ public static partial class IrToTsExpressionBridge
 
         if (
             context.Temporaries is { } temporaries
-            && !bindings.Any(binding => IrReferencedNames.IsReadByAClosure(guard, binding.Name))
+            && TryBindCaseGuardInline(bindings, guard, temporaries, context) is { } inline
         )
-            return BindCaseGuardInline(bindings, guard, temporaries, context);
+            return inline;
 
-        // Outside a statement list, or where a closure in the guard reads a
+        // Outside a statement list, or where a function in the guard reads a
         // designator, which then needs a scope of its own per evaluation: the
-        // designators are the parameters of an arrow invoked on the spot.
-        var lowered = Map(guard, context);
+        // designators are the parameters of an arrow invoked on the spot, and the
+        // guard declares no temporary of the enclosing list, read inside it.
+        var lowered = Map(guard, context with { Temporaries = null });
 
         return TsImmediateInvocation.Of(
             [
@@ -272,9 +273,10 @@ public static partial class IrToTsExpressionBridge
     /// statement list that hold them while it runs:
     /// <c>$s instanceof Square &amp;&amp; ($s1 = $s, $s1.side &gt; 2)</c>. Each
     /// temporary is named after its designator with a <c>$</c>, so it never
-    /// collides with the local the section body declares for it.
+    /// collides with the local the section body declares for it. <c>null</c> when a
+    /// function in the lowered guard reads one (<see cref="CapturesABinding"/>).
     /// </summary>
-    private static TsExpression BindCaseGuardInline(
+    private static TsExpression? TryBindCaseGuardInline(
         IReadOnlyList<PatternBinding> bindings,
         IrExpression guard,
         TsTemporaries temporaries,
@@ -291,7 +293,7 @@ public static partial class IrToTsExpressionBridge
                 temporaries.TemporaryFor(
                     guard,
                     () =>
-                        temporaries.Declare(
+                        temporaries.Claim(
                             "$" + IrToTsNamingPolicy.ToLocalName(binding.Name),
                             context.ReservedLocals
                         ),
@@ -306,13 +308,26 @@ public static partial class IrToTsExpressionBridge
             ),
         };
 
+        var mappedGuard = Map(guard, guardContext);
+
+        if (
+            CapturesABinding(
+                [mappedGuard],
+                temporariesByName.Values.Select(temporary => temporary.Name)
+            )
+        )
+            return null;
+
+        foreach (var temporary in temporariesByName.Values)
+            temporaries.DeclareClaimed(temporary);
+
         return Sequence([
             .. read.Select(binding => new TsBinaryExpression(
                 temporariesByName[binding.Name],
                 "=",
                 binding.Value
             )),
-            Map(guard, guardContext),
+            mappedGuard,
         ]);
     }
 

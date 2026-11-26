@@ -51,10 +51,17 @@ public static class IrToTsStatementBridge
     internal static IReadOnlyList<TsStatement> MapSectionBody(
         IReadOnlyList<IrStatement> body,
         IrToTsBridgeContext context
-    ) =>
-        context.Temporaries is null
-            ? MapBody(body, context)
-            : [.. body.SelectMany(statement => MapInList(statement, context))];
+    ) => context.Temporaries is null ? MapBody(body, context) : MapInScope(body, context);
+
+    /// <summary>
+    /// Maps statements into the statement list of <paramref name="context"/>,
+    /// whose head declares their temporaries: a constructor body shares the scope
+    /// of its base call, so the two never declare the same name.
+    /// </summary>
+    internal static IReadOnlyList<TsStatement> MapInScope(
+        IReadOnlyList<IrStatement> body,
+        IrToTsBridgeContext context
+    ) => [.. body.SelectMany(statement => MapInList(statement, context))];
 
     /// <summary>
     /// <paramref name="value"/> as the value of a statement the caller places in a
@@ -70,23 +77,21 @@ public static class IrToTsStatementBridge
         IrToTsBridgeContext context
     )
     {
-        TsExpression? mapped = null;
         var (leading, result) = StandaloneBodyOf(value);
 
-        var prelude = TsTemporaries.Around(context, scoped =>
+        var ((statements, mapped), declarations) = TsTemporaries.Around(context, scoped =>
         {
             var (hoisted, rest) = TsLetHoisting.Split(result, scoped);
-            var statements = leading
+
+            var lowered = leading
                 .Concat(hoisted)
                 .SelectMany(part => MapInList(part, scoped))
                 .ToList();
 
-            mapped = IrToTsExpressionBridge.Map(rest, scoped);
-
-            return statements;
+            return (lowered, IrToTsExpressionBridge.Map(rest, scoped));
         });
 
-        return (mapped!, prelude);
+        return (mapped, [.. declarations, .. statements]);
     }
 
     /// <summary>

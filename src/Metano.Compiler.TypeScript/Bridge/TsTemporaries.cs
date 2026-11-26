@@ -40,10 +40,25 @@ internal sealed class TsTemporaries
         Func<IrToTsBridgeContext, IReadOnlyList<TsStatement>> map
     )
     {
-        var temporaries = new TsTemporaries(context.ReservedLocals);
-        var mapped = map(context with { Temporaries = temporaries });
+        var (mapped, declarations) = Around<IReadOnlyList<TsStatement>>(context, map);
 
-        return [.. temporaries.Declarations(), .. mapped];
+        return [.. declarations, .. mapped];
+    }
+
+    /// <summary>
+    /// Lowers through <paramref name="map"/> with a fresh scope of temporaries:
+    /// what it lowered, and the declarations of the temporaries it assigns, which
+    /// the caller places ahead of it.
+    /// </summary>
+    public static (T Result, IReadOnlyList<TsStatement> Declarations) Around<T>(
+        IrToTsBridgeContext context,
+        Func<IrToTsBridgeContext, T> map
+    )
+    {
+        var temporaries = new TsTemporaries(context.ReservedLocals);
+        var result = map(context with { Temporaries = temporaries });
+
+        return (result, [.. temporaries.Declarations()]);
     }
 
     /// <summary>
@@ -136,11 +151,22 @@ internal sealed class TsTemporaries
     /// <summary>Whether <paramref name="name"/> is claimed here and not declared yet.</summary>
     public bool HoldsClaim(string name) => _claimed.Contains(name);
 
-    /// <summary>Declares a name <see cref="Claim"/> returned, untyped.</summary>
-    public void DeclareClaimed(TsIdentifier claimed)
+    /// <summary>
+    /// Declares a name <see cref="Claim"/> or <see cref="TryClaimExactly"/>
+    /// returned, with <paramref name="type"/> when one is given; a name declared
+    /// already stays as it is.
+    /// </summary>
+    public void DeclareClaimed(TsIdentifier claimed, TsType? type = null)
     {
-        if (_claimed.Remove(claimed.Name))
+        if (!_claimed.Remove(claimed.Name))
+            return;
+
+        if (type is null)
             _names.Add(claimed.Name);
+        else
+            _typed.Add(
+                new TsVariableDeclaration(claimed.Name, Initializer: null, Const: false, Type: type)
+            );
     }
 
     /// <summary>

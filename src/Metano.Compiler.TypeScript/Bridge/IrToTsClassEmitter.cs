@@ -439,7 +439,7 @@ internal sealed class IrToTsClassEmitter(
         return IrToTsClassBridge.BuildSimpleConstructor(
             ir.Constructor,
             ctorParams,
-            ResolveBaseCall(extendsType, ir, keepsBaseMessage, lowering),
+            scoped => ResolveBaseCall(extendsType, ir, keepsBaseMessage, scoped),
             lowering,
             ir.TypeArgumentSlot
         );

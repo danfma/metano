@@ -56,7 +56,7 @@ internal static class TsLetHoisting
         var prelude = new List<IrStatement>();
         var rest = value;
 
-        while (rest is IrLetExpression let && CanHoist(let, context))
+        while (rest is IrLetExpression let && TryClaimBinding(let, context))
         {
             prelude.Add(new IrVariableDeclaration(let.Name, Type: null, let.Value, IsConst: true));
 
@@ -65,6 +65,7 @@ internal static class TsLetHoisting
                 prelude.AddRange(
                     sequence.Effects.Select(effect => new IrExpressionStatement(effect))
                 );
+
                 rest = sequence.Result;
             }
             else
@@ -77,23 +78,22 @@ internal static class TsLetHoisting
     }
 
     /// <summary>
-    /// Whether the binding becomes a declaration of the statement list of
-    /// <paramref name="context"/>: not one that lowers binding nothing
-    /// (<see cref="IrToTsExpressionBridge.LowersWithoutBinding"/>), and only when no
-    /// temporary of the list holds its name.
+    /// Claims the binding's name for a declaration of the statement list of
+    /// <paramref name="context"/>, and whether it did: not for a binding that lowers
+    /// binding nothing (<see cref="IrToTsExpressionBridge.LowersWithoutBinding"/>),
+    /// nor when a temporary of the list holds the name.
     /// </summary>
-    private static bool CanHoist(IrLetExpression let, IrToTsBridgeContext context) =>
+    private static bool TryClaimBinding(IrLetExpression let, IrToTsBridgeContext context) =>
         context.Temporaries is { } temporaries
         && !IrToTsExpressionBridge.LowersWithoutBinding(let, context)
         && temporaries.TryClaimExactly(IrToTsNamingPolicy.ToLocalName(let.Name));
 
     private static IrExpression? ValueOf(IrStatement statement) =>
-        statement switch
+        PlainStoreOf(statement)?.Right
+        ?? statement switch
         {
             IrExpressionStatement { Expression: IrYieldExpression { Value: { } yielded } } =>
                 yielded,
-            IrExpressionStatement { Expression: IrBinaryExpression store }
-                when IsPlainStore(store) => store.Right,
             IrExpressionStatement expression => expression.Expression,
             IrReturnStatement { Value: { } returned } => returned,
             IrThrowStatement thrown => thrown.Expression,
@@ -102,15 +102,22 @@ internal static class TsLetHoisting
         };
 
     /// <summary>
-    /// A plain assignment to a local or to a member of <c>this</c>: evaluating its
-    /// target reads nothing, so its value may run first, as a statement of its own.
+    /// The expression of <paramref name="statement"/> when it is a plain assignment
+    /// to a local or to a member of <c>this</c>: evaluating its target reads
+    /// nothing, so its value may run first, as a statement of its own.
     /// </summary>
-    private static bool IsPlainStore(IrBinaryExpression store) =>
-        store
-            is {
-                Operator: IrBinaryOp.Assign,
-                Left: IrIdentifier or IrMemberAccess { Target: IrThisExpression }
-            };
+    private static IrBinaryExpression? PlainStoreOf(IrStatement statement) =>
+        statement
+            is IrExpressionStatement
+            {
+                Expression: IrBinaryExpression
+                {
+                    Operator: IrBinaryOp.Assign,
+                    Left: IrIdentifier or IrMemberAccess { Target: IrThisExpression },
+                } store,
+            }
+            ? store
+            : null;
 
     /// <summary>
     /// <paramref name="statement"/> over <paramref name="value"/> in place of its
@@ -118,12 +125,15 @@ internal static class TsLetHoisting
     /// bare read, which has no effect left.
     /// </summary>
     private static IrStatement? WithValue(IrStatement statement, IrExpression value) =>
+        PlainStoreOf(statement) is { } store
+            ? new IrExpressionStatement(store with { Right = value })
+            : WithValueOfItsKind(statement, value);
+
+    private static IrStatement? WithValueOfItsKind(IrStatement statement, IrExpression value) =>
         statement switch
         {
             IrExpressionStatement { Expression: IrYieldExpression yield } =>
                 new IrExpressionStatement(yield with { Value = value }),
-            IrExpressionStatement { Expression: IrBinaryExpression store }
-                when IsPlainStore(store) => new IrExpressionStatement(store with { Right = value }),
             IrExpressionStatement when value is IrIdentifier => null,
             IrExpressionStatement => new IrExpressionStatement(value),
             IrReturnStatement => new IrReturnStatement(value),
