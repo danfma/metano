@@ -37,6 +37,8 @@ public class NcBag : IEnumerable<int>
 {
     private readonly List<int> _items = new();
 
+    public int Count => _items.Count;
+
     public void Add(int item)
     {
         if (item < 0)
@@ -48,8 +50,6 @@ public class NcBag : IEnumerable<int>
     public void Add(NcBag nested) => _items.Add(nested.Sum());
 
     public int Sum() => _items.Sum();
-
-    public int Count => _items.Count;
 
     public IEnumerator<int> GetEnumerator() => _items.GetEnumerator();
 
