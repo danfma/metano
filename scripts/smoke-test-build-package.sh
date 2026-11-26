@@ -506,6 +506,12 @@ EOF
   fi
   incremental_build "$dir" skip "a build after the removal"
 
+  # A rename keeps the file's mtime, so only the input list can see it.
+  mv "$dir/Use.cs" "$dir/Renamed.cs"
+  incremental_build "$dir" transpile "a renamed source file"
+  grep -rqs 'class Use' "$dir/generated/src" --include='*.ts' || fail "the renamed file's type is missing"
+  incremental_build "$dir" skip "a build after the rename"
+
   echo "select 1;" >"$dir/extra.sql"
   printf '%s\n' '<Project><ItemGroup><MetanoAsset Include="extra.sql" OutputPath="db/extra.sql" /></ItemGroup></Project>' >"$dir/Directory.Build.targets"
   incremental_build "$dir" transpile "an added MetanoAsset"
