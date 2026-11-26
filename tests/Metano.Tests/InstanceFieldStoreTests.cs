@@ -503,6 +503,30 @@ public class InstanceFieldStoreTests
     }
 
     [Test]
+    public async Task ReferenceConstrainedTypeParameterField_DoesNotWarn()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public sealed class Holder<TRef, TAny> where TRef : class
+            {
+                public TRef Ref;
+                public TRef Prop { get; set; }
+                public TAny Any;
+                public Holder(int n) { }
+            }
+            """
+        );
+
+        var warned = diagnostics
+            .Where(d => d.Message.Contains("has no initializer"))
+            .Select(d => d.Location!.SourceTree!.GetText().ToString(d.Location.SourceSpan))
+            .ToList();
+
+        await Assert.That(warned).IsEquivalentTo(["Any"]);
+    }
+
+    [Test]
     public async Task DerivedClass_KeepsTheDefaultStoreOfAFieldTheBodyAssignsFirst()
     {
         var output = TranspileHelper.Transpile(

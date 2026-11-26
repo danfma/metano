@@ -37,7 +37,11 @@ internal static class UninitializedValueStorageDiagnostics
 
         foreach (var (name, storageType) in UninitializedStorageOf(ir))
         {
-            if (assigned.Contains(name) || !LacksZeroValue(storageType))
+            if (
+                assigned.Contains(name)
+                || !LacksZeroValue(storageType)
+                || IsReferenceTypeParameter(type, name)
+            )
                 continue;
 
             report(
@@ -98,6 +102,19 @@ internal static class UninitializedValueStorageDiagnostics
                     IsIndexer: false,
                 },
             };
+
+    /// <summary>
+    /// Whether the member <paramref name="name"/> of <paramref name="type"/> is
+    /// typed by a reference-constrained type parameter (<c>where T : class</c>),
+    /// whose default is <c>null</c>, not a value-type zero.
+    /// </summary>
+    private static bool IsReferenceTypeParameter(INamedTypeSymbol type, string name) =>
+        type.GetMembers(name).FirstOrDefault() switch
+        {
+            IFieldSymbol { Type: ITypeParameterSymbol { IsReferenceType: true } } => true,
+            IPropertySymbol { Type: ITypeParameterSymbol { IsReferenceType: true } } => true,
+            _ => false,
+        };
 
     private static bool LacksZeroValue(IrTypeRef type) =>
         IsValueType(type) && IrToTsClassBridge.InstanceStorageDefault(type) is null;
