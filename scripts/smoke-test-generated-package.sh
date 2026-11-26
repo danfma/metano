@@ -125,7 +125,7 @@ JSON
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "target": "es2022",
-    "lib": ["es2023", "dom"],
+    "lib": ["es2023", "esnext.disposable", "dom"],
     "types": [],
     "strict": true,
     "noEmit": true,
