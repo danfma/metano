@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Analysis;
@@ -138,19 +139,17 @@ internal sealed class IrToTsClassEmitter(
             ? IrToTsStructDefaultConstructorBridge.BuildBody(ir, type, _context.ReportDiagnostic)
             : null;
 
-        var constructor = ConstructorScopeAliases.InScope(ctorLowering.ShadowedImports, () =>
-            BuildClassConstructor(
-                type,
-                ir,
-                ctorParams,
-                emitsDispatcher,
-                new ConstructorSelectors(typeName, claims),
-                implicitParameterlessBody,
-                constructorAccessibility,
-                extendsType,
-                keepsBaseMessage,
-                ctorLowering
-            )
+        var constructor = BuildClassConstructor(
+            type,
+            ir,
+            ctorParams,
+            emitsDispatcher,
+            new ConstructorSelectors(typeName, claims),
+            implicitParameterlessBody,
+            constructorAccessibility,
+            extendsType,
+            keepsBaseMessage,
+            ctorLowering
         ) with
         {
             Accessibility = constructorAccessibility,
@@ -166,13 +165,11 @@ internal sealed class IrToTsClassEmitter(
             emitsSelectorsAndFactories && implicitParameterlessBody is not null
         );
 
-        var typeInitializer = ConstructorScopeAliases.InScope(ctorLowering.ShadowedImports, () =>
-            TypeInitializerLowering.For(
-                new TypeInitializerSelection(type, _context.Compilation),
-                ir,
-                TypeInitializerTargetOf(type, typeName, implicitDefault, ir),
-                ctorLowering
-            )
+        var typeInitializer = TypeInitializerLowering.For(
+            new TypeInitializerSelection(type, _context.Compilation),
+            ir,
+            TypeInitializerTargetOf(type, typeName, implicitDefault, ir),
+            OutsideTheConstructorScope(ctorLowering)
         );
 
         if (emitsSelectorsAndFactories)
@@ -200,15 +197,13 @@ internal sealed class IrToTsClassEmitter(
         UninitializedValueStorageDiagnostics.Report(type, ir, _context.ReportDiagnostic);
         EventDiagnostics.Report(type, _context.ReportDiagnostic);
 
-        ConstructorScopeAliases.InScope(ctorLowering.ShadowedImports, () =>
-            EmitClassMembers(
-                ir,
-                PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMemberDeclaration),
-                classMembers,
-                keepsBaseMessage,
-                ctorLowering,
-                typeInitializer
-            )
+        EmitClassMembers(
+            ir,
+            PromotedNamesDeclaredByConstructor(ir.Constructor, promotedMemberDeclaration),
+            classMembers,
+            keepsBaseMessage,
+            ctorLowering,
+            typeInitializer
         );
 
         MarkInheritedOverrides(classMembers, dataMembersStart, claims);
@@ -471,55 +466,117 @@ internal sealed class IrToTsClassEmitter(
     {
         foreach (var irMember in ir.Members ?? [])
         {
-            switch (irMember)
+            if (IsStoredByTheConstructor(irMember))
             {
-                case IrFieldDeclaration irField:
-                    var field = IrToTsClassBridge.BuildField(
-                        irField,
-                        IrToTsTypeMapper.Map(irField.Type, BclOverrides),
-                        lowering
-                    );
-
-                    classMembers.AddRange(typeInitializer.LowerField(irField, field));
-
-                    break;
-
-                case IrPropertyDeclaration { Semantics.IsIndexer: true }:
-                    break;
-
-                case IrPropertyDeclaration irProp
-                    when !promotedNames.Contains(
-                        IrToTsNamingPolicy.ToDeclaredDataMemberName(irProp.Name, irProp.Attributes)
-                    ):
-                    var propertyMembers = typeInitializer.LowerProperty(
-                        irProp,
-                        IrToTsClassBridge.BuildProperty(
-                            irProp,
-                            IrToTsTypeMapper.Map(irProp.Type, BclOverrides),
-                            lowering
-                        )
-                    );
-
-                    classMembers.AddRange(
-                        keepsBaseMessage
-                            ? IrToTsExceptionConstructionBridge.MarkMessageOverride(
-                                irProp,
-                                propertyMembers
-                            )
-                            : propertyMembers
-                    );
-
-                    break;
-
-                case IrEventDeclaration irEvent:
-                    classMembers.AddRange(
-                        IrToTsClassBridge.BuildEvent(
-                            irEvent,
-                            IrToTsTypeMapper.Map(irEvent.HandlerType, BclOverrides)
-                        )
-                    );
-                    break;
+                ConstructorScopeAliases.InScope(lowering.ShadowedImports, () =>
+                    EmitClassMember(
+                        irMember,
+                        promotedNames,
+                        classMembers,
+                        keepsBaseMessage,
+                        lowering,
+                        typeInitializer
+                    )
+                );
             }
+            else
+            {
+                EmitClassMember(
+                    irMember,
+                    promotedNames,
+                    classMembers,
+                    keepsBaseMessage,
+                    OutsideTheConstructorScope(lowering),
+                    typeInitializer
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// An instance field or auto-property, whose initializer the constructor
+    /// stores at its store point (<see cref="InstanceFieldStoreLowering"/>), so
+    /// its names read in the constructor scope (<see cref="ConstructorScopeAliases"/>).
+    /// A static member, or an accessor with a body, reads in the class scope.
+    /// </summary>
+    private static bool IsStoredByTheConstructor(IrMemberDeclaration member) =>
+        !member.IsStatic
+        && member switch
+        {
+            IrFieldDeclaration => true,
+            IrPropertyDeclaration property => property.Semantics
+                is not ({ HasGetterBody: true } or { HasSetterBody: true }),
+            _ => false,
+        };
+
+    /// <summary>
+    /// <paramref name="lowering"/> for code outside the constructor scope:
+    /// no parameter or local shadows an import there.
+    /// </summary>
+    private static IrToTsBridgeContext OutsideTheConstructorScope(IrToTsBridgeContext lowering) =>
+        lowering with
+        {
+            ShadowedImports = ImmutableDictionary<string, string>.Empty,
+        };
+
+    private void EmitClassMember(
+        IrMemberDeclaration irMember,
+        IReadOnlySet<string> promotedNames,
+        List<TsClassMember> classMembers,
+        bool keepsBaseMessage,
+        IrToTsBridgeContext lowering,
+        TypeInitializerLowering typeInitializer
+    )
+    {
+        switch (irMember)
+        {
+            case IrFieldDeclaration irField:
+                var field = IrToTsClassBridge.BuildField(
+                    irField,
+                    IrToTsTypeMapper.Map(irField.Type, BclOverrides),
+                    lowering
+                );
+
+                classMembers.AddRange(typeInitializer.LowerField(irField, field));
+
+                break;
+
+            case IrPropertyDeclaration { Semantics.IsIndexer: true }:
+                break;
+
+            case IrPropertyDeclaration irProp
+                when !promotedNames.Contains(
+                    IrToTsNamingPolicy.ToDeclaredDataMemberName(irProp.Name, irProp.Attributes)
+                ):
+                var propertyMembers = typeInitializer.LowerProperty(
+                    irProp,
+                    IrToTsClassBridge.BuildProperty(
+                        irProp,
+                        IrToTsTypeMapper.Map(irProp.Type, BclOverrides),
+                        lowering
+                    )
+                );
+
+                classMembers.AddRange(
+                    keepsBaseMessage
+                        ? IrToTsExceptionConstructionBridge.MarkMessageOverride(
+                            irProp,
+                            propertyMembers
+                        )
+                        : propertyMembers
+                );
+
+                break;
+
+            case IrEventDeclaration irEvent:
+                classMembers.AddRange(
+                    IrToTsClassBridge.BuildEvent(
+                        irEvent,
+                        IrToTsTypeMapper.Map(irEvent.HandlerType, BclOverrides)
+                    )
+                );
+
+                break;
         }
     }
 

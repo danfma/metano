@@ -75,7 +75,7 @@ internal sealed record IrToTsBridgeContext(
     /// The imported names a constructor parameter or local shadows, each with
     /// the alias a read of the import spells instead (W10-1b): the instance
     /// initializers a constructor stores run in its scope. Empty outside a
-    /// class's constructor and member initializers.
+    /// class's constructor and instance member initializers.
     /// </summary>
     public System.Collections.Immutable.ImmutableDictionary<
         string,

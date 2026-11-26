@@ -162,6 +162,25 @@ public sealed class CsStructHolder
     public CsPt Explicit = default;
 }
 
+[Name("csZzCopy")]
+public class CsZzCopy
+{
+    public static readonly CsZzCopy Empty = new(5);
+
+    public static int Seed = 4;
+
+    public int V;
+
+    public int Twice => V * CsZzCopy.Seed;
+
+    public static CsZzCopy Make() => new(3);
+
+    public CsZzCopy(int csZzCopy)
+    {
+        V = csZzCopy;
+    }
+}
+
 public static class ConstructorShadowProbes
 {
     public static string UninitializedStructMembersStartAtZero()
@@ -213,5 +232,12 @@ public static class ConstructorShadowProbes
         var o = new CsOutShadow("12");
 
         return $"{o.C},{o.T},{o.Sum}";
+    }
+
+    public static string OwnTypeNamedLikeAParameterOutsideInitializers()
+    {
+        var made = CsZzCopy.Make();
+
+        return $"{CsZzCopy.Empty.V},{CsZzCopy.Empty.Twice},{made.V},{made.Twice}";
     }
 }

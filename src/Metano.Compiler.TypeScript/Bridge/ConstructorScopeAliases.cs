@@ -84,19 +84,58 @@ internal static class ConstructorScopeAliases
             ? new TsAliasedReference(reference, name, alias)
             : reference;
 
+    /// <summary>
+    /// The names that shadow an instance initializer inlined at a store point
+    /// of <paramref name="ir"/>'s constructor (<see cref="ShadowingNamesOf"/>),
+    /// each with its alias. An alias avoids every name the constructor binds,
+    /// nested locals included, and the names of the file's other classes.
+    /// </summary>
     public static ImmutableDictionary<string, string> Of(
         IrClassDeclaration ir,
         IReadOnlyList<TsConstructorParam> parameters
     )
     {
-        var bound = parameters
-            .Select(parameter => parameter.Name)
-            .Concat(BoundNamesOf(ir))
+        var parameterNames = parameters.Select(parameter => parameter.Name).ToList();
+
+        var shadowing = parameterNames
+            .Concat(ShadowingNamesOf(ir))
             .ToHashSet(StringComparer.Ordinal);
 
-        HashSet<string> avoided = FileScope is { } file ? [.. bound, .. file] : bound;
+        HashSet<string> avoided =
+        [
+            .. parameterNames,
+            .. BoundNamesOf(ir),
+            .. FileScope ?? new HashSet<string>(),
+        ];
 
-        return bound.ToImmutableDictionary(name => name, name => AliasOf(name, avoided));
+        return shadowing.ToImmutableDictionary(name => name, name => AliasOf(name, avoided));
+    }
+
+    /// <summary>
+    /// The names in scope at a store point of <paramref name="ir"/>'s
+    /// constructor: the dispatcher's <c>args</c>, each declaration's parameters
+    /// and the locals its body declares at its top level (a <c>let</c> /
+    /// <c>const</c> shadows from the start of its block, temporal dead zone
+    /// included). A local of a nested block is out of scope there.
+    /// </summary>
+    private static HashSet<string> ShadowingNamesOf(IrClassDeclaration ir)
+    {
+        var shadowing = new HashSet<string>(StringComparer.Ordinal);
+
+        if (ir.Constructor is not { } constructor)
+            return shadowing;
+
+        shadowing.Add(DispatcherArguments);
+
+        foreach (var declaration in constructor.DeclarationsInOrder)
+        {
+            shadowing.UnionWith(ParameterNamesOf(declaration));
+
+            foreach (var statement in declaration.Body ?? [])
+                AddTopLevelLocals(statement, shadowing);
+        }
+
+        return shadowing;
     }
 
     /// <summary>
@@ -115,11 +154,7 @@ internal static class ConstructorScopeAliases
 
         foreach (var declaration in constructor.DeclarationsInOrder)
         {
-            bound.UnionWith(
-                declaration.Parameters.Select(p =>
-                    IrToTsNamingPolicy.ToParameterName(p.Parameter.Name)
-                )
-            );
+            bound.UnionWith(ParameterNamesOf(declaration));
 
             foreach (var statement in declaration.Body ?? [])
                 AddLocals(statement, bound);
@@ -128,15 +163,27 @@ internal static class ConstructorScopeAliases
         return bound;
     }
 
+    private static IEnumerable<string> ParameterNamesOf(IrConstructorDeclaration declaration) =>
+        declaration.Parameters.Select(p => IrToTsNamingPolicy.ToParameterName(p.Parameter.Name));
+
     private static void AddLocals(IrStatement statement, HashSet<string> bound)
+    {
+        AddTopLevelLocals(statement, bound);
+
+        foreach (var nested in IrNodeChildren.StatementsOf(statement))
+            AddLocals(nested, bound);
+    }
+
+    /// <summary>
+    /// Adds the locals <paramref name="statement"/> declares in its own block:
+    /// its declarations and the <c>out</c> locals of its own expressions.
+    /// </summary>
+    private static void AddTopLevelLocals(IrStatement statement, HashSet<string> bound)
     {
         bound.UnionWith(LocalsDeclaredBy(statement).Select(IrToTsNamingPolicy.ToLocalName));
 
         foreach (var expression in IrNodeChildren.ExpressionsOf(statement))
             AddOutLocals(expression, bound);
-
-        foreach (var nested in IrNodeChildren.StatementsOf(statement))
-            AddLocals(nested, bound);
     }
 
     private static IEnumerable<string> LocalsDeclaredBy(IrStatement statement) =>

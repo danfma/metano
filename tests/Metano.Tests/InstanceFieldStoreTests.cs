@@ -327,6 +327,34 @@ public class InstanceFieldStoreTests
     }
 
     [Test]
+    public async Task OwnLowercaseTypeNamedLikeAParameter_ReadsUnaliasedOutsideInstanceInitializers()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, Name("zzCopy")]
+            public class ZzCopy
+            {
+                public static readonly ZzCopy Empty = new ZzCopy(0);
+                public static int Seed = 4;
+                public int V;
+                public int Twice => V * ZzCopy.Seed;
+                public static ZzCopy Make() => new ZzCopy(1);
+                public ZzCopy(int zzCopy) { V = zzCopy; }
+                public ZzCopy(string zzCopy) { V = zzCopy.Length; }
+            }
+            """
+        );
+
+        var output = files["zz-copy.ts"];
+
+        await Assert
+            .That(diagnostics.Where(d => d.Severity == MetanoDiagnosticSeverity.Error))
+            .IsEmpty();
+
+        await Assert.That(output).DoesNotContain("zzCopy$");
+    }
+
+    [Test]
     public async Task ClassesSharingAFile_ReadAShadowedImportUnderOneAlias()
     {
         var files = TranspileHelper.Transpile(
