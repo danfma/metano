@@ -45,9 +45,9 @@ public sealed partial class IrExpressionExtractor
             ),
             EqualsValueClauseSyntax { Parent: PropertyDeclarationSyntax property } =>
                 TypeOfDeclared(_semantic.GetDeclaredSymbol(property)),
-            AssignmentExpressionSyntax assignment when assignment.Right == value => _semantic
-                .GetTypeInfo(assignment.Left)
-                .Type,
+            AssignmentExpressionSyntax assignment when assignment.Right == value => AssignedTypeOf(
+                assignment.Left
+            ),
             ArgumentSyntax argument => ParameterTypeOf(argument),
             ArrowExpressionClauseSyntax arrow => ReturnTypeOf(arrow.Parent),
             ReturnStatementSyntax statement => ReturnTypeOf(
@@ -55,6 +55,16 @@ public sealed partial class IrExpressionExtractor
             ),
             _ => null,
         };
+
+    /// <summary>
+    /// The declared type of an assignment target. The target's type info follows
+    /// Roslyn's flow state, which is maybe-null for a non-nullable member inside a
+    /// constructor or after a null test, so a symbol's declared type wins; an element
+    /// of an array (no symbol) falls back to the type info.
+    /// </summary>
+    private ITypeSymbol? AssignedTypeOf(ExpressionSyntax target) =>
+        TypeOfDeclared(_semantic.GetSymbolInfo(target).Symbol)
+        ?? _semantic.GetTypeInfo(target).Type;
 
     private static bool IsReturnScope(SyntaxNode node) =>
         node
@@ -92,6 +102,7 @@ public sealed partial class IrExpressionExtractor
             ILocalSymbol local => local.Type,
             IFieldSymbol field => field.Type,
             IPropertySymbol property => property.Type,
+            IParameterSymbol parameter => parameter.Type,
             _ => null,
         };
 }

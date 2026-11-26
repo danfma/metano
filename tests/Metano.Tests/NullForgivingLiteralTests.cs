@@ -73,4 +73,36 @@ public class NullForgivingLiteralTests
         await Assert.That(output).Contains("const generic: T = null!;");
         await Assert.That(output).Contains("const viaDefault: IPort = null!;");
     }
+
+    [Test]
+    public async Task NullForgivingStore_InAConstructorOrAfterANullTest_KeepsTheAssertion()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            [Transpile]
+            public sealed class Node { }
+
+            [Transpile]
+            public sealed class CtorNull
+            {
+                public string Name;
+                public string Prop { get; set; }
+                public Node Link;
+
+                public CtorNull() { Name = null!; Prop = null!; Link = null!; }
+
+                public void Clear() { if (Name == null) { } Name = null!; }
+
+                public void Nullable(string? keep) { keep = null!; }
+            }
+            """
+        )["ctor-null.ts"];
+
+        await Assert.That(output).Contains("this.name = null!;");
+        await Assert.That(output).Contains("this.prop = null!;");
+        await Assert.That(output).Contains("this.link = null!;");
+        await Assert.That(output).DoesNotContain("this.name = null;");
+        await Assert.That(output).Contains("keep = null;");
+    }
 }
