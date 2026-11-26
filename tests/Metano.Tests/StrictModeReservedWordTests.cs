@@ -101,6 +101,39 @@ public class StrictModeReservedWordTests
     }
 
     [Test]
+    public async Task Dart_MembersNamedLikeReservedWords_AreEscapedAtTheDeclarationAndEveryUse()
+    {
+        var (files, _) = DartTranspileHelper.Transpile(
+            """
+            [Transpile]
+            public record KW(int In, int New, int Of);
+
+            [Transpile]
+            public class KwUse
+            {
+                public int Default { get; set; }
+                public static int Sum(KW k) => k.In + k.New + k.Of;
+                public static KW With(KW k) => k with { In = 3 };
+                public int Read() => Default + this.Default;
+            }
+            """
+        );
+
+        var record = files["k_w.dart"];
+        var use = files["kw_use.dart"];
+
+        await Assert.That(record).Contains("KW(this.in_, this.new_, this.of);");
+        await Assert.That(record).Contains("other.in_ == this.in_");
+        await Assert.That(record).DoesNotContain("this.in ");
+        await Assert.That(record).DoesNotContain("this.in,");
+        await Assert.That(use).Contains("k.in_ + k.new_ + k.of");
+        await Assert.That(use).Contains("k.copyWith(in_: 3)");
+        await Assert.That(use).Contains("late int default_;");
+        await Assert.That(use).Contains("this.default_ + this.default_");
+        await Assert.That(use).Contains("static KW with_(KW k)");
+    }
+
+    [Test]
     public async Task EscapedFunctions_AreImportedByAnotherFile_AndThroughTheBarrel()
     {
         var files = TranspileHelper.Transpile(
@@ -179,5 +212,78 @@ public class StrictModeReservedWordTests
         await Assert.That(all).Contains("new implements_()");
         await Assert.That(all).DoesNotContain("class implements ");
         await Assert.That(files["use.ts"]).Contains("import { implements_ } from");
+    }
+
+    [Test]
+    public async Task StaticDispatcher_OfAnEscapedOrRenamedClass_ReceivesItsEmittedName()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class let
+            {
+                public static string Make(int n) => "n" + n;
+                public static string Make(string s) => "s" + s;
+            }
+
+            [Transpile, Name("Signals")]
+            public static class Signal
+            {
+                public static string Describe(int x) => "int" + x;
+                public static string Describe(string x) => "str" + x;
+            }
+
+            [Transpile]
+            public class Signal<T> { public T Value; public Signal(T v) { Value = v; } }
+            """
+        );
+
+        var escaped = files["let_.ts"];
+        var renamed = files["signals.ts"];
+
+        await Assert.That(escaped).Contains("return let_.makeN(args[0] as number);");
+        await Assert.That(escaped).DoesNotContain("return let.");
+        await Assert.That(renamed).Contains("return Signals.describeInt32(args[0] as number);");
+    }
+
+    [Test]
+    public async Task ConstructorSelectors_OfAnEscapedClass_AgreeAcrossPackages()
+    {
+        const string library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("plib")]
+
+            namespace Lib;
+
+            public class let
+            {
+                public string K = "p";
+                public let(System.Func<int> f) { K = "fi" + f(); }
+                [Name("Lbl")] public let(System.Func<string> f) { K = "fs" + f(); }
+                public let(int n) { K = "n" + n; }
+            }
+            """;
+        const string consumer = """
+            using Lib;
+
+            [Transpile]
+            public class AppLet : let
+            {
+                public int Z = 1;
+                public AppLet(int n) : base(() => "a" + n) { Z += n; }
+                public AppLet(string s) : base(() => s.Length) { }
+            }
+            """;
+
+        var producer = TranspileHelper.Transpile(library);
+        var viaSource = TranspileHelper.TranspileWithLibrary(library, consumer)["app-let.ts"];
+        var viaImage = TranspileHelper.TranspileWithLibraryImage(library, consumer)["app-let.ts"];
+        var declared = string.Join("\n", producer.Values);
+
+        await Assert.That(declared).Contains("static readonly bylet_Lbl = ");
+        await Assert.That(viaSource).Contains("super(let_.bylet_Lbl, ");
+        await Assert.That(viaSource).DoesNotContain("let_.byletLbl");
+        await Assert.That(viaImage).Contains("super(let_.bylet_Lbl, ");
+        await Assert.That(viaImage).DoesNotContain("let_.byletLbl");
     }
 }

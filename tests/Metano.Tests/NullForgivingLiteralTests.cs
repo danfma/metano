@@ -73,4 +73,91 @@ public class NullForgivingLiteralTests
         await Assert.That(output).Contains("const generic: T = null!;");
         await Assert.That(output).Contains("const viaDefault: IPort = null!;");
     }
+
+    [Test]
+    public async Task NullForgivingStore_InAConstructorOrAfterANullTest_KeepsTheAssertion()
+    {
+        var output = TranspileHelper.Transpile(
+            """
+            #nullable enable
+            [Transpile]
+            public sealed class Node { }
+
+            [Transpile]
+            public sealed class CtorNull
+            {
+                public string Name;
+                public string Prop { get; set; }
+                public Node Link;
+
+                public CtorNull() { Name = null!; Prop = null!; Link = null!; }
+
+                public void Clear() { if (Name == null) { } Name = null!; }
+
+                public void Nullable(string? keep) { keep = null!; }
+            }
+            """
+        )["ctor-null.ts"];
+
+        await Assert.That(output).Contains("this.name = null!;");
+        await Assert.That(output).Contains("this.prop = null!;");
+        await Assert.That(output).Contains("this.link = null!;");
+        await Assert.That(output).DoesNotContain("this.name = null;");
+        await Assert.That(output).Contains("keep = null;");
+    }
+
+    private const string VarLocalStores = """
+        #nullable enable
+        [Transpile]
+        public static class VarLocals
+        {
+            public static string Deconstructed((string, string) pair)
+            {
+                var (a, b) = pair;
+                a = null!;
+                return a + b;
+            }
+
+            public static string Simple(string start)
+            {
+                var s = start;
+                s = null!;
+                return s;
+            }
+
+            public static string? Reassigned(string start, string? next)
+            {
+                var s = start;
+                s = next;
+                s = null!;
+                return s;
+            }
+        }
+        """;
+
+    [Test]
+    public async Task NullForgivingStore_ToAnUnannotatedVarLocal_KeepsTheAssertion()
+    {
+        var output = TranspileHelper.Transpile(VarLocalStores)["var-locals.ts"];
+
+        await Assert.That(output).Contains("a = null!;");
+        await Assert.That(output).DoesNotContain("a = null;");
+        await Assert.That(output).Contains("let s = start;\n    s = null!;");
+
+        await Assert
+            .That(output)
+            .Contains("let s: string | null = start;\n    s = next;\n    s = null;");
+    }
+
+    [Test]
+    public async Task NullForgivingStores_ToVarLocals_TypeCheckStrictly()
+    {
+        var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(
+            TranspileHelper.Transpile(VarLocalStores),
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
 }

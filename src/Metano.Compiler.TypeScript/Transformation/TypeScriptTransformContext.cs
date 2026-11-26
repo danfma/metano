@@ -553,6 +553,9 @@ public sealed class TypeScriptTransformContext(
     /// the early setup phase of <c>TypeTransformer.TransformAll</c>
     /// where the context does not yet exist; in every other call site
     /// prefer the instance method so future changes stay in one place.
+    /// A name that is still the C# name takes the strict-mode escape
+    /// (<see cref="EscapedOwnName"/>), so a type from a referenced package
+    /// resolves to the name its own package declared it under.
     /// </summary>
     internal static string ResolveTsName(
         IReadOnlyDictionary<string, string>? typeNamesBySymbol,
@@ -560,8 +563,19 @@ public sealed class TypeScriptTransformContext(
     ) =>
         typeNamesBySymbol is not null
         && typeNamesBySymbol.TryGetValue(type.GetCrossAssemblyOriginKey(), out var name)
+        && name != type.Name
             ? name
-            : type.Name;
+            : EscapedOwnName(type);
+
+    /// <summary>
+    /// The C# name of <paramref name="type"/> as its module declares it: a
+    /// top-level type is a module-level binding, an identifier position, so a
+    /// strict-mode reserved word is escaped (<c>class let</c> → <c>let_</c>,
+    /// #791); a nested type is reached as a member and keeps its name. The
+    /// producer's declaration and every consumer, in any package, read this rule.
+    /// </summary>
+    internal static string EscapedOwnName(INamedTypeSymbol type) =>
+        type.ContainingType is null ? TypeScriptNaming.EscapeIfReserved(type.Name) : type.Name;
 
     /// <summary>
     /// The project-type entry of <paramref name="type"/>, looked up by its emitted
@@ -656,6 +670,7 @@ public sealed class TypeScriptTransformContext(
         {
             EmitsConstructorSelectors = TsConstructorSelectorShapes.EmitsSelectors,
             EmitsBrandedFastPath = TsCompanionPlan.EmitsFastPathFor,
+            EmitsStructZeroValue = true,
             HasExceptionRuntimeClass = ExceptionClasses.HasRuntimeClass,
             UnprintableTextReason = TsUnprintableText.ReasonOf,
             EmittedMemberName = IrToTsNamingPolicy.DeclaredNameOf,

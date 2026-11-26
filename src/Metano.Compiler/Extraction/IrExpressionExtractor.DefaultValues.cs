@@ -95,13 +95,14 @@ public sealed partial class IrExpressionExtractor
 
     /// <summary>
     /// <c>default(S)</c> of a struct that declares a constructor (#802): the
-    /// struct's own zero value, which the TypeScript target reads from its
-    /// <c>$default()</c> factory. Another target keeps the placeholder.
+    /// struct's own zero value, where the target declares one
+    /// (<see cref="IrExtractionContext.EmitsStructZeroValue"/>). Another target
+    /// keeps the placeholder.
     /// </summary>
     private IrExpression? StructZeroValueOf(SyntaxNode syntax, ITypeSymbol type)
     {
         if (
-            _target is not (null or Metano.Annotations.TargetLanguage.TypeScript)
+            !_context.EmitsStructZeroValue
             || type is not INamedTypeSymbol named
             || !IrTypeRefMapper.HasZeroValueFactory(named, _target)
         )

@@ -2572,7 +2572,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             if (
                 !typeNamesBySymbol.TryGetValue(key, out var current)
                 || current != type.Name
-                || TypeScriptNaming.EscapeIfReserved(current) is var escaped && escaped == current
+                || TypeScriptTransformContext.EscapedOwnName(type) is var escaped
+                    && escaped == current
             )
                 continue;
 

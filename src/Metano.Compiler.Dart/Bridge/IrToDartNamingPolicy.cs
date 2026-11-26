@@ -54,27 +54,27 @@ public static class IrToDartNamingPolicy
     public static string ToTypeName(string irName, IReadOnlyList<IrAttribute>? attributes) =>
         FindNameOverride(attributes) ?? irName;
 
-    public static string ToMemberName(string irName, IReadOnlyList<IrAttribute>? attributes)
-    {
-        var overrideName = FindNameOverride(attributes);
-        if (overrideName is not null)
-            return overrideName;
-        return ToCamelCase(irName);
-    }
+    /// <summary>
+    /// The emitted name of a member: its <c>[Name]</c> override, else camelCase
+    /// with a Dart reserved word escaped (<see cref="EscapeIfReserved"/>). Unlike
+    /// JavaScript, Dart rejects a reserved word in a member position too
+    /// (<c>final int in;</c>, <c>k.in</c>), so the declaration and every use
+    /// (member reads, <c>==</c>, <c>hashCode</c>, <c>copyWith</c> keys) read this
+    /// one spelling.
+    /// </summary>
+    public static string ToMemberName(string irName, IReadOnlyList<IrAttribute>? attributes) =>
+        FindNameOverride(attributes) ?? EscapeIfReserved(ToCamelCase(irName));
 
     /// <summary>
     /// The emitted name of a local, parameter, loop or catch variable or pattern
     /// designator: camelCase, with a Dart reserved word (<c>final</c>, <c>var</c>,
     /// <c>with</c>, <c>assert</c>, …) escaped by a trailing underscore, since an
-    /// identifier cannot carry one. A member name (<see cref="ToMemberName"/>) is
-    /// not escaped.
+    /// identifier cannot carry one.
     /// </summary>
-    public static string ToParameterName(string irName)
-    {
-        var name = ToCamelCase(irName);
+    public static string ToParameterName(string irName) => EscapeIfReserved(ToCamelCase(irName));
 
-        return ReservedWords.Contains(name) ? name + "_" : name;
-    }
+    private static string EscapeIfReserved(string name) =>
+        ReservedWords.Contains(name) ? name + "_" : name;
 
     public static string ToPromotedMemberName(IrConstructorParameter parameter) =>
         parameter.EmittedName ?? ToParameterName(parameter.Parameter.Name);

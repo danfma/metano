@@ -109,17 +109,21 @@ internal static class ReferenceNullability
 
     /// <summary>
     /// A write that keeps the local non-null: a simple <c>=</c> of a never-null string
-    /// expression, or a <c>+=</c> (a concatenation never yields null). Any other write
-    /// (a deconstruction, <c>out</c>, <c>ref</c>, <c>??=</c>, an increment) is not
-    /// classified and keeps the guard.
+    /// expression, or a <c>+=</c> that is the built-in concatenation (which never yields
+    /// null; a user-defined <c>operator +</c> may). Any other write (a deconstruction,
+    /// <c>out</c>, <c>ref</c>, <c>??=</c>, an increment) is not classified and keeps the
+    /// guard.
     /// </summary>
     private static bool IsNeverNullWrite(SemanticModel model, ILocalReferenceOperation reference) =>
         reference.Parent switch
         {
             ISimpleAssignmentOperation { Value.Syntax: ExpressionSyntax value } assignment =>
                 assignment.Target == reference && IsNeverNull(model, value),
-            ICompoundAssignmentOperation { OperatorKind: BinaryOperatorKind.Add } compound =>
-                compound.Target == reference,
+            ICompoundAssignmentOperation
+            {
+                OperatorKind: BinaryOperatorKind.Add,
+                OperatorMethod: null
+            } compound => compound.Target == reference,
             _ => false,
         };
 
@@ -131,11 +135,27 @@ internal static class ReferenceNullability
                 parenthesized.Expression
             ),
             InterpolatedStringExpressionSyntax => true,
-            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AddExpression } => model
-                .GetTypeInfo(expression)
-                .Type?.SpecialType == SpecialType.System_String,
+            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AddExpression } =>
+                IsBuiltInStringConcatenation(model, expression),
             _ => model.GetConstantValue(expression) is { HasValue: true, Value: string },
         };
+
+    /// <summary>
+    /// Whether <paramref name="expression"/> is the built-in string <c>+</c>, which never
+    /// yields <c>null</c>. A user-defined <c>operator +</c> (an <c>OperatorMethod</c>) can
+    /// return <c>null</c> even when its result type reads as <c>string</c>.
+    /// </summary>
+    private static bool IsBuiltInStringConcatenation(
+        SemanticModel model,
+        ExpressionSyntax expression
+    ) =>
+        model.GetOperation(expression)
+            is IBinaryOperation
+            {
+                OperatorKind: BinaryOperatorKind.Add,
+                OperatorMethod: null,
+                Type.SpecialType: SpecialType.System_String
+            };
 
     /// <summary>
     /// Whether a value read from a symbol of <paramref name="type"/> may hold
@@ -176,8 +196,10 @@ internal static class ReferenceNullability
                 NullableAnnotation.NotAnnotated,
             InterpolatedStringExpressionSyntax => NullableAnnotation.NotAnnotated,
             BaseObjectCreationExpressionSyntax => NullableAnnotation.NotAnnotated,
-            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AddExpression } =>
-                NullableAnnotation.NotAnnotated,
+            BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AddExpression } => AdditionAnnotation(
+                model,
+                expression
+            ),
             BinaryExpressionSyntax { RawKind: (int)SyntaxKind.CoalesceExpression } coalesce =>
                 DeclaredAnnotation(model, coalesce.Right),
             ConditionalExpressionSyntax conditional => Either(
@@ -188,6 +210,18 @@ internal static class ReferenceNullability
             _ => AnnotationOfSymbol(model, expression),
         };
     }
+
+    /// <summary>
+    /// A <c>+</c>: the built-in string concatenation never yields <c>null</c>; a
+    /// user-defined operator answers with its declared return annotation.
+    /// </summary>
+    private static NullableAnnotation AdditionAnnotation(
+        SemanticModel model,
+        ExpressionSyntax expression
+    ) =>
+        IsBuiltInStringConcatenation(model, expression)
+            ? NullableAnnotation.NotAnnotated
+            : AnnotationOfSymbol(model, expression);
 
     private static NullableAnnotation Either(NullableAnnotation first, NullableAnnotation second) =>
         first == NullableAnnotation.NotAnnotated ? second : first;

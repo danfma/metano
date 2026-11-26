@@ -1097,7 +1097,7 @@ internal sealed class IrToTsClassEmitter(
 
             var dispatcher = TryBuildOverloadDispatcherFromIr(
                 irMethod,
-                type.Name,
+                _context.ResolveTsName(type),
                 ir,
                 claims,
                 lowering

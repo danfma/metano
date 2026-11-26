@@ -49,4 +49,41 @@ public class StructDefaultTests
         await Assert.That(output).DoesNotContain("undefined");
         await Assert.That(files["pt.ts"]).Contains("static $default(): Pt");
     }
+
+    private const string ParameterDefaultSource = """
+        [Transpile]
+        public struct Vec
+        {
+            public int X;
+            public int Y;
+
+            public Vec(int x, int y) { X = x; Y = y; }
+        }
+
+        [Transpile]
+        public static class Defaults
+        {
+            public static int TakeV(Vec v = default) => v.X;
+        }
+        """;
+
+    [Test]
+    public async Task ParameterDefaultOfAStructWithAConstructor_IsTheZeroValueFactory()
+    {
+        var output = TranspileHelper.Transpile(ParameterDefaultSource)["defaults.ts"];
+
+        await Assert.That(output).Contains("v: Vec = Vec.$default()");
+    }
+
+    [Test]
+    public async Task Dart_ParameterDefaultOfAStruct_KeepsThePlaceholderAndItsWarning()
+    {
+        var (files, diagnostics) = DartTranspileHelper.Transpile(ParameterDefaultSource);
+        var output = string.Join("\n", files.Values);
+        var warned = diagnostics.Any(d => d.Message.Contains("'default(Vec)' has no literal"));
+
+        await Assert.That(output).DoesNotContain("Vec v = Vec()");
+        await Assert.That(output).Contains("/* default */");
+        await Assert.That(warned).IsTrue();
+    }
 }
