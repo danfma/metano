@@ -187,6 +187,33 @@ compilation reports nothing: `MS0063` is reported where the type is declared.
 Prefer a project reference for a library whose branded types overload static
 methods.
 
+### Overloads the dispatcher cannot reach
+
+When two overloads have the same runtime test (`Func<Action, T>` and
+`Action<Action>` are both a `function`), the dispatcher keeps the first and
+drops the other, and `MS0063` names the fast path hand-written TypeScript must
+call. C# call sites in the same compilation or through a project reference bind
+to the right fast path either way. Put `[Name("…")]` on the dropped overload of
+a class method or constructor to acknowledge it: its fast path or factory gets a
+stable name (`Root` + `[Name("rootVoid")]` → `rootRootVoid`), a consumer that
+reads the library from a DLL or a package calls that name instead of the
+dispatcher, and `MS0063` is not reported. A pinned name never takes `$`: when
+another member, even an `internal` or `private` one, already has it, the build
+fails with `MS0068` at that member, because a consumer reading the DLL cannot
+see that member and would call it instead. An overloaded module function or
+extension method is still reported when pinned, because a consumer in another
+package keeps calling its dispatcher.
+
+A dispatcher left with a single overload is a plain method under the C# name
+that forwards to that overload's fast path, with its signature, not a
+`...args` dispatcher:
+
+```ts
+static root<T>(body: (arg: () => void) => T): T {
+  return Reactivity.rootBody<T>(body);
+}
+```
+
 ## The naming rule
 
 Every overload of a group gets a **suffix**; the member names are built from it.
@@ -321,8 +348,10 @@ run in `targets/js/sample-issue-tracker`.
 | `MS0034` | error | `[JsonFactory]` on a method of an overloaded group (the dispatcher is shared by its siblings) |
 | `MS0001` | error | an overload a dispatcher cannot tell from a synthesized value-equality member implements a transpiled interface member, whose callers reach it through the shared name; or two methods spelled alike by `[Name]` take the same synthesized member (see below) |
 | `MS0063` | warning | an overload a dispatcher cannot tell from a synthesized value-equality member that joined its group (see below) |
+| `MS0063` | warning | an overload a dispatcher drops because an earlier overload has the same runtime test, unless a `[Name]` pins a class method or constructor overload (see [Overloads the dispatcher cannot reach](#overloads-the-dispatcher-cannot-reach)) |
 | `MS0067` | warning | a generated name was taken and took `$` |
 | `MS0068` | error | a user member takes a generated fast path or factory name it does not own (including `equalsByValue` / `hashCodeByValue` / `withByValue`) |
+| `MS0068` | error | a member holds a name a `[Name]` pin gives a fast path, factory or selector, which never takes `$` |
 | `MS0069` | warning | a type implements one generic interface with overload groups more than once (`C : IConv<int>, IConv<string>`); calls to those members keep runtime dispatch |
 
 The [diagnostic catalog](../specs/001-project-baseline-evolution/baseline/diagnostic-catalog.md)

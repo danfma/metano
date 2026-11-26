@@ -1,5 +1,3 @@
-import { isInt32 } from "metano-runtime";
-
 export class Generic {
   constructor() { }
 
@@ -11,12 +9,7 @@ export class Generic {
     return 2;
   }
 
-  m<T>(x: number): number;
-  m(...args: unknown[]): any {
-    if (args.length === 1 && isInt32(args[0])) {
-      return this.mInt32$1(args[0] as any);
-    }
-
-    throw new Error("No matching overload for m");
+  m<T>(x: number): number {
+    return this.mInt32$1<T>(x);
   }
 }

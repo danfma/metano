@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -12,7 +13,8 @@ namespace Metano.Compiler.Extraction;
 /// constructors) whose IR is available, declared in this compilation or in a
 /// project reference, which loads as source; a type read from metadata only
 /// (a DLL or a package) keeps the dispatcher call, since its claimed names are
-/// unknown and the dispatcher is correct, only slower. Which shapes a target
+/// unknown and the dispatcher is correct, only slower — except for an
+/// overload a <c>[Name]</c> pins (FR-019). Which shapes a target
 /// emits with selectors and factories is the target's call, asked through
 /// <see cref="IrExtractionContext.EmitsConstructorSelectors"/>.
 /// </summary>
@@ -28,7 +30,8 @@ public static class DispatchedConstructorCalls
     ) =>
         constructor is not null
         && context.EmitsConstructorSelectors is { } emitsSelectors
-        && ConstructsThroughFactories(constructor.ContainingType, emitsSelectors)
+        && !constructor.ContainingType.IsAbstract
+        && SelectsOverload(constructor, emitsSelectors, context.Target)
             ? OverloadOf(constructor)
             : null;
 
@@ -43,7 +46,7 @@ public static class DispatchedConstructorCalls
     ) =>
         constructor is not null
         && context.EmitsConstructorSelectors is { } emitsSelectors
-        && HasSelectors(constructor.ContainingType, emitsSelectors)
+        && SelectsOverload(constructor, emitsSelectors, context.Target)
             ? OverloadOf(constructor)
             : null;
 
@@ -70,6 +73,29 @@ public static class DispatchedConstructorCalls
 
         return IrConstructorExtractor.IsDispatchedSet(definition)
             && HasSourceIr(definition)
+            && emitsSelectors(definition);
+    }
+
+    /// <summary>
+    /// Whether a call can select <paramref name="constructor"/> by its selector
+    /// and factory: its type <see cref="HasSelectors"/>, or the type is a
+    /// dispatched set the target emits with selectors, read from metadata only,
+    /// and a <c>[Name]</c> pins the overload's suffix, so its metadata
+    /// determines the names (FR-019; the dispatcher may drop it, MS0063).
+    /// </summary>
+    private static bool SelectsOverload(
+        IMethodSymbol constructor,
+        Func<INamedTypeSymbol, bool> emitsSelectors,
+        TargetLanguage? target
+    )
+    {
+        var definition = constructor.ContainingType.OriginalDefinition;
+
+        if (HasSelectors(definition, emitsSelectors))
+            return true;
+
+        return OverloadGroupNaming.IsPinnedConstructor(constructor.OriginalDefinition, target)
+            && IrConstructorExtractor.IsDispatchedSet(definition)
             && emitsSelectors(definition);
     }
 

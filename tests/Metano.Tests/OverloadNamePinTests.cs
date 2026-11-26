@@ -266,11 +266,14 @@ public class OverloadNamePinTests
     }
 
     /// <summary>
-    /// DECIDED-24: a producer read from metadata only keeps the dispatcher
-    /// calls, and the dispatcher keeps the C# name whatever its overloads pin.
+    /// DECIDED-24 as FR-019 amends it (#799): a producer read from metadata
+    /// only keeps the dispatcher calls, by its C# name, except for a class
+    /// overload a <c>[Name]</c> pins, whose factory and fast path the consumer
+    /// names from metadata (<c>Money.fromCents</c>, <c>addCents</c>). A module
+    /// function keeps its dispatcher even when pinned.
     /// </summary>
     [Test]
-    public async Task MetadataOnlyReference_CallsTheDispatcherByItsCSharpName()
+    public async Task MetadataOnlyReference_BindsPinnedClassOverloadsOnly()
     {
         var files = TranspileHelper.TranspileWithLibraryImage(PinLibrary, PinConsumer);
 
@@ -395,11 +398,12 @@ public class OverloadNamePinTests
     }
 
     /// <summary>
-    /// The claim pass treats a pinned name like any candidate (FR-004): a user
-    /// member that already holds it moves the generated pair to <c>$</c>.
+    /// A pinned name never takes <c>$</c> (FR-019, W10-8c): a user member that
+    /// already holds it is an <c>MS0068</c> error at that member, since a
+    /// consumer reading the type from metadata calls the pinned name.
     /// </summary>
     [Test]
-    public async Task PinTakenByAUserMember_IsRenamedByTheClaimPass()
+    public async Task PinTakenByAUserMember_ReportsMS0068AtTheMember()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -424,17 +428,22 @@ public class OverloadNamePinTests
             """
         );
 
-        var rename = diagnostics.Single();
+        var error = diagnostics.Single();
 
-        await TranspileHelper.AssertGolden("overload-name-pin-claimed.ts", files["fee.ts"]);
-        await Assert.That(rename.Code).IsEqualTo(DiagnosticCodes.OverloadNameShadowed);
+        await Assert.That(error.Code).IsEqualTo(DiagnosticCodes.OverloadFastPathHijacked);
+        await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        await Assert.That(SourceTextOf(error)).IsEqualTo("FromCents");
+        await Assert.That(files["fee.ts"]).Contains("byFeeCents = ");
+        await Assert.That(files["fee.ts"]).DoesNotContain("$");
 
         await Assert
-            .That(rename.Message)
+            .That(error.Message)
             .IsEqualTo(
-                "Factory 'Fee.fromCents' collides with the user member 'fromCents'; the "
-                    + "generated factory and selector are emitted as 'fromCents$' and "
-                    + "'byFeeCents$' (spec 013 FR-004)."
+                "Factory 'Fee.fromCents' of 'Fee(int value)', which [Name] pins, collides with "
+                    + "the user member 'fromCents'; a pinned name never takes '$', because "
+                    + "consumers that read the type from metadata call it without seeing "
+                    + "non-public members: rename that member or change the pin (spec 013 "
+                    + "FR-005, FR-019)."
             );
     }
 

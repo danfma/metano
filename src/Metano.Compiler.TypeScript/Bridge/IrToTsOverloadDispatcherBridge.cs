@@ -27,7 +27,9 @@ namespace Metano.Compiler.TypeScript.Bridge;
 ///   group. A group that only overrides an inherited dispatcher's overloads
 ///   emits none; one that adds overloads to it emits an <c>override</c>
 ///   dispatcher whose signatures are the inherited ones plus its own and
-///   whose unmatched calls go to <c>super</c>.</item>
+///   whose unmatched calls go to <c>super</c>. A declared dispatcher left with
+///   one reachable overload is a typed forwarder to its fast path instead
+///   (#799).</item>
 /// </list>
 /// The branches follow <see cref="OverloadDispatchOrder"/> and match the
 /// arguments as <see cref="OverloadArgumentShape"/> describes. An omitted
@@ -413,6 +415,16 @@ public static class IrToTsOverloadDispatcherBridge
         var name = TsClassMemberTable.MethodNameOf(group.Primary);
         var receiver = DispatchReceiver(group.Primary.IsStatic, containingTypeName);
 
+        if (ReachesOneOverload(group, branches, signatures))
+            return BuildTypedForwarder(
+                branches[0],
+                name,
+                names.FastPathNameOf(branches[0]),
+                receiver,
+                plan,
+                context
+            );
+
         var unmatched = overridesInherited
             ? ForwardToBase(name, inherited)
             : NoMatchingOverload(name);
@@ -449,6 +461,83 @@ public static class IrToTsOverloadDispatcherBridge
             Override: overridesInherited || overridesBaseValueEquality
         );
     }
+
+    /// <summary>
+    /// Whether a declared dispatcher is left with one reachable overload — the
+    /// others dropped because an earlier branch has the same runtime test
+    /// (#778, #799) — and so lowers to a typed forwarder. A dispatcher over a
+    /// synthesized member or an inherited one keeps its branches.
+    /// </summary>
+    private static bool ReachesOneOverload(
+        IrMethodGroup group,
+        IReadOnlyList<IrMethodDeclaration> branches,
+        IReadOnlyList<IrMethodDeclaration> signatures
+    ) =>
+        group is { DispatcherKind: IrDispatcherKind.Declared, Synthesized: null }
+        && branches.Count == 1
+        && signatures.Count == 1;
+
+    /// <summary>
+    /// The C# name of a group whose dispatcher reaches one overload (spec 013
+    /// FR-016): a member with that overload's signature that forwards to its
+    /// fast path, instead of a rest-args dispatcher. An omitted optional
+    /// argument reaches the fast path as <c>undefined</c>, where its default
+    /// applies; overrides keep working, since the fast path keeps its name.
+    /// </summary>
+    private static TsMethodMember BuildTypedForwarder(
+        IrMethodDeclaration lone,
+        string name,
+        string fastPathName,
+        TsExpression receiver,
+        OverloadGroupPlan plan,
+        IrToTsBridgeContext context
+    )
+    {
+        var parameters = SignatureParameters(lone, context.TypeOverrides);
+        var typeParameters = MapTypeParameters(lone.TypeParameters);
+
+        var call = ForwardingCall(
+            FastPathCallee(receiver, fastPathName),
+            parameters,
+            typeParameters
+        );
+
+        return new TsMethodMember(
+            name,
+            parameters,
+            IrToTsTypeMapper.Map(lone.ReturnType, context.TypeOverrides),
+            [new TsReturnStatement(call)],
+            Static: lone.IsStatic,
+            Accessibility: plan.Accessibility,
+            TypeParameters: typeParameters,
+            JSDoc: plan.Signatures[0].JSDoc
+        );
+    }
+
+    /// <summary>
+    /// A forwarder's call into the member it forwards to: each parameter passed
+    /// by name, a rest parameter spread, and, when given, the forwarder's type
+    /// parameters passed through, so one that only the return type names stays
+    /// bound.
+    /// </summary>
+    internal static TsCallExpression ForwardingCall(
+        TsExpression callee,
+        IReadOnlyList<TsParameter> parameters,
+        IReadOnlyList<TsTypeParameter>? typeParameters = null
+    ) =>
+        new(
+            callee,
+            parameters
+                .Select(parameter =>
+                    parameter.Rest
+                        ? new TsSpreadExpression(new TsIdentifier(parameter.Name))
+                        : (TsExpression)new TsIdentifier(parameter.Name)
+                )
+                .ToList(),
+            TypeArguments: typeParameters
+                ?.Select(typeParameter => (TsType)new TsNamedType(typeParameter.Name))
+                .ToList()
+        );
 
     /// <summary>
     /// The overloads of <paramref name="primary"/>'s dispatchers whose
@@ -812,15 +901,9 @@ public static class IrToTsOverloadDispatcherBridge
     {
         var parameters = SignatureParameters(method, context.TypeOverrides);
 
-        var call = new TsCallExpression(
+        var call = ForwardingCall(
             new TsPropertyAccess(new TsIdentifier("this"), fastPathName),
             parameters
-                .Select(parameter =>
-                    parameter.Rest
-                        ? new TsSpreadExpression(new TsIdentifier(parameter.Name))
-                        : (TsExpression)new TsIdentifier(parameter.Name)
-                )
-                .ToList()
         );
 
         return new TsMethodMember(
