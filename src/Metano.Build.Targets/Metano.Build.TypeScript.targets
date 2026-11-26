@@ -73,7 +73,13 @@
 
       MetanoTranspileTs is skipped while every input is older than
       <resolved output dir>/.metano-stamp. Besides the user's sources, assets
-      and project file, its inputs include a toolchain key file,
+      and project file, its inputs include the implementation assemblies of the references
+      (@(ReferencePath): the compiler reads a referenced project as source, so any change that
+      rebuilds its assembly, a body included, reruns the transpile, #818), a list of the
+      sources, assets and references,
+      $(IntermediateOutputPath)$(MSBuildProjectFile).MetanoInputs.typescript.cache, rewritten
+      only when the set changes (a removed or renamed source or asset, #797), and a toolchain
+      key file,
       $(IntermediateOutputPath)$(MSBuildProjectFile).MetanoToolchain.typescript.cache,
       rewritten only when its content changes. The content names the Metano
       toolchain: the path of Metano.Build.Common.targets (inside the versioned
@@ -97,6 +103,11 @@
       place, and the compiled assembly is not an input. Delete the stamp to
       force a rerun (MetanoClean alone does not: it only applies when the
       target runs).
+
+      A standalone `-t:MetanoTranspileTs` run without Build in the same invocation sees no
+      resolved references, so its input list differs from a normal build's and the next normal
+      build reruns the transpile once. In that mode a change in a referenced project is not
+      detected at all: run a normal build for it.
 
       Not tracked: a tool installed with the tool install `tool-path` option;
       a tool pinned in a manifest further up the tree than the nearest one
@@ -207,6 +218,7 @@
       <_MetanoTsActive Condition="'$(_MetanoTsEnabled)' == 'true' and '$(_MetanoTsOutputDir)' != ''"
         >true</_MetanoTsActive>
       <_MetanoTsToolchainKeyFile>$(IntermediateOutputPath)$(MSBuildProjectFile).MetanoToolchain.typescript.cache</_MetanoTsToolchainKeyFile>
+      <_MetanoTsInputListFile>$(IntermediateOutputPath)$(MSBuildProjectFile).MetanoInputs.typescript.cache</_MetanoTsInputListFile>
     </PropertyGroup>
 
     <ItemGroup Condition="'$(_MetanoTsActive)' == 'true'">
@@ -215,6 +227,7 @@
         OutputDir="$(_MetanoTsOutputDir)"
         OutputDirFull="$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(_MetanoTsOutputDir)').TrimEnd('/\'))"
         ToolchainKeyFile="$(_MetanoTsToolchainKeyFile)"
+        InputListFile="$(_MetanoTsInputListFile)"
         CompilerProject="$(_MetanoTsCompilerProject)"
         ToolStoreName="metano.compiler.typescript"
         PostBuildCommand="$([MSBuild]::Escape('$(_MetanoTsPostBuildCommand)'))"
@@ -342,11 +355,16 @@
     </ItemGroup>
   </Target>
 
+  <!-- @(ReferencePath), the implementation assemblies, is an input (#818): the compiler reads a
+       ProjectReference as source, so bodies of a referenced project ([Inline] expansion, getter
+       shapes, const reads) shape the output, and any rebuild of that project that changes its
+       assembly reruns the transpile. The input list (#797, written by _MetanoWriteInputLists)
+       makes a removed or renamed source or asset rerun it too. -->
   <Target
     Name="_MetanoTranspileTsIfOutOfDate"
     DependsOnTargets="_MetanoComposeTsArguments"
     Condition="'$(_MetanoTsActive)' == 'true'"
-    Inputs="@(_MetanoUserCompile);@(MetanoAsset);$(MSBuildProjectFullPath);$(_MetanoTsToolchainKeyFile)"
+    Inputs="@(_MetanoUserCompile);@(MetanoAsset->WithMetadataValue('Language', 'typescript'));@(MetanoAsset->WithMetadataValue('Language', 'all'));@(ReferencePath);$(MSBuildProjectFullPath);$(_MetanoTsToolchainKeyFile);$(_MetanoTsInputListFile)"
     Outputs="$(_MetanoTsOutputDir)/.metano-stamp"
   >
     <!-- Marks that the transpile really ran. Neither a PropertyGroup nor CreateProperty can:
