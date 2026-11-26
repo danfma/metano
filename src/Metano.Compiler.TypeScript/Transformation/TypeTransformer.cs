@@ -679,6 +679,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var (erasableFunctionExports, synthesizedAliasesByFile) = BuildNoContainerFunctionExports(
             transpilableTypes,
             transpilableTypesDict,
+            typeNamesBySymbol,
             ir.BclExports,
             ir.ExternalImports,
             ir.CrossAssemblyOrigins,
@@ -3341,6 +3342,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     ) BuildNoContainerFunctionExports(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
         IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
+        IReadOnlyDictionary<string, string> typeNamesBySymbol,
         IReadOnlyDictionary<string, IrBclExport> bclExports,
         IReadOnlyDictionary<string, IrExternalImport> externalImports,
         IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
@@ -3353,6 +3355,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var reservedNames = BuildReservedImportNames(
             transpilableTypes,
             transpilableTypesDict,
+            typeNamesBySymbol,
             bclExports,
             externalImports
         );
@@ -3368,7 +3371,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             if (!SymbolHelper.IsContainerless(type))
                 continue;
 
-            if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
+            if (
+                TypeScriptTransformContext.TranspilableTypeOf(
+                    transpilableTypesDict,
+                    typeNamesBySymbol,
+                    type
+                )
+                is not { } typeRef
+            )
                 continue;
 
             var barrelClaims = moduleFunctionClaims.ClaimedNamesOf(type);
@@ -3615,6 +3625,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private static IReadOnlyDictionary<string, ReservedImportName> BuildReservedImportNames(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
         IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
+        IReadOnlyDictionary<string, string> typeNamesBySymbol,
         IReadOnlyDictionary<string, IrBclExport> bclExports,
         IReadOnlyDictionary<string, IrExternalImport> externalImports
     )
@@ -3627,8 +3638,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 continue;
             if (SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript))
                 continue;
-            if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
+
+            if (
+                TypeScriptTransformContext.TranspilableTypeOf(
+                    transpilableTypesDict,
+                    typeNamesBySymbol,
+                    type
+                )
+                is not { } typeRef
+            )
                 continue;
+
             reserved[typeRef.TsName] = new ReservedImportName(
                 ReservedImportKind.TranspilableType,
                 type.ToDisplayString(),

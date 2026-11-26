@@ -2179,12 +2179,57 @@ public static partial class IrToTsExpressionBridge
         var value = Map(let.Value, context);
 
         return TryFoldPlainObjectInitializer(let, value, context)
+            ?? TryMapLetInline(let, value, context)
             ?? TsImmediateInvocation.Of(
                 [new TsImmediateBinding(IrToTsNamingPolicy.ToLocalName(let.Name), value)],
                 ReturningBody(let.Body, context),
                 isAsync: IrEvaluationTraits.ContainsAwait(let.Body)
             );
     }
+
+    /// <summary>
+    /// <see cref="IrLetExpression"/> as <c>(name = value, body)</c> over a
+    /// temporary declared at the head of the enclosing statement list
+    /// (<see cref="TsTemporaries"/>), with no immediately invoked function
+    /// (rule 1a, W10-6a): the value is evaluated once, before the body, as the
+    /// IIFE's argument is. Only for a store temporary
+    /// (<see cref="IrLetExpression.IsStoreTemporary"/>), where a statement list exists and no closure
+    /// in the value or the body could capture the temporary, which every
+    /// evaluation of the statement reassigns; <c>null</c> otherwise.
+    /// </summary>
+    private static TsExpression? TryMapLetInline(
+        IrLetExpression let,
+        TsExpression value,
+        IrToTsBridgeContext context
+    )
+    {
+        if (
+            !let.IsStoreTemporary
+            || context.Temporaries is not { } temporaries
+            || ContainsClosure(let.Value)
+            || ContainsClosure(let.Body)
+        )
+            return null;
+
+        var name = IrToTsNamingPolicy.ToLocalName(let.Name);
+
+        if (temporaries.TryDeclareExactly(name) is not { } temporary)
+            return null;
+
+        IReadOnlyList<IrExpression> body = let.Body is IrSequenceExpression sequence
+            ? [.. sequence.Effects, sequence.Result]
+            : [let.Body];
+
+        return new TsParenthesized(
+            body.Select(part => Map(part, context))
+                .Prepend(new TsBinaryExpression(temporary, "=", value))
+                .Aggregate((left, right) => new TsBinaryExpression(left, ",", right))
+        );
+    }
+
+    private static bool ContainsClosure(IrExpression expression) =>
+        expression is IrLambdaExpression
+        || IrNodeChildren.ExpressionsOf(expression).Any(ContainsClosure);
 
     /// <summary>
     /// Folds an object-initialized <c>[PlainObject]</c> construction —
@@ -2257,17 +2302,18 @@ public static partial class IrToTsExpressionBridge
             : null;
 
     /// <summary>
-    /// Lowers <see cref="IrSequenceExpression"/> outside a let-binding to a
-    /// parameterless IIFE whose body runs the effects and returns the result.
+    /// Lowers <see cref="IrSequenceExpression"/> outside a let-binding to the
+    /// comma expression <c>(effect, …, result)</c>.
     /// </summary>
     private static TsExpression MapSequence(
         IrSequenceExpression sequence,
         IrToTsBridgeContext context
     ) =>
-        TsImmediateInvocation.Of(
-            [],
-            ReturningBody(sequence, context),
-            isAsync: IrEvaluationTraits.ContainsAwait(sequence)
+        new TsParenthesized(
+            sequence
+                .Effects.Append(sequence.Result)
+                .Select(part => Map(part, context))
+                .Aggregate((left, right) => new TsBinaryExpression(left, ",", right))
         );
 
     /// <summary>

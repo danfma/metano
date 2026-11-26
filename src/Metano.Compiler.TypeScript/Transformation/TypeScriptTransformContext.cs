@@ -144,7 +144,7 @@ public sealed class TypeScriptTransformContext(
 
         foreach (var type in EnumerateTopLevelStaticTypes(CurrentAssembly.GlobalNamespace))
         {
-            if (!TranspilableTypes.TryGetValue(type.Name, out var ownerRef))
+            if (TranspilableTypeOf(TranspilableTypes, TypeNamesBySymbol, type) is not { } ownerRef)
                 continue;
 
             foreach (var member in type.GetMembers())
@@ -267,8 +267,15 @@ public sealed class TypeScriptTransformContext(
                 Register(operatorName, op, ownerRef, map, firstClaim, reportDiagnostic);
                 break;
 
-            case IPropertySymbol prop
-                when prop.DeclaredAccessibility == Accessibility.Public && !prop.IsIndexer:
+            // An extension property, or an extension indexer
+            // (`extension(R r) { public T this[int i] { … } }`), whose reads
+            // lower to `count$get(self)` / `item$get(self, index)` and writes
+            // to `count$set(self, value)` / `item$set(self, index, value)`. An
+            // indexer's helper base name is its metadata name
+            // (`IrExtensionConventions.AccessorBaseName`: the `[IndexerName]`
+            // override when present, default `Item`), so the registry keys
+            // agree with the helper names emitted by `IrModuleFunctionExtractor`.
+            case IPropertySymbol prop when prop.DeclaredAccessibility == Accessibility.Public:
                 Register(
                     ResolvePropertyHelperName(prop),
                     prop,
@@ -277,6 +284,7 @@ public sealed class TypeScriptTransformContext(
                     firstClaim,
                     reportDiagnostic
                 );
+
                 if (prop.SetMethod is not null)
                 {
                     Register(
@@ -288,36 +296,7 @@ public sealed class TypeScriptTransformContext(
                         reportDiagnostic
                     );
                 }
-                break;
 
-            // Extension indexer (`extension(R r) { public T this[int i] { … } }`).
-            // Reads lower to `item$get(self, index)` and writes to
-            // `item$set(self, index, value)` — the helper base name comes
-            // from the indexer symbol's <c>Name</c> (Roslyn already rewrites
-            // it to the <c>[IndexerName]</c> override when present, default
-            // <c>"Item"</c>), so the registry keys agree with the helper
-            // names emitted by `IrModuleFunctionExtractor`.
-            case IPropertySymbol indexer
-                when indexer.DeclaredAccessibility == Accessibility.Public && indexer.IsIndexer:
-                Register(
-                    ResolvePropertyHelperName(indexer),
-                    indexer,
-                    ownerRef,
-                    map,
-                    firstClaim,
-                    reportDiagnostic
-                );
-                if (indexer.SetMethod is not null)
-                {
-                    Register(
-                        ResolvePropertySetterHelperName(indexer),
-                        indexer,
-                        ownerRef,
-                        map,
-                        firstClaim,
-                        reportDiagnostic
-                    );
-                }
                 break;
         }
     }
@@ -343,16 +322,22 @@ public sealed class TypeScriptTransformContext(
             : null;
 
     private static string ResolvePropertyHelperName(IPropertySymbol property) =>
-        (
-            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
-            ?? TypeScriptNaming.ToCamelCase(property.Name)
-        ) + IrExtensionConventions.PropertyGetterSuffix;
+        AccessorHelperBaseName(property) + IrExtensionConventions.PropertyGetterSuffix;
 
     private static string ResolvePropertySetterHelperName(IPropertySymbol property) =>
-        (
-            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
-            ?? TypeScriptNaming.ToCamelCase(property.Name)
-        ) + IrExtensionConventions.PropertySetterSuffix;
+        AccessorHelperBaseName(property) + IrExtensionConventions.PropertySetterSuffix;
+
+    /// <summary>
+    /// The emitted base name of an extension property's or indexer's helpers:
+    /// its <c>[Name]</c> when that renames the whole helper, else the camelCased
+    /// <see cref="IrExtensionConventions.AccessorBaseName"/> (which carries the
+    /// suffix a <c>[Name]</c> pins on an indexer sharing its name with another).
+    /// </summary>
+    private static string AccessorHelperBaseName(IPropertySymbol property) =>
+        IrExtensionConventions.WholeHelperNameOverride(property, TargetLanguage.TypeScript)
+        ?? TypeScriptNaming.ToCamelCase(
+            IrExtensionConventions.AccessorBaseName(property, TargetLanguage.TypeScript)
+        );
 
     /// <summary>
     /// Records <paramref name="ownerRef"/> as the import target for
@@ -564,6 +549,18 @@ public sealed class TypeScriptTransformContext(
         && typeNamesBySymbol.TryGetValue(type.GetCrossAssemblyOriginKey(), out var name)
             ? name
             : type.Name;
+
+    /// <summary>
+    /// The project-type entry of <paramref name="type"/>, looked up by its emitted
+    /// name: a <c>[Name]</c>-renamed type's C# name may be another type's emitted
+    /// name (<c>[Name("Signals")] static class Signal</c> beside <c>Signal&lt;T&gt;</c>,
+    /// #776), so a lookup by <see cref="ISymbol.Name"/> could find the other type.
+    /// </summary>
+    internal static IrTranspilableTypeRef? TranspilableTypeOf(
+        IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypes,
+        IReadOnlyDictionary<string, string>? typeNamesBySymbol,
+        INamedTypeSymbol type
+    ) => transpilableTypes.GetValueOrDefault(ResolveTsName(typeNamesBySymbol, type));
 
     /// <summary>
     /// The identifier <paramref name="type"/> is declared under in its TypeScript

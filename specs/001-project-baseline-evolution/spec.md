@@ -1767,6 +1767,35 @@ Product requirements added after the migration (normative; each one is traced by
   Dispatchers that also dispatch to a synthesized member and the static groups of a branded
   companion object apply the delegate test but drop nothing.
 
+- **FR-110** (C# 14 extension properties and indexers, the extension-member model of #156,
+  #523, decision W10-6): A property or indexer declared in a C# 14 `extension` block MUST run its
+  accessors at every use. The TypeScript target emits each accessor as an exported function of
+  the extension class's module: a property `P` as `p$get(receiver)` / `p$set(receiver, value)`
+  (a static one without the receiver), an indexer as `item$get(receiver, ...indices)` /
+  `item$set(receiver, ...indices, value)`, its base name being the indexer's metadata name (an
+  `[IndexerName("Slot")]` gives `slot$get` / `slot$set`; a `[Name]` replaces it). Two indexers
+  of one extension class with the same metadata name (`this[int]` beside `this[string]`, W10-6a)
+  report `MS0001` (warning) at each one without a `[Name]`; a `[Name("byKey")]` on such an
+  indexer pins its suffix as spec 013 FR-005 pins an overload's (`itemByKey$get`). Each name is
+  registered in the project-wide extension-helper registry, so a consumer imports it from the
+  class's module and two classes exporting one name report `MS0021`; a consumer of a referenced
+  package imports it, like the package's extension methods, from that package (#766: every
+  extension-helper call names its container with the container's cross-assembly origin). A read calls the getter, a
+  plain assignment the setter. A compound assignment, `++` / `--` and `??=` read the current
+  value through the getter and store through the setter, evaluating the receiver and then each
+  index once, in source order (an impure one, `xs[i++] += 1`, is assigned to a temporary declared
+  at the head of the enclosing statement list, `($t = i++, item$set(xs, $t, item$get(xs, $t) + 1))`,
+  with no immediately invoked function, W10-6a; only where no statement list exists, a field
+  initializer, it stays the scoped arrow form); a `Nullable<T>` accessor stores the
+  lifted value (`null` stays `null`), a `bool?` `&=` / `|=` / `^=` stores the three-valued
+  result a `bool?` field stores, and `??=` calls the setter only when the current value is
+  `null` (`item$get(b, i) ?? item$set(b, i, v)`). Where the value of the assignment or increment
+  is used, it is the stored value (the previous one for a postfix increment), as in C#. The
+  getter may be called again inside a lifted store (getters are assumed side-effect free).
+  Tests: `tests/Metano.Tests/ExtensionIndexerTests.cs`, `ExtensionPropertySetterTests.cs`,
+  `CrossPackageExtensionAccessorTests.cs`; conformance rows `ExtensionIndexerProbes.*`,
+  `CrossPackageExtensionProbes.*`.
+
 ### Key Entities
 
 - **Frontend**: The source-language ingestion stage (C#/Roslyn today) that produces the IR.

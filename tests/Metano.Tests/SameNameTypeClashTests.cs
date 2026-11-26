@@ -692,4 +692,80 @@ public class SameNameTypeClashTests
 
         await Assert.That(clash.Message).Contains("in 'circle'");
     }
+
+    [Test]
+    public async Task RenamedGenericOfAnotherArity_KeepsTheSameNamedGenericImport()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Box<T>(T value) { public T Value { get; } = value; }
+
+            [Transpile, Name("Pair")]
+            public sealed class Box<T1, T2>(T1 first, T2 second)
+            {
+                public T1 First { get; } = first;
+                public T2 Second { get; } = second;
+            }
+
+            [Transpile]
+            public static class UseBox
+            {
+                public static Box<int> One() => new(1);
+                public static Box<int, string> Two() => new(1, "a");
+            }
+            """
+        );
+
+        var use = files["use-box.ts"];
+
+        await Assert.That(use).Contains("import { Box } from \"./box.js\";");
+        await Assert.That(use).Contains("import { Pair } from \"./pair.js\";");
+    }
+
+    [Test]
+    public async Task RenamedFactoryOfTheGenericsCSharpName_ImportsTheGeneric()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Signal<T>(T value) { public T Value { get; } = value; }
+
+            [Transpile, Name("Signals")]
+            public static class Signal
+            {
+                public static Signal<T> Create<T>(T value) => new(value);
+            }
+            """
+        );
+
+        await Assert.That(files["signals.ts"]).Contains("import { Signal } from \"./signal.js\";");
+
+        await Assert.That(files["signal.ts"]).DoesNotContain("import");
+    }
+
+    [Test]
+    public async Task GenericAndFactoryOfOneName_SuggestsRenamingTheFactory()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public sealed class Signal<T>(T value) { public T Value { get; } = value; }
+
+            [Transpile]
+            public static class Signal
+            {
+                public static Signal<T> Create<T>(T value) => new(value);
+            }
+            """
+        );
+
+        var clash = diagnostics.Single(d => d.Code == DiagnosticCodes.ImportedNameClash);
+
+        await Assert
+            .That(clash.Message)
+            .Contains(
+                "Rename one of them with [Name(\"...\")], for example [Name(\"Signals\")] on 'Signal'."
+            );
+    }
 }
