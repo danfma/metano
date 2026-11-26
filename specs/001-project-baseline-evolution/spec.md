@@ -1687,7 +1687,9 @@ Product requirements added after the migration (normative; each one is traced by
   name is the same in every class of a file; parameters are never renamed (their names
   are API). One that the module itself declares cannot be aliased and reports MS0001. A parameter of an explicit
   constructor is promoted only to an auto-property its body initializes from it
-  (`Name = name;`, #801); a computed property keeps its getter. Consumers compiling the output with
+  (`Name = name;`, #801) in its leading run of plain stores to the instance whose values never
+  read it (after a `return`, a read of the member or a store through another receiver, the
+  property keeps its default store); a computed property keeps its getter. Consumers compiling the output with
   Babel's `preset-typescript` need `allowDeclareFields`. Tests:
   `tests/Metano.Tests/InstanceFieldStoreTests.cs`, conformance `FieldStoreProbes` and
   `ConstructorShadowProbes`.

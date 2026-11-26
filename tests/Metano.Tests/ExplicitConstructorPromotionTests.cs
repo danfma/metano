@@ -67,4 +67,37 @@ public class ExplicitConstructorPromotionTests
         await Assert.That(output).Contains("    this.count = 0;");
         await Assert.That(output).DoesNotContain("this.count = count;");
     }
+
+    [Test]
+    public async Task StoreAfterAReturnARead_OrAnotherReceiver_IsNotPromoted()
+    {
+        var files = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Pb { public int Limit { get; } public Pb(int limit) { if (limit < 0) return; Limit = limit; } }
+
+            [Transpile]
+            public class Pf { public int Limit { get; } public int Seen { get; } public Pf(int limit) { Seen = Limit; Limit = limit; } }
+
+            [Transpile]
+            public class Pj
+            {
+                public int Limit { get; set; }
+                public static Pj? Last;
+                public Pj(int limit) { Last ??= this; Last.Limit = limit; }
+            }
+
+            [Transpile]
+            public class Pk { public int Limit { get; } public int Size { get; } public Pk(int limit, int size) { Size = size; Limit = limit; } }
+            """
+        );
+
+        await Assert.That(files["pb.ts"]).Contains("    this.limit = 0;\n\n    if (limit < 0) {\n");
+        await Assert.That(files["pf.ts"]).Contains("    this.limit = 0;\n    this.seen = 0;\n");
+        await Assert.That(files["pj.ts"]).Contains("    this.limit = 0;\n");
+
+        var promoted = files["pk.ts"];
+
+        await Assert.That(promoted).Contains("    this.limit = limit;\n    this.size = size;\n");
+    }
 }
