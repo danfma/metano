@@ -1,9 +1,11 @@
 import { checkedInt32, checkedInt64, checkedUInt64 } from "metano-runtime";
 
 export class Project {
-  private _total: bigint = 0n;
+  declare private _total: bigint;
 
-  constructor() { }
+  constructor() {
+    this._total = 0n;
+  }
 
   add(l: bigint, m: bigint): bigint {
     return checkedInt64(l + m);

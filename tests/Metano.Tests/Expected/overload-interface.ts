@@ -9,8 +9,6 @@ import { isInt32 } from "metano-runtime";
 import type { IShape } from "./i-shape.js";
 
 export class Sq implements IShape {
-  constructor() { }
-
   areaWH(w: number, h: number): number {
     return Math.imul(w, h);
   }
@@ -38,8 +36,6 @@ import { isBool, isInt32 } from "metano-runtime";
 import type { IShape } from "./i-shape.js";
 
 export class Plot implements IShape {
-  constructor() { }
-
   areaWH(w: number, h: number): number {
     return Math.imul(w, h);
   }
@@ -91,8 +87,6 @@ import type { IA } from "./ia.js";
 import type { IB } from "./ib.js";
 
 export class Both implements IA, IB {
-  constructor() { }
-
   gA(x: number): number {
     return (x + 1) | 0;
   }
@@ -133,8 +127,6 @@ import type { IShape } from "./i-shape.js";
 import type { IA } from "./ia.js";
 
 export class Use {
-  constructor() { }
-
   throughInterface(shape: IShape): number {
     return shape.areaS(2);
   }

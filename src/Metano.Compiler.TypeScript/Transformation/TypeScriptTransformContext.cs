@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Metano.Annotations;
 using Metano.Compiler;
@@ -420,6 +421,18 @@ public sealed class TypeScriptTransformContext(
 
     public IReadOnlyDictionary<string, IrExternalImport> ExternalImportMap { get; } =
         externalImportMap;
+
+    /// <summary>
+    /// Where each name a class's constructor scope binds is declared (its
+    /// parameter, else the constructor), keyed by the emitted class name: the
+    /// import collector reports an unaliasable shadowed read there (W10-1b).
+    /// Concurrent: classes are emitted in parallel.
+    /// </summary>
+    public ConcurrentDictionary<
+        (string ClassName, string Name),
+        Location
+    > ConstructorScopeBindings { get; } = new();
+
     public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
     public IReadOnlyDictionary<string, string> TypeNamesBySymbol { get; } = typeNamesBySymbol;
     public IReadOnlySet<string> GuardableTypeKeys { get; } = guardableTypeKeys;

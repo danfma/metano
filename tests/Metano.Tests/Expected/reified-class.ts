@@ -2,8 +2,8 @@ import { UnknownType, isType, type RuntimeType } from "metano-runtime";
 
 export class Box<T> {
   declare readonly $typeArguments$Box: readonly [RuntimeType<T>];
-  private readonly _initType: RuntimeType;
-  readonly ctorType: RuntimeType;
+  declare private readonly _initType: RuntimeType;
+  declare readonly ctorType: RuntimeType;
 
   constructor($typeArgs?: readonly [RuntimeType<T>]) {
     Object.defineProperty(this, "$typeArguments$Box", { value: $typeArgs, enumerable: false });

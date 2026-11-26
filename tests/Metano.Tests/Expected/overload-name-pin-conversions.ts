@@ -1,7 +1,9 @@
 export class Money {
-  cents: number = 0;
+  declare cents: number;
 
-  constructor() { }
+  constructor() {
+    this.cents = 0;
+  }
 
   static __toInt(m: Money): number {
     return m.cents;

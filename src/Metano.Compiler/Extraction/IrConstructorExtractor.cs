@@ -430,14 +430,16 @@ public static class IrConstructorExtractor
         /// constructor's parameter, or any parameter without a compilation (no
         /// syntax to inspect), pairs by name with a promotion candidate,
         /// preferring an exact-case match when two properties differ only by
-        /// case.
+        /// case, that it initializes (<see cref="ExplicitConstructorPromotion"/>).
         /// </summary>
         public IPropertySymbol? PromotionTarget(IParameterSymbol parameter) =>
             IsInspectablePrimaryParameter(parameter)
                 ? Promotion.PromotedPropertyOf(parameter)
                 : PrimaryConstructorPropertyAlias
                     .CandidatesNamed(Type, parameter.Name, Target)
-                    .FirstOrDefault();
+                    .FirstOrDefault(property =>
+                        ExplicitConstructorPromotion.Promotes(property, parameter, Compilation)
+                    );
 
         private bool IsInspectablePrimaryParameter(IParameterSymbol parameter) =>
             Compilation is not null

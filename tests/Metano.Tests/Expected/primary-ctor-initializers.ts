@@ -1,13 +1,16 @@
 export class Account {
-  readonly amount: number = 0;
-  private readonly _bonus: number;
-  private readonly _total: number = 0;
-  readonly twice: number = 0;
-  private readonly _owner: string;
+  declare readonly amount: number;
+  declare private readonly _bonus: number;
+  declare private readonly _total: number;
+  declare readonly twice: number;
+  declare private readonly _owner: string;
 
   constructor(amount: number, owner: string, bonus: number) {
-    this._owner = owner;
+    this.amount = 0;
     this._bonus = bonus;
+    this._total = 0;
+    this.twice = 0;
+    this._owner = owner;
     this.amount = Math.imul(amount, 2);
     this._total = (bonus + 1) | 0;
     this.twice = Math.imul(amount, 2);

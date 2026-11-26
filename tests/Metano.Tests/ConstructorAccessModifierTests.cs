@@ -67,7 +67,7 @@ public class ConstructorAccessModifierTests
 
         var output = files["money.ts"];
 
-        await Assert.That(output).Contains("  private constructor(readonly cents: number) {");
+        await Assert.That(output).Contains("  private constructor(cents: number) {");
         await Assert.That(output).Contains("return new Money(cents);");
     }
 
@@ -90,14 +90,12 @@ public class ConstructorAccessModifierTests
             """
         );
 
-        await Assert.That(files["point.ts"]).Contains("  constructor(readonly x: number) { }");
-        await Assert.That(files["shape.ts"]).Contains("  constructor(readonly name: string) { }");
+        await Assert.That(files["point.ts"]).Contains("  constructor(x: number) {");
+        await Assert.That(files["shape.ts"]).Contains("  constructor(name: string) {");
 
-        await Assert
-            .That(files["counter.ts"])
-            .Contains("  constructor(readonly start: number) { }");
+        await Assert.That(files["counter.ts"]).Contains("  constructor(start: number) {");
 
-        await Assert.That(files["gauge.ts"]).Contains("  constructor(readonly max: number) { }");
+        await Assert.That(files["gauge.ts"]).Contains("  constructor(max: number) {");
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }
 
@@ -111,7 +109,7 @@ public class ConstructorAccessModifierTests
             """
         );
 
-        await Assert.That(files["entity.ts"]).Contains("  constructor() { }");
+        await Assert.That(files["entity.ts"]).Contains("  constructor() {\n    this.id = 0;");
     }
 
     [Test]
@@ -217,8 +215,16 @@ public class ConstructorAccessModifierTests
             """
         );
 
-        await Assert.That(files["temp.ts"]).Contains("export class Temp {\n  constructor(");
-        await Assert.That(files["celsius.ts"]).Contains("export class Celsius {\n  constructor(");
+        await Assert
+            .That(files["temp.ts"])
+            .Contains("export class Temp {\n  declare readonly value: number;\n\n  constructor(");
+
+        await Assert
+            .That(files["celsius.ts"])
+            .Contains(
+                "export class Celsius {\n  declare readonly degrees: number;\n\n  constructor("
+            );
+
         await Assert.That(files["thermometer.ts"]).Contains("return new Temp();");
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }
@@ -289,7 +295,7 @@ public class ConstructorAccessModifierTests
             DiagnosticCodes.MixedConstructorAccessibility
         );
 
-        await Assert.That(output).Contains("  readonly width: number = 0;");
+        await Assert.That(output).Contains("this.width = 0;");
         await Assert.That(output).Contains("  constructor(width: number, height: number);\n");
         await Assert.That(output).Contains("  constructor(side: number);\n");
         await Assert.That(warning.Message).Contains("'Size(int, int)' (private)");
@@ -316,7 +322,7 @@ public class ConstructorAccessModifierTests
 
         var output = files["animal.ts"];
 
-        await Assert.That(output).Contains("  readonly name: string;\n");
+        await Assert.That(output).Contains("  declare readonly name: string;\n");
         await Assert.That(output).Contains("  constructor(name: string);\n");
         await Assert.That(output).Contains("      this.name = name;\n");
 
@@ -467,7 +473,7 @@ public class ConstructorAccessModifierTests
             DiagnosticCodes.ConstructorAccessibilityWidened
         );
 
-        await Assert.That(files["app/tag.ts"]).Contains("  constructor(readonly name: string) {");
+        await Assert.That(files["app/tag.ts"]).Contains("  constructor(name: string) {");
         await Assert.That(files["app/app-json-context.ts"]).Contains("new Tag(p.name as string)");
         await Assert.That(warning.Severity).IsEqualTo(MetanoDiagnosticSeverity.Warning);
         await Assert.That(warning.Message).Contains("instead of private");
@@ -499,7 +505,7 @@ public class ConstructorAccessModifierTests
             DiagnosticCodes.ConstructorAccessibilityWidened
         );
 
-        await Assert.That(files["app/base.ts"]).Contains("  constructor() { }");
+        await Assert.That(files["app/base.ts"]).Contains("  constructor() {\n    this.id = 0;");
         await Assert.That(files["app/app-json-context.ts"]).Contains("type: Base,");
         await Assert.That(warning.Message).Contains("instead of protected");
     }
@@ -557,7 +563,7 @@ public class ConstructorAccessModifierTests
             DiagnosticCodes.ConstructorAccessibilityWidened
         );
 
-        await Assert.That(output).Contains("  constructor(readonly title: string) {");
+        await Assert.That(output).Contains("  constructor(title: string) {");
         await Assert.That(output).Contains("return new Report(title);");
         await Assert.That(warning.Message).Contains("the nested type 'Report.Builder'");
     }
@@ -767,9 +773,7 @@ public class ConstructorAccessModifierTests
             """
         );
 
-        await Assert
-            .That(files["animal.ts"])
-            .Contains("  protected constructor(readonly name: string) {");
+        await Assert.That(files["animal.ts"]).Contains("  protected constructor(name: string) {");
 
         await Assert.That(ConstructorAccessDiagnostics(diagnostics)).IsEmpty();
     }

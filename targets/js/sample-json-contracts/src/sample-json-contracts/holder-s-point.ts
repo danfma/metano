@@ -5,7 +5,11 @@ import type { SPoint } from "./s-point.js";
 let HolderSPoint$rt: ClassType<HolderSPoint> | undefined;
 
 export class HolderSPoint {
-  constructor(readonly s: SPoint) {}
+  declare readonly s: SPoint;
+
+  constructor(s: SPoint) {
+    this.s = s;
+  }
 
   static get $runtimeType(): ClassType<HolderSPoint> {
     return (HolderSPoint$rt ??= {

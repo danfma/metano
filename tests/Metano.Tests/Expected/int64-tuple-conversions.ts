@@ -3,8 +3,6 @@ import { checkedInt32, checkedNarrow, throwError, tupleEquals } from "metano-run
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Pairs {
-  constructor() { }
-
   returned(pair: [number, number]): [bigint, bigint] {
     return [BigInt(pair[0]), BigInt(pair[1])] as [bigint, bigint];
   }

@@ -8,7 +8,7 @@ import type { Plain } from "./plain.js";
 import { Trace } from "./trace.js";
 
 export class SourceOrderCalls {
-  constructor() { }
+  private constructor() { }
 
   static getters(e: Engine, h: Holder): number {
     return (($arg1, $arg0) => e.applyFD($arg0, $arg1))(h.p, h.q);
@@ -89,23 +89,26 @@ import { Label } from "./label.js";
 import { Trace } from "./trace.js";
 
 export class Holder {
-  field: number = 0;
-  auto: number = 0;
+  declare field: number;
+  declare auto: number;
   static shared: number = 0;
+  declare first: Label;
+  declare second: Label;
 
-  first: Label = ((receiver$temp$0) => {
-    receiver$temp$0.text = "a";
+  constructor() {
+    this.field = 0;
+    this.auto = 0;
+    this.first = ((receiver$temp$0) => {
+      receiver$temp$0.text = "a";
 
-    return receiver$temp$0;
-  })(new Label());
+      return receiver$temp$0;
+    })(new Label());
+    this.second = ((receiver$temp$0) => {
+      receiver$temp$0.text = "b";
 
-  second: Label = ((receiver$temp$0) => {
-    receiver$temp$0.text = "b";
-
-    return receiver$temp$0;
-  })(new Label());
-
-  constructor() { }
+      return receiver$temp$0;
+    })(new Label());
+  }
 
   get p(): number {
     return Trace.next("p");

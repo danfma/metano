@@ -5,12 +5,12 @@ import { Mood } from "./mood.js";
 export class Day {
   protected static readonly byDayN = /* @__PURE__ */ Symbol("Day(int n)");
   protected static readonly byDayLabel = /* @__PURE__ */ Symbol("Day(string label)");
-  tag: string = "\u0000";
-  label: string;
-  mood: Mood = Mood.Calm;
-  nested: Inner;
-  id: UUID = UUID.empty;
-  span: [number, number];
+  declare tag: string;
+  declare label: string;
+  declare mood: Mood;
+  declare nested: Inner;
+  declare id: UUID;
+  declare span: [number, number];
 
   constructor(overload: typeof Day.byDayN, n: number);
   constructor(overload: typeof Day.byDayLabel, label: string);
@@ -31,6 +31,12 @@ export class Day {
 
     if (typeof args[0] === "symbol" && args[0] === Day.byDayN) {
       const n = args[1] as number;
+      this.tag = "\u0000";
+      this.label = undefined!;
+      this.mood = Mood.Calm;
+      this.nested = undefined!;
+      this.id = UUID.empty;
+      this.span = undefined!;
       this.tag = "a";
       this.label = "";
       this.mood = Mood.Loud;
@@ -47,6 +53,12 @@ export class Day {
 
       {
         const n = __chain0Arg0;
+        this.tag = "\u0000";
+        this.label = undefined!;
+        this.mood = Mood.Calm;
+        this.nested = undefined!;
+        this.id = UUID.empty;
+        this.span = undefined!;
         this.tag = "a";
         this.label = "";
         this.mood = Mood.Loud;
@@ -62,6 +74,12 @@ export class Day {
 
     if (args.length === 1 && isInt32(args[0])) {
       const n = args[0] as number;
+      this.tag = "\u0000";
+      this.label = undefined!;
+      this.mood = Mood.Calm;
+      this.nested = undefined!;
+      this.id = UUID.empty;
+      this.span = undefined!;
       this.tag = "a";
       this.label = "";
       this.mood = Mood.Loud;
@@ -78,6 +96,12 @@ export class Day {
 
       {
         const n = __chain0Arg0;
+        this.tag = "\u0000";
+        this.label = undefined!;
+        this.mood = Mood.Calm;
+        this.nested = undefined!;
+        this.id = UUID.empty;
+        this.span = undefined!;
         this.tag = "a";
         this.label = "";
         this.mood = Mood.Loud;

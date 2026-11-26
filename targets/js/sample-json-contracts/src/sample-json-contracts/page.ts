@@ -5,7 +5,11 @@ import type { IReadOnlyList } from "metano-runtime/system/collections";
 let Page$rt: ClassType<Page<unknown>> | undefined;
 
 export class Page<T> {
-  constructor(readonly items: IReadOnlyList<T>) {}
+  declare readonly items: IReadOnlyList<T>;
+
+  constructor(items: IReadOnlyList<T>) {
+    this.items = items;
+  }
 
   static get $runtimeType(): ClassType<Page<unknown>> {
     return (Page$rt ??= {

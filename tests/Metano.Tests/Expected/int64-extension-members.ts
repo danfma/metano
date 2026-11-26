@@ -3,8 +3,6 @@ import { bonus$get, bonus$set, nBonus$get, nBonus$set, nShared$get, nShared$set,
 import type { Holder } from "./holder.js";
 
 export class Uses {
-  constructor() { }
-
   bump(h: Holder): void {
     bonus$set(h, BigInt.asIntN(64, bonus$get(h) + 1n));
     bonus$set(h, BigInt.asIntN(64, bonus$get(h) + 5n));

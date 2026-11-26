@@ -2,7 +2,7 @@
 import type { IWidget } from "../i-widget.js";
 
 export class Column implements IWidget {
-  private readonly _children: IWidget[];
+  private declare readonly _children: IWidget[];
 
   constructor(children: IWidget[]) {
     this._children = children;

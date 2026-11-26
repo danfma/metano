@@ -5,10 +5,13 @@ import { IGauge$runtimeType, type IGauge } from "./i-gauge.js";
 let Gauge$rt: ClassType<Gauge> | undefined;
 
 export class Gauge implements IGauge {
-  constructor(
-    readonly level: number,
-    readonly unit: string,
-  ) {}
+  declare readonly level: number;
+  declare readonly unit: string;
+
+  constructor(level: number, unit: string) {
+    this.level = level;
+    this.unit = unit;
+  }
 
   static get $runtimeType(): ClassType<Gauge> {
     return (Gauge$rt ??= {

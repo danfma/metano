@@ -20,6 +20,7 @@ internal static class TsPrecedenceClassifier
             TsIdentifier
             or TsTypeReference
             or TsModuleExportReference
+            or TsAliasedReference
             or TsRuntimeHelperReference
             or TsStringLiteral
             or TsTemplateLiteral

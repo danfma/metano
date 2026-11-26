@@ -1,7 +1,11 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Amount {
-  constructor(readonly value: number) { }
+  declare readonly value: number;
+
+  constructor(value: number) {
+    this.value = value;
+  }
 
   doubled(): number {
     return Math.imul(this.value, 2);

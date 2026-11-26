@@ -1,8 +1,6 @@
 import { isInt32, toException } from "metano-runtime";
 
 export class Collisions {
-  constructor() { }
-
   static paramVsLocal(total: number): number {
     const total$1 = 10;
 

@@ -1,9 +1,11 @@
 import { checkedInt32, checkedUInt32, intDiv } from "metano-runtime";
 
 export class Checks {
-  total: number = 0;
+  declare total: number;
 
-  constructor() { }
+  constructor() {
+    this.total = 0;
+  }
 
   add(a: number, b: number): number {
     return checkedInt32(a + b);

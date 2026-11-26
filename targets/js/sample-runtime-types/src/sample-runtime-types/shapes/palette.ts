@@ -3,7 +3,7 @@ import { enumFromRaw, enumIsDefined } from "metano-runtime";
 import { Color$runtimeType, type Color } from "./color.js";
 
 export class Palette {
-  constructor() {}
+  private constructor() {}
 
   static isDefined(value: number): boolean {
     return enumIsDefined(Color$runtimeType, value);

@@ -1,8 +1,6 @@
 import type { Base } from "./base.js";
 
 export class Use {
-  constructor() { }
-
   of(b: Base): (arg: number) => number {
     return b.addX.bind(b);
   }

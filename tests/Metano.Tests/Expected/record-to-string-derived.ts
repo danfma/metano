@@ -2,8 +2,11 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 import { Base } from "./base.js";
 
 export class Derived extends Base {
-  constructor(name: string, readonly level: number) {
+  declare readonly level: number;
+
+  constructor(name: string, level: number) {
     super(name);
+    this.level = level;
   }
 
   override equals(other: any): boolean {

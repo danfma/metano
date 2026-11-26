@@ -5,38 +5,12 @@ namespace Metano.Compiler.TypeScript.Bridge;
 
 /// <summary>
 /// The storage half of the lazy type initializer: each static field and
-/// auto-property becomes a <c>#name$</c> slot behind a guarded accessor pair,
-/// and a struct's instance field keeps its default (FR-066).
+/// auto-property becomes a <c>#name$</c> slot behind a guarded accessor pair
+/// (FR-066). Instance storage is unchanged: the constructor stores it after the
+/// guard (<see cref="InstanceFieldStoreLowering"/>).
 /// </summary>
 internal sealed partial class LazyTypeInitializerLowering
 {
-    /// <summary>
-    /// An instance field of a struct keeps its default; its C# initializer runs in
-    /// the constructor, after the guard, as C# runs it only in a declared
-    /// constructor. A class's instance field is unchanged.
-    /// </summary>
-    private TsFieldMember LowerInstanceStorage(
-        TsFieldMember built,
-        IrTypeRef type,
-        bool hasInitializer
-    )
-    {
-        if (!target.IsStruct || !hasInitializer || built.Initializer is not { } initializer)
-            return built;
-
-        _structFieldInitializers.Add(
-            Assignment(new TsPropertyAccess(new TsIdentifier("this"), built.Name), initializer)
-        );
-
-        var defaultValue = IrToTsClassBridge.ComputeDefaultInitializer(type);
-
-        return built with
-        {
-            Initializer = defaultValue,
-            DefinitelyAssigned = defaultValue is null,
-        };
-    }
-
     private IReadOnlyList<TsClassMember> LowerStaticStorage(
         TsFieldMember built,
         StaticStorage storage

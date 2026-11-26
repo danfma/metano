@@ -2,7 +2,7 @@
 import { Widget } from "../widget.js";
 
 export class Text extends Widget {
-  private readonly _content: string;
+  private declare readonly _content: string;
 
   constructor(content: string) {
     super();

@@ -4,7 +4,7 @@ import { StateHolder } from "./state-holder.js";
 import type { ViewFn } from "./view-fn.js";
 
 export class App {
-  constructor() {}
+  private constructor() {}
 
   static mount<TState>(containerId: string, initialState: TState, view: ViewFn<TState>): void {
     const container = App.resolveContainer(containerId);

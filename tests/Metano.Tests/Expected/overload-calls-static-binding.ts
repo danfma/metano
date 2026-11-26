@@ -1,8 +1,6 @@
 import { isString } from "metano-runtime";
 
 export class Binder {
-  constructor() { }
-
   fString(a: string): string {
     return "string";
   }

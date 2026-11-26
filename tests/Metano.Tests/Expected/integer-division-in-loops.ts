@@ -1,7 +1,7 @@
 import { intDiv } from "metano-runtime";
 
 export class Halver {
-  constructor() { }
+  private constructor() { }
 
   static steps(n: number): number {
     let steps = 0;

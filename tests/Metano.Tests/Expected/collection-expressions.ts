@@ -5,14 +5,21 @@ import { Color } from "./color.js";
 import type { Dog } from "./dog.js";
 
 export class Shelf {
-  private readonly _primes: HashSet<number> = HashSet.of<number>([2, 3, 5]);
-  private readonly _colors: HashSet<Color> = HashSet.of<Color>([Color.Red]);
-  private readonly _defaults: ImmutableDictionary<string, number> = ImmutableDictionary.empty<string, number>().setItems([["a", 1] as [string, number], ["b", 2] as [string, number]]);
-  private readonly _cache: ConcurrentDictionary<string, number> = new ConcurrentDictionary<string, number>();
-  private readonly _none: ImmutableHashSet<string> = ImmutableHashSet.empty<string>();
-  private _calls: number = 0;
+  declare private readonly _primes: HashSet<number>;
+  declare private readonly _colors: HashSet<Color>;
+  declare private readonly _defaults: ImmutableDictionary<string, number>;
+  declare private readonly _cache: ConcurrentDictionary<string, number>;
+  declare private readonly _none: ImmutableHashSet<string>;
+  declare private _calls: number;
 
-  constructor() { }
+  constructor() {
+    this._primes = HashSet.of<number>([2, 3, 5]);
+    this._colors = HashSet.of<Color>([Color.Red]);
+    this._defaults = ImmutableDictionary.empty<string, number>().setItems([["a", 1] as [string, number], ["b", 2] as [string, number]]);
+    this._cache = new ConcurrentDictionary<string, number>();
+    this._none = ImmutableHashSet.empty<string>();
+    this._calls = 0;
+  }
 
   private next(): number {
     return this._calls = (this._calls + 1) | 0;

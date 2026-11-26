@@ -5,11 +5,15 @@ import type { List } from "metano-runtime/system/collections";
 let Blob$rt: ClassType<Blob> | undefined;
 
 export class Blob {
-  constructor(
-    readonly data: number[],
-    readonly maybe: number[] | null,
-    readonly numbers: List<number>,
-  ) {}
+  declare readonly data: number[];
+  declare readonly maybe: number[] | null;
+  declare readonly numbers: List<number>;
+
+  constructor(data: number[], maybe: number[] | null, numbers: List<number>) {
+    this.data = data;
+    this.maybe = maybe;
+    this.numbers = numbers;
+  }
 
   static get $runtimeType(): ClassType<Blob> {
     return (Blob$rt ??= {

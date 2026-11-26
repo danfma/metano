@@ -5,7 +5,7 @@ import { ImageClip } from "./image-clip.js";
 import { SilenceClip } from "./silence-clip.js";
 
 export class ClipDescription {
-  constructor() { }
+  private constructor() { }
 
   static of(clip: Clip): string {
     {

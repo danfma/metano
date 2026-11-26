@@ -5,11 +5,12 @@ export class Cell {
   static readonly #$init = /* @__PURE__ */ typeInitializer("Cell", () => {
   }) as () => void;
 
-  v: number = 0;
-  w: number = 0;
+  declare v: number;
+  declare w: number;
 
   constructor(v: number) {
     Cell.#$init();
+    this.v = 0;
     this.w = Seed.next();
     this.v = v;
   }

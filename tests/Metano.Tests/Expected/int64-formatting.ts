@@ -1,8 +1,6 @@
 import { compareInt64, formatInt64, formatInteger, objectEquals, parseInt64, parseUInt64, tryParseInt64, tryParseUInt64 } from "metano-runtime";
 
 export class Text {
-  constructor() { }
-
   format(l: bigint, u: bigint, format: string): string {
     return formatInt64(l, "N0") + formatInt64(u, "X") + formatInt64(l, format);
   }

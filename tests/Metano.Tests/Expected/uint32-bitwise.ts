@@ -1,7 +1,9 @@
 export class Bits {
-  flags: number = 0;
+  declare flags: number;
 
-  constructor() { }
+  constructor() {
+    this.flags = 0;
+  }
 
   and(a: number, b: number): number {
     return (a & b) >>> 0;

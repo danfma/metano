@@ -5,11 +5,11 @@ import { UBaseH } from "./u-base-h.js";
 let UBaseX$rt: ClassType<UBaseX> | undefined;
 
 export class UBaseX extends UBaseH {
-  constructor(
-    a: number,
-    readonly x: number,
-  ) {
+  declare readonly x: number;
+
+  constructor(a: number, x: number) {
     super(a);
+    this.x = x;
   }
 
   static override get $runtimeType(): ClassType<UBaseX> {

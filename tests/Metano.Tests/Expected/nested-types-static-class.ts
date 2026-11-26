@@ -1,7 +1,13 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
 
 class ShotSchedule$ShotEntry {
-  constructor(readonly name: string, readonly frames: number) { }
+  declare readonly name: string;
+  declare readonly frames: number;
+
+  constructor(name: string, frames: number) {
+    this.name = name;
+    this.frames = frames;
+  }
 
   static empty(): ShotSchedule$ShotEntry {
     return new ShotSchedule$ShotEntry("", 0);
@@ -40,7 +46,11 @@ const ShotSchedule$Kind = {
 type ShotSchedule$Kind = typeof ShotSchedule$Kind[keyof typeof ShotSchedule$Kind];
 
 class ShotSchedule$Slot {
-  constructor(readonly index: number) { }
+  declare readonly index: number;
+
+  constructor(index: number) {
+    this.index = index;
+  }
 
   static create(): ShotSchedule$Slot {
     return new ShotSchedule$Slot(7);
@@ -67,13 +77,15 @@ class ShotSchedule$Slot {
 }
 
 class ShotSchedule$Box<T> {
-  constructor(readonly value: T) {
+  declare readonly value: T;
+
+  constructor(value: T) {
     this.value = value;
   }
 }
 
 class ShotSchedule$Deep {
-  constructor() { }
+  private constructor() { }
 
   static make(): ShotSchedule$Deep$Leaf {
     return new ShotSchedule$Deep$Leaf(5);
@@ -81,7 +93,11 @@ class ShotSchedule$Deep {
 }
 
 class ShotSchedule$Deep$Leaf {
-  constructor(readonly n: number) { }
+  declare readonly n: number;
+
+  constructor(n: number) {
+    this.n = n;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.n === other.n;
@@ -104,7 +120,7 @@ class ShotSchedule$Deep$Leaf {
 }
 
 export class ShotSchedule {
-  constructor() { }
+  private constructor() { }
 
   /** @internal */
   static get Kind(): typeof ShotSchedule$Kind {

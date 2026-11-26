@@ -1,12 +1,17 @@
 import { checkedNarrowNumber, intDiv } from "metano-runtime";
 
 export class Small {
-  field: number = 0;
-  property: number = 0;
-  cells: number[] = new Array<number>(4).fill(0);
-  optional: number | null = null;
+  declare field: number;
+  declare property: number;
+  declare cells: number[];
+  declare optional: number | null;
 
-  constructor() { }
+  constructor() {
+    this.field = 0;
+    this.property = 0;
+    this.cells = new Array<number>(4).fill(0);
+    this.optional = null;
+  }
 
   add(b: number): number {
     b = (b + 1) & 0xFF;

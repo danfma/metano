@@ -1,7 +1,7 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Calc {
-  constructor() { }
+  private constructor() { }
 
   static sum(...xs: number[]): number {
     return xs?.length ?? -1;
@@ -23,7 +23,7 @@ export interface ISummer {
 export type Folder = (...xs: number[]) => number;
 
 export class Bag {
-  readonly items: number[] | null;
+  declare readonly items: number[] | null;
 
   constructor(...items: number[]) {
     this.items = items;
@@ -54,7 +54,7 @@ export class Bag {
 }
 
 export class Box {
-  readonly n: number = 0;
+  declare readonly n: number;
 
   constructor(...xs: number[]) {
     this.n = xs?.length ?? -1;

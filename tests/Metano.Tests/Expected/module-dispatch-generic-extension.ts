@@ -23,8 +23,6 @@ export function first(...args: unknown[]): any {
 import { firstDefault, firstFallback } from "./seqs.js";
 
 export class Caller {
-  constructor() { }
-
   static alone(): number {
     return firstDefault<number>([1, 2]);
   }

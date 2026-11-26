@@ -744,11 +744,11 @@ public class OutArgumentTranspileTests
             .That(output)
             .Contains(
                 """
-                  private readonly _width: number = (() => {
-                    const [$found0, w] = tryParseInt32("12");
+                    this._width = (() => {
+                      const [$found0, w] = tryParseInt32("12");
 
-                    return $found0 ? w : 0;
-                  })();
+                      return $found0 ? w : 0;
+                    })();
                 """
             );
 

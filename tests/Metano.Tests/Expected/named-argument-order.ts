@@ -16,7 +16,7 @@ import { Trace } from "./trace.js";
 import type { Tuner } from "./tuner.js";
 
 export class SourceOrderCalls {
-  constructor() { }
+  private constructor() { }
 
   static instance(e: Engine): number {
     return (($arg1, $arg0) => e.single($arg0, $arg1))(Trace.next("p"), Trace.next("q"));
@@ -196,10 +196,13 @@ import type { Op } from "./op.js";
 import { Trace } from "./trace.js";
 
 export class Holder {
-  auto: number = 3;
-  field: Op = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
+  declare auto: number;
+  declare field: Op;
 
-  constructor() { }
+  constructor() {
+    this.auto = 3;
+    this.field = (f: number, d: number) => (Math.imul(f, 10) + d) | 0;
+  }
 
   get p(): number {
     return Trace.next("p");
@@ -254,7 +257,7 @@ import { Trace } from "./trace.js";
 export class Chained {
   protected static readonly byChainedFD = /* @__PURE__ */ Symbol("Chained(int f, int d)");
   protected static readonly byChainedDefault = /* @__PURE__ */ Symbol("Chained()");
-  total: number = 0;
+  declare total: number;
 
   constructor(overload: typeof Chained.byChainedFD, f: number, d: number);
   constructor(overload: typeof Chained.byChainedDefault);
@@ -264,6 +267,7 @@ export class Chained {
     if (typeof args[0] === "symbol" && args[0] === Chained.byChainedFD) {
       const f = args[1] as number;
       const d = args[2] as number;
+      this.total = 0;
       this.total = (Math.imul(f, 10) + d) | 0;
 
       return;
@@ -276,6 +280,7 @@ export class Chained {
       {
         const f = __chain0Arg1;
         const d = __chain0Arg0;
+        this.total = 0;
         this.total = (Math.imul(f, 10) + d) | 0;
       }
 
@@ -285,6 +290,7 @@ export class Chained {
     if (args.length === 2 && isInt32(args[0]) && isInt32(args[1])) {
       const f = args[0] as number;
       const d = args[1] as number;
+      this.total = 0;
       this.total = (Math.imul(f, 10) + d) | 0;
 
       return;
@@ -297,6 +303,7 @@ export class Chained {
       {
         const f = __chain0Arg1;
         const d = __chain0Arg0;
+        this.total = 0;
         this.total = (Math.imul(f, 10) + d) | 0;
       }
 
@@ -320,7 +327,7 @@ import type { Collector } from "./collector.js";
 import { Trace } from "./trace.js";
 
 export class ParamsCalls {
-  constructor() { }
+  private constructor() { }
 
   static arrayOmitted(e: Collector): number {
     return (($arg0, $arg2, $arg1) => e.restA($arg0, $arg1, $arg2))(Trace.next("x"), Trace.next("p"), Trace.next("q"));
@@ -363,7 +370,7 @@ import { NativeBox } from "../native-box";
 import { Trace } from "./trace.js";
 
 export class AmbientCalls {
-  constructor() { }
+  private constructor() { }
 
   static delegateProperty(box: NativeBox): number {
     return (($arg1, $arg0) => box.calc($arg0, $arg1))(Trace.next("p"), Trace.next("q"));

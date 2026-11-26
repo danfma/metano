@@ -6,8 +6,6 @@ import { Stage } from "@acme/domain/acme/domain";
 let Pipeline$rt: ClassType<Pipeline> | undefined;
 
 export class Pipeline {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Pipeline> {
     return (Pipeline$rt ??= {
       kind: "class",

@@ -15,15 +15,31 @@ import { Color$runtimeType, type Color } from "./color.js";
 let Nums$rt: ClassType<Nums> | undefined;
 
 export class Nums {
+  declare readonly n: number;
+  declare readonly m: number | null;
+  declare readonly d: Decimal;
+  declare readonly x: number;
+  declare readonly l: List<number>;
+  declare readonly map: Dictionary<string, number>;
+  declare readonly c: Color;
+
   constructor(
-    readonly n: number,
-    readonly m: number | null,
-    readonly d: Decimal,
-    readonly x: number,
-    readonly l: List<number>,
-    readonly map: Dictionary<string, number>,
-    readonly c: Color,
-  ) {}
+    n: number,
+    m: number | null,
+    d: Decimal,
+    x: number,
+    l: List<number>,
+    map: Dictionary<string, number>,
+    c: Color,
+  ) {
+    this.n = n;
+    this.m = m;
+    this.d = d;
+    this.x = x;
+    this.l = l;
+    this.map = map;
+    this.c = c;
+  }
 
   static get $runtimeType(): ClassType<Nums> {
     return (Nums$rt ??= {

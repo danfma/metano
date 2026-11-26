@@ -6,8 +6,6 @@ import { Point } from "./point.js";
 import { Shape } from "./shape.js";
 
 export class Casts {
-  constructor() { }
-
   all(d: any): void {
     const i = numberFromDynamic(d, "Int32");
     const b = numberFromDynamic(d, "Byte");

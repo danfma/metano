@@ -9,8 +9,6 @@ import type { Seek } from "./seek.js";
 abstract class Command$Base {
   abstract readonly kind: "Play" | "Halt" | "SeekTo" | "SeekBy" | "Custom";
 
-  constructor() { }
-
   static default(): Command {
     return new Halt();
   }
@@ -108,8 +106,11 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 import { Seek } from "./seek.js";
 
 export class SeekBy extends Seek {
-  constructor(readonly delta: number) {
+  declare readonly delta: number;
+
+  constructor(delta: number) {
     super();
+    this.delta = delta;
   }
 
   override get kind(): "SeekBy" {
@@ -261,8 +262,11 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 import { Custom } from "./custom.js";
 
 export class Macro extends Custom {
-  constructor(readonly name: string) {
+  declare readonly name: string;
+
+  constructor(name: string) {
     super();
+    this.name = name;
   }
 
   override equals(other: any): boolean {
@@ -301,8 +305,6 @@ import type { Node } from "./node.js";
 abstract class Tree$Base<T> {
   abstract readonly kind: "Leaf" | "Node" | "IntLeaf";
 
-  constructor() { }
-
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this);
   }
@@ -337,8 +339,11 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 import { Tree } from "./tree.js";
 
 export class IntLeaf extends Tree<number> {
-  constructor(readonly number: number) {
+  declare readonly number: number;
+
+  constructor(number: number) {
     super();
+    this.number = number;
   }
 
   override get kind(): "IntLeaf" {
@@ -377,8 +382,6 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 
 abstract class Take$Base {
   abstract readonly kind: "Fresh" | "Reused";
-
-  constructor() { }
 
   static get Fresh(): typeof Take$Fresh {
     return Take$Fresh;
@@ -459,8 +462,11 @@ class Take$Fresh extends Take {
 }
 
 class Take$Reused extends Take {
-  constructor(readonly from: number) {
+  declare readonly from: number;
+
+  constructor(from: number) {
     super();
+    this.from = from;
   }
 
   override get kind(): "Reused" {
@@ -505,7 +511,7 @@ import { SeekTo } from "./seek-to.js";
 import { Seek } from "./seek.js";
 
 export class Reader {
-  constructor() { }
+  private constructor() { }
 
   static name(command: Command): string {
     {

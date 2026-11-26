@@ -41,9 +41,11 @@ export interface UpdateTodoDto {
 }
 
 export class TodoStore {
-  private readonly _items: List<StoredTodo> = List.of<StoredTodo>([]);
+  private declare readonly _items: List<StoredTodo>;
 
-  constructor() {}
+  constructor() {
+    this._items = List.of<StoredTodo>([]);
+  }
 
   all(): IReadOnlyList<StoredTodo> {
     return linq(

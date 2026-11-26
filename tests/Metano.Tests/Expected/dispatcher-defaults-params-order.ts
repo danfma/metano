@@ -1,8 +1,6 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Over {
-  constructor() { }
-
   fA(a: number): string {
     return "a";
   }

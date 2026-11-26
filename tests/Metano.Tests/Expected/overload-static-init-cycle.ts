@@ -3,8 +3,6 @@ import { B } from "./b.js";
 export class A {
   static readonly seed = /* @__PURE__ */ B.fromV(1) as B;
 
-  constructor() { }
-
   read(b: B): number {
     return b.v;
   }
@@ -16,7 +14,7 @@ import { A } from "./a.js";
 export class B {
   protected static readonly byBV = /* @__PURE__ */ Symbol("B(int v)");
   protected static readonly byBText = /* @__PURE__ */ Symbol("B(string text)");
-  readonly v: number = 0;
+  declare readonly v: number;
 
   constructor(overload: typeof B.byBV, v: number);
   constructor(overload: typeof B.byBText, text: string);

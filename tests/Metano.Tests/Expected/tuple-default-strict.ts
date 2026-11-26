@@ -1,5 +1,5 @@
 export class StrictDefaults {
-  constructor() { }
+  private constructor() { }
 
   static defaulted(): [number, string] {
     const t = [0, null!] as [number, string];

@@ -37,7 +37,7 @@ public class RequiredMemberTests
     }
 
     [Test]
-    public async Task RequiredRecordProperty_CarriesTheDefiniteAssignmentAssertion()
+    public async Task RequiredRecordProperty_IsOnlyDeclared()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -49,6 +49,6 @@ public class RequiredMemberTests
             """
         );
 
-        await Assert.That(result["tag.ts"]).Contains("readonly name!: string;");
+        await Assert.That(result["tag.ts"]).Contains("declare readonly name: string;");
     }
 }

@@ -5,7 +5,11 @@ import { Level$runtimeType, type Level } from "./level.js";
 let HolderLevel$rt: ClassType<HolderLevel> | undefined;
 
 export class HolderLevel {
-  constructor(readonly level: Level) {}
+  declare readonly level: Level;
+
+  constructor(level: Level) {
+    this.level = level;
+  }
 
   static get $runtimeType(): ClassType<HolderLevel> {
     return (HolderLevel$rt ??= {

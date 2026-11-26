@@ -3,8 +3,11 @@ import { HashCode, copyRecordWith, formatDouble, valueEquals } from "metano-runt
 import { Shape, type ShapeKind } from "./shape.js";
 
 export class Circle extends Shape {
-  constructor(kind: ShapeKind, readonly radius: number) {
+  declare readonly radius: number;
+
+  constructor(kind: ShapeKind, radius: number) {
     super(kind);
+    this.radius = radius;
   }
 
   override equals(other: any): boolean {
@@ -97,7 +100,11 @@ export const ShapeKind = {
 export type ShapeKind = typeof ShapeKind[keyof typeof ShapeKind];
 
 export abstract class Shape {
-  constructor(readonly kind: ShapeKind) { }
+  declare readonly kind: ShapeKind;
+
+  constructor(kind: ShapeKind) {
+    this.kind = kind;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && this.kind === other.kind;
@@ -128,8 +135,11 @@ import { HashCode, copyRecordWith, formatDouble, valueEquals } from "metano-runt
 import { Shape, type ShapeKind } from "./shape.js";
 
 export class Square extends Shape {
-  constructor(kind: ShapeKind, readonly side: number) {
+  declare readonly side: number;
+
+  constructor(kind: ShapeKind, side: number) {
     super(kind);
+    this.side = side;
   }
 
   override equals(other: any): boolean {

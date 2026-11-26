@@ -1,8 +1,6 @@
 import type { Bag } from "./bag.js";
 
 export class Stores {
-  constructor() { }
-
   run(d: any, bag: Bag, i: number, c: string, s: number, u: number, x: number): void {
     twice$set(bag, (twice$get(bag) + d) | 0);
     i = (i + d) | 0;

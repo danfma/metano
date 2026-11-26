@@ -5,11 +5,11 @@ import { NBase } from "./n-base.js";
 let NMid$rt: ClassType<NMid> | undefined;
 
 export class NMid extends NBase {
-  constructor(
-    a: number,
-    readonly b: number,
-  ) {
+  declare readonly b: number;
+
+  constructor(a: number, b: number) {
     super(a);
+    this.b = b;
   }
 
   static override get $runtimeType(): ClassType<NMid> {

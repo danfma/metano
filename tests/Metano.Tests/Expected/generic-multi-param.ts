@@ -1,7 +1,13 @@
 import { HashCode, copyRecordWith, defaultEquals, objectText } from "metano-runtime";
 
 export class Pair<K, V> {
-  constructor(readonly key: K, readonly value: V) { }
+  declare readonly key: K;
+  declare readonly value: V;
+
+  constructor(key: K, value: V) {
+    this.key = key;
+    this.value = value;
+  }
 
   equals(other: any): boolean {
     return other != null && Object.getPrototypeOf(other) === Object.getPrototypeOf(this) && defaultEquals(this.key, other.key) && defaultEquals(this.value, other.value);

@@ -6,7 +6,7 @@ import { Pt } from "./pt.js";
 import { Single } from "./single.js";
 
 export class Shop {
-  constructor() { }
+  private constructor() { }
 
   static price(): Money {
     return Money.fromAmount(new Decimal("19.9"));

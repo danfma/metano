@@ -1,8 +1,6 @@
 import { checkedInt32, checkedNarrowNumber } from "metano-runtime";
 
 export class Project {
-  constructor() { }
-
   add(a: number, b: number): number {
     return checkedInt32(a + b);
   }

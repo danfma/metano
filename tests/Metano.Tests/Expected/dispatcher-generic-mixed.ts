@@ -3,7 +3,7 @@ import { isInt32 } from "metano-runtime";
 export class Mixed<T> {
   protected static readonly byMixedT = /* @__PURE__ */ Symbol("Mixed(T x)");
   protected static readonly byMixedInt32 = /* @__PURE__ */ Symbol("Mixed(int x)");
-  readonly log: string = "";
+  declare readonly log: string;
 
   constructor(overload: typeof Mixed.byMixedT, x: T);
   constructor(overload: typeof Mixed.byMixedInt32, x: number);

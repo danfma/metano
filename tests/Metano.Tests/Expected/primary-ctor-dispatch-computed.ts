@@ -3,8 +3,8 @@ import { isString } from "metano-runtime";
 export class Deps {
   protected static readonly byDepsName = /* @__PURE__ */ Symbol("Deps(string name)");
   protected static readonly byDepsDefault = /* @__PURE__ */ Symbol("Deps()");
-  readonly name: string;
-  private readonly _len: number = 0;
+  declare readonly name: string;
+  declare private readonly _len: number;
 
   constructor(overload: typeof Deps.byDepsName, name: string);
   constructor(overload: typeof Deps.byDepsDefault);
@@ -14,6 +14,7 @@ export class Deps {
     if (typeof args[0] === "symbol" && args[0] === Deps.byDepsName) {
       const name = args[1] as string;
       this.name = name;
+      this._len = 0;
       this._len = name.length;
 
       return;
@@ -25,6 +26,7 @@ export class Deps {
       {
         const name = __chain0Arg0;
         this.name = name;
+        this._len = 0;
         this._len = name.length;
       }
 
@@ -34,6 +36,7 @@ export class Deps {
     if (args.length === 1 && isString(args[0])) {
       const name = args[0] as string;
       this.name = name;
+      this._len = 0;
       this._len = name.length;
 
       return;
@@ -45,6 +48,7 @@ export class Deps {
       {
         const name = __chain0Arg0;
         this.name = name;
+        this._len = 0;
         this._len = name.length;
       }
 

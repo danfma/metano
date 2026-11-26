@@ -3,8 +3,8 @@ import { HashCode, isInt32 } from "metano-runtime";
 export class Pt {
   protected static readonly byPtX = /* @__PURE__ */ Symbol("Pt(int x)");
   protected static readonly byPtXY = /* @__PURE__ */ Symbol("Pt(int x, int y)");
-  x: number = 0;
-  name: string;
+  declare x: number;
+  declare name: string;
 
   constructor(overload: typeof Pt.byPtX, x: number);
   constructor(overload: typeof Pt.byPtXY, x: number, y: number);
@@ -82,7 +82,7 @@ import { HashCode, isInt32 } from "metano-runtime";
 export class Tick {
   protected static readonly byTickDefault = /* @__PURE__ */ Symbol("Tick()");
   protected static readonly byTickN = /* @__PURE__ */ Symbol("Tick(int n)");
-  readonly n: number = 0;
+  declare readonly n: number;
 
   constructor(overload: typeof Tick.byTickDefault);
   constructor(overload: typeof Tick.byTickN, n: number);
@@ -141,8 +141,6 @@ export class Tick {
 import { Pt } from "./pt.js";
 
 export class Use {
-  constructor() { }
-
   origin(): number {
     return new Pt().x;
   }

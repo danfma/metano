@@ -64,7 +64,7 @@ let Tag$rt: ClassType<Tag> | undefined;
 export class Tag {
   protected static readonly byTagId = /* @__PURE__ */ Symbol("Tag(int id)");
   protected static readonly byTagName = /* @__PURE__ */ Symbol("Tag(string name)");
-  readonly name: string;
+  declare readonly name: string;
 
   constructor(overload: typeof Tag.byTagId, id: number);
   /** @internal */

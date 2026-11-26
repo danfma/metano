@@ -1,8 +1,6 @@
 import { Shapes } from "./shapes.js";
 
 export class Use {
-  constructor() { }
-
   ofInt(x: number): number {
     return Shapes.identityT<number>(x);
   }

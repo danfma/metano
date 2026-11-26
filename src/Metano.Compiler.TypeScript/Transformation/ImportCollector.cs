@@ -23,7 +23,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 ///   <item>Other transpilable types in the project (subpath imports via <see cref="PathNaming"/>)</item>
 /// </list>
 /// </summary>
-public sealed class ImportCollector(
+public sealed partial class ImportCollector(
     TypeScriptTransformContext context,
     IReadOnlySet<IrRuntimeRequirement>? irRuntimeRequirements = null,
     IReadOnlyDictionary<string, IrTranspilableTypeRef>? sameNameBindings = null
@@ -862,7 +862,12 @@ public sealed class ImportCollector(
             sink
         );
 
-        return new CollectedImports(MergeImportsByPath(stampedImports), helperAliases);
+        return new CollectedImports(
+            MergeImportsByPath(
+                WithReferenceAliases(stampedImports, sink.ReferenceAliases, statements)
+            ),
+            helperAliases
+        );
     }
 
     /// <summary>
@@ -2092,6 +2097,9 @@ public sealed class ImportCollector(
             case TsModuleExportReference exportReference:
                 RecordModuleExport(sink.OwnersByModuleExport, exportReference);
                 break;
+            case TsAliasedReference aliased:
+                CollectFromAliasedReference(aliased, sink);
+                break;
             case TsRuntimeHelperReference helper:
                 if (helper.Module is TsRuntimeHelperReference.LinqPipeModule)
                 {
@@ -2501,6 +2509,9 @@ internal sealed class ImportCollectionSink(
 
     public Dictionary<string, SortedSet<string>> OwnersByModuleExport { get; } =
         ownersByModuleExport;
+
+    /// <summary>The alias each shadowed imported name is read under (W10-1b).</summary>
+    public Dictionary<string, string> ReferenceAliases { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Whether <paramref name="name"/> is bound by an enclosing function, block,

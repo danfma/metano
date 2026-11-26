@@ -5,7 +5,11 @@ import type { ImmutableArray } from "metano-runtime/system/collections";
 let ImmHolder$rt: ClassType<ImmHolder> | undefined;
 
 export class ImmHolder {
-  constructor(readonly items: ImmutableArray<number>) {}
+  declare readonly items: ImmutableArray<number>;
+
+  constructor(items: ImmutableArray<number>) {
+    this.items = items;
+  }
 
   static get $runtimeType(): ClassType<ImmHolder> {
     return (ImmHolder$rt ??= {

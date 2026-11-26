@@ -11,7 +11,11 @@ import { IShapeB$runtimeType, type IShapeB } from "./i-shape-b.js";
 let OtherB$rt: ClassType<OtherB> | undefined;
 
 export class OtherB implements IShapeB {
-  constructor(readonly area: number) {}
+  declare readonly area: number;
+
+  constructor(area: number) {
+    this.area = area;
+  }
 
   static get $runtimeType(): ClassType<OtherB> {
     return (OtherB$rt ??= {

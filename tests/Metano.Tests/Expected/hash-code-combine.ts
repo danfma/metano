@@ -1,8 +1,6 @@
 import { HashCode } from "metano-runtime";
 
 export class Hashes {
-  constructor() { }
-
   one(a: number): number {
     return HashCode.combine(a);
   }

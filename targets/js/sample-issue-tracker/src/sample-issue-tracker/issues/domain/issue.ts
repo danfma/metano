@@ -15,20 +15,37 @@ import { IssueWorkflow } from "./issue-workflow.js";
 let Issue$rt: ClassType<Issue> | undefined;
 
 export class Issue {
-  status: IssueStatus = IssueStatus.Backlog;
-  assigneeId: UserId | null = null;
-  sprintKey: string | null = null;
-  readonly createdAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
-  updatedAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
-  private readonly _comments: List<Comment> = List.of<Comment>([]);
+  declare readonly id: IssueId;
+  declare title: string;
+  declare description: string;
+  declare readonly type: IssueType;
+  declare priority: IssuePriority;
+  declare status: IssueStatus;
+  declare assigneeId: UserId | null;
+  declare sprintKey: string | null;
+  declare readonly createdAt: Temporal.ZonedDateTime;
+  declare updatedAt: Temporal.ZonedDateTime;
+  private declare readonly _comments: List<Comment>;
 
   constructor(
-    readonly id: IssueId,
-    public title: string,
-    public description: string,
-    readonly type: IssueType,
-    public priority: IssuePriority = "medium",
-  ) {}
+    id: IssueId,
+    title: string,
+    description: string,
+    type: IssueType,
+    priority: IssuePriority = "medium",
+  ) {
+    this.id = id;
+    this.title = title;
+    this.description = description;
+    this.type = type;
+    this.priority = priority;
+    this.status = IssueStatus.Backlog;
+    this.assigneeId = null;
+    this.sprintKey = null;
+    this.createdAt = Temporal.Now.zonedDateTimeISO();
+    this.updatedAt = Temporal.Now.zonedDateTimeISO();
+    this._comments = List.of<Comment>([]);
+  }
 
   static get $runtimeType(): ClassType<Issue> {
     return (Issue$rt ??= {

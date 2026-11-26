@@ -4,8 +4,6 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let MixedBase$rt: ClassType<MixedBase> | undefined;
 
 export abstract class MixedBase {
-  constructor() {}
-
   static get $runtimeType(): ClassType<MixedBase> {
     return (MixedBase$rt ??= {
       kind: "class",

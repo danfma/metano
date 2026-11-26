@@ -2,7 +2,7 @@ import { objectEquals, throwError, tupleEquals } from "metano-runtime";
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Comparisons {
-  constructor() { }
+  private constructor() { }
 
   static flat(a: [number, number], b: [number, number]): boolean {
     return tupleEquals(a, b);

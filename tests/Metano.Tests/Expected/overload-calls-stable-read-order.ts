@@ -3,7 +3,7 @@ import { Holder } from "./holder.js";
 import type { Point } from "./point.js";
 
 export class PlainCalls {
-  constructor() { }
+  private constructor() { }
 
   static insideOneArgument(e: Engine, h: Holder): number {
     return e.applyFD(7, (h.p - h.q) | 0);

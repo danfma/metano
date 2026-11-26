@@ -5,11 +5,11 @@ import { Clip } from "./clip.js";
 let ImageClip$rt: ClassType<ImageClip> | undefined;
 
 export class ImageClip extends Clip {
-  constructor(
-    readonly path: string,
-    seconds: number,
-  ) {
+  declare readonly path: string;
+
+  constructor(path: string, seconds: number) {
     super(seconds);
+    this.path = path;
   }
 
   static override get $runtimeType(): ClassType<ImageClip> {

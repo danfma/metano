@@ -3,9 +3,11 @@ import type { Color } from "./color.js";
 import type { Point } from "./point.js";
 
 export class Money {
-  cents: number = 0;
+  declare cents: number;
 
-  constructor() { }
+  constructor() {
+    this.cents = 0;
+  }
 
   equals(other: Object | null): boolean {
     return other instanceof Money && other.cents === this.cents;

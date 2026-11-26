@@ -27,35 +27,35 @@ public class InternalVisibilityMappingTests
         """;
 
     [Test]
-    [Arguments("public", "  count: number = 0;", "  steps: number = 0;", "  reset(): void")]
+    [Arguments("public", "  declare count: number;", "  declare steps: number;", "  reset(): void")]
     [Arguments(
         "protected",
-        "  protected count: number = 0;",
-        "  protected steps: number = 0;",
+        "  declare protected count: number;",
+        "  declare protected steps: number;",
         "  protected reset(): void"
     )]
     [Arguments(
         "internal",
-        "  /** @internal */\n  count: number = 0;",
-        "  /** @internal */\n  steps: number = 0;",
+        "  /** @internal */\n  declare count: number;",
+        "  /** @internal */\n  declare steps: number;",
         "  /** @internal */\n  reset(): void"
     )]
     [Arguments(
         "protected internal",
-        "{\n  count: number = 0;",
-        "  count: number = 0;\n  steps: number = 0;",
+        "{\n  declare count: number;",
+        "  declare count: number;\n  declare steps: number;",
         "\n\n  reset(): void"
     )]
     [Arguments(
         "private protected",
-        "  /** @internal */\n  protected count: number = 0;",
-        "  /** @internal */\n  protected steps: number = 0;",
+        "  /** @internal */\n  declare protected count: number;",
+        "  /** @internal */\n  declare protected steps: number;",
         "  /** @internal */\n  protected reset(): void"
     )]
     [Arguments(
         "private",
-        "  private count: number = 0;",
-        "  private steps: number = 0;",
+        "  declare private count: number;",
+        "  declare private steps: number;",
         "  private reset(): void"
     )]
     public async Task FieldPropertyAndMethod_EmitTheirMappedModifierAndInternalTag(
@@ -117,7 +117,7 @@ public class InternalVisibilityMappingTests
         "}\n\n  add(a: number, b: number): number;\n  add(text: string): number;\n"
             + "  add(...args: unknown[]): number {",
         "  add(...args: unknown[]): number {",
-        "}\n\n  addAB(a: number, b: number): number {",
+        "{\n  addAB(a: number, b: number): number {",
         "}\n\n  addText(text: string): number {"
     )]
     [Arguments(
@@ -227,7 +227,7 @@ public class InternalVisibilityMappingTests
 
         var output = files["app/widget.ts"];
 
-        await Assert.That(output).Contains("  count: number = 0;");
+        await Assert.That(output).Contains("this.count = 0;");
         await Assert.That(output).Contains("  reset(): void");
         await Assert.That(output).DoesNotContain("protected count:");
         await Assert.That(output).DoesNotContain("protected reset(");
@@ -542,7 +542,7 @@ public class InternalVisibilityMappingTests
 
         await Assert.That(output).Contains("  /** @internal */\n  ticked$add(handler:");
         await Assert.That(output).Contains("  /** @internal */\n  ticked$remove(handler:");
-        await Assert.That(output).Contains("  private ticked:");
+        await Assert.That(output).Contains("  declare private ticked:");
     }
 
     [Test]
@@ -562,7 +562,7 @@ public class InternalVisibilityMappingTests
 
         var output = files["app/probe.ts"];
 
-        await Assert.That(output).Contains("  constructor(readonly x: number) { }");
+        await Assert.That(output).Contains("  constructor(x: number) {");
         await Assert.That(output).DoesNotContain("@internal");
     }
 
@@ -587,9 +587,7 @@ public class InternalVisibilityMappingTests
             """
         );
 
-        await Assert
-            .That(files["app/probe.ts"])
-            .Contains("  constructor(/** @internal */ protected readonly x: number) { }");
+        await Assert.That(files["app/probe.ts"]).Contains("  constructor(x: number) {");
 
         await Assert.That(files["app/derived-probe.ts"]).Contains("return Math.imul(this.x, 2);");
     }
@@ -639,9 +637,9 @@ public class InternalVisibilityMappingTests
         var widget = files["app/widget.ts"];
         var gadget = files["app/gadget.ts"];
 
-        await Assert.That(widget).Contains("  /** @internal */\n  protected count: number = 0;");
-        await Assert.That(widget).Contains("  /** @internal */\n  protected steps: number = 0;");
-        await Assert.That(widget).Contains("  private changed: ");
+        await Assert.That(widget).Contains("this.count = 0;");
+        await Assert.That(widget).Contains("this.steps = 0;");
+        await Assert.That(widget).Contains("  declare private changed: ");
         await Assert.That(widget).Contains("  /** @internal */\n  protected changed$add(handler:");
 
         await Assert
@@ -801,7 +799,7 @@ public class InternalVisibilityMappingTests
         await Assert.That(baseOutput).Contains("\n  v(): void {");
         await Assert.That(baseOutput).DoesNotContain("protected v(");
         await Assert.That(baseOutput).DoesNotContain("/** @internal */\n  v(");
-        await Assert.That(baseOutput).Contains("\n  p: number = 0;");
+        await Assert.That(baseOutput).Contains("this.p = 0;");
         await Assert.That(baseOutput).DoesNotContain("/** @internal */\n  p:");
     }
 

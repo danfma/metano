@@ -1,6 +1,4 @@
 export class Greeter {
-  constructor() { }
-
   single(name: string): string {
     return ('hello name') as string;
   }

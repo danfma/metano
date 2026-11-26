@@ -120,6 +120,13 @@ internal sealed class IrToTsClassEmitter(
         if (hasSlot && !emitsDispatcher)
             ctorParams = IrToTsClassBridge.WithTypeArgsParam(ctorParams, ir.TypeParameters!);
 
+        ctorLowering = ctorLowering with
+        {
+            ShadowedImports = ConstructorScopeAliases.Of(ir, ctorParams),
+        };
+
+        RecordConstructorScopeBindings(type, typeName, ctorLowering.ShadowedImports.Keys);
+
         var promotedMemberDeclaration = ir
             is { Semantics.IsValueType: true, StaticInitializer: not null }
             ? PromotedMemberDeclaration.OwnDeclarations
@@ -151,20 +158,16 @@ internal sealed class IrToTsClassEmitter(
         var classMembers = new List<TsClassMember>();
         var userMembers = new HashSet<TsClassMember>(ReferenceEqualityComparer.Instance);
 
+        var implicitDefault = ImplicitDefaultOf(
+            ir,
+            explicitCtors,
+            emitsSelectorsAndFactories && implicitParameterlessBody is not null
+        );
+
         var typeInitializer = TypeInitializerLowering.For(
             new TypeInitializerSelection(type, _context.Compilation),
             ir,
-            TypeInitializerTargetOf(
-                type,
-                typeName,
-                extendsType,
-                ImplicitDefaultOf(
-                    ir,
-                    explicitCtors,
-                    emitsSelectorsAndFactories && implicitParameterlessBody is not null
-                ),
-                ir
-            ),
+            TypeInitializerTargetOf(type, typeName, implicitDefault, ir),
             ctorLowering
         );
 
@@ -189,8 +192,6 @@ internal sealed class IrToTsClassEmitter(
 
         var dataMembersStart = classMembers.Count;
 
-        var ctorFieldInitializers = new List<TsStatement>();
-
         IndexerDiagnostics.Report(type, ir, _context.ReportDiagnostic);
         EventDiagnostics.Report(type, _context.ReportDiagnostic);
 
@@ -200,43 +201,8 @@ internal sealed class IrToTsClassEmitter(
             classMembers,
             keepsBaseMessage,
             ctorLowering,
-            typeInitializer,
-            hasSlot ? ctorFieldInitializers : null
+            typeInitializer
         );
-
-        if (ctorFieldInitializers.Count > 0)
-        {
-            var insertAt = constructor.Body.Count;
-
-            for (var i = 0; i < constructor.Body.Count; i++)
-            {
-                if (
-                    constructor.Body[i] is TsExpressionStatement
-                    {
-                        Expression: TsCallExpression
-                        {
-                            Callee: TsPropertyAccess
-                            {
-                                Object: TsIdentifier { Name: "Object" },
-                                Property: "defineProperty",
-                            },
-                        },
-                    }
-                )
-                {
-                    insertAt = i + 1;
-                    break;
-                }
-            }
-
-            var updatedBody = new List<TsStatement>(
-                constructor.Body.Count + ctorFieldInitializers.Count
-            );
-            updatedBody.AddRange(constructor.Body.Take(insertAt));
-            updatedBody.AddRange(ctorFieldInitializers);
-            updatedBody.AddRange(constructor.Body.Skip(insertAt));
-            constructor = constructor with { Body = updatedBody };
-        }
 
         MarkInheritedOverrides(classMembers, dataMembersStart, claims);
         userMembers.UnionWith(classMembers.Skip(dataMembersStart));
@@ -288,7 +254,10 @@ internal sealed class IrToTsClassEmitter(
         }
 
         var body = typeInitializer.Complete(
-            new TsClassBody(constructor, classMembers),
+            InstanceFieldStoreLowering.Apply(
+                new TsClassBody(constructor, classMembers),
+                FieldStorePlanOf(ir)
+            ),
             userMembers
         );
 
@@ -297,7 +266,7 @@ internal sealed class IrToTsClassEmitter(
         statements.Add(
             new TsClass(
                 closedSelf?.RuntimeClassName ?? typeName,
-                body.Constructor,
+                EmittedConstructor(ir, body.Constructor, explicitCtors),
                 body.Members,
                 Exported: closedSelf is null,
                 Extends: extendsType,
@@ -490,8 +459,7 @@ internal sealed class IrToTsClassEmitter(
         List<TsClassMember> classMembers,
         bool keepsBaseMessage,
         IrToTsBridgeContext lowering,
-        TypeInitializerLowering typeInitializer,
-        List<TsStatement>? ctorFieldInitializers = null
+        TypeInitializerLowering typeInitializer
     )
     {
         foreach (var irMember in ir.Members ?? [])
@@ -505,31 +473,8 @@ internal sealed class IrToTsClassEmitter(
                         lowering
                     );
 
-                    if (
-                        ctorFieldInitializers is not null
-                        && field.Initializer is { } fieldInit
-                        && !field.Static
-                        && TypeScript
-                            .Printer.RenderExpression(fieldInit)
-                            .Contains(
-                                IrToTsClassBridge.TypeArgsParameterName,
-                                StringComparison.Ordinal
-                            )
-                    )
-                    {
-                        ctorFieldInitializers.Add(
-                            new TsExpressionStatement(
-                                new TsBinaryExpression(
-                                    new TsPropertyAccess(new TsIdentifier("this"), field.Name),
-                                    "=",
-                                    fieldInit
-                                )
-                            )
-                        );
-                        field = field with { Initializer = null };
-                    }
-
                     classMembers.AddRange(typeInitializer.LowerField(irField, field));
+
                     break;
 
                 case IrPropertyDeclaration { Semantics.IsIndexer: true }:
@@ -570,6 +515,115 @@ internal sealed class IrToTsClassEmitter(
             }
         }
     }
+
+    /// <summary>
+    /// Records where each name of the constructor scope is declared — the
+    /// constructor parameter it spells, else the first constructor, else the
+    /// type — so an unaliasable shadowed read reports there (W10-1b).
+    /// </summary>
+    private void RecordConstructorScopeBindings(
+        INamedTypeSymbol type,
+        string typeName,
+        IEnumerable<string> names
+    )
+    {
+        var constructors = type
+            .InstanceConstructors.Where(ctor => !ctor.IsImplicitlyDeclared)
+            .ToList();
+
+        var fallback = constructors.FirstOrDefault()?.Locations.FirstOrDefault()
+            ?? type.Locations.FirstOrDefault();
+
+        foreach (var name in names)
+        {
+            var location = constructors
+                .SelectMany(ctor => ctor.Parameters)
+                .FirstOrDefault(p => IrToTsNamingPolicy.ToParameterName(p.Name) == name)
+                ?.Locations.FirstOrDefault()
+                ?? fallback;
+
+            if (location is not null)
+                _context.ConstructorScopeBindings.TryAdd((typeName, name), location);
+        }
+    }
+
+    /// <summary>
+    /// The facts that let a constructor body's store replace a field's
+    /// (<see cref="InstanceFieldStorePlan"/>): the constructors' leading runs
+    /// (<see cref="IrConstructorLeadingStores"/>) and the fields and
+    /// auto-properties with no initializer or a literal one, under their
+    /// TypeScript names. A class with a base class has no runs: the base
+    /// constructor runs first and may publish <c>this</c>, so a field must hold
+    /// its default before the body stores it (W10-1b).
+    /// </summary>
+    private static InstanceFieldStorePlan FieldStorePlanOf(IrClassDeclaration ir)
+    {
+        if (ir.BaseType is not null)
+            return InstanceFieldStorePlan.None;
+
+        var storage = (ir.Members ?? [])
+            .Where(member => member is IrFieldDeclaration or IrPropertyDeclaration)
+            .GroupBy(member => member.Name)
+            .ToDictionary(
+                group => group.Key,
+                group =>
+                    IrToTsNamingPolicy.ToDeclaredDataMemberName(group.Key, group.First().Attributes)
+            );
+
+        var runs = IrConstructorLeadingStores
+            .RunsOf(ir)
+            .Select(run => (IReadOnlyList<string>)[.. run.Select(member => storage[member])])
+            .ToList();
+
+        var replaceable = (ir.Members ?? [])
+            .Where(HasNoEffectfulInitializer)
+            .Select(member => storage[member.Name])
+            .ToHashSet(StringComparer.Ordinal);
+
+        return new InstanceFieldStorePlan(runs, replaceable);
+    }
+
+    private static bool HasNoEffectfulInitializer(IrMemberDeclaration member) =>
+        member switch
+        {
+            IrFieldDeclaration { IsStatic: false, IsCapturedByCtor: false } field =>
+                field.Initializer is null or IrLiteral,
+            IrPropertyDeclaration { IsStatic: false } property => property.Initializer
+                is null
+                    or IrLiteral,
+            _ => false,
+        };
+
+    /// <summary>
+    /// The constructor the class prints (#787 N4): a private empty one for a
+    /// static class, which C# cannot instantiate; none for a class that
+    /// declares no constructor and has nothing to run in one; otherwise
+    /// <paramref name="constructor"/>.
+    /// </summary>
+    private static TsConstructor? EmittedConstructor(
+        IrClassDeclaration ir,
+        TsConstructor constructor,
+        IReadOnlyList<IMethodSymbol> explicitCtors
+    )
+    {
+        if (ir.Semantics.IsStatic)
+            return new TsConstructor([], [], Accessibility: TsAccessibility.Private);
+
+        return IsImplicitAndEmpty(constructor, explicitCtors) ? null : constructor;
+    }
+
+    private static bool IsImplicitAndEmpty(
+        TsConstructor constructor,
+        IReadOnlyList<IMethodSymbol> explicitCtors
+    ) =>
+        explicitCtors.Count == 0
+        && constructor
+            is {
+                Parameters.Count: 0,
+                Body.Count: 0,
+                Overloads: null or { Count: 0 },
+                Accessibility: TsAccessibility.Public,
+            };
 
     /// <summary>
     /// A static member that shares its TypeScript name with another member's
@@ -657,20 +711,18 @@ internal sealed class IrToTsClassEmitter(
     /// <summary>
     /// The facts the type initializer lowering needs about the class: its emitted
     /// name, the name a <c>TypeInitializationException</c> reports
-    /// (<see cref="ClrTypeName.OfTypeInitializer"/>), whether it extends a class, and, for a
+    /// (<see cref="ClrTypeName.OfTypeInitializer"/>), whether it is a struct, and, for a
     /// struct, where its constructor builds the implicit default value.
     /// </summary>
     private static TypeInitializerTarget TypeInitializerTargetOf(
         INamedTypeSymbol type,
         string typeName,
-        TsType? extendsType,
         ImplicitDefaultConstruction implicitDefault,
         IrClassDeclaration ir
     ) =>
         new(
             typeName,
             ClrTypeName.OfTypeInitializer(type),
-            extendsType is not null,
             ir.Semantics.IsValueType,
             implicitDefault
         );
@@ -861,14 +913,9 @@ internal sealed class IrToTsClassEmitter(
     }
 
     /// <summary>
-    /// Declares as class fields the promoted members the constructor cannot
-    /// declare as parameter properties. With parameter properties, only a
-    /// promoted <c>params T[]</c>: TypeScript forbids the modifier on a rest
-    /// parameter (<c>readonly ...x: T[]</c>), so the signature keeps the rest
-    /// form and the field keeps the member on the public surface (#152). With
-    /// <see cref="PromotedMemberDeclaration.Fields"/>, every promoted member:
-    /// a dispatcher's <c>(...args)</c> declares no parameter properties, and
-    /// its branches assign the fields.
+    /// Declares as class fields the members the constructor promotes, which it
+    /// stores from its parameters (W10-1): unless the members keep their own
+    /// declarations (<see cref="PromotedMemberDeclaration.OwnDeclarations"/>).
     /// </summary>
     private void EmitPromotedMemberFields(
         IrConstructorDeclaration? ctorIr,
@@ -876,24 +923,15 @@ internal sealed class IrToTsClassEmitter(
         List<TsClassMember> classMembers
     )
     {
-        var declaredAsFields = (ctorIr?.Parameters ?? []).Where(p =>
-            IsDeclaredAsField(p, promotedMemberDeclaration)
+        if (promotedMemberDeclaration is PromotedMemberDeclaration.OwnDeclarations)
+            return;
+
+        var promoted = (ctorIr?.Parameters ?? []).Where(p =>
+            p.Promotion is not IrParameterPromotion.None
         );
 
-        classMembers.AddRange(declaredAsFields.Select(BuildPromotedMemberField));
+        classMembers.AddRange(promoted.Select(BuildPromotedMemberField));
     }
-
-    private static bool IsDeclaredAsField(
-        IrConstructorParameter p,
-        PromotedMemberDeclaration promotedMemberDeclaration
-    ) =>
-        promotedMemberDeclaration switch
-        {
-            PromotedMemberDeclaration.ParameterProperties => IsPromotedParamsParameter(p)
-                || IrToTsClassBridge.HasReservedPromotedName(p),
-            PromotedMemberDeclaration.Fields => p.Promotion is not IrParameterPromotion.None,
-            _ => false,
-        };
 
     /// <summary>
     /// The promoted members the constructor declares, which the member walk
@@ -908,31 +946,21 @@ internal sealed class IrToTsClassEmitter(
             : IrToTsClassBridge.PromotedMemberNames(ctorIr);
 
     /// <summary>
-    /// How the members a constructor promotes are declared: as parameter
-    /// properties of a single constructor; as fields when a dispatcher runs a
-    /// record positional or C# 12 primary constructor, which every other
-    /// constructor chains to (its branch assigns them, and a member that
-    /// merely reads the parameter must not be emitted as a self-reading
-    /// getter); or by the members' own declarations when a dispatcher runs
-    /// explicit constructors whose bodies assign them.
+    /// How the members a constructor promotes are declared: as fields the
+    /// constructor stores, when a single constructor or a dispatcher's record
+    /// positional or C# 12 primary constructor (which every other constructor
+    /// chains to) promotes them — a member that merely reads the parameter
+    /// must not be emitted as a self-reading getter; or by the members' own
+    /// declarations when a dispatcher runs explicit constructors whose bodies
+    /// assign them.
     /// </summary>
     private static PromotedMemberDeclaration PromotedMemberDeclarationOf(
         IrConstructorDeclaration? ctorIr,
         bool emitsDispatcher
-    )
-    {
-        var chainsToPrimary = ctorIr?.IsPrimary is true;
-
-        return (emitsDispatcher, chainsToPrimary) switch
-        {
-            (false, _) => PromotedMemberDeclaration.ParameterProperties,
-            (true, true) => PromotedMemberDeclaration.Fields,
-            (true, false) => PromotedMemberDeclaration.OwnDeclarations,
-        };
-    }
-
-    private static bool IsPromotedParamsParameter(IrConstructorParameter p) =>
-        p.Parameter.IsRestParams && p.Promotion is not IrParameterPromotion.None;
+    ) =>
+        emitsDispatcher && ctorIr?.IsPrimary is not true
+            ? PromotedMemberDeclaration.OwnDeclarations
+            : PromotedMemberDeclaration.Fields;
 
     private TsFieldMember BuildPromotedMemberField(IrConstructorParameter p)
     {
@@ -1784,7 +1812,6 @@ internal sealed class IrToTsClassEmitter(
     /// <summary>How the members a constructor promotes are declared.</summary>
     private enum PromotedMemberDeclaration
     {
-        ParameterProperties,
         Fields,
         OwnDeclarations,
     }

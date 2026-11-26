@@ -6,11 +6,16 @@ export class FieldOrder {
     Counter.reset();
   }) as () => void;
 
-  name: string;
-  a: number = (FieldOrder.#$init(), Counter.take());
-  b: number = Counter.take();
+  declare name: string;
+  declare a: number;
+  declare b: number;
 
-  constructor() { }
+  constructor() {
+    FieldOrder.#$init();
+    this.name = undefined!;
+    this.a = Counter.take();
+    this.b = Counter.take();
+  }
 
   static $initialize(): void {
     FieldOrder.#$init();

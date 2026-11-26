@@ -203,8 +203,8 @@ public class DefaultLiteralTests
 
         await Assert.That(holder).Contains("const a = new ZGen<number>();");
         await Assert.That(holder).Contains("const z = new ZOdd();");
-        await Assert.That(files["z-odd.ts"]).Contains("id: UUID = UUID.empty;");
-        await Assert.That(files["z-odd.ts"]).Contains("c: string = \"\\u0000\";");
+        await Assert.That(files["z-odd.ts"]).Contains("this.id = UUID.empty;");
+        await Assert.That(files["z-odd.ts"]).Contains("this.c = \"\\u0000\";");
 
         await Assert
             .That(Warnings(diagnostics))

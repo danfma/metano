@@ -4,10 +4,13 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let SPoint$rt: ClassType<SPoint> | undefined;
 
 export class SPoint {
-  constructor(
-    readonly x: number,
-    readonly y: number,
-  ) {}
+  declare readonly x: number;
+  declare readonly y: number;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
 
   static get $runtimeType(): ClassType<SPoint> {
     return (SPoint$rt ??= {

@@ -2,7 +2,7 @@
 import type { PointDto } from "./point-dto.js";
 
 export class InlineCode {
-  constructor() {}
+  private constructor() {}
 
   static now(): number {
     return performance.now() as number;

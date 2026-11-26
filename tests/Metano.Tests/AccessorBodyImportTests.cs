@@ -68,9 +68,11 @@ public class AccessorBodyImportTests
                 import { Sink } from "./sink.js";
 
                 export class BlockSetter {
-                  private _value: number = 0;
+                  declare private _value: number;
 
-                  constructor() { }
+                  constructor() {
+                    this._value = 0;
+                  }
 
                   get value(): number {
                     return this._value;
@@ -111,8 +113,6 @@ public class AccessorBodyImportTests
                 import { Sink } from "./sink.js";
 
                 export class ExpressionSetter {
-                  constructor() { }
-
                   get value(): number {
                     return 0;
                   }
@@ -159,8 +159,6 @@ public class AccessorBodyImportTests
                 export class StaticSetter {
                   private static _value: number = 0;
 
-                  constructor() { }
-
                   static get value(): number {
                     return StaticSetter._value;
                   }
@@ -206,9 +204,11 @@ public class AccessorBodyImportTests
                 import { Sink } from "./sink.js";
 
                 export class InitAccessor {
-                  private _value: number = 0;
+                  declare private _value: number;
 
-                  constructor() { }
+                  constructor() {
+                    this._value = 0;
+                  }
 
                   get value(): number {
                     return this._value;
@@ -267,9 +267,11 @@ public class AccessorBodyImportTests
                 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
                 export class Guarded {
-                  private _value: number = 0;
+                  declare private _value: number;
 
-                  constructor() { }
+                  constructor() {
+                    this._value = 0;
+                  }
 
                   get value(): number {
                     return this._value;

@@ -2,8 +2,8 @@
 import type { IWidget } from "../i-widget.js";
 
 export class Button implements IWidget {
-  private readonly _label: string;
-  private readonly _onPressed: () => void;
+  private declare readonly _label: string;
+  private declare readonly _onPressed: () => void;
 
   constructor(label: string, onPressed: () => void) {
     this._label = label;

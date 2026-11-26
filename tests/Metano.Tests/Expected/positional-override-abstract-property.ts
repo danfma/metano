@@ -2,8 +2,13 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 import { Entry } from "./entry.js";
 
 export class Note extends Entry {
-  constructor(readonly id: number, readonly text: string) {
+  declare readonly id: number;
+  declare readonly text: string;
+
+  constructor(id: number, text: string) {
     super();
+    this.id = id;
+    this.text = text;
   }
 
   nextId(): number {

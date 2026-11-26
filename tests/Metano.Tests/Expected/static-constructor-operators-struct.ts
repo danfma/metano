@@ -6,7 +6,7 @@ export class Pt {
   }) as () => void;
 
   static #origin$: number = 0;
-  x: number = 0;
+  declare x: number;
 
   constructor(x: number) {
     Pt.#$init();

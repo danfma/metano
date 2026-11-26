@@ -9,8 +9,6 @@ import { isInt32, isString } from "metano-runtime";
 import type { IConv } from "./i-conv.js";
 
 export class C implements IConv<number>, IConv<string> {
-  constructor() { }
-
   convXN(x: number, n: number): number;
   convXN(x: string, n: number): number;
   convXN(...args: unknown[]): number {

@@ -4,10 +4,12 @@ import type { ClassType } from "metano-runtime";
 let OBase$rt: ClassType<OBase> | undefined;
 
 export abstract class OBase {
-  readonly base: number = 0;
+  declare readonly base: number;
   abstract readonly name: string;
 
-  constructor() {}
+  constructor() {
+    this.base = 0;
+  }
 
   static get $runtimeType(): ClassType<OBase> {
     return (OBase$rt ??= {

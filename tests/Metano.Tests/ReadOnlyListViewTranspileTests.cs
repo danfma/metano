@@ -121,7 +121,7 @@ public class ReadOnlyListViewTranspileTests
             import { ImmutableArray, ImmutableList, List, ReadOnlyList, asJsArray, asReadOnlyJsArray, fromEnd, type IReadOnlyList } from "metano-runtime/system/collections";
 
             export class ReadOnlyViewsHolder {
-              private readonly _cached: readonly number[];
+              declare private readonly _cached: readonly number[];
 
               constructor(items: IReadOnlyList<number>) {
                 this._cached = asReadOnlyJsArray(items);

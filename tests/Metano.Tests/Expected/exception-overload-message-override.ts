@@ -9,7 +9,7 @@ export class OverloadOverrideException extends Exception {
   protected static readonly byOverloadOverrideExceptionMessageInner = /* @__PURE__ */ Symbol("OverloadOverrideException(string message, Exception inner)");
   override readonly name: string = "OverloadOverrideException";
   readonly #baseMessage: string;
-  readonly origin: Exception | null = null;
+  declare readonly origin: Exception | null;
 
   constructor(overload: typeof OverloadOverrideException.byOverloadOverrideExceptionDefault);
   constructor(overload: typeof OverloadOverrideException.byOverloadOverrideExceptionMessage, message: string);
@@ -22,6 +22,7 @@ export class OverloadOverrideException extends Exception {
       super("Exception of type 'App.OverloadOverrideException' was thrown.");
       this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
       Reflect.deleteProperty(this, "message");
+      this.origin = null;
 
       return;
     }
@@ -31,6 +32,7 @@ export class OverloadOverrideException extends Exception {
       super(message ?? "Exception of type 'App.OverloadOverrideException' was thrown.");
       this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
       Reflect.deleteProperty(this, "message");
+      this.origin = null;
 
       return;
     }
@@ -45,6 +47,7 @@ export class OverloadOverrideException extends Exception {
         super(message ?? "Exception of type 'App.OverloadOverrideException' was thrown.");
         this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
         Reflect.deleteProperty(this, "message");
+        this.origin = null;
       }
 
       this.origin = inner;
@@ -62,6 +65,7 @@ export class OverloadOverrideException extends Exception {
         super(message ?? "Exception of type 'App.OverloadOverrideException' was thrown.");
         this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
         Reflect.deleteProperty(this, "message");
+        this.origin = null;
       }
 
       this.origin = inner;
@@ -74,6 +78,7 @@ export class OverloadOverrideException extends Exception {
       super(message ?? "Exception of type 'App.OverloadOverrideException' was thrown.");
       this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
       Reflect.deleteProperty(this, "message");
+      this.origin = null;
 
       return;
     }
@@ -82,6 +87,7 @@ export class OverloadOverrideException extends Exception {
       super("Exception of type 'App.OverloadOverrideException' was thrown.");
       this.#baseMessage = Object.hasOwn(this, "message") ? this.message : super.message;
       Reflect.deleteProperty(this, "message");
+      this.origin = null;
 
       return;
     }

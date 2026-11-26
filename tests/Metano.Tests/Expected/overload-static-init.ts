@@ -5,7 +5,7 @@ export class Money {
   protected static readonly byMoneyAmount = /* @__PURE__ */ Symbol("Money(decimal amount)");
   protected static readonly byMoneyCents = /* @__PURE__ */ Symbol("Money(int cents)");
   static readonly zero = /* @__PURE__ */ Money.fromCents(0) as Money;
-  readonly how: string = "";
+  declare readonly how: string;
 
   constructor(overload: typeof Money.byMoneyAmount, amount: Decimal);
   constructor(overload: typeof Money.byMoneyCents, cents: number);

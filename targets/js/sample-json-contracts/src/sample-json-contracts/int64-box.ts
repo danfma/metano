@@ -4,11 +4,15 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let Int64Box$rt: ClassType<Int64Box> | undefined;
 
 export class Int64Box {
-  constructor(
-    readonly id: bigint,
-    readonly mask: bigint,
-    readonly parent: bigint | null,
-  ) {}
+  declare readonly id: bigint;
+  declare readonly mask: bigint;
+  declare readonly parent: bigint | null;
+
+  constructor(id: bigint, mask: bigint, parent: bigint | null) {
+    this.id = id;
+    this.mask = mask;
+    this.parent = parent;
+  }
 
   static get $runtimeType(): ClassType<Int64Box> {
     return (Int64Box$rt ??= {

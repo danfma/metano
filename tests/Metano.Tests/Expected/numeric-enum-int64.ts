@@ -30,7 +30,7 @@ export const Small = {
 export type Small = typeof Small[keyof typeof Small];
 
 export class Ops {
-  constructor() { }
+  private constructor() { }
 
   static combine(): Wide {
     return Wide.Low | Wide.High;

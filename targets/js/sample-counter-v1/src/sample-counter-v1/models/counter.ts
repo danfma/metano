@@ -2,9 +2,12 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Counter {
+  declare readonly count: number;
   static readonly zero = /* @__PURE__ */ new Counter(0) as Counter;
 
-  constructor(readonly count: number) {}
+  constructor(count: number) {
+    this.count = count;
+  }
 
   increment(): Counter {
     return this.with({ count: (this.count + 1) | 0 });

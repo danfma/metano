@@ -3,8 +3,6 @@ import { isInt32, isInt64, isString, isUInt32, isUInt64 } from "metano-runtime";
 import { Point } from "./point.js";
 
 export class Names {
-  constructor() { }
-
   addXY(x: number, y: number): number {
     return (x + y) | 0;
   }

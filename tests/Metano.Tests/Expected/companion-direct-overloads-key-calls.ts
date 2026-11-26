@@ -2,9 +2,11 @@ import { Key } from "./key.js";
 import { UId } from "./u-id.js";
 
 export class KeyCalls {
-  private _counter: number = 0;
+  declare private _counter: number;
 
-  constructor() { }
+  constructor() {
+    this._counter = 0;
+  }
 
   private next(): number {
     return this._counter = (this._counter + 1) | 0;

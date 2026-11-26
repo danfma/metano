@@ -3,7 +3,7 @@ import { isBool, isInt32, isString } from "metano-runtime";
 export class Money {
   protected static readonly byMoneyText = /* @__PURE__ */ Symbol("Money(string text)");
   protected static readonly byMoneyCents = /* @__PURE__ */ Symbol("Money(int value)");
-  readonly cents: number = 0;
+  declare readonly cents: number;
 
   constructor(overload: typeof Money.byMoneyText, text: string);
   constructor(overload: typeof Money.byMoneyCents, value: number);

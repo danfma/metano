@@ -1,8 +1,6 @@
 import { isBigInt, isInt32, isInt64, isUInt64 } from "metano-runtime";
 
 export class Gates {
-  constructor() { }
-
   pickInt32(x: number): string {
     return "int";
   }

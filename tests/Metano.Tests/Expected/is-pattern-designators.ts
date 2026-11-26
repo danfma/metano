@@ -5,7 +5,7 @@ import type { Shape } from "./shape.js";
 import { Square } from "./square.js";
 
 export class Geometry {
-  constructor() { }
+  private constructor() { }
 
   static get radiusOf(): (arg: Shape) => number {
     return (s: Shape) => {

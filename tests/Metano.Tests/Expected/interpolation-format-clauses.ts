@@ -1,8 +1,6 @@
 import { alignValue, formatBoolean, formatDouble, formatInt64, formatInteger } from "metano-runtime";
 
 export class Clauses {
-  constructor() { }
-
   integers(i: number, u: number, s: number, us: number, sb: number, b: number): string {
     return `${formatInteger(i, 32, "D2")}|${formatInteger(u, 32, "X8")}|${formatInteger(s, 16, "X")}|${formatInteger(us, 16, "N0", 6)}|${formatInteger(sb, 8, "x")}|${formatInteger(b, 8, "D3", -4)}`;
   }

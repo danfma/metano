@@ -4,10 +4,13 @@ import { Point } from "./point.js";
 import { Tag } from "./tag.js";
 
 export class Factory {
-  private readonly _defaults: List<number> = List.of<number>([7, 8]);
-  seed: number = 0;
+  declare private readonly _defaults: List<number>;
+  declare seed: number;
 
-  constructor() { }
+  constructor() {
+    this._defaults = List.of<number>([7, 8]);
+    this.seed = 0;
+  }
 
   build(capacity: number): number {
     const point = ((receiver$temp$0) => {

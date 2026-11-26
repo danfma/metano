@@ -4,9 +4,11 @@ import { ArgumentException } from "metano-runtime/system/exceptions/argument-exc
 import { InvalidOperationException } from "metano-runtime/system/exceptions/invalid-operation-exception";
 
 export class Runner {
-  private readonly _log: List<string> = new List<string>();
+  declare private readonly _log: List<string>;
 
-  constructor() { }
+  constructor() {
+    this._log = new List<string>();
+  }
 
   async runAsync(name: string): Promise<string> {
     try {

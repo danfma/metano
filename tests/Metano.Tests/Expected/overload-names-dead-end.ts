@@ -1,6 +1,4 @@
 export class Generic {
-  constructor() { }
-
   mInt32$1<T>(x: number): number {
     return 1;
   }

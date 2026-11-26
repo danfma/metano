@@ -2,7 +2,7 @@
 import type { IWidget } from "../i-widget.js";
 
 export class Text implements IWidget {
-  private readonly _content: string;
+  private declare readonly _content: string;
 
   constructor(content: string) {
     this._content = content;

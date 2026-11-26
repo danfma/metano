@@ -1,8 +1,6 @@
 import { isInt32, isString } from "metano-runtime";
 
 export class Base {
-  constructor() { }
-
   addX(x: number): number {
     return x;
   }
@@ -84,8 +82,6 @@ export class Hider extends Base {
 import { isInt32, isString } from "metano-runtime";
 
 export class Ledger {
-  constructor() { }
-
   addX(x: number): number {
     return x;
   }

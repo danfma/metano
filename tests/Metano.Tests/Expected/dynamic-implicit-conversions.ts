@@ -1,8 +1,6 @@
 import { List } from "metano-runtime/system/collections";
 
 export class Conversions {
-  constructor() { }
-
   static take(s: string): void {
   }
 

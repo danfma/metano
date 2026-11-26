@@ -157,7 +157,7 @@ export class StaleLedgerException extends InvalidOperationException {
 }
 
 export class Ledger {
-  constructor() { }
+  private constructor() { }
 
   static post(account: string | null, amount: Decimal, attempts: number): void {
     if (account == null) {

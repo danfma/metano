@@ -3,7 +3,7 @@ import { box, castTo, defaultEquals, enumText, formatBoolean, getRuntimeType, is
 import { Color, Color$runtimeType } from "./color.js";
 
 export class Probe {
-  constructor() { }
+  private constructor() { }
 
   static boxed(): Object {
     return box(Color.Red, Color$runtimeType);

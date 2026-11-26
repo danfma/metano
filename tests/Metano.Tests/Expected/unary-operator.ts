@@ -1,7 +1,13 @@
 import { HashCode, copyRecordWith } from "metano-runtime";
 
 export class Vec2 {
-  constructor(readonly x: number, readonly y: number) { }
+  declare readonly x: number;
+  declare readonly y: number;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
 
   static __negate(v: Vec2): Vec2 {
     return new Vec2(-v.x | 0, -v.y | 0);

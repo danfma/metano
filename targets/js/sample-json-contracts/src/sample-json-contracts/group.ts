@@ -6,11 +6,13 @@ import { Clip } from "./clip.js";
 let Group$rt: ClassType<Group> | undefined;
 
 export class Group extends Clip {
-  constructor(
-    readonly name: string,
-    readonly members: IReadOnlyList<Clip>,
-  ) {
+  declare readonly name: string;
+  declare readonly members: IReadOnlyList<Clip>;
+
+  constructor(name: string, members: IReadOnlyList<Clip>) {
     super(0);
+    this.name = name;
+    this.members = members;
   }
 
   static override get $runtimeType(): ClassType<Group> {

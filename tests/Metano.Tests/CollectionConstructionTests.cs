@@ -338,9 +338,7 @@ public class CollectionConstructionTests
 
         await Assert
             .That(result["holder.ts"])
-            .Contains(
-                "private readonly _byName: Dictionary<string, number> = new Dictionary<string, number>();"
-            );
+            .Contains("this._byName = new Dictionary<string, number>();");
     }
 
     /// <summary>The same construction over 64-bit keys.</summary>
@@ -367,8 +365,6 @@ public class CollectionConstructionTests
 
         await Assert
             .That(result["holder.ts"])
-            .Contains(
-                "private readonly _byId: Dictionary<bigint, number> = new Dictionary<bigint, number>();"
-            );
+            .Contains("this._byId = new Dictionary<bigint, number>();");
     }
 }

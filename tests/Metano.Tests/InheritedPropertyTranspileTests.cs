@@ -64,8 +64,8 @@ public class InheritedPropertyTranspileTests
             """
         );
 
-        await Assert.That(result["l2.ts"]).Contains("constructor(readonly x: number) {");
-        await Assert.That(result["l3.ts"]).Contains("constructor(x: number, readonly y: number) {");
+        await Assert.That(result["l2.ts"]).Contains("constructor(x: number) {");
+        await Assert.That(result["l3.ts"]).Contains("constructor(x: number, y: number) {");
         await Assert.That(result["l3.ts"]).Contains("super((x + 100) | 0);");
     }
 
@@ -83,7 +83,7 @@ public class InheritedPropertyTranspileTests
         );
 
         await Assert.That(result["box.ts"]).Contains("abstract readonly value: T;");
-        await Assert.That(result["int-box.ts"]).Contains("constructor(readonly value: number) {");
+        await Assert.That(result["int-box.ts"]).Contains("constructor(value: number) {");
     }
 
     [Test]
@@ -106,7 +106,7 @@ public class InheritedPropertyTranspileTests
         );
 
         var counter = result["counter.ts"];
-        await Assert.That(counter).Contains("constructor(readonly x: number) {");
+        await Assert.That(counter).Contains("constructor(x: number) {");
         await Assert.That(counter).Contains("this.y = ((x = (x + 1) | 0) - 1) | 0;");
         await Assert.That(counter).Contains("this.z = x;");
     }

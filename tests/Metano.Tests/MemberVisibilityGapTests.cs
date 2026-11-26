@@ -85,7 +85,7 @@ public class MemberVisibilityGapTests
         );
 
         await Assert.That(result["idx.ts"]).DoesNotContain("this[");
-        await Assert.That(result["idx.ts"]).Contains("size: number = 0;");
+        await Assert.That(result["idx.ts"]).Contains("this.size = 0;");
 
         var reported = diagnostics
             .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)

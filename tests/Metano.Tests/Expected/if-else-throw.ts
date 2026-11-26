@@ -2,7 +2,13 @@ import { HashCode, copyRecordWith } from "metano-runtime";
 import { Exception } from "metano-runtime/system/exceptions/exception";
 
 export class Pair {
-  constructor(readonly a: number, readonly b: number) { }
+  declare readonly a: number;
+  declare readonly b: number;
+
+  constructor(a: number, b: number) {
+    this.a = a;
+    this.b = b;
+  }
 
   static check(pair: Pair): void {
     if (pair.a !== pair.b) {

@@ -2,8 +2,6 @@ import { Money, discount } from "lib/lib";
 import { Decimal } from "metano-runtime/system/decimal";
 
 export class Register {
-  constructor() { }
-
   total(): Money {
     return Money.fromCents(150).addCents(25).add(new Money(new Decimal("1")));
   }

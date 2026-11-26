@@ -1,7 +1,7 @@
 import { checkedInt32, isInt32 } from "metano-runtime";
 
 export class Meters {
-  v: number = 0;
+  declare v: number;
 
   constructor(v: number) {
     this.v = v;

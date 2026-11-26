@@ -6,8 +6,8 @@ export class Pair {
 
   protected static readonly byPairV = /* @__PURE__ */ Symbol("Pair(int v)");
   protected static readonly byPairText = /* @__PURE__ */ Symbol("Pair(string text)");
-  w: number = 0;
-  v: number = 0;
+  declare w: number;
+  declare v: number;
 
   constructor(overload: typeof Pair.byPairV, v: number);
   constructor(overload: typeof Pair.byPairText, text: string);
@@ -23,10 +23,10 @@ export class Pair {
     }
 
     Pair.#$init();
-    this.w = 7;
 
     if (typeof args[0] === "symbol" && args[0] === Pair.byPairV) {
       const v = args[1] as number;
+      this.w = 7;
       this.v = v;
 
       return;
@@ -34,6 +34,7 @@ export class Pair {
 
     if (typeof args[0] === "symbol" && args[0] === Pair.byPairText) {
       const text = args[1] as string;
+      this.w = 7;
       this.v = text.length;
 
       return;
@@ -41,6 +42,7 @@ export class Pair {
 
     if (args.length === 1 && isInt32(args[0])) {
       const v = args[0] as number;
+      this.w = 7;
       this.v = v;
 
       return;
@@ -48,6 +50,7 @@ export class Pair {
 
     if (args.length === 1 && isString(args[0])) {
       const text = args[0] as string;
+      this.w = 7;
       this.v = text.length;
 
       return;

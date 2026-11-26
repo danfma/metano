@@ -4,10 +4,13 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let EpisodeSummary$rt: ClassType<EpisodeSummary> | undefined;
 
 export class EpisodeSummary {
-  constructor(
-    readonly id: string,
-    readonly title: string,
-  ) {}
+  declare readonly id: string;
+  declare readonly title: string;
+
+  constructor(id: string, title: string) {
+    this.id = id;
+    this.title = title;
+  }
 
   static get $runtimeType(): ClassType<EpisodeSummary> {
     return (EpisodeSummary$rt ??= {

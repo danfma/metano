@@ -1,8 +1,6 @@
 import { LoudGreeter } from "./loud-greeter.js";
 
 export class Caller {
-  constructor() { }
-
   static throughBase(): number {
     const g = new LoudGreeter();
 

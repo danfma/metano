@@ -1,5 +1,5 @@
 export class Jumps {
-  constructor() { }
+  private constructor() { }
 
   static scan(a: number[]): number {
     let n = 0;

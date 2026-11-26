@@ -11,10 +11,13 @@ import { IShapeB$runtimeType, type IShapeB } from "./i-shape-b.js";
 let SqB$rt: ClassType<SqB> | undefined;
 
 export class SqB implements IShapeB {
-  constructor(
-    readonly area: number,
-    readonly side: number,
-  ) {}
+  declare readonly area: number;
+  declare readonly side: number;
+
+  constructor(area: number, side: number) {
+    this.area = area;
+    this.side = side;
+  }
 
   static get $runtimeType(): ClassType<SqB> {
     return (SqB$rt ??= {

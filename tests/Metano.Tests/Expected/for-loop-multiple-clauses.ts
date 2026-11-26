@@ -1,5 +1,5 @@
 export class Walks {
-  constructor() { }
+  private constructor() { }
 
   static converge(n: number): number {
     let sum = 0;

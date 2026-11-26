@@ -40,7 +40,7 @@ public class PerClassBackingFieldTests
         var baseOutput = result["app/v-base.ts"];
         var field = FieldOf(baseOutput, "p", "VBase");
 
-        await Assert.That(baseOutput).Contains($"  private readonly {field}: number = 1;");
+        await Assert.That(baseOutput).Contains($"this.{field} = 1;");
         await Assert.That(baseOutput).Contains("  get p(): number {");
         await Assert.That(baseOutput).Contains($"    return this.{field};");
         await Assert.That(baseOutput).DoesNotContain("  readonly p: number");
@@ -79,13 +79,9 @@ public class PerClassBackingFieldTests
         var derivedField = FieldOf(result["app/d-der.ts"], "get", "DDer");
         var derived = result["app/d-der.ts"];
 
-        await Assert
-            .That(result["app/d-base.ts"])
-            .Contains($"  private readonly {baseField}: () => number = () => 1;");
+        await Assert.That(result["app/d-base.ts"]).Contains($"this.{baseField} = () => 1;");
 
-        await Assert
-            .That(derived)
-            .Contains($"  private readonly {derivedField}: () => number = () => 2;");
+        await Assert.That(derived).Contains($"this.{derivedField} = () => 2;");
 
         await Assert.That(derived).Contains($"    return this.{derivedField};");
         await Assert.That(derived).Contains("    return (super.get() + this.get()) | 0;");
@@ -120,7 +116,7 @@ public class PerClassBackingFieldTests
         var baseOutput = result["app/r-base.ts"];
         var field = FieldOf(baseOutput, "p", "RBase");
 
-        await Assert.That(baseOutput).Contains($"  private {field}: number = 10;");
+        await Assert.That(baseOutput).Contains($"this.{field} = 10;");
 
         await Assert
             .That(baseOutput)
@@ -157,7 +153,7 @@ public class PerClassBackingFieldTests
         var derivedField = FieldOf(result["app/i-der.ts"], "q", "IDer");
         var derived = result["app/i-der.ts"];
 
-        await Assert.That(derived).Contains($"  private {derivedField}: number = 7;");
+        await Assert.That(derived).Contains($"this.{derivedField} = 7;");
 
         await Assert
             .That(derived)
@@ -167,7 +163,7 @@ public class PerClassBackingFieldTests
 
         await Assert.That(derived).Contains("    return (this.q + super.q) | 0;");
         await Assert.That(derived).Contains("return copyRecordWith<IDer>(this, overrides);");
-        await Assert.That(result["app/i-base.ts"]).Contains($"  private {baseField}: number = 5;");
+        await Assert.That(result["app/i-base.ts"]).Contains($"this.{baseField} = 5;");
         // equals / hashCode compare each declaring class's own backing field (#384).
         await Assert.That(derived).Contains($"this.{derivedField} === other.{derivedField}");
         await Assert.That(derived).Contains($"hc.add(this.{derivedField});");
@@ -192,9 +188,7 @@ public class PerClassBackingFieldTests
 
         var field = FieldOf(result["app/lonely.ts"], "z", "Lonely");
 
-        await Assert
-            .That(result["app/lonely.ts"])
-            .Contains($"  private readonly {field}: number = 9;");
+        await Assert.That(result["app/lonely.ts"]).Contains($"this.{field} = 9;");
 
         await Assert.That(result["app/lonely.ts"]).Contains("  get z(): number {");
     }
@@ -214,7 +208,7 @@ public class PerClassBackingFieldTests
             """
         );
 
-        await Assert.That(result["app/plain.ts"]).Contains("  readonly z: number = 9;");
+        await Assert.That(result["app/plain.ts"]).Contains("this.z = 9;");
         await Assert.That(result["app/plain.ts"]).DoesNotMatch(BackingField);
         await Assert.That(result["app/plain.ts"]).DoesNotContain("toJSON");
     }
@@ -242,9 +236,7 @@ public class PerClassBackingFieldTests
 
         var field = FieldOf(result["app/s-mid.ts"], "s", "SMid");
 
-        await Assert
-            .That(result["app/s-mid.ts"])
-            .Contains($"  private readonly {field}: number = 2;");
+        await Assert.That(result["app/s-mid.ts"]).Contains($"this.{field} = 2;");
 
         await Assert.That(result["app/s-mid.ts"]).Contains("  override get s(): number {");
     }
@@ -349,8 +341,9 @@ public class PerClassBackingFieldTests
         var field = FieldOf(result["app/pos.ts"], "v", "Pos");
         var output = result["app/pos.ts"];
 
-        await Assert.That(output).Contains("  constructor(readonly id: number) { }");
-        await Assert.That(output).Contains($"  private {field}: number = 3;");
+        await Assert.That(output).Contains("  constructor(id: number) {");
+        await Assert.That(output).Contains($"  declare private {field}: number;");
+        await Assert.That(output).Contains($"    this.{field} = 3;");
 
         await Assert
             .That(output)
@@ -466,7 +459,7 @@ public class PerClassBackingFieldTests
 
         var field = FieldOf(result["app/f-base.ts"], "p", "FBase");
 
-        await Assert.That(result["app/f-base.ts"]).Contains($"private {field}: number = 1;");
+        await Assert.That(result["app/f-base.ts"]).Contains($"this.{field} = 1;");
         await Assert.That(result["app/f-base.ts"]).DoesNotContain("q$");
         await Assert.That(result["app/f-base.ts"]).DoesNotContain("r$");
     }
@@ -881,7 +874,7 @@ public class PerClassBackingFieldTests
         var result = TranspileHelper.TranspileWithLibrary(library, consumer);
         var field = FieldOf(result["app/consumer.ts"], "p", "Consumer");
 
-        await Assert.That(result["app/consumer.ts"]).Contains($"  private {field}: number = 2;");
+        await Assert.That(result["app/consumer.ts"]).Contains($"this.{field} = 2;");
         await Assert.That(result["app/consumer.ts"]).Contains("  override get p(): number {");
         await Assert.That(result["app/consumer.ts"]).Contains("  override toJSON(): unknown {");
         // No storage of its own: it inherits the library's toJSON.
@@ -1005,12 +998,10 @@ public class PerClassBackingFieldTests
         var hider = FieldOf(result["app/hider.ts"], "x", "Hider");
         var virtualHider = FieldOf(result["app/virtual-hider.ts"], "x", "VirtualHider");
 
-        await Assert.That(result["app/hider.ts"]).Contains($"  private {hider}: number = 2;");
+        await Assert.That(result["app/hider.ts"]).Contains($"this.{hider} = 2;");
         await Assert.That(result["app/hider.ts"]).Contains("  override get x(): number {");
 
-        await Assert
-            .That(result["app/virtual-hider.ts"])
-            .Contains($"  private {virtualHider}: number = 3;");
+        await Assert.That(result["app/virtual-hider.ts"]).Contains($"this.{virtualHider} = 3;");
     }
 
     private static string FieldOf(string output, string property, string owner)

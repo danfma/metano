@@ -5,8 +5,11 @@ import { UFail } from "./u-fail.js";
 let UFailX$rt: ClassType<UFailX> | undefined;
 
 export class UFailX extends UFail {
-  constructor(readonly a: number) {
+  declare readonly a: number;
+
+  constructor(a: number) {
     super();
+    this.a = a;
   }
 
   static override get $runtimeType(): ClassType<UFailX> {

@@ -25,7 +25,7 @@ public class AutoInitDefaultTests
             """
         );
 
-        await Assert.That(result["order.ts"]).Contains("state: Status = Status.Pending");
+        await Assert.That(result["order.ts"]).Contains("this.state = Status.Pending");
     }
 
     [Test]
@@ -46,7 +46,7 @@ public class AutoInitDefaultTests
             """
         );
 
-        await Assert.That(result["ticket.ts"]).Contains("level: Priority = 0 as Priority");
+        await Assert.That(result["ticket.ts"]).Contains("this.level = 0 as Priority");
     }
 
     /// <summary>
@@ -69,7 +69,7 @@ public class AutoInitDefaultTests
             """
         );
 
-        await Assert.That(result["holder.ts"]).Contains("level: H = H.Z");
+        await Assert.That(result["holder.ts"]).Contains("this.level = H.Z");
     }
 
     [Test]
@@ -88,7 +88,7 @@ public class AutoInitDefaultTests
             """
         );
 
-        await Assert.That(result["holder.ts"]).Contains("tone: S = S.Q");
+        await Assert.That(result["holder.ts"]).Contains("this.tone = S.Q");
     }
 
     /// <summary>
@@ -130,8 +130,8 @@ public class AutoInitDefaultTests
         );
 
         var output = result["counter.ts"];
-        await Assert.That(output).Contains("count: number = 0");
-        await Assert.That(output).Contains("total: bigint = 0n");
+        await Assert.That(output).Contains("this.count = 0");
+        await Assert.That(output).Contains("this.total = 0n");
     }
 
     [Test]
@@ -147,7 +147,7 @@ public class AutoInitDefaultTests
             """
         );
 
-        await Assert.That(result["flag.ts"]).Contains("isActive: boolean = false");
+        await Assert.That(result["flag.ts"]).Contains("this.isActive = false");
     }
 
     [Test]
@@ -166,7 +166,7 @@ public class AutoInitDefaultTests
             """
         );
 
-        await Assert.That(result["money.ts"]).Contains("amount: Decimal = new Decimal(\"0\")");
+        await Assert.That(result["money.ts"]).Contains("this.amount = new Decimal(\"0\")");
     }
 
     [Test]
@@ -184,7 +184,7 @@ public class AutoInitDefaultTests
             """
         );
 
-        await Assert.That(result["sample.ts"]).Contains("count: number = 42");
+        await Assert.That(result["sample.ts"]).Contains("this.count = 42");
         await Assert.That(result["sample.ts"]).DoesNotContain("count: number = 0");
     }
 
@@ -205,8 +205,8 @@ public class AutoInitDefaultTests
         );
 
         var output = result["sample.ts"];
-        await Assert.That(output).Contains("name: string | null = null");
-        await Assert.That(output).Contains("count: number | null = null");
+        await Assert.That(output).Contains("this.name = null");
+        await Assert.That(output).Contains("this.count = null");
     }
 
     [Test]
@@ -228,7 +228,7 @@ public class AutoInitDefaultTests
 
         // The user provided "", so it round-trips. The negative case (no init) is
         // covered by the absence of any auto-default.
-        await Assert.That(result["sample.ts"]).Contains("name: string = \"\"");
+        await Assert.That(result["sample.ts"]).Contains("this.name = \"\"");
     }
 
     [Test]
@@ -247,8 +247,8 @@ public class AutoInitDefaultTests
         );
 
         var output = result["box.ts"];
-        await Assert.That(output).Contains("count: number = 0");
-        await Assert.That(output).Contains("open: boolean = false");
+        await Assert.That(output).Contains("this.count = 0");
+        await Assert.That(output).Contains("this.open = false");
     }
 
     [Test]
@@ -337,7 +337,7 @@ public class AutoInitDefaultTests
         );
 
         var output = result["shape.ts"];
-        await Assert.That(output).Contains("center: Point = new Point();");
+        await Assert.That(output).Contains("this.center = new Point();");
         await Assert.That(output).Contains("static zero = /* @__PURE__ */ new Point() as Point;");
         await Assert.That(output).Contains("import { Point } from \"./point.js\";");
     }

@@ -44,7 +44,7 @@ export const FlagsEnum = {
 export type FlagsEnum = number & { readonly __enum?: "FlagsEnum" };
 
 export class EnumCasts {
-  constructor() { }
+  private constructor() { }
 
   static byte(x: number): ByteEnum {
     return (x & 0xFF) as ByteEnum;

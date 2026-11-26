@@ -43,8 +43,6 @@ import type { Ranked } from "./ranked.js";
 import { maxAB, maxABC } from "./ranks.js";
 
 export class Caller {
-  constructor() { }
-
   top(a: Ranked, b: Ranked): Ranked {
     return maxAB<Ranked>(a, b);
   }

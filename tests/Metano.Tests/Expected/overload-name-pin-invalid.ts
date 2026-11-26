@@ -1,8 +1,6 @@
 import { isBool, isChar, isFloat64, isInt32, isString } from "metano-runtime";
 
 export class Box {
-  constructor() { }
-
   putX(x: number): number {
     return x;
   }

@@ -98,7 +98,7 @@ public class PropertyTranspileTests
         );
 
         var output = result["config.ts"];
-        await Assert.That(output).Contains("retries: number = 3");
+        await Assert.That(output).Contains("this.retries = 3");
     }
 
     [Test]

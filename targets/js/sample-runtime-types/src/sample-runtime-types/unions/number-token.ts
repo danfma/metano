@@ -11,11 +11,11 @@ import { Token, type TokenKind } from "./token.js";
 let NumberToken$rt: ClassType<NumberToken> | undefined;
 
 export class NumberToken extends Token {
-  constructor(
-    kind: TokenKind,
-    readonly value: number,
-  ) {
+  declare readonly value: number;
+
+  constructor(kind: TokenKind, value: number) {
     super(kind);
+    this.value = value;
   }
 
   static override get $runtimeType(): ClassType<NumberToken> {

@@ -4,7 +4,11 @@ import { HashCode, copyRecordWith, type ClassType } from "metano-runtime";
 let UNear$rt: ClassType<UNear> | undefined;
 
 export abstract class UNear {
-  constructor(readonly a: number) {}
+  declare readonly a: number;
+
+  constructor(a: number) {
+    this.a = a;
+  }
 
   static get $runtimeType(): ClassType<UNear> {
     return (UNear$rt ??= {

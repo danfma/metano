@@ -359,7 +359,7 @@ public class ObjectInitializerTests
         );
 
         var output = result["doubled.ts"];
-        await Assert.That(output).Contains("private _value: number = 0;");
+        await Assert.That(output).Contains("this._value = 0;");
         await Assert.That(output).Contains("set value(value: number) {");
         await Assert.That(output).Contains("this._value = Math.imul(value, 2);");
         await Assert.That(output).Contains("Object.assign(receiver$temp$0, { value: 3 });");

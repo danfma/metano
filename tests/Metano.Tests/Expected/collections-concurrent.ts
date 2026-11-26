@@ -2,7 +2,7 @@ import { ConcurrentDictionary } from "metano-runtime/system/collections";
 import { formatBoolean } from "metano-runtime";
 
 export class Caches {
-  constructor() { }
+  private constructor() { }
 
   static build(): ConcurrentDictionary<string, number> {
     return ConcurrentDictionary.assign<string, number>([

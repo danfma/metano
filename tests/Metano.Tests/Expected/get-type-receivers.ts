@@ -1,6 +1,5 @@
 // receivers/blob.ts
 export class Blob {
-  constructor() { }
 }
 
 // receivers/circle.ts
@@ -71,8 +70,6 @@ import type { IHasArea } from "./i-has-area.js";
 let Gadget$rt: ClassType<Gadget> | undefined;
 
 export class Gadget implements IHasArea {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Gadget> {
     return (Gadget$rt ??= {
       kind: "class",
@@ -117,9 +114,11 @@ import { HashCode, type ClassType } from "metano-runtime";
 let Point$rt: ClassType<Point> | undefined;
 
 export class Point {
-  x: number = 0;
+  declare x: number;
 
-  constructor() { }
+  constructor() {
+    this.x = 0;
+  }
 
   static get $runtimeType(): ClassType<Point> {
     return (Point$rt ??= {
@@ -163,7 +162,7 @@ import { Point } from "./point.js";
 import type { Shape } from "./shape.js";
 
 export class Probes {
-  constructor() { }
+  private constructor() { }
 
   static ofObject(o: Object): string {
     return getRuntimeType(o).name;
@@ -204,8 +203,6 @@ import type { ClassType } from "metano-runtime";
 let Shape$rt: ClassType<Shape> | undefined;
 
 export abstract class Shape {
-  constructor() { }
-
   static get $runtimeType(): ClassType<Shape> {
     return (Shape$rt ??= {
       kind: "class",

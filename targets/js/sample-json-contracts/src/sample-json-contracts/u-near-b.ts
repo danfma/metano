@@ -5,12 +5,11 @@ import { UNearA } from "./u-near-a.js";
 let UNearB$rt: ClassType<UNearB> | undefined;
 
 export class UNearB extends UNearA {
-  constructor(
-    a: number,
-    b: number,
-    readonly c: number,
-  ) {
+  declare readonly c: number;
+
+  constructor(a: number, b: number, c: number) {
     super(a, b);
+    this.c = c;
   }
 
   static override get $runtimeType(): ClassType<UNearB> {

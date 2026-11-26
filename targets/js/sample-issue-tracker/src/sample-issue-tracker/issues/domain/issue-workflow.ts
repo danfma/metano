@@ -7,7 +7,7 @@ import { IssueStatus } from "./issue-status.js";
 import type { Issue } from "./issue.js";
 
 export class IssueWorkflow {
-  constructor() {}
+  private constructor() {}
 
   static getAllowedTransitions(currentStatus: IssueStatus): IReadOnlyList<IssueStatus> {
     return currentStatus === IssueStatus.Backlog
