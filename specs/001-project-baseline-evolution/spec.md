@@ -1714,7 +1714,9 @@ Product requirements added after the migration (normative; each one is traced by
      dispatcher's receiver, the names derived from it (constructor selectors, factories), and
      a derived class or caller in another package. A `[Name]` override is used as written.
      Dart rejects its reserved words in member positions too, so the Dart target escapes them
-     in identifier and member positions alike, at the declaration and every use.
+     in identifier and member positions alike, at the declaration and every use; every member
+     is escaped (fields, properties and methods, promoted or not), not only promoted record
+     members, because Dart rejects the bare word in any of them (supervisor decision, wave 10).
   6. *Struct defaults (#802).* `default` / `default(S)` of a struct that declares a
      constructor is the struct's zero value, `S.$default()`, in every position, parameter
      defaults included, on a target that declares one; Dart keeps the placeholder and its
