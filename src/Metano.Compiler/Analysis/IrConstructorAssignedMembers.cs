@@ -7,8 +7,9 @@ namespace Metano.Compiler.Analysis;
 /// members its parameters are promoted to, and every member its body assigns
 /// (<c>this.f = value</c> / <c>f = value</c>, or an <c>out this.f</c>
 /// argument), on any path. A constructor that chains to
-/// another one (<c>: this(...)</c>) assigns what that one assigns, so only the
-/// others count; a class without a declared constructor assigns nothing.
+/// another one (<c>: this(...)</c>) also assigns what that one assigns — none
+/// for a struct's implicit parameterless constructor; a class without a
+/// declared constructor assigns nothing.
 /// Lambdas and local functions are not entered: they may never run.
 /// </summary>
 public static class IrConstructorAssignedMembers
@@ -20,16 +21,7 @@ public static class IrConstructorAssignedMembers
 
         foreach (var declaration in type.Constructor?.DeclarationsInOrder ?? [])
         {
-            if (declaration.ThisChain is not null)
-                continue;
-
-            var assigned = declaration
-                .Parameters.Where(parameter => parameter.Promotion is not IrParameterPromotion.None)
-                .Select(parameter => parameter.PromotedPropertyName ?? parameter.Parameter.Name)
-                .ToHashSet(StringComparer.Ordinal);
-
-            foreach (var statement in declaration.Body ?? [])
-                Collect(statement, assigned);
+            var assigned = AssignedBy(declaration);
 
             if (common is null)
                 common = assigned;
@@ -38,6 +30,26 @@ public static class IrConstructorAssignedMembers
         }
 
         return common ?? new HashSet<string>(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The members <paramref name="declaration"/> assigns, with those of the
+    /// constructor it chains to (C# forbids cyclic chains).
+    /// </summary>
+    private static HashSet<string> AssignedBy(IrConstructorDeclaration declaration)
+    {
+        var assigned = declaration
+            .Parameters.Where(parameter => parameter.Promotion is not IrParameterPromotion.None)
+            .Select(parameter => parameter.PromotedPropertyName ?? parameter.Parameter.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var statement in declaration.Body ?? [])
+            Collect(statement, assigned);
+
+        if (declaration.ThisChain is { Target: var target })
+            assigned.UnionWith(AssignedBy(target));
+
+        return assigned;
     }
 
     private static void Collect(IrStatement statement, HashSet<string> assigned)

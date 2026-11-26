@@ -467,6 +467,42 @@ public class InstanceFieldStoreTests
     }
 
     [Test]
+    public async Task StructValueFieldWithoutATargetZeroValue_WarnsUnlessEveryConstructorAssignsIt()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct Partial { public System.DateTime When; public int X; public Partial(int x) { X = x; } }
+
+            [Transpile]
+            public struct ChainsToDefault { public System.DateTime Then; public int X; public ChainsToDefault(int x) : this() { X = x; } }
+
+            [Transpile]
+            public struct Assigns
+            {
+                public System.DateTime At;
+                public Assigns(int x) { At = new System.DateTime(2020, 1, 1); }
+                public Assigns(string s) : this(s.Length) { }
+            }
+
+            [Transpile]
+            public struct NoConstructor { public System.DateTime Never; }
+            """
+        );
+
+        var warned = diagnostics
+            .Where(d =>
+                d.Code == DiagnosticCodes.UnsupportedFeature
+                && d.Severity == MetanoDiagnosticSeverity.Warning
+                && d.Message.Contains("has no initializer")
+            )
+            .Select(d => d.Location!.SourceTree!.GetText().ToString(d.Location.SourceSpan))
+            .ToList();
+
+        await Assert.That(warned).IsEquivalentTo(["When", "Then"]);
+    }
+
+    [Test]
     public async Task DerivedClass_KeepsTheDefaultStoreOfAFieldTheBodyAssignsFirst()
     {
         var output = TranspileHelper.Transpile(

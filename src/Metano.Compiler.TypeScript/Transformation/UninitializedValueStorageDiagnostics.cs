@@ -16,7 +16,7 @@ namespace Metano.Compiler.TypeScript.Transformation;
 internal static class UninitializedValueStorageDiagnostics
 {
     /// <summary>
-    /// Reports MS0001 (warning) at each such member of the class <paramref name="ir"/>
+    /// Reports MS0001 (warning) at each such member of the class or struct <paramref name="ir"/>
     /// that some declared constructor leaves unassigned, so the missing zero
     /// value stays visible, as the TypeScript definite-assignment check made it
     /// before the field moved into the constructor.
@@ -27,10 +27,10 @@ internal static class UninitializedValueStorageDiagnostics
         Action<MetanoDiagnostic> report
     )
     {
-        // A struct's unset fields report where its default is built
-        // (a default or parameterless construction of it): only a class has
-        // constructor stores to check.
-        if (ir.Semantics.IsValueType)
+        // A struct without a declared constructor reports its unset fields
+        // where its default is built (a default or parameterless construction
+        // of it); one that declares a constructor stores them there.
+        if (ir.Semantics.IsValueType && type.InstanceConstructors.All(c => c.IsImplicitlyDeclared))
             return;
 
         var assigned = IrConstructorAssignedMembers.Of(ir);
