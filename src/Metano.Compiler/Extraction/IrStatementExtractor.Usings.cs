@@ -82,14 +82,11 @@ public sealed partial class IrStatementExtractor
     }
 
     /// <summary>
-    /// Whether a <c>using</c> declaration stays a declaration. One that is a direct child of
-    /// a switch section never does: a JavaScript <c>using</c> is not allowed directly in a
-    /// <c>case</c> clause, and hoisting it ahead of the <c>switch</c> would acquire the
-    /// resource early (decision W11-1a).
+    /// Whether a <c>using</c> declaration stays a declaration. C# never puts one directly in
+    /// a switch section (CS8647), where a JavaScript <c>using</c> would not be allowed either.
     /// </summary>
     private bool KeepsUsingDeclaration(LocalDeclarationStatementSyntax local) =>
-        local.Parent is not SwitchSectionSyntax
-        && UnloweredUsingDeclarationReason(local) is null
+        UnloweredUsingDeclarationReason(local) is null
         && KeepsDeclaration(DeclaredTypeOf(local.Declaration));
 
     /// <summary>

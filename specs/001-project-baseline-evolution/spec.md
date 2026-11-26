@@ -1950,9 +1950,8 @@ Product requirements added after the migration (normative; each one is traced by
      disposes the earlier resources. Item 3's lowering stays for: a class bound to a
      hand-written declaration (`[Import]`, `[External]`, `[NoEmit]`) or declared in a
      referenced package, which may have no alias; a `ref struct` disposed through its
-     pattern-based `Dispose()`; and a `using` declaration that is a direct child of a switch
-     section (JavaScript rejects `using` directly in a `case` clause, and hoisting it ahead of
-     the `switch` would acquire the resource early). An interface- or type-parameter-typed
+     pattern-based `Dispose()`. (A `using` declaration cannot be a direct child of a switch
+     section, CS8647; a `using` statement there becomes a block.) An interface- or type-parameter-typed
      resource needs a value with `[Symbol.dispose]()`.
   3. When the body (or a later disposal) and `dispose()` both throw, JavaScript raises a
      `SuppressedError` whose `error` is the `dispose()` exception. `toException`, which every

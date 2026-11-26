@@ -690,9 +690,8 @@ the compiled project), and every interface- or type-parameter-typed resource
 (`IDisposable`, an interface extending it, `T : IDisposable`). These keep the `try`/`finally`
 lowering of the section below, because their runtime objects may have no
 `[Symbol.dispose]()`: a class bound to a hand-written declaration (`[Import]`, `[External]`,
-`[NoEmit]`), a class from a referenced package, a `ref struct` with a pattern-based
-`Dispose()`, and a `using` declaration that is a direct child of a `switch` section
-(JavaScript allows no `using` directly in a `case`). An interface- or generic-typed resource
+`[NoEmit]`), a class from a referenced package, and a `ref struct` with a pattern-based
+`Dispose()`. An interface- or generic-typed resource
 needs a value with `[Symbol.dispose]()`: TypeScript enforces it for hand-written values typed
 as the runtime `IDisposable`, and a value cast to it without the member throws a `TypeError`
 when the `using` is entered.
