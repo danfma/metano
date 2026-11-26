@@ -102,6 +102,10 @@
       force a rerun (MetanoClean alone does not: it only applies when the
       target runs).
 
+      A standalone `-t:MetanoTranspileTs` run without Build in the same invocation sees no
+      resolved references, so its input list differs from a normal build's and the next normal
+      build reruns the transpile once.
+
       Not tracked: a tool installed with the tool install `tool-path` option;
       a tool pinned in a manifest further up the tree than the nearest one
       (`dotnet tool` merges manifests upward until one sets `isRoot: true`,
