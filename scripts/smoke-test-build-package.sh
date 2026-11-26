@@ -436,6 +436,118 @@ check_up_to_date() {
   fi
 }
 
+check_incremental_inputs() {
+  step "Rerunning the transpile when a referenced project or the set of sources changes (#818, #797)"
+
+  local dir="$WORK_DIR/incremental"
+  write_consumer "$dir" with-tool
+  mkdir -p "$dir/lib"
+  cat >"$dir/lib/Lib.csproj" <<EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><PackageReference Include="Metano" Version="$SMOKE_VERSION" /></ItemGroup>
+</Project>
+EOF
+  write_lib_calc "$dir" "" "return a + b;"
+  cat >"$dir/Consumer.csproj" <<EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <MetanoOutputDir>generated/src</MetanoOutputDir>
+    <MetanoClean>true</MetanoClean>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Metano" Version="$SMOKE_VERSION" />
+    <PackageReference Include="Metano.Build.TypeScript" Version="$SMOKE_VERSION" />
+    <ProjectReference Include="lib/Lib.csproj" />
+    <Compile Remove="lib/**/*.cs" />
+  </ItemGroup>
+</Project>
+EOF
+  cat >"$dir/Use.cs" <<'EOF'
+using Metano.Annotations;
+using Smoke.Lib;
+
+namespace Smoke;
+
+[Transpile]
+public class Use
+{
+    public int Run() => new Calc().Add(1, 2);
+}
+EOF
+  cat >"$dir/Extra.cs" <<'EOF'
+using Metano.Annotations;
+
+namespace Smoke;
+
+[Transpile]
+public class Extra;
+EOF
+  run_in_directory "$dir" restore_with_retry restore Consumer.csproj
+
+  incremental_build "$dir" transpile "the first build"
+  grep -rqs '\.add(' "$dir/generated/src" --include='*.ts' || fail "the consumer does not call the original name"
+  grep -rqs 'class Extra' "$dir/generated/src" --include='*.ts' || fail "Extra was not emitted"
+  incremental_build "$dir" skip "an unchanged build"
+
+  write_lib_calc "$dir" "" "return a + b + 0;"
+  incremental_build "$dir" skip "a body-only change in the referenced project"
+
+  write_lib_calc "$dir" '[Name("plus")]' "return a + b + 0;"
+  incremental_build "$dir" transpile "a [Name] pin in the referenced project"
+  grep -rqs '\.plus(' "$dir/generated/src" --include='*.ts' || fail "the consumer kept the old member name after the [Name] pin"
+  incremental_build "$dir" skip "a build after the pin was picked up"
+
+  rm "$dir/Extra.cs"
+  incremental_build "$dir" transpile "a removed source file"
+  if grep -rqs 'class Extra' "$dir/generated/src" --include='*.ts'; then
+    fail "the removed type is still in the output"
+  fi
+  if grep -rqs 'Extra' "$dir/generated/src" --include='index.ts'; then
+    fail "the removed type's barrel export is still in the output"
+  fi
+  incremental_build "$dir" skip "a build after the removal"
+
+  mv "$dir/Use.cs" "$dir/Renamed.cs"
+  incremental_build "$dir" transpile "a renamed source file"
+  grep -rqs 'class Use' "$dir/generated/src" --include='*.ts' || fail "the renamed file's type is missing"
+  incremental_build "$dir" skip "a build after the rename"
+}
+
+# Writes the library's single source. $1 project dir, $2 attribute line, $3 method body.
+write_lib_calc() {
+  cat >"$1/lib/Calc.cs" <<EOF
+using Metano.Annotations;
+
+[assembly: TranspileAssembly]
+[assembly: EmitPackage("smoke-lib")]
+
+namespace Smoke.Lib;
+
+public class Calc
+{
+    $2
+    public int Add(int a, int b) { $3 }
+}
+EOF
+}
+
+# Builds the incremental project and asserts whether the transpile ran ($2: transpile | skip).
+incremental_build() {
+  local dir="$1" expect="$2" what="$3" output
+  capture_dotnet output "$dir" build --no-restore -nologo || {
+    echo "$output"
+    fail "the build failed: $what"
+  }
+  if [ "$expect" = transpile ]; then
+    grep -q 'Metano: Transpiling' <<<"$output" || fail "$what did not rerun the transpile"
+  elif grep -q 'Metano: Transpiling' <<<"$output"; then
+    fail "$what ran the transpile again"
+  fi
+}
+
 check_transitive_consumer() {
   step "Building a buildTransitive-only consumer"
 
@@ -545,6 +657,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   pack_packages
   check_package_layout
   check_consumer_build
+  check_incremental_inputs
   check_transitive_consumer
   check_static_graph
   check_missing_tool
