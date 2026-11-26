@@ -1695,9 +1695,13 @@ Product requirements added after the migration (normative; each one is traced by
      reference type keeps the assertion (`null!`), decided from the destination's declared
      type (a field, property, local or parameter symbol, a parameter, a return type), never
      from its flow state: a store to a non-nullable member inside a constructor or after a null
-     test keeps it. An explicitly typed local initialized so keeps its annotation.
+     test keeps it. An explicitly typed local initialized so keeps its annotation. A local is
+     judged by its emitted declaration: a store to a `var` local keeps `null!` unless that
+     declaration is annotated `T | null` (rule 4), so a deconstructed or pattern-declared local
+     always keeps it.
   4. *Local annotations and narrowing (#796, #798).* A `var` reference local is annotated
-     `T | null` only when a later assignment has a maybe-null value. A carried `!` is left out
+     `T | null` only when a later assignment has a maybe-null value (a suppressed `null!` is
+     not one). A carried `!` is left out
      where TypeScript narrows by itself (the right operand of `&&`, the true branch of an `if`
      or conditional guarded by a null test of the same local with no assignment between), and
      kept on a captured, reassigned `let` read inside a lambda or local function.

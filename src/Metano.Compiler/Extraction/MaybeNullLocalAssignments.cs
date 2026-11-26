@@ -47,7 +47,14 @@ internal static class MaybeNullLocalAssignments
         && SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(assignment.Left).Symbol, local)
         && MayBeNull(model, assignment.Right);
 
+    /// <summary>
+    /// A suppressed value (<c>s = null!;</c>) is never null to C#, and the store
+    /// keeps its assertion (#794), so it does not make the local nullable.
+    /// </summary>
     private static bool MayBeNull(SemanticModel model, ExpressionSyntax value) =>
-        model.GetConstantValue(value) is { HasValue: true, Value: null }
-        || model.GetTypeInfo(value).Nullability.FlowState == NullableFlowState.MaybeNull;
+        !value.IsKind(SyntaxKind.SuppressNullableWarningExpression)
+        && (
+            model.GetConstantValue(value) is { HasValue: true, Value: null }
+            || model.GetTypeInfo(value).Nullability.FlowState == NullableFlowState.MaybeNull
+        );
 }

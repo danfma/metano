@@ -60,11 +60,41 @@ public sealed partial class IrExpressionExtractor
     /// The declared type of an assignment target. The target's type info follows
     /// Roslyn's flow state, which is maybe-null for a non-nullable member inside a
     /// constructor or after a null test, so a symbol's declared type wins; an element
-    /// of an array (no symbol) falls back to the type info.
+    /// of an array (no symbol) falls back to the type info. A local is typed by the
+    /// declaration the target emits for it instead (<see cref="EmittedLocalType"/>).
     /// </summary>
     private ITypeSymbol? AssignedTypeOf(ExpressionSyntax target) =>
-        TypeOfDeclared(_semantic.GetSymbolInfo(target).Symbol)
-        ?? _semantic.GetTypeInfo(target).Type;
+        _semantic.GetSymbolInfo(target).Symbol switch
+        {
+            ILocalSymbol local => EmittedLocalType(local),
+            var symbol => TypeOfDeclared(symbol) ?? _semantic.GetTypeInfo(target).Type,
+        };
+
+    /// <summary>
+    /// The type of a local as its emitted declaration states it. Roslyn declares
+    /// every <c>var</c> local of a reference type nullable, but the declaration
+    /// carries that only for a simple <c>var</c> local later assigned a value that
+    /// may be null (#796); any other <c>var</c> local and every deconstructed or
+    /// pattern-declared local is typed by its initializer, which rejects a bare
+    /// <c>null</c>. An explicitly typed local keeps its declared type.
+    /// </summary>
+    private ITypeSymbol EmittedLocalType(ILocalSymbol local)
+    {
+        var declarator =
+            local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            as VariableDeclaratorSyntax;
+
+        if (declarator?.Parent is VariableDeclarationSyntax { Type.IsVar: false })
+            return local.Type;
+
+        var declaresNullable =
+            declarator?.Parent is VariableDeclarationSyntax declaration
+            && MaybeNullLocalAssignments.AnyAfterDeclaration(_semantic, declaration, declarator);
+
+        return local.Type.WithNullableAnnotation(
+            declaresNullable ? NullableAnnotation.Annotated : NullableAnnotation.NotAnnotated
+        );
+    }
 
     private static bool IsReturnScope(SyntaxNode node) =>
         node
