@@ -1347,7 +1347,8 @@ Product requirements added after the migration (normative; each one is traced by
      inert. Settings are resolved when the build runs, not at evaluation, so values set in
      `Directory.Build.targets` (imported after NuGet package targets) are honoured.
   3. *Isolation.* Each enabled target runs in its own MSBuild target (`MetanoTranspileTs`, ...)
-     with its own incremental check (`<OutputDir>/.metano-stamp`), its own toolchain key file in
+     with its own incremental check (`<OutputDir>/.metano-stamp`; its inputs include the references' implementation assemblies, whose bodies the compiler reads, #818, and a list of the input files that changes when a source or
+     `MetanoAsset` is added, removed or renamed, #797), its own toolchain key file in
      `obj/`, its own asset selection (`<MetanoAsset Language="...">`, unchanged) and its own
      post-build command; one target's settings never reach another's command line. As in 2.x, a
      post-build command runs on every build, also when its target was up to date; unlike 2.x, a
@@ -1372,7 +1373,9 @@ Product requirements added after the migration (normative; each one is traced by
      `Metano.Build.TypeScript` at a throw-away version into a local feed, installs the tool from
      that feed into a local tool manifest, and builds a throw-away consumer that references
      `Metano.Build.TypeScript` with `PackageReference`; it asserts the generated `.ts` file,
-     `.metano-stamp` and `package.json`, and that a second build skips the transpile. A negative
+     `.metano-stamp` and `package.json`, and that a second build skips the transpile; a two-project scenario also asserts that a body change (an `[Inline]` value) or a `[Name]`
+     pin in a referenced project, and a removed source, re-transpile, and that an unchanged build
+     does not (#818, #797). A negative
      case without the tool asserts `METANOBUILD001` and its install text. It uses an isolated
      NuGet package cache and `DOTNET_CLI_HOME`, so it neither reads nor pollutes the developer's.
      For #706, nuget.org downloads MUST use a reusable HTTP cache and bounded retries for
@@ -1922,6 +1925,83 @@ Product requirements added after the migration (normative; each one is traced by
   6. Dart: `using` reports `MS0001`; `IDisposable` is not emitted in heritage clauses.
   Tests: `tests/Metano.Tests/DisposableTests.cs`,
   `targets/js/metano-runtime/test/system/disposable.test.ts`; conformance `DisposableProbes`.
+
+  **Amendment A1 — native `using` and `Symbol.dispose`** (#817, decisions W11-1 and W11-1a,
+  TypeScript). Supersedes, for the default configuration, the last sentence of item 1 and the
+  lowering of item 3; item 3 stays normative for the resources of A1.2's exceptions and under
+  the opt-out of A1.5. Items 2, 4, 5 and 6 are unchanged.
+  1. The runtime interface is `IDisposable { dispose(): void; [Symbol.dispose](): void }`.
+     Every transpiled class or struct that takes on `IDisposable` itself (directly or through
+     an interface, not only by inheriting it from its base class; `IrTypeSemantics.Disposable`,
+     with the member that implements `Dispose()`) declares
+     `[Symbol.dispose](): void { disposeResource(this, this.<dispose>); }`, where `<dispose>` is
+     that member's emitted name (`close` for `[Name("Close")]`). The runtime's
+     `disposeResource` only invokes the method; it is the polyfill anchor: building it
+     installs `Symbol.dispose ??= Symbol.for("Symbol.dispose")`, and since the runtime never
+     imports generated code, the ESM graph evaluates it before any class that reads the
+     binding (also within an import cycle of generated modules, and in every bundle), while a
+     module whose implementer is unused keeps no load-time code (spec 011 FR-043).
+  2. A `using` declaration or statement emits TypeScript `using` declarations
+     (`IrVariableDeclaration.IsUsing`, set when `IrExtractionContext.EmitsUsingDeclarations`)
+     when its resource's static type is an interface or type parameter, or a class or struct
+     whose `IDisposable` contract a type declared and emitted in the compiled project takes on
+     (`ResourceDisposal.IsContractTakenOnByThisCompilation`):
+     `using var x = e;` → `using x = e;`; `using (T x = e) body` → `{ using x = e; body }`;
+     `using (e) body` → `{ using $using0 = e; body }` (the temporary binds the value at entry);
+     several declarators → one `using` per declarator, in order. Disposal is in reverse order on
+     every exit, a `null` resource is skipped, and a later initializer that throws still
+     disposes the earlier resources. Item 3's lowering stays for: an `[Import]` class, or a
+     class declared in a referenced package, which may have no alias (also as the class
+     constraint of a type-parameter resource); a `ref struct` disposed through its
+     pattern-based `Dispose()`. (A `using` declaration cannot be a direct child of a switch
+     section, CS8647; a `using` statement there becomes a block.) An interface- or
+     type-parameter-typed resource needs a value with `[Symbol.dispose]()`, so instances of a
+     referenced package must come from a build of this version. An `[Import]` class of the
+     compilation that implements `IDisposable` reports an `MS0001` warning (its instances
+     have no `[Symbol.dispose]()` when held through an interface or type parameter); a class
+     whose implementing `Dispose()` is `[Emit]` gets no alias and reports `MS0001` (error),
+     like an `[Ignore]`d one, and a `using` over it keeps item 3's lowering.
+  3. When the body (or a later disposal) and `dispose()` both throw, JavaScript raises a
+     `SuppressedError` whose `error` is the `dispose()` exception. `toException`, which every
+     generated `catch` and `when` filter reads, unwraps it recursively through `error` (the
+     native class and the stand-in TypeScript's downlevel helpers build, recognized by its
+     `name`), so the clause sees the exception .NET lets through. An unhandled one reaches the
+     host as a `SuppressedError`.
+  4. Every consumer of `metano-runtime` needs `ESNext.Disposable` in its tsconfig `lib`: the
+     exported `IDisposable` names `Symbol.dispose` (unless `skipLibCheck` hides the runtime's
+     declarations and no generated `using` is checked). Below target `ESNext`, TypeScript
+     downlevels `using` to its helpers (a per-block allocation, accepted for backward
+     compatibility); `importHelpers` with `tslib` is strongly recommended, and a generated
+     package that declares a `using` lists `tslib` (`^2.6.0`) as an optional peer dependency
+     (`peerDependenciesMeta`), leaving any `tslib` entry it already has as written. The
+     samples' tsconfigs list `ESNext.Disposable` and enable `importHelpers`.
+  5. Opt-out: MSBuild `MetanoUsingLowering=tryFinally` (`MetanoTsUsingLowering`), CLI
+     `--using-lowering tryFinally` (`UsingLowering.TryFinally`), restores the 3.3.0 lowering
+     of every `using` (item 3). The output is not byte-identical to 3.3.0: the A1.1 alias, its
+     import and the `lib` requirement stay. `native` is the default. This adds
+     `UsingLowering` to the FR-086.1 settings list of `Metano.Build.TypeScript`.
+  6. Kept from W10-9: `await using` reports `MS0001` (`IAsyncDisposable` stays unmapped, so a
+     native `await using` would have no `Symbol.asyncDispose` to call); the module entry point,
+     unemitted-`Dispose` and shadowing rules of item 5; the forwarder rules of item 4; Dart.
+  Tests: `tests/Metano.Tests/DisposableTests.cs` (goldens `disposable-using-declarations.ts`,
+  `disposable-using-forms.ts` under the opt-out), `DisposalHelpersPeerDependencyTests.cs`,
+  `test/system/disposable.test.ts`, `test/system/exceptions/to-exception.test.ts`,
+  `test/tree-shaking/bundle.test.ts`; conformance `NativeUsingProbes`, `DisposableProbes`,
+  `DisposableNullGuardProbes`, `DisposableOverloadProbes` (Bun and Node).
+- **FR-111a** (internal descendants and contract members, #819, decision W11-3, TypeScript;
+  amends FR-111 and spec 011 D29):
+  1. In an `[EmitPackage]` library (or under `[assembly: EmitRuntimeType]`), an internal class
+     (reached automatically by W9-9) gets its own `$runtimeType` getter, with its own base,
+     interfaces and type parameters, when it has a describable class ancestor that is public or
+     reached (decision W11-3a); otherwise it would inherit that ancestor's descriptor and answer
+     `is IFoo` wrongly. Any other internal type gets one only when D29 reaches it. Internal types
+     stay out of the barrels.
+  2. An `internal` or `private protected` member that an explicit implementation of a public
+     interface member forwards to (the claiming member of a superseded explicit
+     implementation, such as `IDisposable.Dispose()`, FR-111 item 4; `IDisposable` only accepts a
+     `public` or `internal` claimant) is emitted `public` and never tagged `@internal`, so
+     `stripInternal` keeps the member the `implements` clause relies on.
+  Tests: `tests/Metano.Tests/InternalRuntimeTypeTests.cs`; conformance `InternalRuntimeTypeProbes`.
 
 ### Key Entities
 

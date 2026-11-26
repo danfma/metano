@@ -3,10 +3,11 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Tests;
 
 /// <summary>
-/// <c>System.IDisposable</c> and <c>using</c> (FR-111, #800): the runtime interface
-/// <c>IDisposable { dispose(): void }</c> kept in heritage clauses and descriptors and
-/// tested nominally, <c>using</c> lowered to <c>try</c>/<c>finally</c>, and the explicit
-/// <c>IDisposable.Dispose()</c> forwarder rules.
+/// <c>System.IDisposable</c> and <c>using</c> (FR-111, #800, #817): the runtime interface
+/// <c>IDisposable</c> kept in heritage clauses and descriptors and tested nominally, the
+/// <c>[Symbol.dispose]()</c> alias of every implementer, <c>using</c> emitted as a
+/// TypeScript <c>using</c> declaration (or lowered to <c>try</c>/<c>finally</c> under the
+/// <c>tryFinally</c> opt-out), and the explicit <c>IDisposable.Dispose()</c> forwarder rules.
 /// </summary>
 public class DisposableTests
 {
@@ -35,22 +36,380 @@ public class DisposableTests
 
         """;
 
+    private const string TypeQuestion = """
+        [Transpile]
+        public static class Probe
+        {
+            public static bool Is(object o) => o is IDisposable;
+        }
+        """;
+
+    private const string UsingForms = """
+        [Transpile]
+        public static class Uses
+        {
+            public static Res Open() => new Res();
+            public static void Touch(Res? r) { }
+            public static int A() { using var r = new Res(); return r.Count; }
+            public static void B(Res? maybe) { using (var r = maybe) { Touch(r); } Touch(null); }
+            public static void C() { using (Open()) { Touch(null); } }
+            public static void D() { using (Res a = new Res(), b = new Res()) { a.Count++; } }
+            public static void E() { using var a = new Res(); using var b = new Handle(); Touch(a); }
+            public static void F(SRes s, SRes? ns) { using (s) { } using (ns) { } }
+            public static void G<T>(T t) where T : IDisposable { using (t) { } }
+            public static void K() { using (var a = new Res()) using (var b = new Res()) { a.Count++; } }
+        }
+        """;
+
+    private const string NestedScopes = """
+        [Transpile]
+        public static class Uses
+        {
+            public static void Touch(Res? r) { }
+
+            public static void I(bool f)
+            {
+                if (f) { using var r = new Res(); Touch(r); }
+
+                for (var i = 0; i < 2; i++)
+                {
+                    using var q = new Res();
+                    if (i == 0) continue;
+                    break;
+                }
+            }
+
+            public static int J(System.Collections.Generic.Dictionary<string, int> d)
+            {
+                d.TryGetValue("a", out var v);
+                using var r = new Res();
+                Touch(r);
+                return v + 1;
+            }
+
+            public static Func<int> L() => () => { using var r = new Res(); return r.Count; };
+        }
+        """;
+
+    private const string AsyncUsing = """
+        [Transpile]
+        public static class Uses
+        {
+            public static async System.Threading.Tasks.Task<int> Run(
+                System.Threading.Tasks.Task<int> pending
+            )
+            {
+                using var r = new Res();
+
+                return await pending;
+            }
+        }
+        """;
+
     [Test]
     public async Task Implementer_KeepsTheInterfaceInImplementsAndItsDescriptor()
+    {
+        var result = TranspileHelper.Transpile(Resources + TypeQuestion);
+
+        await TranspileHelper.AssertGolden("disposable-implementer.ts", result["res.ts"]);
+        await TranspileHelper.AssertGolden("disposable-explicit.ts", result["handle.ts"]);
+    }
+
+    [Test]
+    public async Task DisposeAlias_IsDeclaredWhereTheContractIsTakenOn()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public interface IScope : IDisposable { }
+
+            [Transpile]
+            public class Scope : IScope
+            {
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public class ChildScope : Scope { }
+
+            [Transpile]
+            public class Overloaded : IDisposable
+            {
+                public void Dispose() { }
+                public void Dispose(int count) { }
+            }
+            """
+        );
+
+        const string Alias = "[Symbol.dispose](): void {";
+
+        await Assert.That(result["scope.ts"]).Contains(Alias);
+        await Assert.That(result["scope.ts"]).Contains("disposeResource(this, this.dispose);");
+        await Assert.That(result["scope.ts"]).Contains("} from \"metano-runtime\";");
+        await Assert.That(result["child-scope.ts"]).DoesNotContain(Alias);
+        await Assert.That(result["i-scope.ts"]).DoesNotContain(Alias);
+        await Assert.That(result["overloaded.ts"]).Contains("disposeResource(this, this.dispose);");
+    }
+
+    [Test]
+    public async Task DisposeAlias_CallsTheEmittedNameOfARenamedDispose()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Named : IDisposable
+            {
+                [Name("close")]
+                public void Dispose() { }
+            }
+            """
+        );
+
+        await Assert.That(result["named.ts"]).Contains("close(): void {");
+        await Assert.That(result["named.ts"]).Contains("disposeResource(this, this.close);");
+    }
+
+    [Test]
+    public async Task UsingStatementInASwitchSection_IsABlockWithAUsingDeclaration()
     {
         var result = TranspileHelper.Transpile(
             Resources
                 + """
                 [Transpile]
-                public static class Probe
+                public static class Uses
                 {
-                    public static bool Is(object o) => o is IDisposable;
+                    public static void Touch(Res? r) { }
+
+                    public static void Run(int k)
+                    {
+                        switch (k)
+                        {
+                            case 1:
+                                var shared = 1;
+                                using (var r = new Res())
+                                    Touch(r);
+                                break;
+                            case 2:
+                                shared = 2;
+                                using (var s = new Res()) { Touch(s); }
+                                break;
+                        }
+                    }
                 }
                 """
         );
 
-        await TranspileHelper.AssertGolden("disposable-implementer.ts", result["res.ts"]);
-        await TranspileHelper.AssertGolden("disposable-explicit.ts", result["handle.ts"]);
+        var output = result["uses.ts"];
+
+        // C# rejects a using declaration directly in a section (CS8647); a using statement
+        // becomes a block, where a TypeScript `using` is allowed.
+        var lines = output.Split('\n').Select(line => line.Trim()).ToList();
+        var resource = lines.IndexOf("using r = new Res();");
+
+        await Assert.That(resource).IsGreaterThan(0);
+        await Assert.That(lines[resource - 1]).IsEqualTo("{");
+        await Assert.That(output).Contains("using s = new Res();");
+    }
+
+    [Test]
+    public async Task ImportedClassResource_ReportsMS0001AndIsNeverAUsingDeclaration()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            Resources
+                + """
+                [Import("Socket", from: "net-lib")]
+                public sealed class Socket : IDisposable
+                {
+                    public void Dispose() { }
+                }
+
+                [Transpile]
+                public static class Uses
+                {
+                    public static Socket Open() => null!;
+
+                    public static void Run(IDisposable handle)
+                    {
+                        using var socket = Open();
+                        using var viaInterface = handle;
+                        using var own = new Res();
+                    }
+                }
+                """
+        );
+
+        var output = files["uses.ts"];
+
+        // An [Import] class's Dispose is not emitted: MS0001 as in 3.3.0, the value is kept
+        // undisposed; interface and own-class resources stay using declarations.
+        await Assert.That(output).Contains("const socket = Uses.open();");
+        await Assert.That(output).DoesNotContain("using socket");
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.UnsupportedFeature && d.Message.Contains("Socket")
+                )
+            )
+            .IsTrue();
+
+        await Assert.That(output).Contains("using viaInterface = handle;");
+        await Assert.That(output).Contains("using own = new Res();");
+    }
+
+    [Test]
+    public async Task ImportedDisposableClass_WarnsOnlyForNativeUsing()
+    {
+        const string Source = """
+            [Import("Socket", from: "net-lib")]
+            public sealed class Socket : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public sealed class Res : IDisposable
+            {
+                public void Dispose() { }
+            }
+            """;
+
+        var (_, native) = TranspileHelper.TranspileWithDiagnostics(Source);
+        var (_, tryFinally) = TranspileHelper.TranspileWithTryFinallyUsings(Source);
+
+        static bool NamesSocket(MetanoDiagnostic d) =>
+            d
+                is {
+                    Code: DiagnosticCodes.UnsupportedFeature,
+                    Severity: MetanoDiagnosticSeverity.Warning
+                }
+            && d.Message.Contains("'Socket' is an [Import] class that implements IDisposable");
+
+        await Assert.That(native.Count(NamesSocket)).IsEqualTo(1);
+        await Assert.That(native.Any(d => d.Message.Contains("'Res'"))).IsFalse();
+        await Assert.That(tryFinally.Any(NamesSocket)).IsFalse();
+    }
+
+    [Test]
+    public async Task EmitDispose_GetsNoAliasReportsMS0001AndKeepsTheTryFinally()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public sealed class Handle : IDisposable
+            {
+                [Emit("release($0)")]
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public static class Uses
+            {
+                public static void Run() { using var h = new Handle(); }
+            }
+            """
+        );
+
+        await Assert.That(files["handle.ts"]).DoesNotContain("[Symbol.dispose]");
+        // The class cannot satisfy IDisposable (MS0001 error below); the using keeps the
+        // try/finally, whose dispose call is the 3.3.0 one (the template is not expanded).
+        await Assert.That(files["uses.ts"]).DoesNotContain("using h");
+        await Assert.That(files["uses.ts"]).Contains("h.dispose();");
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d
+                        is {
+                            Code: DiagnosticCodes.UnsupportedFeature,
+                            Severity: MetanoDiagnosticSeverity.Error
+                        }
+                    && d.Message.Contains("is [Emit]")
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task ImportedClassResource_UnderTranspileAssembly_KeepsTheTryFinally()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            [Import("Socket", from: "net-lib")]
+            public sealed class Socket : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            public static class Uses
+            {
+                public static Socket Open() => null!;
+
+                public static void Run()
+                {
+                    using var socket = Open();
+                }
+            }
+            """
+        );
+
+        var output = result["uses.ts"];
+
+        // The [Import] class is transpilable under TranspileAssembly, so its Dispose counts as
+        // emitted, but the bound declaration has no [Symbol.dispose](): try/finally.
+        await Assert.That(output).DoesNotContain("using socket");
+        await Assert.That(output).Contains("socket?.dispose();");
+    }
+
+    [Test]
+    public async Task ClassConstrainedTypeParameterOfAReferencedPackage_KeepsTheTryFinally()
+    {
+        var files = TranspileHelper.TranspileWithLibrary(
+            """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@scope/lib")]
+
+            namespace Lib;
+
+            public class LibRes : IDisposable
+            {
+                public void Dispose() { }
+            }
+            """,
+            """
+            using Lib;
+
+            [Transpile]
+            public class OwnRes : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public static class Uses
+            {
+                public static void Lib<T>(T t) where T : LibRes { using (t) { } }
+                public static void Own<T>(T t) where T : OwnRes { using (t) { } }
+                public static void Iface<T>(T t) where T : IDisposable { using (t) { } }
+            }
+            """
+        );
+
+        var output = files["uses.ts"];
+
+        // Lib<T> keeps try/finally; Own<T> and Iface<T> declare `using` (one temporary each).
+        await Assert.That(output).Contains("$using0?.dispose();");
+        await Assert.That(output.Split("using $using0 = t;").Length - 1).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task DisposeAlias_IsKeptUnderTheTryFinallyOptOut()
+    {
+        var (files, _) = TranspileHelper.TranspileWithTryFinallyUsings(Resources + TypeQuestion);
+
+        await TranspileHelper.AssertGolden("disposable-implementer.ts", files["res.ts"]);
     }
 
     [Test]
@@ -180,68 +539,101 @@ public class DisposableTests
     }
 
     [Test]
-    public async Task UsingForms_LowerToTryFinally()
+    public async Task UsingForms_EmitUsingDeclarations()
     {
-        var result = TranspileHelper.Transpile(
-            Resources
-                + """
-                [Transpile]
-                public static class Uses
-                {
-                    public static Res Open() => new Res();
-                    public static void Touch(Res? r) { }
-                    public static int A() { using var r = new Res(); return r.Count; }
-                    public static void B(Res? maybe) { using (var r = maybe) { Touch(r); } Touch(null); }
-                    public static void C() { using (Open()) { Touch(null); } }
-                    public static void D() { using (Res a = new Res(), b = new Res()) { a.Count++; } }
-                    public static void E() { using var a = new Res(); using var b = new Handle(); Touch(a); }
-                    public static void F(SRes s, SRes? ns) { using (s) { } using (ns) { } }
-                    public static void G<T>(T t) where T : IDisposable { using (t) { } }
-                    public static void K() { using (var a = new Res()) using (var b = new Res()) { a.Count++; } }
-                }
-                """
-        );
+        var result = TranspileHelper.Transpile(Resources + UsingForms);
 
-        await TranspileHelper.AssertGolden("disposable-using-forms.ts", result["uses.ts"]);
+        await TranspileHelper.AssertGolden("disposable-using-declarations.ts", result["uses.ts"]);
     }
 
     [Test]
-    public async Task UsingDeclaration_InNestedScopesAndLambdas_WrapsTheRestOfItsScope()
+    public async Task UsingForms_UnderTheTryFinallyOptOut_KeepThe330Lowering()
+    {
+        var (files, _) = TranspileHelper.TranspileWithTryFinallyUsings(Resources + UsingForms);
+
+        await TranspileHelper.AssertGolden("disposable-using-forms.ts", files["uses.ts"]);
+    }
+
+    [Test]
+    public async Task PatternBasedRefStruct_KeepsTheTryFinallyLowering()
     {
         var result = TranspileHelper.Transpile(
-            Resources
-                + """
-                [Transpile]
-                public static class Uses
-                {
-                    public static void Touch(Res? r) { }
+            """
+            [Transpile]
+            public ref struct Lease
+            {
+                public int Count;
+                public void Dispose() { Count++; }
+            }
 
-                    public static void I(bool f)
-                    {
-                        if (f) { using var r = new Res(); Touch(r); }
-
-                        for (var i = 0; i < 2; i++)
-                        {
-                            using var q = new Res();
-                            if (i == 0) continue;
-                            break;
-                        }
-                    }
-
-                    public static int J(System.Collections.Generic.Dictionary<string, int> d)
-                    {
-                        d.TryGetValue("a", out var v);
-                        using var r = new Res();
-                        Touch(r);
-                        return v + 1;
-                    }
-
-                    public static Func<int> L() => () => { using var r = new Res(); return r.Count; };
-                }
-                """
+            [Transpile]
+            public static class Uses
+            {
+                public static void Run() { using var lease = new Lease(); }
+            }
+            """
         );
 
         var output = result["uses.ts"];
+
+        await Assert.That(output).DoesNotContain("using lease");
+        await Assert.That(output).Contains("lease.dispose();");
+    }
+
+    [Test]
+    public async Task UsingDeclaration_InNestedScopesLoopsAndLambdas_StaysADeclaration()
+    {
+        var result = TranspileHelper.Transpile(Resources + NestedScopes);
+        var output = result["uses.ts"];
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    if (f) {
+                      using r = new Res();
+                      Uses.touch(r);
+                    }
+                """
+            );
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    for (let i = 0; i < 2; i++) {
+                      using q = new Res();
+                """
+            );
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    const [, v] = d.tryGetValue("a", 0);
+                    using r = new Res();
+                    Uses.touch(r);
+                """
+            );
+
+        await Assert
+            .That(output)
+            .Contains(
+                """
+                    return () => {
+                      using r = new Res();
+
+                      return r.count;
+                    };
+                """
+            );
+    }
+
+    [Test]
+    public async Task UsingDeclaration_UnderTheTryFinallyOptOut_WrapsTheRestOfItsScope()
+    {
+        var (files, _) = TranspileHelper.TranspileWithTryFinallyUsings(Resources + NestedScopes);
+        var output = files["uses.ts"];
 
         await Assert
             .That(output)
@@ -452,6 +844,7 @@ public class DisposableTests
         var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
 
         await Assert.That(error.Message).Contains("module entry point");
+        await Assert.That(error.Message).Contains("module's top-level code");
     }
 
     [Test]
@@ -563,28 +956,28 @@ public class DisposableTests
     }
 
     [Test]
-    public async Task UsingDeclaration_InAnAsyncMethod_KeepsTheAwaitInsideTheTry()
+    public async Task UsingDeclaration_InAnAsyncMethod_StaysADeclarationBeforeTheAwait()
     {
-        var result = TranspileHelper.Transpile(
-            Resources
-                + """
-                [Transpile]
-                public static class Uses
-                {
-                    public static async System.Threading.Tasks.Task<int> Run(
-                        System.Threading.Tasks.Task<int> pending
-                    )
-                    {
-                        using var r = new Res();
-
-                        return await pending;
-                    }
-                }
-                """
-        );
+        var result = TranspileHelper.Transpile(Resources + AsyncUsing);
 
         await Assert
             .That(result["uses.ts"])
+            .Contains(
+                """
+                    using r = new Res();
+
+                    return await pending;
+                """
+            );
+    }
+
+    [Test]
+    public async Task UsingDeclaration_InAnAsyncMethod_UnderTheTryFinallyOptOut_KeepsTheAwaitInsideTheTry()
+    {
+        var (files, _) = TranspileHelper.TranspileWithTryFinallyUsings(Resources + AsyncUsing);
+
+        await Assert
+            .That(files["uses.ts"])
             .Contains(
                 """
                     const r = new Res();
@@ -629,9 +1022,9 @@ public class DisposableTests
     }
 
     [Test]
-    public async Task DisposeGuard_IsDroppedOnlyForACreatedValue()
+    public async Task DisposeGuard_UnderTheTryFinallyOptOut_IsDroppedOnlyForACreatedValue()
     {
-        var result = TranspileHelper.Transpile(
+        var (files, _) = TranspileHelper.TranspileWithTryFinallyUsings(
             Resources
                 + """
                 [Transpile]
@@ -650,7 +1043,7 @@ public class DisposableTests
                 """
         );
 
-        var output = result["uses.ts"];
+        var output = files["uses.ts"];
 
         await Assert.That(output).Contains("created.dispose();");
         await Assert.That(output).Contains("element?.dispose();");
@@ -659,9 +1052,9 @@ public class DisposableTests
     }
 
     [Test]
-    public async Task DisposeGuard_IsKeptForACreationThroughAUserDefinedConversion()
+    public async Task DisposeGuard_UnderTheTryFinallyOptOut_IsKeptForACreationThroughAUserDefinedConversion()
     {
-        var result = TranspileHelper.Transpile(
+        var (files, _) = TranspileHelper.TranspileWithTryFinallyUsings(
             Resources
                 + """
                 [Transpile]
@@ -682,7 +1075,7 @@ public class DisposableTests
                 """
         );
 
-        var output = result["uses.ts"];
+        var output = files["uses.ts"];
 
         await Assert.That(output).Contains("declared?.dispose();");
         await Assert.That(output).Contains("statement?.dispose();");
@@ -718,8 +1111,9 @@ public class DisposableTests
         var output = files["uses.ts"];
 
         await Assert.That(output).Contains("return isType(o, IDisposable$runtimeType);");
-        // A created value is never null, so it needs no guard.
+        // A class of a referenced package may have no [Symbol.dispose]() alias.
         await Assert.That(output).Contains("r.dispose();");
+        await Assert.That(output).DoesNotContain("using r");
     }
 
     [Test]

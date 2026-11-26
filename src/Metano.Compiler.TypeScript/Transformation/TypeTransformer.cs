@@ -112,6 +112,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public bool StripInterfacePrefix { get; init; }
 
     /// <summary>
+    /// How a C# <c>using</c> is emitted (FR-111); forwarded to the extraction context
+    /// (<see cref="TypeScriptTransformContext.UsingLowering"/>).
+    /// </summary>
+    public UsingLowering UsingLowering { get; init; }
+
+    /// <summary>
     /// The single decision point for the text of every module specifier this run
     /// prints, shared by the import collector's ordering and every
     /// <see cref="Printer"/> (spec 004 Amendment A1).
@@ -731,6 +737,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 TypeMapping = typeMappingContext,
                 ModuleSpecifiers = ModuleSpecifiers,
                 UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
+                UsingLowering = UsingLowering,
                 NoContainerFunctionExports = erasableFunctionExports,
                 SynthesizedAliasesByFile = synthesizedAliasesByFile,
                 StructuralGuardTypes = structuralGuards.Types,
@@ -851,6 +858,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // The 64-bit interop warning (MS0065) runs before the per-group cache
         // is consulted so a cache hit still reports.
         new Int64InteropBoundaries(compilation, _assemblyWideTranspile, ReportDiagnostic).Report();
+
+        if (UsingLowering is UsingLowering.Native)
+            new ImportedDisposableDiagnostics(compilation, ReportDiagnostic).Report();
 
         var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
         var jsonConstructedTypes = JsonConstructedTypesByContext(emittedTypes);

@@ -374,8 +374,8 @@ public static class IrClassExtractor
             IsJsxComponent: SymbolHelper.IsJsxComponent(type),
             JsxNativeElementTag: SymbolHelper.GetJsxNativeElementTag(type),
             RendersAsJsxElement: SymbolHelper.IsJsxRenderable(type),
-            Enumerable: EnumerationContractExtractor.ExtractEnumerable(type, context),
-            Enumerator: EnumerationContractExtractor.ExtractEnumerator(type, context),
+            Enumerable: InterfaceContractExtractor.ExtractEnumerable(type, context),
+            Enumerator: InterfaceContractExtractor.ExtractEnumerator(type, context),
             InheritsPerClassStorage: OverrideChains.AncestorEmitsPerClassStorage(
                 type,
                 context.Compilation,
@@ -390,6 +390,7 @@ public static class IrClassExtractor
         {
             ValueEquality = ValueEqualityShapes.Of(type, context.GroupingPolicy),
             IsClosed = type.IsClosed,
+            Disposable = InterfaceContractExtractor.ExtractDisposable(type, context),
         };
     }
 
@@ -469,9 +470,7 @@ public static class IrClassExtractor
                     break;
 
                 case IEventSymbol evt:
-                    result.Add(
-                        DeclareUnderInterfaceName(ExtractEvent(evt, context.OriginResolver), evt)
-                    );
+                    result.Add(DeclareUnderInterfaceName(ExtractEvent(evt, context), evt));
                     break;
             }
         }
@@ -717,15 +716,12 @@ public static class IrClassExtractor
         return roots.Count > 0 ? roots : null;
     }
 
-    private static IrEventDeclaration ExtractEvent(
-        IEventSymbol evt,
-        IrTypeOriginResolver? originResolver
-    ) =>
+    private static IrEventDeclaration ExtractEvent(IEventSymbol evt, IrExtractionContext context) =>
         new(
             evt.Name,
-            IrVisibilityMapper.MapMember(evt),
+            IrVisibilityMapper.MapMember(evt, context),
             evt.IsStatic,
-            IrTypeRefMapper.Map(evt.Type, originResolver)
+            IrTypeRefMapper.Map(evt.Type, context.OriginResolver)
         )
         {
             Attributes = IrAttributeExtractor.Extract(evt),

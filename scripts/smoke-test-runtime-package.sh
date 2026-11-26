@@ -90,7 +90,7 @@ write_consumer_tsconfig() {
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "target": "es2022",
-    "lib": ["es2023"],
+    "lib": ["es2023", "esnext.disposable"],
     "types": [],
     "strict": true,
     "noEmit": true,

@@ -47,7 +47,17 @@ public sealed record IrVariableDeclaration(
     bool AssignedInWhenGuard = false,
     IrTypeRef? InferredType = null,
     bool AssignedMaybeNull = false
-) : IrStatement;
+) : IrStatement
+{
+    /// <summary>
+    /// The local is the resource of a C# <c>using</c> declaration or statement, kept as a
+    /// declaration (FR-111): it is disposed through <c>IDisposable</c> when its scope
+    /// exits, in reverse declaration order, and skipped when <c>null</c>. Set only for a
+    /// target that declares such locals natively (<c>IrExtractionContext.EmitsUsingDeclarations</c>);
+    /// otherwise the <c>using</c> is lowered to <c>try</c>/<c>finally</c>.
+    /// </summary>
+    public bool IsUsing { get; init; }
+}
 
 /// <summary>
 /// A deconstructing variable declaration — <c>var (a, b) = expr;</c>. Each

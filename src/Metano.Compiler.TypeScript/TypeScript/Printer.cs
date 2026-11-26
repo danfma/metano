@@ -212,6 +212,14 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
     private static bool IsPureInitializer(TsExpression? initializer) =>
         initializer is TsCallExpression or TsNewExpression;
 
+    private static string DeclarationKeyword(TsVariableDeclaration declaration) =>
+        declaration switch
+        {
+            { Using: true } => "using ",
+            { Const: true } => "const ",
+            _ => "let ",
+        };
+
     /// <summary>
     /// A static field whose initializer is pure-annotated, printed without its type
     /// annotation: tsgo drops a comment that follows a property's type annotation,
@@ -1444,9 +1452,11 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
 
             case TsVariableDeclaration varDecl:
                 PrintJSDoc(varDecl.JSDoc);
+
                 if (varDecl.Exported)
                     _sb.Write("export ");
-                _sb.Write(varDecl.Const ? "const " : "let ");
+
+                _sb.Write(DeclarationKeyword(varDecl));
                 _sb.Write(varDecl.Name);
 
                 if (varDecl.DefinitelyAssigned)

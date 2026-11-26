@@ -340,17 +340,13 @@ public sealed partial class IrStatementExtractor(
 
     /// <summary>
     /// The declarators of a local declaration. A <c>using</c> declaration
-    /// (<c>using var x = r;</c>) reaches here only when it is not lowered
-    /// (<see cref="ExtractUpToUsingDeclaration"/>): its value would never be
-    /// disposed, so it reports the dropped call.
+    /// (<c>using var x = r;</c>) reaches here only when it is not lowered to
+    /// <c>try</c>/<c>finally</c> (<see cref="ExtractUpToUsingDeclaration"/>).
     /// </summary>
-    private List<IrStatement> ExtractLocalDeclaration(LocalDeclarationStatementSyntax local)
-    {
-        if (local.UsingKeyword.IsKind(SyntaxKind.UsingKeyword))
-            ReportUnloweredUsingDeclaration(local);
-
-        return ExtractDeclarators(local.Declaration, local.IsConst);
-    }
+    private List<IrStatement> ExtractLocalDeclaration(LocalDeclarationStatementSyntax local) =>
+        local.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)
+            ? ExtractUnsplitUsingDeclaration(local)
+            : ExtractDeclarators(local.Declaration, local.IsConst);
 
     private IrStatement ExtractStatement(StatementSyntax statement) =>
         IrStatementSpans.WithSpanOf(

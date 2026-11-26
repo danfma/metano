@@ -22,6 +22,7 @@ public static class PackageJsonWriter
     internal const string PackageJsonFileName = "package.json";
 
     private const string PeerDependenciesSection = "peerDependencies";
+    private const string PeerDependenciesMetaSection = "peerDependenciesMeta";
 
     /// <summary>The import condition Bun resolves first, mapped to the <c>.ts</c> sources.</summary>
     private const string BunCondition = "bun";
@@ -89,6 +90,9 @@ public static class PackageJsonWriter
     /// <param name="packageVersion">When non-null, written to <c>package.json#version</c>,
     /// replacing a hand-written value: the same source as the range a cross-package
     /// consumer writes for this package, so the two cannot diverge (#765).</param>
+    /// <param name="declaresDisposalHelpers">When true, declares the optional <c>tslib</c>
+    /// peer dependency a downlevelled <c>using</c> imports its helpers from (see
+    /// <see cref="DisposalHelpersPeerDependency"/>).</param>
     /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
     public static IReadOnlyList<MetanoDiagnostic> UpdateOrCreate(
         string packageRoot,
@@ -103,7 +107,8 @@ public static class PackageJsonWriter
         PackageSubpathRoot subpathRoot = default,
         string? runtimePeerSpecifier = null,
         SourceCondition sourceCondition = default,
-        string? packageVersion = null
+        string? packageVersion = null,
+        bool declaresDisposalHelpers = false
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
@@ -238,6 +243,11 @@ public static class PackageJsonWriter
         if (runtimePeerSpecifier is not null)
             DeclareRuntimePeerDependency(root, runtimePeerSpecifier);
 
+        if (declaresDisposalHelpers)
+            DeclareDisposalHelpersPeerDependency(root);
+        else
+            RemoveOwnDisposalHelpersPeerDependency(root);
+
         Directory.CreateDirectory(packageRoot);
         File.WriteAllText(packageJsonPath, root.ToJsonString(WriteOptions) + "\n");
         return diagnostics;
@@ -355,6 +365,73 @@ public static class PackageJsonWriter
 
         peers[RuntimePeerDependency.PackageName] = versionSpecifier;
         root[PeerDependenciesSection] = peers;
+    }
+
+    /// <summary>
+    /// Declares <c>tslib</c> as an optional peer dependency. Any declaration of
+    /// <c>tslib</c> the consumer already made, in any dependency section, wins and is left
+    /// as written.
+    /// </summary>
+    private static void DeclareDisposalHelpersPeerDependency(JsonObject root)
+    {
+        var declared = DependencySections.Any(section =>
+            root[section] is JsonObject entries
+            && entries.ContainsKey(DisposalHelpersPeerDependency.PackageName)
+        );
+
+        if (declared)
+            return;
+
+        var peers = root[PeerDependenciesSection] as JsonObject ?? new JsonObject();
+        peers[DisposalHelpersPeerDependency.PackageName] = DisposalHelpersPeerDependency.Specifier;
+        root[PeerDependenciesSection] = peers;
+
+        var meta = root[PeerDependenciesMetaSection] as JsonObject ?? new JsonObject();
+        meta[DisposalHelpersPeerDependency.PackageName] = new JsonObject { ["optional"] = true };
+        root[PeerDependenciesMetaSection] = meta;
+    }
+
+    /// <summary>
+    /// Removes the optional <c>tslib</c> peer this writer declared once the package no longer
+    /// declares a <c>using</c>. Only the writer's own entry goes: the
+    /// <see cref="DisposalHelpersPeerDependency.Specifier"/> range marked optional in
+    /// <c>peerDependenciesMeta</c> (<see cref="DisposalHelpersPeerDependency.IsOwnEntry"/>);
+    /// any other <c>tslib</c> entry is the consumer's. A section left empty is removed. A
+    /// hand-written optional <c>tslib: "^2.6.0"</c> peer cannot be told apart from the
+    /// writer's own entry, so it is removed with it.
+    /// </summary>
+    private static void RemoveOwnDisposalHelpersPeerDependency(JsonObject root)
+    {
+        var peers = root[PeerDependenciesSection] as JsonObject;
+        var meta = root[PeerDependenciesMetaSection] as JsonObject;
+        var name = DisposalHelpersPeerDependency.PackageName;
+
+        var isOwnEntry = DisposalHelpersPeerDependency.IsOwnEntry(
+            peers is null ? null : ReadStringField(peers, name),
+            IsMarkedOptional(meta, name)
+        );
+
+        if (!isOwnEntry)
+            return;
+
+        RemoveEntry(root, PeerDependenciesSection, name);
+        RemoveEntry(root, PeerDependenciesMetaSection, name);
+    }
+
+    private static bool IsMarkedOptional(JsonObject? meta, string name) =>
+        meta?[name]?["optional"] is JsonValue optional
+        && optional.TryGetValue<bool>(out var isOptional)
+        && isOptional;
+
+    private static void RemoveEntry(JsonObject root, string section, string name)
+    {
+        if (root[section] is not JsonObject entries)
+            return;
+
+        entries.Remove(name);
+
+        if (entries.Count == 0)
+            root.Remove(section);
     }
 
     private static bool DeclaresRuntime(JsonObject root, string section) =>

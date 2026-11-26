@@ -10,7 +10,8 @@
     "@semantic-release/git": "^10.0.1",
     "@typescript/native-preview": "^7.0.0-dev.20260306.1",
     "conventional-changelog-conventionalcommits": "^8.0.0",
-    "semantic-release": "^24.2.0"
+    "semantic-release": "^24.2.0",
+    "tslib": "2.8.1"
   },
   "scripts": {
     "dev": "bun run --parallel ts:watch sample-counter-v1 sample-counter-v2 sample-counter-v3 sample-counter-v4 sample-counter-v5 sample-solid-ui",

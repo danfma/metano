@@ -60,7 +60,8 @@ public static class PackageJsonReconciler
             subpathRoot: inputs.SubpathRoot,
             runtimePeerSpecifier: inputs.RuntimePeerSpecifier,
             sourceCondition: sourceCondition,
-            packageVersion: inputs.PackageVersion
+            packageVersion: inputs.PackageVersion,
+            declaresDisposalHelpers: inputs.NeedsDisposalHelpers
         );
 
         return PackageJsonReconciliation.Written(

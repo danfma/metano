@@ -12,6 +12,7 @@
 #   scripts/run-conformance.sh --filter REGEX   # only the rows whose name matches
 #   scripts/run-conformance.sh --no-build       # reuse the last transpile (.work/) and the built CLI/runtime
 #
+# The disposable rows also run downlevelled (tools/downlevel-check.mjs, spec FR-111).
 # Every probe process runs under a timeout (CONFORMANCE_TIMEOUT_MS, default 30000).
 set -euo pipefail
 
@@ -70,7 +71,18 @@ if [ "$build" = 1 ]; then
     (cd "$work/$package" && "$tsgo" -p . >"$work/$package/tsgo.log" 2>&1 || true)
     echo "tsgo $package: $(grep -c 'error TS' "$work/$package/tsgo.log" || true) type error(s) (see $work/$package/tsgo.log)" >&2
   done
+
+  step "compile the probes downlevelled (target es2022, importHelpers)"
+  ln -sfn "$root/node_modules/tslib" "$work/probes/node_modules/tslib"
+  cp "$conformance/tools/workspace/probes/tsconfig.downlevel.json" "$work/probes/"
+  (cd "$work/probes" && "$tsgo" -p tsconfig.downlevel.json >"$work/probes/tsgo-downlevel.log" 2>&1 || true)
 fi
 
 step "run the rows under Bun and Node"
-bun "$conformance/tools/conformance.mjs" ${forward[@]+"${forward[@]}"}
+status=0
+bun "$conformance/tools/conformance.mjs" ${forward[@]+"${forward[@]}"} || status=$?
+
+step "run the downlevelled using rows (Bun, Node, and without Symbol.dispose)"
+bun "$conformance/tools/downlevel-check.mjs" ${forward[@]+"${forward[@]}"} || status=1
+
+exit "$status"

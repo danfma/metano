@@ -1,4 +1,4 @@
-import { IDisposable$runtimeType, type ClassType, type IDisposable } from "metano-runtime";
+import { IDisposable$runtimeType, disposeResource, type ClassType, type IDisposable } from "metano-runtime";
 import { OwnerNode } from "./owner-node.js";
 
 let EffectNode$rt: ClassType<EffectNode> | undefined;
@@ -25,5 +25,9 @@ export class EffectNode extends OwnerNode implements IDisposable {
       create: () => new EffectNode(),
       test: (v: unknown): v is EffectNode => v instanceof EffectNode,
     });
+  }
+
+  [Symbol.dispose](): void {
+    disposeResource(this, this.dispose);
   }
 }

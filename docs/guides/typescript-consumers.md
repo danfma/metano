@@ -97,6 +97,15 @@ Here is the `package.json` Metano generates for an assembly marked with
   - **Webpack / Jest:** Webpack needs `resolve.extensionAlias: { ".js": [".ts", ".js"] }`
     when reading `.ts` sources directly; Jest needs a matching `moduleNameMapper`
     for `.js` specifiers.
+- **`lib` needs `ESNext.Disposable`.** Every consumer of `metano-runtime` lists
+  `"ESNext.Disposable"` (or `"ESNext"`) in `lib`: the runtime's exported `IDisposable` names
+  `Symbol.dispose` (only `skipLibCheck` over its `.d.ts` hides that), and generated code
+  declares a C# `using` as a TypeScript `using` declaration. Below target `ESNext`, set
+  `"importHelpers": true` with `tslib` installed (strongly recommended), so the downlevelled
+  `using` helpers are shared instead of copied into each module; a generated package that
+  declares a `using` lists `tslib` as an optional peer dependency. Details, the Safari
+  polyfill and the `MetanoUsingLowering=tryFinally` opt-out:
+  [BCL mappings](../bcl-mappings.md#native-using-and-symboldispose-spec-001-fr-111-amendment-a1-817).
 
 ---
 

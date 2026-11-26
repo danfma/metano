@@ -55,4 +55,13 @@ public sealed record IrTypeSemantics(
     /// (<see cref="IrClassDeclaration.ClosedCases"/>).
     /// </summary>
     public bool IsClosed { get; init; }
+
+    /// <summary>
+    /// The <c>IDisposable</c> contract the class or struct takes on itself — directly or
+    /// through an interface — rather than inheriting it from its base type, with the member
+    /// that implements <c>Dispose()</c>, for a backend whose disposal protocol differs
+    /// (JavaScript: <c>[Symbol.dispose]()</c>). Null for every other type, for interfaces,
+    /// and when the target declares no member for <c>Dispose()</c>.
+    /// </summary>
+    public IrDisposableContract? Disposable { get; init; }
 }
