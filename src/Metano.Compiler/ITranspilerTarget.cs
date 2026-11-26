@@ -39,6 +39,15 @@ public interface ITranspilerTarget
     bool SupportsReifiedTypeParameters => false;
 
     /// <summary>
+    /// The overload-grouping policy every extraction for this target reads
+    /// (<see cref="Extraction.IrExtractionContext.GroupingPolicy"/>), so the frontend's
+    /// scans see the explicit-implementation fates the extraction does. <c>null</c>, the
+    /// default, for a target that supplies none: the frontend then uses the bare policy
+    /// of its language.
+    /// </summary>
+    Extraction.OverloadGroupingPolicy? GroupingPolicy => null;
+
+    /// <summary>
     /// Produces the set of files (plus diagnostics) the host should emit. Targets
     /// SHOULD prefer the data on <paramref name="ir"/> over <paramref name="compilation"/>
     /// for anything the active frontend already populates; the Roslyn compilation is

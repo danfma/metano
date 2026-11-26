@@ -14,6 +14,11 @@ namespace Metano.Compiler.Extraction;
 /// part of the contract, so it is no <c>internal</c> member (#819): a target that
 /// hides internal members from its public surface must not hide it.
 /// <para>
+/// A claiming member inherited by a class whose forwarder the target publishes as the
+/// class's own member (<see cref="NarrowedClaimForwarders"/>, #821) is no claim: it
+/// keeps its own visibility.
+/// </para>
+/// <para>
 /// It reads <c>Fate == Superseded</c> from <see cref="ExplicitImplementationLowering"/>
 /// and not <see cref="ExplicitImplementationFates.IsDropped"/>: the
 /// <c>KeepsSupersededEquatable</c> case keeps the explicit member, which only widens
@@ -29,7 +34,7 @@ internal static class InterfaceContractClaims
 
     private static readonly ConditionalWeakTable<
         Compilation,
-        ConcurrentDictionary<int, HashSet<ISymbol>>
+        ConcurrentDictionary<(int Target, bool HidesInternalMembers), HashSet<ISymbol>>
     > Cache = new();
 
     /// <summary>
@@ -40,14 +45,17 @@ internal static class InterfaceContractClaims
     public static bool IsClaimedByPublicContract(
         ISymbol member,
         Compilation compilation,
-        TargetLanguage? target
+        OverloadGroupingPolicy policy
     ) =>
         Cache
             .GetValue(compilation, _ => new())
-            .GetOrAdd(target is { } t ? (int)t : NoTarget, _ => Collect(compilation, target))
+            .GetOrAdd(
+                (policy.Target is { } target ? (int)target : NoTarget, policy.HidesInternalMembers),
+                _ => Collect(compilation, policy)
+            )
             .Contains(member.OriginalDefinition);
 
-    private static HashSet<ISymbol> Collect(Compilation compilation, TargetLanguage? target)
+    private static HashSet<ISymbol> Collect(Compilation compilation, OverloadGroupingPolicy policy)
     {
         var claims = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
 
@@ -55,7 +63,7 @@ internal static class InterfaceContractClaims
         {
             foreach (var member in type.GetMembers())
             {
-                if (ClaimOf(member, target) is { } claim)
+                if (ClaimOf(member, policy) is { } claim)
                     claims.Add(claim.OriginalDefinition);
             }
         }
@@ -63,29 +71,22 @@ internal static class InterfaceContractClaims
         return claims;
     }
 
-    private static ISymbol? ClaimOf(ISymbol member, TargetLanguage? target)
+    private static ISymbol? ClaimOf(ISymbol member, OverloadGroupingPolicy policy)
     {
-        if (ExplicitImplementationLowering.Resolve(member, target) is not { } lowering)
+        if (ExplicitImplementationLowering.Resolve(member, policy.Target) is not { } lowering)
             return null;
 
-        return IsSupersededByPublicContract(lowering) ? lowering.ClaimingMember : null;
+        return IsSupersededByPublicContract(lowering, policy) ? lowering.ClaimingMember : null;
     }
 
-    private static bool IsSupersededByPublicContract(ExplicitImplementation lowering) =>
+    private static bool IsSupersededByPublicContract(
+        ExplicitImplementation lowering,
+        OverloadGroupingPolicy policy
+    ) =>
         lowering.Fate is ExplicitImplementationFate.Superseded
         && lowering.ClaimingMember is not null
-        && IsPublic(lowering.InterfaceMember.ContainingType);
-
-    private static bool IsPublic(INamedTypeSymbol type)
-    {
-        for (var current = type; current is not null; current = current.ContainingType)
-        {
-            if (current.DeclaredAccessibility is not Accessibility.Public)
-                return false;
-        }
-
-        return true;
-    }
+        && SymbolHelper.IsEffectivelyPublic(lowering.InterfaceMember.ContainingType)
+        && !NarrowedClaimForwarders.IsPublishedAsOwnMember(lowering, policy);
 
     private static IEnumerable<INamedTypeSymbol> TypesOf(INamespaceSymbol container)
     {

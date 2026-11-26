@@ -1949,4 +1949,19 @@ public static class SymbolHelper
                 && SymbolEqualityComparer.Default.Equals(parameter.Type, otherParameter.Type)
             )
             .All(same => same);
+
+    /// <summary>
+    /// Whether <paramref name="type"/> and every type containing it are declared
+    /// <c>public</c>: the type is part of the assembly's public API.
+    /// </summary>
+    public static bool IsEffectivelyPublic(INamedTypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            if (current.DeclaredAccessibility is not Accessibility.Public)
+                return false;
+        }
+
+        return true;
+    }
 }

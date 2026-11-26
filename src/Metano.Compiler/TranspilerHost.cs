@@ -57,7 +57,8 @@ public static class TranspilerHost
         var ir = await frontend.ExtractAsync(
             projectPath,
             target: target.Language,
-            supportsReifiedTypeParameters: target.SupportsReifiedTypeParameters
+            supportsReifiedTypeParameters: target.SupportsReifiedTypeParameters,
+            groupingPolicy: target.GroupingPolicy
         );
 
         var compilation = frontend.LoadedCompilation;

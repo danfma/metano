@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
 using Metano.Compiler.Mappings;
@@ -40,7 +41,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         string projectPath,
         CancellationToken ct = default,
         TargetLanguage target = TargetLanguage.TypeScript,
-        bool? supportsReifiedTypeParameters = null
+        bool? supportsReifiedTypeParameters = null,
+        OverloadGroupingPolicy? groupingPolicy = null
     )
     {
         var assemblyName = Path.GetFileNameWithoutExtension(projectPath);
@@ -61,7 +63,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             diagnostics: diagnostics,
             target: target,
             generatedSources: GeneratedSourceTrees.Reported(generatedFilePaths),
-            supportsReifiedTypeParameters: supportsReifiedTypeParameters
+            supportsReifiedTypeParameters: supportsReifiedTypeParameters,
+            groupingPolicy: groupingPolicy
         );
     }
 
@@ -85,7 +88,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         Compilation compilation,
         TargetLanguage target = TargetLanguage.TypeScript,
         IEnumerable<SyntaxTree>? generatedTrees = null,
-        bool? supportsReifiedTypeParameters = null
+        bool? supportsReifiedTypeParameters = null,
+        OverloadGroupingPolicy? groupingPolicy = null
     )
     {
         LoadedCompilation = compilation;
@@ -101,7 +105,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             diagnostics: new List<MetanoDiagnostic>(),
             target: target,
             generatedSources: generatedSources,
-            supportsReifiedTypeParameters: supportsReifiedTypeParameters
+            supportsReifiedTypeParameters: supportsReifiedTypeParameters,
+            groupingPolicy: groupingPolicy
         );
     }
 
@@ -111,7 +116,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         List<MetanoDiagnostic> diagnostics,
         TargetLanguage target,
         GeneratedSourceTrees generatedSources,
-        bool? supportsReifiedTypeParameters = null
+        bool? supportsReifiedTypeParameters = null,
+        OverloadGroupingPolicy? groupingPolicy = null
     )
     {
         // The queryable-extraction diagnostic sink (#205 / MS0024) is
@@ -254,7 +260,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     generatedSources,
                     declarativeMappings.Methods,
                     reifiedTypeAnalysis,
-                    diagnostics
+                    diagnostics,
+                    groupingPolicy
                 );
 
         if (compilation is not null)

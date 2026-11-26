@@ -27,6 +27,10 @@ export class EffectNode extends OwnerNode implements IDisposable {
     });
   }
 
+  override dispose(): void {
+    super.dispose();
+  }
+
   [Symbol.dispose](): void {
     disposeResource(this, this.dispose);
   }

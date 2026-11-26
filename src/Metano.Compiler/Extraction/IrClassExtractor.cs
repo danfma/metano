@@ -734,7 +734,10 @@ public static class IrClassExtractor
     {
         var declaration = IrMethodExtractor.Extract(method, context);
 
-        return DeclareUnderInterfaceName(declaration, method);
+        return DeclareUnderInterfaceName(
+            NarrowedClaimForwarders.CallThroughBase(declaration, method, context),
+            method
+        );
     }
 
     /// <summary>

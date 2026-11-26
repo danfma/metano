@@ -95,6 +95,16 @@ public sealed record OverloadGroupingPolicy(
     /// </summary>
     public bool GroupsSynthesizedEquals => ValueEqualityNames?.GroupsEquals is true;
 
+    /// <summary>
+    /// Whether the target tags or hides <c>internal</c> members from its public
+    /// surface (TypeScript: <c>/** @internal */</c> and <c>stripInternal</c>), so a
+    /// member that a public interface relies on must not be widened for a base class
+    /// that other types inherit (#821). <c>false</c>, the default and the answer for a
+    /// <c>null</c> target, for a target that ignores the accessibility of members
+    /// (Dart): its output keeps the widened member and the dropped forwarder.
+    /// </summary>
+    public bool HidesInternalMembers { get; init; }
+
     /// <summary>The policy of a target that supplies no synthesized member names.</summary>
     public static OverloadGroupingPolicy For(TargetLanguage? target) => new(target, null);
 

@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 
@@ -70,11 +71,14 @@ public interface ISourceFrontend
     /// use. Defaults to <see cref="TargetLanguage.TypeScript"/> for
     /// backwards compatibility with tests and any callers that predate the
     /// parameter.</param>
+    /// <param name="groupingPolicy">The target's overload-grouping policy, which the
+    /// frontend's scans read in place of the bare policy of <paramref name="target"/>.</param>
     /// <param name="ct">Cancellation token.</param>
     Task<IrCompilation> ExtractAsync(
         string projectPath,
         CancellationToken ct = default,
         TargetLanguage target = TargetLanguage.TypeScript,
-        bool? supportsReifiedTypeParameters = null
+        bool? supportsReifiedTypeParameters = null,
+        OverloadGroupingPolicy? groupingPolicy = null
     );
 }
