@@ -163,6 +163,16 @@ public sealed record IrExtractionContext(
     public Func<IMethodSymbol, bool>? EmitsBrandedFastPath { get; init; }
 
     /// <summary>
+    /// Whether the target gives a struct that declares a constructor a zero
+    /// value of its own (#802), so <c>default(S)</c> lowers to a struct-default
+    /// construction (<see cref="Metano.Compiler.IR.IrNewExpression.IsStructDefault"/>):
+    /// TypeScript reads it from the struct's <c>$default()</c> factory. <c>false</c>,
+    /// the default, for a target with no such value: <c>default(S)</c> keeps the
+    /// placeholder and its MS0001 warning (Dart).
+    /// </summary>
+    public bool EmitsStructZeroValue { get; init; }
+
+    /// <summary>
     /// The port through which a target says whether it gives an exception type
     /// without a declaration of its own (a BCL one, mostly) a runtime class
     /// that tells it apart (spec 011 FR-014): TypeScript answers from its
@@ -250,9 +260,11 @@ public sealed record IrExtractionContext(
     /// named arguments or a formatted value, or answers for an exception
     /// construction or type test, and a C# default value is a constant,
     /// <c>default</c> or a parameterless struct construction, which holds
-    /// none of them.
+    /// none of them. <see cref="EmitsStructZeroValue"/> is kept: a <c>default</c>
+    /// parameter value of a struct is exactly the zero value it answers for.
     /// </summary>
-    public IrExtractionContext ForConstantDefault() => new(OriginResolver);
+    public IrExtractionContext ForConstantDefault() =>
+        new(OriginResolver) { EmitsStructZeroValue = EmitsStructZeroValue };
 
     /// <summary>Shape-only extraction: no resolver, compilation or target.</summary>
     public static IrExtractionContext Empty { get; } = new();
