@@ -2007,13 +2007,16 @@ Product requirements added after the migration (normative; each one is traced by
      stays on that class. A claiming member declared on the implementing class itself cannot
      coexist with a second member of that name, so it is the one member and is emitted public
      and untagged. A claiming member that is already `public` keeps the FR-111 drop. A
-     forwarder that is not pure keeps the claiming member public. Known gaps (still the 4.0.0
-     behavior): an explicit property or event implementation, a forwarder whose return type is
-     not the claiming member's (`object ICloneable.Clone() => Clone();`), and a generic-method
-     forwarder are not published, so their claiming member stays public (or tagged, for the
-     generic method). The forwarder is also rebound only from the single statement `this.M(...)`;
-     any other published body fails the extraction instead of recursing. Dart ignores `internal`
-     (`HidesInternalMembersFor`) and keeps its output.
+     forwarder that is not pure keeps the claiming member public. Known gaps (they keep the 4.0.0
+     behavior, the claiming member public and the forwarder dropped): an explicit property or
+     event implementation; a forwarder whose return type is not the claiming member's
+     (`object ICloneable.Clone() => Clone();`) or whose claiming member is a generic method; an
+     abstract claiming member (`super.m()` of an abstract member is TS2513); a claiming member
+     that has an overload beside it (the forwarder would join its dispatched group); and two
+     forwarders of different interfaces that name the same member, which claim each other
+     instead of the inherited member. The forwarder is rebound only from the single statement
+     `this.M(...)`; any other published body is reported as an error (MS0001). Dart ignores
+     `internal` (`OverloadGroupingPolicy.HidesInternalMembers` is false) and keeps its output.
   Tests: `tests/Metano.Tests/InternalRuntimeTypeTests.cs`; conformance `InternalRuntimeTypeProbes`.
 
 ### Key Entities

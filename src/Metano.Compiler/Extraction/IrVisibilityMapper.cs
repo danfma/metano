@@ -55,7 +55,11 @@ public static class IrVisibilityMapper
     ) =>
         visibility is IrVisibility.Internal or IrVisibility.PrivateProtected
         && context.Compilation is { } compilation
-        && InterfaceContractClaims.IsClaimedByPublicContract(member, compilation, context.Target);
+        && InterfaceContractClaims.IsClaimedByPublicContract(
+            member,
+            compilation,
+            context.GroupingPolicy
+        );
 
     private static ISymbol RootDeclarationOf(ISymbol member)
     {

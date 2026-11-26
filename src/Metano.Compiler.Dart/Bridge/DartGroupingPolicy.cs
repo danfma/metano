@@ -13,5 +13,8 @@ public static class DartGroupingPolicy
 {
     /// <summary>The policy every Dart extraction reads.</summary>
     public static OverloadGroupingPolicy Instance { get; } =
-        OverloadGroupingPolicy.For(TargetLanguage.Dart);
+        OverloadGroupingPolicy.For(TargetLanguage.Dart) with
+        {
+            HidesInternalMembers = false,
+        };
 }

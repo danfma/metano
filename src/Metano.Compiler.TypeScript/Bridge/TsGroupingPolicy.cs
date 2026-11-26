@@ -28,7 +28,10 @@ public static class TsGroupingPolicy
                 FastPathSuffix,
                 groupsEquals: true
             )
-        );
+        )
+        {
+            HidesInternalMembers = true,
+        };
 
     /// <summary>
     /// The name <paramref name="kind"/> is emitted under: the one map from a

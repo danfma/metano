@@ -115,7 +115,7 @@ public class NarrowedClaimForwarderTests
     }
 
     [Test]
-    public async Task TwoForwardersOfDifferentInterfaces_ClaimEachOther_AndStayDropped()
+    public async Task KnownLimitation_TwoForwardersOfDifferentInterfacesClaimEachOther_AndBothStayDropped()
     {
         // Each explicit member finds the other one first as the member that claims the
         // name (FindClaimingMember scans the class before its bases), so neither forwards
@@ -135,6 +135,64 @@ public class NarrowedClaimForwarderTests
 
         await Assert.That(files["base.ts"]).Contains("/** @internal */\n  compareTo(");
         await Assert.That(files["derived.ts"]).DoesNotContain("compareTo");
+    }
+
+    [Test]
+    public async Task AbstractClaimer_KeepsThe4_0_0Path_BecauseSuperOfAnAbstractMemberDoesNotCompile()
+    {
+        var files = await StrictFiles(
+            """
+            [assembly: TranspileAssembly]
+
+            public abstract class ABase { internal abstract void Dispose(); }
+            public abstract class AEffect : ABase, IDisposable
+            {
+                void IDisposable.Dispose() => Dispose();
+            }
+            public sealed class ALeaf : AEffect { internal override void Dispose() { } }
+            """
+        );
+
+        await Assert
+            .That(files["a-effect.ts"])
+            .DoesNotContain("super.dispose")
+            .And.DoesNotContain("  dispose(");
+        await Assert.That(files["a-base.ts"]).Contains("  abstract dispose(): void;");
+        await Assert.That(files["a-base.ts"]).DoesNotContain("@internal");
+    }
+
+    [Test]
+    public async Task OverloadedClaimer_KeepsThe4_0_0Path_WithNoDispatcherAndNoWarning()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [assembly: TranspileAssembly]
+
+            public abstract class Base
+            {
+                internal void Dispose() { }
+                internal void Dispose(bool disposing) { }
+            }
+            public sealed class Effect : Base, IDisposable
+            {
+                void IDisposable.Dispose() => Dispose();
+            }
+            """
+        );
+
+        await Assert.That(diagnostics.Select(d => d.Code)).DoesNotContain("MS0067");
+        await Assert
+            .That(files["effect.ts"])
+            .DoesNotContain("super.dispose")
+            .And.DoesNotContain("dispose(...args");
+
+        var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(
+            files,
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
     }
 
     [Test]

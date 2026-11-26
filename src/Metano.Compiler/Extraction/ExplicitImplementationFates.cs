@@ -19,7 +19,7 @@ internal static class ExplicitImplementationFates
         ExplicitImplementationLowering.Resolve(member, policy.Target) is { } lowering
         && lowering.Fate is not ExplicitImplementationFate.EmittedUnderInterfaceName
         && !KeepsSupersededEquatable(member, lowering, policy)
-        && !NarrowedClaimForwarders.IsPublishedAsOwnMember(lowering, policy.Target);
+        && !NarrowedClaimForwarders.IsPublishedAsOwnMember(lowering, policy);
 
     /// <summary>
     /// Whether a struct's (or record struct's) explicit
