@@ -4,6 +4,27 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 4.0.0
+
+_2026-11-26_
+
+
+### ⚠ BREAKING CHANGES
+
+* consumers of the generated code and of metano-runtime need
+"ESNext.Disposable" in their tsconfig `lib`. Below target ESNext,
+`importHelpers` with `tslib` (^2.6.0) is strongly recommended, and generated
+packages that use `using` declare tslib as an optional peer dependency.
+Hand-written TypeScript implementers of the runtime `IDisposable` must add
+`[Symbol.dispose]()`. Libraries generated with 3.x must be regenerated before
+their IDisposable instances are used through an interface or type parameter in
+a native `using`. The `tryFinally` opt-out restores the 3.3.0 lowering of
+`using` only; the alias and the `lib` requirement stay.
+
+### ✨ Features
+
+* emit native using declarations and track build inputs (wave 11) ([#820](https://github.com/danfma/metano/issues/820)) ([9967164](https://github.com/danfma/metano/commit/9967164fc7dd7ca0300ff7a657e9f10600e6800e)), closes [#817](https://github.com/danfma/metano/issues/817) [#818](https://github.com/danfma/metano/issues/818) [#797](https://github.com/danfma/metano/issues/797) [#819](https://github.com/danfma/metano/issues/819) [#797](https://github.com/danfma/metano/issues/797) [#817](https://github.com/danfma/metano/issues/817) [#818](https://github.com/danfma/metano/issues/818) [#819](https://github.com/danfma/metano/issues/819)
+
 ## 3.3.0
 
 _2026-11-26_
