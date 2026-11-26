@@ -171,10 +171,12 @@ public static class NoClosureTemporaryProbes
     public static string ExpressionPositions()
     {
         var log = new NcLog();
+
         var both = UseBoth(
             new NcBox { V = log.Note("a", 1), W = log.Note("b", 2) },
             new NcBox { V = log.Note("c", 3), W = log.Note("d", 4) }
         );
+
         var conditional = log.Note("cond", true) ? Use(new NcBox { V = 5 }) : -1;
 
         return $"{both}|{conditional}|{log}";
@@ -193,6 +195,7 @@ public static class NoClosureTemporaryProbes
             },
             W = log.Note("outer.w", 4),
         };
+
         var bag = new NcBag
         {
             1,
@@ -286,6 +289,7 @@ public static class NoClosureTemporaryProbes
             V = log.Note("before", 1),
             W = await Task.FromResult(log.Note("awaited", 2)),
         };
+
         var used = Use(new NcBox { V = await Task.FromResult(3), W = log.Note("after", 4) });
 
         return $"{box.V}{box.W}|{used}|{log}";
@@ -344,6 +348,7 @@ public static class NoClosureTemporaryProbes
             V = 2,
             Inner = new NcBox { V = 3 },
         };
+
         var sum = UseBoth(
             new NcBox { V = 4 },
             new NcBox
@@ -352,6 +357,7 @@ public static class NoClosureTemporaryProbes
                 Inner = new NcBox { V = 6 },
             }
         );
+
         var receiver = new NcBox { V = 7 };
         var t0 = new NcBox { V = 8 };
 
