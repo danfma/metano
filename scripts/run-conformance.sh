@@ -83,6 +83,6 @@ status=0
 bun "$conformance/tools/conformance.mjs" ${forward[@]+"${forward[@]}"} || status=$?
 
 step "run the downlevelled using rows (Bun, Node, and without Symbol.dispose)"
-bun "$conformance/tools/downlevel-check.mjs" || status=1
+bun "$conformance/tools/downlevel-check.mjs" ${forward[@]+"${forward[@]}"} || status=1
 
 exit "$status"

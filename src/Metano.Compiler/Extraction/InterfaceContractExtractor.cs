@@ -80,10 +80,25 @@ internal static class InterfaceContractExtractor
 
         var contract = Interface(type, SpecialType.System_IDisposable);
 
+        if (IsInlinedImplementation(type, contract, DisposeName))
+            return null;
+
         return Implementation(type, contract, DisposeName, context?.Target) is { } dispose
             ? new IrDisposableContract(dispose)
             : null;
     }
+
+    /// <summary>
+    /// The member implementing <paramref name="memberName"/> is <c>[Emit]</c>: its calls are
+    /// inlined, so the type declares no member a protocol bridge could call.
+    /// </summary>
+    private static bool IsInlinedImplementation(
+        INamedTypeSymbol type,
+        INamedTypeSymbol contract,
+        string memberName
+    ) =>
+        contract.GetMembers(memberName).FirstOrDefault() is { } interfaceMember
+        && type.FindImplementationForInterfaceMember(interfaceMember)?.HasEmit() == true;
 
     private static bool TakesOnContract(INamedTypeSymbol type, SpecialType contract)
     {

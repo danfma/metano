@@ -720,6 +720,15 @@ alias.
   never imports generated code, so in the ESM graph (and in every bundle, import cycles
   between generated modules included) the symbol exists before any generated class that
   needs it is defined.
+- An `[Import]` class that implements `IDisposable` binds a JavaScript class with no
+  `[Symbol.dispose]()`. A `using` over the class type keeps `try`/`finally`, but an instance
+  held through `IDisposable`, a derived interface or a type parameter throws a `TypeError` at
+  the `using`; the build warns (`MS0001`) at such a class. Use the class type at those `using`
+  sites, add `[Symbol.dispose]()` to the JavaScript class, or set
+  `MetanoUsingLowering=tryFinally`.
+- A transpiled class whose `Dispose()` is `[Emit]` gets no alias and reports `MS0001` (error):
+  its calls are inlined, so the emitted class has neither `dispose()` nor
+  `[Symbol.dispose]()`. A `using` over the class type keeps `try`/`finally`.
 - Hand-written TypeScript that implements the runtime `IDisposable` must now declare
   `[Symbol.dispose]()` too. A library transpiled by Metano 3.3 has no alias in its classes and
   must be regenerated.

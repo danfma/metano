@@ -1956,7 +1956,11 @@ Product requirements added after the migration (normative; each one is traced by
      pattern-based `Dispose()`. (A `using` declaration cannot be a direct child of a switch
      section, CS8647; a `using` statement there becomes a block.) An interface- or
      type-parameter-typed resource needs a value with `[Symbol.dispose]()`, so instances of a
-     referenced package must come from a build of this version.
+     referenced package must come from a build of this version. An `[Import]` class of the
+     compilation that implements `IDisposable` reports an `MS0001` warning (its instances
+     have no `[Symbol.dispose]()` when held through an interface or type parameter); a class
+     whose implementing `Dispose()` is `[Emit]` gets no alias and reports `MS0001` (error),
+     like an `[Ignore]`d one, and a `using` over it keeps item 3's lowering.
   3. When the body (or a later disposal) and `dispose()` both throw, JavaScript raises a
      `SuppressedError` whose `error` is the `dispose()` exception. `toException`, which every
      generated `catch` and `when` filter reads, unwraps it recursively through `error` (the

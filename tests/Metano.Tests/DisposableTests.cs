@@ -258,6 +258,79 @@ public class DisposableTests
     }
 
     [Test]
+    public async Task ImportedDisposableClass_WarnsOnlyForNativeUsing()
+    {
+        const string Source = """
+            [Import("Socket", from: "net-lib")]
+            public sealed class Socket : IDisposable
+            {
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public sealed class Res : IDisposable
+            {
+                public void Dispose() { }
+            }
+            """;
+
+        var (_, native) = TranspileHelper.TranspileWithDiagnostics(Source);
+        var (_, tryFinally) = TranspileHelper.TranspileWithTryFinallyUsings(Source);
+
+        static bool NamesSocket(MetanoDiagnostic d) =>
+            d
+                is {
+                    Code: DiagnosticCodes.UnsupportedFeature,
+                    Severity: MetanoDiagnosticSeverity.Warning
+                }
+            && d.Message.Contains("'Socket' is an [Import] class that implements IDisposable");
+
+        await Assert.That(native.Count(NamesSocket)).IsEqualTo(1);
+        await Assert.That(native.Any(d => d.Message.Contains("'Res'"))).IsFalse();
+        await Assert.That(tryFinally.Any(NamesSocket)).IsFalse();
+    }
+
+    [Test]
+    public async Task EmitDispose_GetsNoAliasReportsMS0001AndKeepsTheTryFinally()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public sealed class Handle : IDisposable
+            {
+                [Emit("release($0)")]
+                public void Dispose() { }
+            }
+
+            [Transpile]
+            public static class Uses
+            {
+                public static void Run() { using var h = new Handle(); }
+            }
+            """
+        );
+
+        await Assert.That(files["handle.ts"]).DoesNotContain("[Symbol.dispose]");
+        // The class cannot satisfy IDisposable (MS0001 error below); the using keeps the
+        // try/finally, whose dispose call is the 3.3.0 one (the template is not expanded).
+        await Assert.That(files["uses.ts"]).DoesNotContain("using h");
+        await Assert.That(files["uses.ts"]).Contains("h.dispose();");
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d
+                        is {
+                            Code: DiagnosticCodes.UnsupportedFeature,
+                            Severity: MetanoDiagnosticSeverity.Error
+                        }
+                    && d.Message.Contains("is [Emit]")
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
     public async Task ImportedClassResource_UnderTranspileAssembly_KeepsTheTryFinally()
     {
         var result = TranspileHelper.Transpile(
@@ -771,6 +844,7 @@ public class DisposableTests
         var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
 
         await Assert.That(error.Message).Contains("module entry point");
+        await Assert.That(error.Message).Contains("module's top-level code");
     }
 
     [Test]

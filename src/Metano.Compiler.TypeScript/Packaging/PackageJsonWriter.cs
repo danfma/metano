@@ -396,7 +396,9 @@ public static class PackageJsonWriter
     /// declares a <c>using</c>. Only the writer's own entry goes: the
     /// <see cref="DisposalHelpersPeerDependency.Specifier"/> range marked optional in
     /// <c>peerDependenciesMeta</c> (<see cref="DisposalHelpersPeerDependency.IsOwnEntry"/>);
-    /// any other <c>tslib</c> entry is the consumer's. A section left empty is removed.
+    /// any other <c>tslib</c> entry is the consumer's. A section left empty is removed. A
+    /// hand-written optional <c>tslib: "^2.6.0"</c> peer cannot be told apart from the
+    /// writer's own entry, so it is removed with it.
     /// </summary>
     private static void RemoveOwnDisposalHelpersPeerDependency(JsonObject root)
     {

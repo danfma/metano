@@ -9,7 +9,9 @@ namespace Metano.Compiler.Frontend.Roslyn;
 /// Reports, as <c>MS0001</c> errors, a transpiled type whose emitted shape cannot satisfy
 /// the runtime <c>IDisposable</c> interface it now implements (FR-111): a
 /// <c>[PlainObject]</c>, whose <c>Dispose</c> lowers to a helper function rather than a
-/// member, and a type whose own implementing <c>Dispose</c> is <c>[Ignore]</c>. Only for a
+/// member, and a type whose own implementing <c>Dispose</c> is <c>[Ignore]</c> or
+/// <c>[Emit]</c> (inlined at call sites, so neither <c>dispose()</c> nor the
+/// <c>[Symbol.dispose]()</c> alias that calls it exists). Only for a
 /// target that declares <c>IDisposable</c>; generated sources are not policed.
 /// </summary>
 internal sealed class DisposableImplementationValidator
@@ -90,11 +92,15 @@ internal sealed class DisposableImplementationValidator
             return "it is a [PlainObject], whose Dispose lowers to a helper function rather "
                 + "than a member";
 
-        return
-            type.FindImplementationForInterfaceMember(_interfaceDispose) is { } dispose
-            && dispose.HasIgnore(_target)
-            ? $"its implementing '{dispose.Name}' is [Ignore]"
-            : null;
+        return type.FindImplementationForInterfaceMember(_interfaceDispose) switch
+        {
+            { } dispose when dispose.HasIgnore(_target) =>
+                $"its implementing '{dispose.Name}' is [Ignore]",
+            { } dispose when dispose.HasEmit() =>
+                $"its implementing '{dispose.Name}' is [Emit], which inlines its calls "
+                    + "instead of declaring a member",
+            _ => null,
+        };
     }
 
     private static MetanoDiagnostic Unsatisfiable(INamedTypeSymbol type, string reason) =>

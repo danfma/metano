@@ -859,6 +859,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // is consulted so a cache hit still reports.
         new Int64InteropBoundaries(compilation, _assemblyWideTranspile, ReportDiagnostic).Report();
 
+        if (UsingLowering is UsingLowering.Native)
+            new ImportedDisposableDiagnostics(compilation, ReportDiagnostic).Report();
+
         var emittedTypes = transpilableTypes.SelectMany(WithEmittedNestedTypes).ToList();
         var jsonConstructedTypes = JsonConstructedTypesByContext(emittedTypes);
 

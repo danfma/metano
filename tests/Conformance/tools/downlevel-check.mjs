@@ -4,9 +4,11 @@
 // is and on a simulated engine without `Symbol.dispose` / `SuppressedError`
 // (without-symbol-dispose.mjs), where the metano-runtime polyfill must install the symbol
 // before the generated classes are defined. Every row must print what .NET prints.
-// Run by scripts/run-conformance.sh after the probes are compiled (.work/probes/dist-downlevel).
+// Run by scripts/run-conformance.sh after the probes are compiled (.work/probes/dist-downlevel),
+// with its --filter; it is skipped when no disposable row matches, and fails when the
+// downlevelled build is missing (a --no-build run before any full run).
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,10 +27,25 @@ const modules = [
 
 const classes = ["NativeUsingProbes.", "DisposableProbes.", "DisposableNullGuardProbes.", "DisposableOverloadProbes."];
 
+const filter = filterOf(process.argv.slice(2));
+
 const expected = readFileSync(join(conformance, "recorded", "dotnet.txt"), "utf8")
   .split("\n")
   .filter((line) => classes.some((name) => line.startsWith(name)))
+  .filter((line) => filter.test(rowName(line)))
   .sort();
+
+if (expected.length === 0) {
+  console.error("downlevel: skipped, no disposable row matches the filter");
+  process.exit(0);
+}
+
+if (!existsSync(dist)) {
+  console.error(
+    `downlevel: FAILED, ${dist} is missing; run scripts/run-conformance.sh without --no-build first`,
+  );
+  process.exit(1);
+}
 
 const variants = [
   ["bun", []],
@@ -40,7 +57,10 @@ const variants = [
 let failed = false;
 
 for (const [runtime, preloads] of variants) {
-  const actual = modules.flatMap((module) => run(runtime, module, preloads)).sort();
+  const actual = modules
+    .flatMap((module) => run(runtime, module, preloads))
+    .filter((line) => line.includes(" FAILED (") || filter.test(rowName(line)))
+    .sort();
   const label = `${runtime}${preloads.length > 0 ? " (no Symbol.dispose)" : ""}`;
   const missing = expected.filter((line) => !actual.includes(line));
 
@@ -61,6 +81,18 @@ for (const [runtime, preloads] of variants) {
 }
 
 process.exit(failed ? 1 : 0);
+
+/** The `--filter REGEX` of run-conformance.sh (every row when absent). */
+function filterOf(args) {
+  const index = args.indexOf("--filter");
+
+  return index >= 0 && args[index + 1] !== undefined ? new RegExp(args[index + 1]) : /./;
+}
+
+/** `Class.method` of a printed row. */
+function rowName(line) {
+  return line.split(" ")[0];
+}
 
 function run(runtime, module, preloads) {
   const result = spawnSync(

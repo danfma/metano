@@ -111,7 +111,7 @@ On TypeScript a `using` statement or declaration no longer reports `MS0001`: it 
 
 ### Wave 11 native `using` (FR-111 amendment A1, #817, no new code)
 
-No diagnostic changes: the `MS0001` sources of wave 10 (`await using`, an unemitted `Dispose`, a `using` declaration directly in a module entry point, a `Dispose` overload shadowing the implementation) apply to the native `using` declarations and to the `tryFinally` opt-out alike.
+No new code. The `MS0001` sources of wave 10 (`await using`, an unemitted `Dispose`, a `using` declaration directly in a module entry point, a `Dispose` overload shadowing the implementation) apply to the native `using` declarations and to the `tryFinally` opt-out alike; the entry-point message names the form of the active mode. New `MS0001` sources: a warning at an `[Import]` class of the compilation that implements `IDisposable`, under native `using` only (`Transformation/ImportedDisposableDiagnostics.cs`); an error at a transpiled type whose implementing `Dispose()` is `[Emit]` (`Frontend/Roslyn/DisposableImplementationValidator.cs`).
 
 ## Build integration (`Metano.Build.<Target>` packages)
 

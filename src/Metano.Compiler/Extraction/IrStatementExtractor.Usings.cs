@@ -316,9 +316,7 @@ public sealed partial class IrStatementExtractor
             return AwaitUsingReason("declaration");
 
         if (IsDirectlyInModuleEntryPoint(local))
-            return "A C# using declaration directly in a module entry point body is not "
-                + "supported by the transpiler: the try/finally that disposes it would hide the "
-                + "body's exported variables. Use a using statement or an inner block.";
+            return ModuleEntryPointUsingReason();
 
         return UnemittedDisposeReason(DeclaredTypeOf(local.Declaration));
     }
@@ -358,6 +356,21 @@ public sealed partial class IrStatementExtractor
 
         return null;
     }
+
+    /// <summary>
+    /// Why a <c>using</c> declaration directly in a module entry point body does not lower,
+    /// in the terms of the form the target would emit for it.
+    /// </summary>
+    private string ModuleEntryPointUsingReason() =>
+        _context.EmitsUsingDeclarations
+            ? "A C# using declaration directly in a module entry point body is not supported "
+                + "by the transpiler: the body becomes the module's top-level code, where a "
+                + "using declaration spans the whole module, and below target ESNext TypeScript "
+                + "wraps the module body, the body's exported variables included, in its "
+                + "disposal helpers. Use a using statement or an inner block."
+            : "A C# using declaration directly in a module entry point body is not supported "
+                + "by the transpiler: the try/finally that disposes it would hide the body's "
+                + "exported variables. Use a using statement or an inner block.";
 
     private static string AwaitUsingReason(string form) =>
         $"The C# 'await using' {form} is not supported by the transpiler: IAsyncDisposable is "

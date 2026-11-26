@@ -37,7 +37,10 @@ internal static class DisposableResources
             {
                 IsContractTakenOnByThisCompilation =
                     ClassConstraintOf(parameter) is not { } constraint
-                    || IsContractTakenOnBy(constraint, compilation.Assembly, target),
+                    || (
+                        IsContractTakenOnBy(constraint, compilation.Assembly, target)
+                        && !IsInlinedDispose(constraint, interfaceDispose)
+                    ),
             },
             INamedTypeSymbol { TypeKind: TypeKind.Interface } iface => new(
                 interfaceDispose,
@@ -45,11 +48,9 @@ internal static class DisposableResources
             ),
             var resource => ImplementationDisposal(resource, interfaceDispose, target) with
             {
-                IsContractTakenOnByThisCompilation = IsContractTakenOnBy(
-                    resource,
-                    compilation.Assembly,
-                    target
-                ),
+                IsContractTakenOnByThisCompilation =
+                    IsContractTakenOnBy(resource, compilation.Assembly, target)
+                    && !IsInlinedDispose(resource, interfaceDispose),
             },
         };
     }
@@ -125,6 +126,13 @@ internal static class DisposableResources
                 }
             )
             .FirstOrDefault(constraint => constraint is not null);
+
+    /// <summary>
+    /// The resource's <c>Dispose</c> is <c>[Emit]</c>: its calls are inlined and the type
+    /// declares no disposal member, so only a lowering that calls it can dispose it.
+    /// </summary>
+    private static bool IsInlinedDispose(ITypeSymbol resource, IMethodSymbol interfaceDispose) =>
+        resource.FindImplementationForInterfaceMember(interfaceDispose)?.HasEmit() == true;
 
     private static INamedTypeSymbol? ContractTakerOf(INamedTypeSymbol? type)
     {
