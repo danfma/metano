@@ -284,6 +284,26 @@ public class InterpolatedStringHandlerTests
         await Assert.That(exitCode).IsEqualTo(0);
     }
 
+    /// <summary>
+    /// Roslyn numbers a handler-argument placeholder by the written position of
+    /// the argument it names, the order of the call's argument list, not by
+    /// parameter order: named arguments out of parameter order still pass the
+    /// named one.
+    /// </summary>
+    [Test]
+    public async Task NamedArgumentsOutOfOrder_PassTheNamedArgument()
+    {
+        var files = TranspileHelper.Transpile(
+            UnsupportedPrelude
+                + """
+                    public void Run(Lg lg, int n, int m) => lg.Log3(other: m, level: n, h: $"a{n}");
+                }
+                """
+        );
+
+        await Assert.That(files["use.ts"]).Contains("new LevelH(1, 1, n)");
+    }
+
     [Test]
     public async Task LibraryHandler_LowersInTheConsumerAndTypeChecksStrictly()
     {

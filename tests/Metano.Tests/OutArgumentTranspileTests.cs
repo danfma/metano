@@ -1210,4 +1210,31 @@ public class OutArgumentTranspileTests
                     + "not reach the caller."
             );
     }
+
+    /// <summary>
+    /// A <c>[PlainObject]</c> constructs as an object literal, which has no
+    /// place for the constructor's writes either: its <c>out</c> parameter is
+    /// reported like any constructor's.
+    /// </summary>
+    [Test]
+    public async Task PlainObjectConstructorOutParameter_IsAnError()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, PlainObject]
+            public record Dto(int Level)
+            {
+                public Dto(int level, out bool ok) : this(level) { ok = true; }
+            }
+            """
+        );
+
+        var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+
+        await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+
+        await Assert
+            .That(error.Message)
+            .StartsWith("Constructor parameter 'ok' of 'Dto.Dto(int, out bool)'");
+    }
 }

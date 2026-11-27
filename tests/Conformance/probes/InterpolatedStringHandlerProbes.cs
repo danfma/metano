@@ -95,6 +95,66 @@ public sealed class Gate
     }
 }
 
+/// <summary>
+/// Passes the <c>level</c> argument, wherever the call writes it, to the
+/// handler's constructor.
+/// </summary>
+public sealed class LevelRecorder
+{
+    public string Log3(
+        int level,
+        int other,
+        [InterpolatedStringHandlerArgument("level")] LevelLog log
+    ) => log.Text() + "|other=" + other;
+}
+
+[InterpolatedStringHandler]
+public sealed class LevelLog
+{
+    private readonly List<string> _calls = new();
+
+    public LevelLog(int literalLength, int formattedCount, int level)
+    {
+        _calls.Add("new(" + literalLength + "," + formattedCount + "," + level + ")");
+    }
+
+    public void AppendLiteral(string literal) => _calls.Add("literal:" + literal);
+
+    public void AppendFormatted<T>(T value) => _calls.Add("value:" + value);
+
+    public string Text() => string.Join(",", _calls);
+}
+
+/// <summary>A struct handler: C# copies it when it is passed, the lowering passes it once.</summary>
+[InterpolatedStringHandler]
+public struct Tally
+{
+    private readonly List<string> _calls;
+
+    private int _count;
+
+    public Tally(int literalLength, int formattedCount)
+    {
+        _calls = new List<string>();
+        _count = 0;
+        _calls.Add("new(" + literalLength + "," + formattedCount + ")");
+    }
+
+    public void AppendLiteral(string literal)
+    {
+        _count++;
+        _calls.Add("literal:" + literal);
+    }
+
+    public void AppendFormatted<T>(T value)
+    {
+        _count++;
+        _calls.Add("value:" + value);
+    }
+
+    public string Text() => string.Join(",", _calls) + "#" + _count;
+}
+
 public static class InterpolatedStringHandlerProbes
 {
     private static int _counter;
@@ -165,6 +225,43 @@ public static class InterpolatedStringHandlerProbes
 
         return text + "|" + _counter;
     }
+
+    public static string NamedArgumentsOutOfOrder()
+    {
+        var recorder = new LevelRecorder();
+        var n = 4;
+
+        return recorder.Log3(other: 9, level: n, log: $"a{n}");
+    }
+
+    public static string HoleMutatesTheReferencedLocal()
+    {
+        var recorder = new GateRecorder();
+        var limit = 10;
+        var text = recorder.Write(limit, $"a{(limit = 1)}b{limit}");
+
+        return text + "|" + limit;
+    }
+
+    public static string EscapedBracesCountLikeDotNet()
+    {
+        var n = 3;
+
+        return Render($"{{x}}{n}")
+            + "|"
+            + Render($@"q{{""{n}""}}")
+            + "|"
+            + Render($$"""{a}{{n}}""");
+    }
+
+    public static string StructHandler()
+    {
+        var n = 6;
+
+        return RenderTally($"t{n}u");
+    }
+
+    private static string RenderTally(Tally tally) => tally.Text();
 
     private static string Render(CallLog log) => log.Text();
 
