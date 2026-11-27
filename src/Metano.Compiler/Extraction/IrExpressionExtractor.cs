@@ -296,6 +296,7 @@ public sealed partial class IrExpressionExtractor
             ?? FoldedPrimitiveLimit(expression)
             ?? FoldedCheckedContextConstant(expression)
             ?? FoldedNumberStylesConstant(expression)
+            ?? InterpolatedStringHandlerOf(expression)
             ?? ExtractUnbound(expression);
 
         var collectionValue = _context.KeepsNativeCollections
