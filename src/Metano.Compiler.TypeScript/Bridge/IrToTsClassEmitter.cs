@@ -306,8 +306,10 @@ internal sealed class IrToTsClassEmitter(
     /// <paramref name="member"/> marked <c>override</c> when an emitted base
     /// already declares its name on the same side, so a package compiled with
     /// <c>noImplicitOverride</c> accepts it (TS4114/TS4116) whatever its
-    /// accessibility (#759). The members of an overload group are not passed
-    /// here: the claim pass decides which of them override.
+    /// accessibility (#759). A <c>declare</c> field stays unmarked: TypeScript
+    /// rejects <c>declare override</c> (TS1243) and exempts the declaration.
+    /// The members of an overload group are not passed here: the claim pass
+    /// decides which of them override.
     /// </summary>
     private static TsClassMember WithInheritedOverride(
         TsClassMember member,
@@ -330,8 +332,12 @@ internal sealed class IrToTsClassEmitter(
             {
                 Override = true,
             },
-            TsFieldMember { Override: false, Accessibility: not TsAccessibility.Private } field
-                when claims.InheritsMember(field.Name, field.Static) => field with
+            TsFieldMember
+            {
+                Override: false,
+                Declare: false,
+                Accessibility: not TsAccessibility.Private
+            } field when claims.InheritsMember(field.Name, field.Static) => field with
             {
                 Override = true,
             },

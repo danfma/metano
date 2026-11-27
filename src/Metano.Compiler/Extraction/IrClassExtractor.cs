@@ -452,7 +452,10 @@ public static class IrClassExtractor
                 continue;
 
             if (ExplicitImplementationFates.IsDropped(member, context.GroupingPolicy))
+            {
+                NarrowedClaimForwarders.ReportUnpublished(member, context.GroupingPolicy);
                 continue;
+            }
 
             switch (member)
             {
@@ -462,7 +465,11 @@ public static class IrClassExtractor
                     break;
 
                 case IPropertySymbol prop:
-                    var property = IrPropertyExtractor.Extract(prop, context);
+                    var property = NarrowedClaimForwarders.RepublishInherited(
+                        IrPropertyExtractor.Extract(prop, context),
+                        prop,
+                        context
+                    );
 
                     InheritedDataMemberHiding.ReportIfHiding(prop, target);
 
@@ -725,6 +732,7 @@ public static class IrClassExtractor
         )
         {
             Attributes = IrAttributeExtractor.Extract(evt),
+            RepublishesInherited = NarrowedClaimForwarders.RepublishesInherited(evt, context),
         };
 
     private static IrMethodDeclaration ExtractMethod(

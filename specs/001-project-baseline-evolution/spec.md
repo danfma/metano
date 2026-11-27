@@ -2017,6 +2017,28 @@ Product requirements added after the migration (normative; each one is traced by
      instead of the inherited member. The forwarder is rebound only from the single statement
      `this.M(...)`; any other published body is reported as an error (MS0001). Dart ignores
      `internal` (`OverloadGroupingPolicy.HidesInternalMembers` is false) and keeps its output.
+  3. (#822, decision W14-3; amends the known gaps of item 2) Item 2 also covers a pure
+     explicit property or event forwarder (`bool IChangeTracking.IsChanged => IsChanged;`,
+     `object? IStrongBox.Value { get => Value; set => Value = value; }`,
+     `event Action INote.Changed { add => Changed += value; remove => Changed -= value; }`) to an
+     inherited `internal` or `private protected` member of the same type. The claiming member
+     keeps its tag, and the implementing class re-publishes it public with no storage of its
+     own: an inherited auto-property (one with no per-class storage) as a `declare` field
+     (`declare value: Object | null;`), with the inherited mutability, except that a private
+     setter the interface does not publish makes it `readonly`; inherited accessors as
+     `override` accessors that go through `super`, a setter the interface does not publish
+     keeping the inherited visibility (`/** @internal */ override set`); an event as `override`
+     `name$add`/`name$remove` methods that call the inherited ones through `super` (the
+     custom add/remove accessor error of decision W9-13 does not apply). An indexer forwarder is not
+     covered: no indexer is emitted. Every other shape keeps the 4.0.0 path of item 2 (the
+     claiming member public, the forwarder dropped) and now reports `MS0001` (warning) at the
+     forwarder, naming the reason: an abstract or static claiming member; a forwarder whose
+     type is not the claiming member's (a generic method forwarder included); a claiming method
+     with an overload beside it; a property forwarder with no getter; a claiming property with
+     accessors and an `init` or private setter; a forwarder that is not pure. Two forwarders of
+     different interfaces that claim each other report it too (the inherited member then stays
+     `internal`). Dart is unchanged. Tests: `tests/Metano.Tests/NarrowedClaimDataMemberTests.cs`;
+     conformance `NarrowedClaimProbes` (Bun and Node).
   Tests: `tests/Metano.Tests/InternalRuntimeTypeTests.cs`; conformance `InternalRuntimeTypeProbes`.
 
 ### Key Entities

@@ -52,6 +52,38 @@ public sealed record IrPropertySemantics(
     /// index as a parameter.
     /// </summary>
     public bool IsIndexer { get; init; }
+
+    /// <summary>
+    /// The property only re-publishes a less accessible property of the same name that
+    /// the type inherits (a pure explicit forwarder of a public interface property,
+    /// #822), and how that inherited property keeps its value. The declaration then
+    /// carries the inherited property's accessors, a setter the interface does not
+    /// publish keeping the inherited visibility in
+    /// <see cref="IrPropertyDeclaration.SetterVisibility"/>, and no bodies.
+    /// </summary>
+    public IrRepublishedProperty Republishes { get; init; }
+}
+
+/// <summary>
+/// How the inherited property a property re-publishes keeps its value
+/// (<see cref="IrPropertySemantics.Republishes"/>).
+/// </summary>
+public enum IrRepublishedProperty
+{
+    /// <summary>The property re-publishes nothing.</summary>
+    None,
+
+    /// <summary>
+    /// An auto-property whose one backing storage the whole hierarchy shares: it owns no
+    /// per-class storage (<see cref="IrPropertySemantics.OwnsPerClassStorage"/>).
+    /// </summary>
+    SharedStorage,
+
+    /// <summary>
+    /// Accessors: the inherited property has accessor bodies, or per-class storage behind
+    /// its accessors (<see cref="IrPropertySemantics.EmitsPerClassStorage"/>).
+    /// </summary>
+    Accessors,
 }
 
 /// <summary>

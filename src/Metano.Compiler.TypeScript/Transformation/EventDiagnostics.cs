@@ -1,5 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -48,7 +50,7 @@ internal static class EventDiagnostics
             || evt.IsAbstract
             || SymbolHelper.HasIgnore(evt, TargetLanguage.TypeScript);
 
-        if (notEmitted)
+        if (notEmitted || RepublishesInherited(evt))
             return null;
 
         if (DeclaresAccessorBodies(evt))
@@ -56,6 +58,13 @@ internal static class EventDiagnostics
 
         return evt.IsStatic ? ("static", MetanoDiagnosticSeverity.Warning) : null;
     }
+
+    /// <summary>
+    /// An explicit implementation whose accessors only forward to a less accessible
+    /// inherited event, which the class re-publishes with the same effect (#822).
+    /// </summary>
+    private static bool RepublishesInherited(IEventSymbol evt) =>
+        NarrowedClaimForwarders.IsPublishedAsOwnMember(evt, TsGroupingPolicy.Instance);
 
     /// <summary>
     /// Whether an accessor of <paramref name="evt"/> has a body that does something:
