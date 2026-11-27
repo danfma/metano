@@ -721,7 +721,10 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
     /// The described type, with <c>unknown</c> for each type parameter — its
     /// generic containers' included, which a nested type declares too (#436): a
     /// static getter cannot name the class's own type parameters (TS2302), and the
-    /// descriptor describes the open definition.
+    /// descriptor describes the open definition. A parameter bounded over type
+    /// parameters is written <c>any</c> instead: <c>unknown</c> does not satisfy that
+    /// bound (TS2344 on <c>Component&lt;unknown&gt;</c> for
+    /// <c>Component&lt;TSelf extends Component&lt;TSelf&gt;&gt;</c>).
     /// </summary>
     private static TsNamedType SelfType(
         INamedTypeSymbol type,
@@ -729,12 +732,39 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         string typeArgument = "unknown"
     )
     {
-        var arity = GenericContainers.TypeParametersOf(type).Count + type.TypeParameters.Length;
+        var typeParameters = GenericContainers
+            .TypeParametersOf(type)
+            .Concat(type.TypeParameters)
+            .ToList();
 
-        return arity == 0
+        return typeParameters.Count == 0
             ? new TsNamedType(tsName)
-            : new TsNamedType(tsName, [.. Enumerable.Repeat(new TsNamedType(typeArgument), arity)]);
+            : new TsNamedType(
+                tsName,
+                [
+                    .. typeParameters.Select(parameter => new TsNamedType(
+                        HasTypeParameterBound(parameter) ? "any" : typeArgument
+                    )),
+                ]
+            );
     }
+
+    /// <summary>
+    /// Whether a constraint of <paramref name="parameter"/> names a type parameter
+    /// (<c>where TSelf : Component&lt;TSelf&gt;</c>): no fixed argument satisfies that
+    /// bound, while <c>unknown</c> keeps the descriptor typed for any other.
+    /// </summary>
+    private static bool HasTypeParameterBound(ITypeParameterSymbol parameter) =>
+        parameter.ConstraintTypes.Any(MentionsTypeParameter);
+
+    private static bool MentionsTypeParameter(ITypeSymbol type) =>
+        type switch
+        {
+            ITypeParameterSymbol => true,
+            IArrayTypeSymbol array => MentionsTypeParameter(array.ElementType),
+            INamedTypeSymbol named => named.TypeArguments.Any(MentionsTypeParameter),
+            _ => false,
+        };
 
     /// <summary><c>(v: unknown): v is X =&gt; test</c>.</summary>
     private static TsArrowFunction Predicate(TsType described, TsExpression test) =>

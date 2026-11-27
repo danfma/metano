@@ -65,6 +65,7 @@ public sealed class ReifiedTypeParameterAnalysis
         private readonly List<CallEdge> _callEdges = [];
         private readonly List<NewEdge> _newEdges = [];
         private readonly List<DerivedEdge> _derivedEdges = [];
+        private readonly UndescribableArgumentReports _undescribableArguments = new();
         private readonly List<(IMethodSymbol Member, IMethodSymbol BaseOrIface)> _groupEdges = [];
         private readonly List<IMethodSymbol> _allMethods = [];
         private readonly List<INamedTypeSymbol> _allGenericTypes = [];
@@ -918,7 +919,10 @@ public sealed class ReifiedTypeParameterAnalysis
                 parameterlessCtors: parameterlessCtors,
                 unreifiableMembers: _unreifiableSites,
                 staticClassReifiedParams: staticClassReifiedParams
-            );
+            )
+            {
+                UndescribableArguments = _undescribableArguments,
+            };
         }
 
         private void ValidateReifiedCallSiteDescriptors(
@@ -1004,6 +1008,8 @@ public sealed class ReifiedTypeParameterAnalysis
                 && path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase)
             )
                 return;
+
+            _undescribableArguments.Add(arg, location);
 
             diagnostics.Add(
                 new MetanoDiagnostic(
@@ -1483,6 +1489,10 @@ public sealed class ReifiedTypeAnalysisResult
 
     public bool IsEnabled { get; }
 
+    /// <summary>The undescribable reified type arguments this phase reported.</summary>
+    public UndescribableArgumentReports UndescribableArguments { get; init; } =
+        UndescribableArgumentReports.None;
+
     public bool IsUnreifiable(ISymbol member) =>
         _unreifiableMembers.Contains(member.OriginalDefinition);
 
@@ -1501,14 +1511,24 @@ public sealed class ReifiedTypeAnalysisResult
     public IReadOnlyList<IrTypeRef>? ReifiedTypeArgumentsForCall(
         IMethodSymbol callee,
         Func<ITypeSymbol, IrTypeRef> mapType
-    )
+    ) =>
+        ReifiedTypeArgumentSymbolsForCall(callee) is { } symbols
+            ? [.. symbols.Select(mapType)]
+            : null;
+
+    /// <summary>
+    /// The type arguments a call to <paramref name="callee"/> binds to its hidden reified
+    /// parameters, in parameter order: the containing type's reified parameters of a
+    /// static member first, then the method's own. <c>null</c> when it passes none.
+    /// </summary>
+    public IReadOnlyList<ITypeSymbol>? ReifiedTypeArgumentSymbolsForCall(IMethodSymbol callee)
     {
         var orig = callee.OriginalDefinition;
 
         if (!_reifiedMethodParams.TryGetValue(orig, out var reified) || reified.Count == 0)
             return null;
 
-        var args = new List<IrTypeRef>(reified.Count);
+        var args = new List<ITypeSymbol>(reified.Count);
 
         if (
             orig.IsStatic
@@ -1521,7 +1541,7 @@ public sealed class ReifiedTypeAnalysisResult
             foreach (var ctp in staticClassTps)
             {
                 var idx = containingDef.TypeParameters.IndexOf(ctp);
-                args.Add(mapType(callee.ContainingType.TypeArguments[idx]));
+                args.Add(callee.ContainingType.TypeArguments[idx]);
             }
         }
 
@@ -1530,7 +1550,7 @@ public sealed class ReifiedTypeAnalysisResult
             var tpIdx = orig.TypeParameters.ToList().FindIndex(t => t.Name == rp.Name);
 
             if (tpIdx >= 0 && tpIdx < callee.TypeArguments.Length)
-                args.Add(mapType(callee.TypeArguments[tpIdx]));
+                args.Add(callee.TypeArguments[tpIdx]);
         }
 
         return args.Count > 0 ? args : null;

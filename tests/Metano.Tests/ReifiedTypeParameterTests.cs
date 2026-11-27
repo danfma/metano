@@ -612,9 +612,33 @@ public class ReifiedTypeParameterTests
             """
         );
 
-        var ms0001Count = result.Diagnostics.Count(d => d.Code == "MS0001");
-        await Assert.That(ms0001Count).IsGreaterThanOrEqualTo(6);
+        var ms0001 = result
+            .Diagnostics.Where(d => d.Code == "MS0001")
+            .Select(d => d.Message)
+            .ToList();
+
+        // One MS0001 per undescribable argument (the frontend's, W5-9 R4).
+        string[] undescribable =
+        [
+            "(int, string)",
+            "int[]",
+            "System.Func<int>",
+            "App.Opaque",
+            "System.DayOfWeek",
+        ];
+
+        foreach (var type in undescribable)
+            await Assert.That(ms0001.Count(m => m.Contains($"'{type}'"))).IsEqualTo(1);
+
+        await Assert.That(ms0001.Count).IsEqualTo(undescribable.Length);
+
+        // IDisposable has a runtime descriptor (spec 001 FR-111): it is passed, not reported.
+        await Assert.That(ms0001).DoesNotContain(m => m.Contains("IDisposable"));
+
         var ts = result.Files["app/probes.ts"];
+
+        await Assert.That(ts).Contains("isA<IDisposable>(\"s\", IDisposable$runtimeType)");
+
         await Assert.That(ts).Contains("unsupportedType(");
         await Assert.That(ts).DoesNotContain("UnknownType");
         await Assert.That(ts).DoesNotContain("ArrayType");
