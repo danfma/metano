@@ -2053,6 +2053,8 @@ Product requirements added after the migration (normative; each one is traced by
      (never the dispatcher), then yield the handler. A hole is a typed argument: no default-text
      lowering (`?? ""`), no `formatInteger` / `alignValue`; alignment and format are passed as
      bound arguments, omitted optional parameters explicitly (FR-017 of spec 013).
+     A struct handler has reference semantics in TypeScript: the lowering passes the one
+     instance it built and never copies it.
   2. The handler instance is held by one temporary. When the conversion is the statement's own
      value (declaration initializer, plain store, `return`, `yield`) it is a hoisted `const`
      followed by one statement per append; elsewhere it is a comma expression over a
@@ -2074,6 +2076,9 @@ Product requirements added after the migration (normative; each one is traced by
      `[Inline]`, or bound dynamically (a `dynamic` hole); a handler type the target neither
      emits nor imports, a `[PlainObject]` one, or an `[ObjectArgs]` construction. Roslyn never
      binds an `Append*` to an extension method (CS1061), so that shape does not arise.
+     Behavior change: a third-party handler type that is neither transpiled nor imported used to
+     lower to a template literal, so the callee silently received a string; it now reports
+     `MS0001`.
   7. Dart: every handler conversion of item 1 reports `MS0001`.
   Tests: `tests/Metano.Tests/InterpolatedStringHandlerTests.cs` (goldens
   `interpolated-string-handlers.ts`, `interpolated-string-handler-positions.ts`,
