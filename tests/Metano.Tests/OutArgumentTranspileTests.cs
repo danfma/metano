@@ -1237,4 +1237,52 @@ public class OutArgumentTranspileTests
             .That(error.Message)
             .StartsWith("Constructor parameter 'ok' of 'Dto.Dto(int, out bool)'");
     }
+
+    /// <summary>
+    /// A struct whose constructor has an <c>out</c> parameter, held as a field
+    /// of another struct, reports once: the outer struct's zero value reads the
+    /// nested struct's shape without reporting again (the <c>typeof</c> makes
+    /// the outer struct's zero factory emitted, which reads that shape).
+    /// </summary>
+    [Test]
+    public async Task NestedStructConstructorOutParameter_IsReportedOnce()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct PInner
+            {
+                public int X;
+
+                public PInner(int x, out bool ok)
+                {
+                    X = x;
+                    ok = true;
+                }
+            }
+
+            [Transpile]
+            public struct POuter
+            {
+                public PInner Inner;
+            }
+
+            [Transpile]
+            public static class Zeroes
+            {
+                public static POuter Outer() => default(POuter);
+
+                public static System.Type Reached() => typeof(POuter);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Count(d => d.Message.StartsWith("Constructor parameter 'ok'")))
+            .IsEqualTo(1);
+
+        await Assert
+            .That(diagnostics.Select(d => (d.Message, d.Location)).Distinct().Count())
+            .IsEqualTo(diagnostics.Count);
+    }
 }

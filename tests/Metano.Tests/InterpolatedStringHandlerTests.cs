@@ -164,7 +164,19 @@ public class InterpolatedStringHandlerTests
 
             public void LogWide(int level, [InterpolatedStringHandlerArgument("level")] WideH h) { }
 
+            public void LogOut(
+                int level,
+                out int z,
+                [InterpolatedStringHandlerArgument("level")] LevelH h
+            ) { z = level; }
+
             public static Lg Get() => new();
+        }
+
+        [Transpile]
+        public sealed class Holder
+        {
+            public Lg B { get; } = new();
         }
 
         [Transpile]
@@ -380,6 +392,34 @@ public class InterpolatedStringHandlerTests
 
         await Assert.That(files["use.ts"]).Contains("new ArgH(1, 1, lg, this.level)");
         await Assert.That(files["use.ts"]).DoesNotContain("new ArgH(1, 1, lg, (n + 1)");
+    }
+
+    /// <summary>
+    /// An <c>out</c> argument between a handler argument and the handler runs
+    /// nothing before the handler, so it does not keep the argument from being
+    /// read again.
+    /// </summary>
+    [Test]
+    public async Task OutArgumentBetween_DoesNotBlockTheRead()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            UnsupportedPrelude
+                + """
+                    public int Run(Lg lg, int level)
+                    {
+                        lg.LogOut(level, out var z, $"a{level}");
+
+                        return z;
+                    }
+                }
+                """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Message.StartsWith("Interpolated string")))
+            .IsEmpty();
+
+        await Assert.That(files["use.ts"]).Contains("new LevelH(1, 1, level)");
     }
 
     /// <summary>
@@ -615,6 +655,12 @@ public class InterpolatedStringHandlerTests
         "ArgH",
         "the receiver 'maybe' is null-conditional, so it cannot be read again at the handler; "
             + "write 'if (maybe != null) maybe.Log(...)' instead"
+    )]
+    [Arguments(
+        "public void Run(Holder? a, int level) { a?.B.Log(level, $\"a{level}\"); }",
+        "ArgH",
+        "the receiver 'a?.B' is null-conditional, so it cannot be read again at the handler; "
+            + "write 'if (a != null) a.B.Log(...)' instead"
     )]
     [Arguments(
         "public void Run(Lg lg, int level) { lg.LogWide(level, $\"a{level}\"); }",

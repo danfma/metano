@@ -1,6 +1,7 @@
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -31,14 +32,7 @@ public sealed partial class IrExpressionExtractor
     /// </summary>
     private IrExpression? InterpolatedStringHandlerOf(ExpressionSyntax expression)
     {
-        if (
-            expression
-            is not (
-                InterpolatedStringExpressionSyntax
-                or BinaryExpressionSyntax
-                or CastExpressionSyntax
-            )
-        )
+        if (!MayConvertToHandler(expression))
             return null;
 
         if (
@@ -369,4 +363,31 @@ public sealed partial class IrExpressionExtractor
         part is IInterpolatedStringAppendOperation { AppendCall: IInvocationOperation append }
         && !SymbolHelper.HasEmit(append.TargetMethod)
         && !SymbolHelper.HasInline(append.TargetMethod);
+
+    /// <summary>
+    /// A syntactic pre-test that spares the semantic query for every other
+    /// expression: an interpolated string, a cast of one, or a <c>+</c> whose
+    /// right operand is one (an interpolated-string addition only adds
+    /// interpolated strings).
+    /// </summary>
+    private static bool MayConvertToHandler(ExpressionSyntax expression) =>
+        expression switch
+        {
+            InterpolatedStringExpressionSyntax => true,
+            CastExpressionSyntax cast => IsInterpolatedOperand(cast.Expression),
+            BinaryExpressionSyntax addition when addition.IsKind(SyntaxKind.AddExpression) =>
+                IsInterpolatedOperand(addition.Right),
+            _ => false,
+        };
+
+    private static bool IsInterpolatedOperand(ExpressionSyntax operand) =>
+        operand switch
+        {
+            ParenthesizedExpressionSyntax parenthesized => IsInterpolatedOperand(
+                parenthesized.Expression
+            ),
+            BinaryExpressionSyntax addition when addition.IsKind(SyntaxKind.AddExpression) =>
+                IsInterpolatedOperand(addition.Right),
+            _ => operand is InterpolatedStringExpressionSyntax,
+        };
 }

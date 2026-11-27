@@ -60,7 +60,8 @@ internal static class HandlerArgumentReads
             .Skip(firstReadIndex)
             .Take(handlerIndex - firstReadIndex)
             .FirstOrDefault(between =>
-                !IrEvaluationTraits.IsRepeatableRead(extract(between.Value))
+                between.Parameter?.RefKind is not RefKind.Out
+                && !IrEvaluationTraits.IsRepeatableRead(extract(between.Value))
             );
 
         return changing is null
@@ -94,8 +95,8 @@ internal static class HandlerArgumentReads
 
         var referenced = ReferencedOperationOf(PlaceholderOf(argument)!, call, callArguments);
 
-        if (referenced is IConditionalAccessInstanceOperation receiver)
-            return (null, ConditionalReceiverProblem(receiver, call));
+        if (ConditionalReceiverOf(referenced) is { } receiver)
+            return (null, ConditionalReceiverProblem(receiver, referenced!, call));
 
         if (referenced is null)
             return (null, "the handler argument names nothing the call passes");
@@ -115,16 +116,36 @@ internal static class HandlerArgumentReads
         return (read, null);
     }
 
+    /// <summary>
+    /// The null-conditional receiver <paramref name="referenced"/> reads, alone
+    /// or at the root of a member chain (<c>a?.B</c>), or <c>null</c>.
+    /// </summary>
+    private static IConditionalAccessInstanceOperation? ConditionalReceiverOf(
+        IOperation? referenced
+    ) =>
+        referenced
+            ?.DescendantsAndSelf()
+            .OfType<IConditionalAccessInstanceOperation>()
+            .FirstOrDefault();
+
+    /// <summary>
+    /// The message for a receiver read through <paramref name="receiver"/>:
+    /// <c>maybe</c> itself or a chain on it (<c>a?.B</c>), with the guarded
+    /// call to write instead.
+    /// </summary>
     private static string ConditionalReceiverProblem(
         IConditionalAccessInstanceOperation receiver,
+        IOperation referenced,
         IOperation call
     )
     {
-        var target = receiver.Syntax.ToString();
+        var root = receiver.Syntax.ToString();
+        var chain = ReferenceEquals(referenced, receiver) ? "" : referenced.Syntax.ToString();
+        var shown = chain.Length == 0 ? root : $"{root}?{chain}";
         var method = (call as IInvocationOperation)?.TargetMethod.Name ?? "M";
 
-        return $"the receiver '{target}' is null-conditional, so it cannot be read again at the "
-            + $"handler; write 'if ({target} != null) {target}.{method}(...)' instead";
+        return $"the receiver '{shown}' is null-conditional, so it cannot be read again at the "
+            + $"handler; write 'if ({root} != null) {root}{chain}.{method}(...)' instead";
     }
 
     private static IInterpolatedStringHandlerArgumentPlaceholderOperation? PlaceholderOf(
