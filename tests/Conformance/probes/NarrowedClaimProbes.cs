@@ -58,7 +58,7 @@ public sealed class ClaimAccessorBox : ClaimAccessorBoxBase, IStrongBox
 /// <remarks>
 /// The tsgo log of the probes shows the type errors of this event on purpose (TS2304 for the
 /// unmapped <c>System.EventArgs</c>, TS2345 for <c>delegateAdd</c> over a nullable handler):
-/// the rows run on Bun and Node regardless. See the EventArgs mapping follow-up.
+/// the rows run on Bun and Node regardless. See #831.
 /// </remarks>
 public abstract class ClaimInitializerBase
 {
