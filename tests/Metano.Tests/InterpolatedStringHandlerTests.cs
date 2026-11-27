@@ -162,7 +162,65 @@ public class InterpolatedStringHandlerTests
 
             public void Log3(int level, int other, [InterpolatedStringHandlerArgument("level")] LevelH h) { }
 
+            public void LogWide(int level, [InterpolatedStringHandlerArgument("level")] WideH h) { }
+
             public static Lg Get() => new();
+        }
+
+        [Transpile]
+        [InterpolatedStringHandler]
+        public sealed class WideH
+        {
+            public WideH(int literalLength, int formattedCount, long level) { }
+
+            public void AppendLiteral(string s) { }
+
+            public void AppendFormatted<T>(T value) { }
+        }
+
+        [InterpolatedStringHandler]
+        public sealed class RawH
+        {
+            public RawH(int literalLength, int formattedCount) { }
+
+            public void AppendLiteral(string s) { }
+
+            public void AppendFormatted<T>(T value) { }
+        }
+
+        [Transpile, PlainObject]
+        [InterpolatedStringHandler]
+        public sealed class ShapeH
+        {
+            public ShapeH(int literalLength, int formattedCount) { }
+
+            public void AppendLiteral(string s) { }
+
+            public void AppendFormatted<T>(T value) { }
+        }
+
+        [Transpile]
+        [InterpolatedStringHandler]
+        public sealed class ArgsH
+        {
+            [ObjectArgs]
+            public ArgsH(int literalLength, int formattedCount) { }
+
+            public void AppendLiteral(string s) { }
+
+            public void AppendFormatted<T>(T value) { }
+        }
+
+        [Transpile]
+        [InterpolatedStringHandler]
+        public sealed class InlineH
+        {
+            public InlineH(int literalLength, int formattedCount) { }
+
+            public void AppendLiteral(string s) { }
+
+            [Inline]
+            public void AppendFormatted(int value) { }
         }
 
         [Transpile]
@@ -227,11 +285,6 @@ public class InterpolatedStringHandlerTests
             private static int Bump() => 1;
 
         """;
-
-    private const string NonRepeatableArgument =
-        "a handler argument is not a repeatable read (a local, a parameter, 'this', a constant "
-        + "or a field of those), or an argument with a side effect runs between it and the "
-        + "handler; bind it to a local first";
 
     [Test]
     public async Task TemplateCalls_BindTheExactOverloads()
@@ -302,6 +355,142 @@ public class InterpolatedStringHandlerTests
         );
 
         await Assert.That(files["use.ts"]).Contains("new LevelH(1, 1, n)");
+    }
+
+    /// <summary>
+    /// A handler argument that is a repeatable read by the shared rule
+    /// (<c>IrEvaluationTraits.IsRepeatableRead</c>) lowers, a plain
+    /// auto-property included; an addition that lowers with overflow wrapping
+    /// is not one.
+    /// </summary>
+    [Test]
+    public async Task RepeatableHandlerArguments_AreReadAgainAtTheHandler()
+    {
+        var files = TranspileHelper.Transpile(
+            UnsupportedPrelude
+                + """
+                    public int Level { get; set; }
+
+                    public void Sum(Lg lg, int n) => lg.Log(n + 1, $"a{n}");
+
+                    public void Auto(Lg lg) => lg.Log(Level, $"a{Level}");
+                }
+                """
+        );
+
+        await Assert.That(files["use.ts"]).Contains("new ArgH(1, 1, lg, this.level)");
+        await Assert.That(files["use.ts"]).DoesNotContain("new ArgH(1, 1, lg, (n + 1)");
+    }
+
+    /// <summary>
+    /// A <c>base</c> receiver passes the instance: <c>super</c> is not a value.
+    /// </summary>
+    [Test]
+    public async Task BaseReceiver_PassesThisAndTypeChecksStrictly()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Runtime.CompilerServices;
+
+            [Transpile]
+            public class Writer
+            {
+                public virtual void LogR([InterpolatedStringHandlerArgument("")] RecvH h) { }
+            }
+
+            [Transpile]
+            public sealed class Loud : Writer
+            {
+                public override void LogR(RecvH h) { }
+
+                public void Run(int level) => base.LogR($"b{level}");
+            }
+
+            [Transpile]
+            [InterpolatedStringHandler]
+            public sealed class RecvH
+            {
+                public RecvH(int literalLength, int formattedCount, Writer writer) { }
+
+                public void AppendLiteral(string s) { }
+
+                public void AppendFormatted(int value) { }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+
+        await Assert.That(files["loud.ts"]).Contains("new RecvH(1, 1, this)");
+
+        var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(
+            files,
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
+    }
+
+    /// <summary>
+    /// A C# 14 extension-block member whose handler names the extension
+    /// receiver lowers with it. Naming it <c>""</c> does not compile (CS8944).
+    /// </summary>
+    [Test]
+    public async Task ExtensionBlockReceiver_LowersWithTheReceiver()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System.Runtime.CompilerServices;
+
+            [Transpile]
+            public sealed class Pad { }
+
+            [Transpile]
+            public static class PadLogs
+            {
+                extension(Pad pad)
+                {
+                    public void LogX([InterpolatedStringHandlerArgument("pad")] PadH h) { }
+                }
+            }
+
+            [Transpile]
+            [InterpolatedStringHandler]
+            public sealed class PadH
+            {
+                public PadH(int literalLength, int formattedCount, Pad pad) { }
+
+                public void AppendLiteral(string s) { }
+
+                public void AppendFormatted(int value) { }
+            }
+
+            [Transpile]
+            public static class Use
+            {
+                public static void Run(Pad pad, int n) => pad.LogX($"x{n}");
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsEmpty();
+
+        await Assert
+            .That(files["use.ts"])
+            .Contains("logX(pad, (handler$temp$0 = new PadH(1, 1, pad), ");
+
+        var (exitCode, output) = await TreeShaking.StrictTypeCheck.Run(
+            files,
+            new Dictionary<string, string>()
+        );
+
+        await Assert.That(output).IsEmpty();
+        await Assert.That(exitCode).IsEqualTo(0);
     }
 
     [Test]
@@ -404,17 +593,54 @@ public class InterpolatedStringHandlerTests
     [Arguments(
         "public void Run(int level) { Lg.Get().Log(level, $\"a{level}\"); }",
         "ArgH",
-        NonRepeatableArgument
+        "the handler argument 'Lg.Get()' is not a repeatable read (a local, a parameter, 'this', "
+            + "a constant, a field or plain auto-property of those, or an operator over them); "
+            + "bind it to a local first"
     )]
     [Arguments(
-        "public void Run(Lg lg, int n) { lg.Log(n + 1, $\"a{n}\"); }",
+        "public void Run(Lg lg) { lg.Log(Bump(), $\"a{1}\"); }",
         "ArgH",
-        NonRepeatableArgument
+        "the handler argument 'Bump()' is not a repeatable read (a local, a parameter, 'this', "
+            + "a constant, a field or plain auto-property of those, or an operator over them); "
+            + "bind it to a local first"
     )]
     [Arguments(
         "public void Run(Lg lg, int level) { lg.Log3(level, Bump(), $\"a{level}\"); }",
         "LevelH",
-        NonRepeatableArgument
+        "the argument 'Bump()' is evaluated between a handler argument and the handler and may "
+            + "change it; bind it to a local first"
+    )]
+    [Arguments(
+        "public void Run(Lg? maybe, int level) { maybe?.Log(level, $\"a{level}\"); }",
+        "ArgH",
+        "the receiver 'maybe' is null-conditional, so it cannot be read again at the handler; "
+            + "write 'if (maybe != null) maybe.Log(...)' instead"
+    )]
+    [Arguments(
+        "public void Run(Lg lg, int level) { lg.LogWide(level, $\"a{level}\"); }",
+        "WideH",
+        "the handler argument 'level' is converted to the constructor's parameter type 'long'; "
+            + "pass a value of that type"
+    )]
+    [Arguments(
+        "public void Run(int n) { RawH h = $\"a{n}\"; }",
+        "RawH",
+        "the handler type is neither transpiled nor imported"
+    )]
+    [Arguments(
+        "public void Run(int n) { ShapeH h = $\"a{n}\"; }",
+        "ShapeH",
+        "the handler type is a [PlainObject], whose object literal has no methods"
+    )]
+    [Arguments(
+        "public void Run(int n) { ArgsH h = $\"a{n}\"; }",
+        "ArgsH",
+        "the handler constructor takes [ObjectArgs], whose factory takes no counts"
+    )]
+    [Arguments(
+        "public void Run(int n) { InlineH h = $\"a{n}\"; }",
+        "InlineH",
+        "the part '{n}' calls an [Emit] or [Inline] member or binds dynamically"
     )]
     [Arguments(
         "public void Run(int n) { EmitH h = $\"a{n}\"; }",
