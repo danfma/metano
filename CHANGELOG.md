@@ -4,6 +4,15 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 4.0.3
+
+_2026-11-27_
+
+
+### 🐛 Bug Fixes
+
+* treat nested and referenced [External] types as ambient, type-check private-ctor descriptors, publish property and event claims ([#833](https://github.com/danfma/metano/issues/833)) ([35b406a](https://github.com/danfma/metano/commit/35b406a6031fd6e49ad23004d77990d323981aa2)), closes [#826](https://github.com/danfma/metano/issues/826) [#827](https://github.com/danfma/metano/issues/827) [#822](https://github.com/danfma/metano/issues/822) [#822](https://github.com/danfma/metano/issues/822) [#826](https://github.com/danfma/metano/issues/826) [#827](https://github.com/danfma/metano/issues/827)
+
 ## 4.0.2
 
 _2026-11-26_
