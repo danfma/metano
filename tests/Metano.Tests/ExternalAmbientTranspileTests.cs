@@ -471,12 +471,11 @@ public class ExternalAmbientTranspileTests
             .Select(d => d.Message)
             .ToList();
 
-        await Assert
-            .That(messages.Any(m => m.Contains("typeof(DomLib.Dom.Window.Frame)")))
-            .IsTrue();
-        await Assert
-            .That(messages.Any(m => m.Contains("typeof(DomLib.Dom.Window.NKind)")))
-            .IsTrue();
+        var reportsFrame = messages.Any(m => m.Contains("typeof(DomLib.Dom.Window.Frame)"));
+        var reportsKind = messages.Any(m => m.Contains("typeof(DomLib.Dom.Window.NKind)"));
+
+        await Assert.That(reportsFrame).IsTrue();
+        await Assert.That(reportsKind).IsTrue();
         await Assert.That(files["nested.ts"]).Contains("Unsupported expression: TypeOfExpression");
     }
 
