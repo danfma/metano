@@ -185,10 +185,12 @@ public static partial class IrToTsExpressionBridge
             IrSliceExpression slice => MapSlice(slice, context),
             // An optional call (`handler?.(x)`) yields `undefined` for a null
             // delegate; read as a value it becomes the C# `null`.
-            IrCallExpression { IsOptional: true } call => NormalizedToNull(MapCall(call, context)),
-            IrCallExpression call => MapCall(call, context),
+            IrCallExpression { IsOptional: true } call => NormalizedToNull(
+                InlinedSpreadLiterals(MapCall(call, context))
+            ),
+            IrCallExpression call => InlinedSpreadLiterals(MapCall(call, context)),
             IrBaseObjectMemberCall baseCall => MapBaseObjectMemberCall(baseCall, context),
-            IrNewExpression ne => MapNewExpression(ne, context),
+            IrNewExpression ne => InlinedSpreadLiterals(MapNewExpression(ne, context)),
             IrBinaryExpression bin => EnumValueAssertion.Wrap(
                 MapBinary(bin, context),
                 bin.EnumResultType
@@ -3294,4 +3296,48 @@ public static partial class IrToTsExpressionBridge
 
     private static string FormatInner(IrExpression expr) =>
         expr is IrIdentifier id ? id.Name : expr.GetType().Name;
+
+    /// <summary>
+    /// <paramref name="expression"/>, when it is a call or a <c>new</c>, with
+    /// <see cref="InlinedSpreadLiterals(IReadOnlyList{TsExpression})"/> applied to its
+    /// arguments. Done on the finished expression, after evaluation order and
+    /// template binding have taken their positions from the arguments.
+    /// </summary>
+    internal static TsExpression InlinedSpreadLiterals(TsExpression expression) =>
+        expression switch
+        {
+            TsCallExpression call when HasSpreadLiteral(call.Arguments) => call with
+            {
+                Arguments = InlinedSpreadLiterals(call.Arguments),
+            },
+            TsNewExpression construction when HasSpreadLiteral(construction.Arguments) =>
+                construction with
+                {
+                    Arguments = InlinedSpreadLiterals(construction.Arguments),
+                },
+            _ => expression,
+        };
+
+    /// <summary>
+    /// The arguments of a call, <c>new</c> or <c>super(...)</c>, with a spread array
+    /// literal (<c>...[a, b]</c>) replaced by its elements (<c>a, b</c>): the same
+    /// values in the same order, without allocating an array only to spread it. An
+    /// element that is itself a spread stays one.
+    /// </summary>
+    internal static IReadOnlyList<TsExpression> InlinedSpreadLiterals(
+        IReadOnlyList<TsExpression> arguments
+    ) =>
+        HasSpreadLiteral(arguments)
+            ?
+            [
+                .. arguments.SelectMany(argument =>
+                    argument is TsSpreadExpression { Expression: TsArrayLiteral literal }
+                        ? literal.Elements
+                        : [argument]
+                ),
+            ]
+            : arguments;
+
+    private static bool HasSpreadLiteral(IReadOnlyList<TsExpression> arguments) =>
+        arguments.Any(argument => argument is TsSpreadExpression { Expression: TsArrayLiteral });
 }

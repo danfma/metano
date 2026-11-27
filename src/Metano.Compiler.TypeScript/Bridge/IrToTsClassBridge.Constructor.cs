@@ -302,7 +302,9 @@ internal static partial class IrToTsClassBridge
                     binding.Value
                 )),
             ],
-            selector is null ? ordered.Arguments : [selector, .. ordered.Arguments],
+            IrToTsExpressionBridge.InlinedSpreadLiterals(
+                selector is null ? ordered.Arguments : [selector, .. ordered.Arguments]
+            ),
             keepsBaseMessage
         );
     }

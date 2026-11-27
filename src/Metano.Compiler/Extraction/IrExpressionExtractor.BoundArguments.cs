@@ -532,19 +532,13 @@ public sealed partial class IrExpressionExtractor
             ),
         };
 
-        var parameter = argument.Parameter!;
-
-        if (!parameter.IsParams)
-            return extracted;
-
-        return NormalizeNullParamsArray(
-            extracted with
-            {
-                IsSpread = true,
-            },
-            argumentExpression,
-            (IMethodSymbol)parameter.ContainingSymbol
-        );
+        return IsNormalFormParams(argument)
+            ? AsSpreadParamsArray(
+                extracted,
+                argumentExpression,
+                (IMethodSymbol)argument.Parameter!.ContainingSymbol
+            )
+            : extracted;
     }
 
     /// <summary>The elements an expanded <c>params</c> call passes, one argument each.</summary>
@@ -650,4 +644,24 @@ public sealed partial class IrExpressionExtractor
         int ParameterOrdinal,
         int EvaluationIndex
     );
+
+    /// <summary>
+    /// Whether a call passes <paramref name="argument"/> as the array itself to a
+    /// <c>params</c> parameter (the normal form): Roslyn binds the slot as
+    /// <see cref="ArgumentKind.Explicit"/> then, and as
+    /// <see cref="ArgumentKind.ParamArray"/> when the call passes the elements.
+    /// </summary>
+    private static bool IsNormalFormParams(IArgumentOperation argument) =>
+        argument is { ArgumentKind: ArgumentKind.Explicit, Parameter.IsParams: true };
+
+    /// <summary>
+    /// A normal-form <c>params</c> argument, marked to spread into the rest
+    /// parameter; a constant <c>null</c> array follows
+    /// <see cref="NormalizeNullParamsArray"/>.
+    /// </summary>
+    private IrArgument AsSpreadParamsArray(
+        IrArgument argument,
+        ExpressionSyntax syntax,
+        IMethodSymbol callee
+    ) => NormalizeNullParamsArray(argument with { IsSpread = true }, syntax, callee);
 }
