@@ -1171,4 +1171,43 @@ public class OutArgumentTranspileTests
             )
             .IsTrue();
     }
+
+    [Test]
+    [Arguments("out bool ok", "ok = level > 0;", "out")]
+    [Arguments("ref int count", "count++;", "ref")]
+    public async Task ConstructorByReferenceParameter_IsAnErrorAtTheParameter(
+        string parameter,
+        string body,
+        string keyword
+    )
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            [Transpile]
+            public class Handler
+            {
+                public Handler(int level, {{parameter}}) { {{body}} }
+            }
+            """
+        );
+
+        var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+        var name = parameter.Split(' ')[^1];
+
+        await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        var location = error.Location!;
+
+        await Assert
+            .That(location.SourceTree!.GetText().ToString(location.SourceSpan))
+            .IsEqualTo(name);
+
+        await Assert
+            .That(error.Message)
+            .IsEqualTo(
+                $"Constructor parameter '{name}' of 'Handler.Handler(int, {keyword} "
+                    + $"{(keyword == "out" ? "bool" : "int")})' is '{keyword}', which a constructor "
+                    + "cannot lower: it would be passed by value, so the constructor's writes would "
+                    + "not reach the caller."
+            );
+    }
 }
