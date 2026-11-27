@@ -173,6 +173,114 @@ public class NarrowedClaimDataMemberTests
     }
 
     [Test]
+    public async Task AutoPropertyWithAnInternalSetter_IsRedeclaredWritable_AsTheFr111PathPublishedIt()
+    {
+        // Known limitation: a field has no per-accessor visibility, so the get-only
+        // interface property re-publishes the inherited internal setter as public state —
+        // the state the FR-111 path (claimer widened) already published.
+        var files = await StrictFiles(
+            """
+            using System.ComponentModel;
+
+            [assembly: TranspileAssembly]
+
+            public abstract class Base
+            {
+                internal bool IsChanged { get; set; }
+                internal void AcceptChanges() => IsChanged = false;
+            }
+            public sealed class Tracker : Base, IChangeTracking
+            {
+                bool IChangeTracking.IsChanged => IsChanged;
+                void IChangeTracking.AcceptChanges() => AcceptChanges();
+            }
+            """
+        );
+
+        await Assert
+            .That(files["base.ts"])
+            .Contains("/** @internal */\n  declare isChanged: boolean;");
+
+        await Assert.That(files["tracker.ts"]).Contains("\n  declare isChanged: boolean;\n");
+    }
+
+    [Test]
+    public async Task GenericBaseClaimer_IsPublishedThroughTheConstructedBase()
+    {
+        var files = await StrictFiles(
+            """
+            using System.ComponentModel;
+
+            [assembly: TranspileAssembly]
+
+            public abstract class Base<T>
+            {
+                internal bool IsChanged => true;
+                internal void AcceptChanges() { }
+            }
+            public sealed class Tracker : Base<string>, IChangeTracking
+            {
+                bool IChangeTracking.IsChanged => IsChanged;
+                void IChangeTracking.AcceptChanges() => AcceptChanges();
+            }
+            public sealed class Sibling : Base<int> { }
+            """
+        );
+
+        await Assert
+            .That(files["base.ts"])
+            .Contains("/** @internal */\n  get isChanged(): boolean {");
+
+        await Assert
+            .That(files["tracker.ts"])
+            .Contains("  override get isChanged(): boolean {\n    return super.isChanged;\n  }");
+
+        await Assert.That(files["sibling.ts"]).DoesNotContain("isChanged");
+    }
+
+    [Test]
+    public async Task EventOverCustomAccessorsOfTheBase_IsPublishedThroughSuper()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithLibraryImageAndDiagnostics(
+            NoteLibrary,
+            """
+            [assembly: TranspileAssembly]
+
+            public abstract class Base
+            {
+                private System.Action _handlers = () => { };
+                internal event System.Action Changed
+                {
+                    add => _handlers += value;
+                    remove => _handlers -= value;
+                }
+            }
+            public sealed class Note : Base, INote
+            {
+                event System.Action INote.Changed { add => Changed += value; remove => Changed -= value; }
+            }
+            """
+        );
+
+        await Assert.That(UnpublishedWarnings(diagnostics)).IsEmpty();
+
+        await Assert
+            .That(diagnostics.Where(d => d.Message.Contains("custom add/remove accessors")))
+            .HasSingleItem()
+            .And.All(d => d.Message.Contains("'Base.Changed'"));
+
+        await Assert
+            .That(files["note.ts"])
+            .Contains(
+                "  override changed$add(handler: () => void): void {\n"
+                    + "    super.changed$add(handler);\n  }"
+            )
+            .And.Contains("    super.changed$remove(handler);");
+
+        await AssertStrict(files);
+    }
+
+    [Test]
     public async Task InitProperty_IsRedeclaredReadonly()
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithLibraryImageAndDiagnostics(

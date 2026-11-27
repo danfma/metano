@@ -11,7 +11,10 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// <list type="bullet">
 ///   <item>An inherited auto-property is a field the base constructor stores: a
 ///     <c>declare</c> field re-types it public and emits no code, so the base value
-///     stays (a class field would reset it, and <c>super</c> cannot read a field).</item>
+///     stays (a class field would reset it, and <c>super</c> cannot read a field). A field
+///     has no per-accessor visibility, so an inherited internal setter the interface does
+///     not publish stays writable on this class: the same public state the FR-111 path
+///     (the inherited member widened) published.</item>
 ///   <item>Inherited accessors are overridden by accessors that reach them through
 ///     <c>super</c>; a setter the interface does not publish keeps the inherited
 ///     visibility, as a JavaScript accessor declaration replaces the base's pair.</item>

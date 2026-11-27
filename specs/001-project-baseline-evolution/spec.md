@@ -2025,7 +2025,8 @@ Product requirements added after the migration (normative; each one is traced by
      keeps its tag, and the implementing class re-publishes it public with no storage of its
      own: an inherited auto-property (one with no per-class storage) as a `declare` field
      (`declare value: Object | null;`), with the inherited mutability, except that a private
-     setter the interface does not publish makes it `readonly`; inherited accessors as
+     setter the interface does not publish makes it `readonly` (an internal one stays writable on
+     the implementing class, the public state the FR-111 path already published); inherited accessors as
      `override` accessors that go through `super`, a setter the interface does not publish
      keeping the inherited visibility (`/** @internal */ override set`); an event as `override`
      `name$add`/`name$remove` methods that call the inherited ones through `super` (the
