@@ -13,7 +13,7 @@ namespace Metano.Compiler.Frontend.Roslyn;
 /// <c>public</c> or <c>internal</c>: a <c>protected</c> or <c>private</c> one cannot
 /// satisfy the interface in the target.
 /// </summary>
-internal static class ForwardingImplementations
+internal static partial class ForwardingImplementations
 {
     /// <summary>
     /// Whether <paramref name="member"/> is satisfied through <paramref name="claiming"/>:
@@ -34,43 +34,69 @@ internal static class ForwardingImplementations
     }
 
     /// <summary>
-    /// Whether the body of <paramref name="member"/> is one call of
-    /// <paramref name="claiming"/> on <c>this</c>, passing its own parameters in order,
-    /// whatever the accessibility of <paramref name="claiming"/>.
+    /// Whether <paramref name="member"/> only forwards to <paramref name="claiming"/> on
+    /// <c>this</c>, whatever the accessibility of <paramref name="claiming"/>: a method
+    /// whose body is one call of it passing its own parameters in order, or a property or
+    /// event whose every accessor only reads, writes, adds to or removes from it.
     /// </summary>
     public static bool IsPureForwarder(ISymbol member, ISymbol claiming) =>
-        member is IMethodSymbol method
-        && claiming is IMethodSymbol target
-        && ForwardedCallOf(method) is { } call
-        && IsForwardingCall(call, method, target);
-
-    private static IInvocationOperation? ForwardedCallOf(IMethodSymbol method)
-    {
-        if (
-            method.ContainingAssembly is not ISourceAssemblySymbol { Compilation: var compilation }
-            || method.DeclaringSyntaxReferences is not [var reference]
-            || reference.GetSyntax() is not MethodDeclarationSyntax declaration
-            || SoleExpressionOf(declaration) is not { } expression
-        )
-            return null;
-
-        var semantic = compilation.GetSemanticModel(declaration.SyntaxTree);
-
-        return semantic.GetOperation(expression) as IInvocationOperation;
-    }
+        (member, claiming) switch
+        {
+            (IMethodSymbol method, IMethodSymbol target) => ForwardedCallOf(method) is { } call
+                && IsForwardingCall(call, method, target),
+            (IPropertySymbol property, IPropertySymbol target) => IsPurePropertyForwarder(
+                property,
+                target
+            ),
+            (IEventSymbol evt, IEventSymbol target) => IsPureEventForwarder(evt, target),
+            _ => false,
+        };
 
     /// <summary>
-    /// The one expression the body evaluates: an expression body, or a block holding a
-    /// single expression statement or <c>return</c>.
+    /// The member a forwarder reaches on <c>this</c>: the method its body calls, or the
+    /// property its getter reads, or the event its <c>add</c> accessor adds to;
+    /// <c>null</c> when its body is no such single access.
     /// </summary>
-    private static ExpressionSyntax? SoleExpressionOf(MethodDeclarationSyntax declaration) =>
-        declaration switch
+    public static ISymbol? ForwardedMemberOf(ISymbol member) =>
+        member switch
         {
-            { ExpressionBody.Expression: var arrow } => arrow,
-            { Body.Statements: [ExpressionStatementSyntax statement] } => statement.Expression,
-            { Body.Statements: [ReturnStatementSyntax { Expression: { } returned }] } => returned,
+            IMethodSymbol method => ForwardedCallOf(method)?.TargetMethod,
+            IPropertySymbol property => ReadPropertyOf(property),
+            IEventSymbol evt => AddedEventOf(evt),
             _ => null,
         };
+
+    private static IInvocationOperation? ForwardedCallOf(IMethodSymbol method) =>
+        method.DeclaringSyntaxReferences is [var reference]
+        && reference.GetSyntax() is MethodDeclarationSyntax declaration
+        && SoleExpressionOf(declaration.ExpressionBody, declaration.Body) is { } expression
+            ? OperationOf(method, expression) as IInvocationOperation
+            : null;
+
+    /// <summary>
+    /// The one expression a body evaluates: an expression body, or a block holding a
+    /// single expression statement or <c>return</c>.
+    /// </summary>
+    private static ExpressionSyntax? SoleExpressionOf(
+        ArrowExpressionClauseSyntax? arrow,
+        BlockSyntax? block
+    ) =>
+        (arrow, block) switch
+        {
+            ({ Expression: var expression }, _) => expression,
+            (_, { Statements: [ExpressionStatementSyntax statement] }) => statement.Expression,
+            (_, { Statements: [ReturnStatementSyntax { Expression: { } returned }] }) => returned,
+            _ => null,
+        };
+
+    /// <summary>
+    /// The operation of <paramref name="expression"/>, a part of the source of
+    /// <paramref name="member"/>; <c>null</c> for a member of a referenced assembly.
+    /// </summary>
+    private static IOperation? OperationOf(ISymbol member, ExpressionSyntax expression) =>
+        member.ContainingAssembly is ISourceAssemblySymbol { Compilation: var compilation }
+            ? compilation.GetSemanticModel(expression.SyntaxTree).GetOperation(expression)
+            : null;
 
     private static bool IsForwardingCall(
         IInvocationOperation call,
@@ -81,13 +107,20 @@ internal static class ForwardingImplementations
             call.TargetMethod.OriginalDefinition,
             target.OriginalDefinition
         )
-        && call.Instance
+        && IsOnThis(call.Instance)
+        && PassesParametersInOrder(call, method);
+
+    /// <summary>
+    /// An implicit or explicit <c>this</c> receiver: <c>base.M()</c> skips the overrides
+    /// of the derived classes, so it does not forward to the member that claims the name.
+    /// </summary>
+    private static bool IsOnThis(IOperation? instance) =>
+        instance
             is IInstanceReferenceOperation
             {
                 ReferenceKind: InstanceReferenceKind.ContainingTypeInstance,
                 Syntax: not BaseExpressionSyntax,
-            }
-        && PassesParametersInOrder(call, method);
+            };
 
     private static bool PassesParametersInOrder(IInvocationOperation call, IMethodSymbol method) =>
         call.Arguments.Length == method.Parameters.Length

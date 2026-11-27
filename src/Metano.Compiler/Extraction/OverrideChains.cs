@@ -204,7 +204,7 @@ internal static class OverrideChains
     /// An auto-property: by its syntax when declared in source, and in a referenced
     /// assembly by its metadata accessors.
     /// </summary>
-    private static bool IsAutoProperty(IPropertySymbol property) =>
+    internal static bool IsAutoProperty(IPropertySymbol property) =>
         property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
             is PropertyDeclarationSyntax declaration
             ? PrimaryConstructorPropertyAlias.IsAutoProperty(declaration)

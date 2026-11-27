@@ -1,5 +1,7 @@
 using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
+using Metano.Compiler.Extraction;
+using Metano.Compiler.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -48,7 +50,7 @@ internal static class EventDiagnostics
             || evt.IsAbstract
             || SymbolHelper.HasIgnore(evt, TargetLanguage.TypeScript);
 
-        if (notEmitted)
+        if (notEmitted || ReproducesForwarder(evt))
             return null;
 
         if (DeclaresAccessorBodies(evt))
@@ -56,6 +58,15 @@ internal static class EventDiagnostics
 
         return evt.IsStatic ? ("static", MetanoDiagnosticSeverity.Warning) : null;
     }
+
+    /// <summary>
+    /// An explicit implementation whose accessors only forward to the event that claims
+    /// its name: the class re-publishes it, or it is dropped and every subscription
+    /// through the interface reaches that event, so no body is lost (#822). An impure
+    /// forwarder keeps the error.
+    /// </summary>
+    private static bool ReproducesForwarder(IEventSymbol evt) =>
+        NarrowedClaimForwarders.ReproducesForwarder(evt, TsGroupingPolicy.Instance);
 
     /// <summary>
     /// Whether an accessor of <paramref name="evt"/> has a body that does something:

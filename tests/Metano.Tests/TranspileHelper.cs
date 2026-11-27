@@ -670,6 +670,26 @@ public static class TranspileHelper
         string consumerSource,
         bool referenceAssembly = false,
         string libraryAssemblyName = "TestLibrary"
+    ) =>
+        TranspileWithLibraryImageAndDiagnostics(
+            librarySource,
+            consumerSource,
+            referenceAssembly,
+            libraryAssemblyName
+        ).Files;
+
+    /// <summary>
+    /// Same as <see cref="TranspileWithLibraryImage"/> but also returns the diagnostics of
+    /// the consumer's transformation.
+    /// </summary>
+    public static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileWithLibraryImageAndDiagnostics(
+        string librarySource,
+        string consumerSource,
+        bool referenceAssembly = false,
+        string libraryAssemblyName = "TestLibrary"
     )
     {
         var libCompilation = CompileLibrary(librarySource, libraryAssemblyName);
@@ -695,7 +715,7 @@ public static class TranspileHelper
             extraReferences: [MetadataReference.CreateFromImage(stream.ToArray())]
         );
 
-        return TranspileCore(consumerCompilation).Files;
+        return TranspileCore(consumerCompilation);
     }
 
     /// <summary>
