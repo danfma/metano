@@ -28,9 +28,11 @@ internal static class DefaultTextSites
             // A hole of a string converted to a BCL interpolated-string handler binds as the
             // `AppendFormatted` call of the handler, not as an interpolation operation. A
             // custom handler's `AppendFormatted` takes the value as an argument (FR-112).
-            IInvocationOperation { Parent: IInterpolatedStringAppendOperation } append
-                when append.TargetMethod.ContainingAssembly.IsBclAssembly() =>
-                DefaultTextSite.Implicit,
+            IInvocationOperation
+            {
+                Parent: IInterpolatedStringAppendOperation,
+                Instance.Type: var handlerType,
+            } when handlerType.IsBclInterpolatedStringHandler() => DefaultTextSite.Implicit,
             IBinaryOperation
             {
                 OperatorKind: BinaryOperatorKind.Add,

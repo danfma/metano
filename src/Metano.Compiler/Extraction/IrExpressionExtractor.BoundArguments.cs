@@ -197,7 +197,7 @@ public sealed partial class IrExpressionExtractor
     /// The arguments Roslyn bound to a call or construction, in the order C#
     /// evaluates them; <c>null</c> for any other operation.
     /// </summary>
-    private static ImmutableArray<IArgumentOperation>? WrittenArgumentsOf(IOperation? call) =>
+    internal static ImmutableArray<IArgumentOperation>? WrittenArgumentsOf(IOperation? call) =>
         call switch
         {
             IObjectCreationOperation creation => creation.Arguments,

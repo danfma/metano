@@ -2060,7 +2060,9 @@ Product requirements added after the migration (normative; each one is traced by
      followed by one statement per append; elsewhere it is a comma expression over a
      block-level `let`. A handler in argument position is never hoisted out of it, which would
      evaluate it before the receiver and the earlier arguments. No IIFE, no closure, no runtime
-     helper. A generic handler's construction is asserted to the constructed type
+     helper, with one inherited exception: a handler conversion inside a static field
+     initializer takes that initializer's existing W13-1 fallback, an IIFE that runs once per
+     class. A generic handler's construction is asserted to the constructed type
      (`new H(1, 1) as H<number>`), since no argument infers its type arguments.
   3. `bool`-returning `Append*` methods: the appends form one `&&` chain, so a `false` result
      skips the remaining appends and their hole expressions, as in .NET.
@@ -2079,7 +2081,9 @@ Product requirements added after the migration (normative; each one is traced by
      Behavior change: a third-party handler type that is neither transpiled nor imported used to
      lower to a template literal, so the callee silently received a string; it now reports
      `MS0001`.
-  7. Dart: every handler conversion of item 1 reports `MS0001`.
+  7. Dart: every handler conversion of item 1 reports `MS0001`. This is a rollout choice, not
+     an inability: the lowering uses only IR nodes the Dart printer already prints, but its
+     output is not yet verified (`dart analyze` of a lowered handler, a run against .NET).
   Tests: `tests/Metano.Tests/InterpolatedStringHandlerTests.cs` (goldens
   `interpolated-string-handlers.ts`, `interpolated-string-handler-positions.ts`,
   `interpolated-string-handler-arguments.ts`); conformance `InterpolatedStringHandlerProbes`
