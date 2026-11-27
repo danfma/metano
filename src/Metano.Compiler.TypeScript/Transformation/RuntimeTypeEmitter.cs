@@ -327,6 +327,18 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
         );
     }
 
+    /// <summary>
+    /// The class as the descriptor's <c>ctor</c>. The slot is typed as a public
+    /// constructor, which a class whose only constructor is private or protected cannot
+    /// satisfy (TS2322), so that class is asserted with a type-only <c>as never</c>
+    /// (#827): no wrapper, no run-time cost, constructor visibility unchanged. A narrower
+    /// assertion (<c>as ClassType&lt;X&gt;["ctor"]</c>) fails with TS2352, hence <c>never</c>.
+    /// </summary>
+    private static TsExpression ConstructorReference(TsIdentifier self, TsClass declaration) =>
+        declaration.Constructor?.Accessibility.IsNonPublic() is true
+            ? new TsCastExpression(self, new TsNamedType("never"))
+            : self;
+
     private TsObjectLiteral ClassLiteral(INamedTypeSymbol type, TsClass declaration)
     {
         var self = new TsIdentifier(declaration.Name);
@@ -335,7 +347,7 @@ internal sealed class RuntimeTypeEmitter(TypeScriptTransformContext context)
 
         return new TsObjectLiteral([
             .. Identity("class", type),
-            new TsObjectProperty("ctor", self),
+            new TsObjectProperty("ctor", ConstructorReference(self, declaration)),
             .. BaseThunk(type, declaration),
             new TsObjectProperty("interfaces", Thunks(type.AllInterfaces, "an interface thunk")),
             new TsObjectProperty(

@@ -13,10 +13,11 @@ public static class TsConstructorModifier
 {
     /// <summary>
     /// Whether <paramref name="modifier"/> restricts construction:
-    /// <c>protected</c> or <c>private</c>.
+    /// <c>protected</c> or <c>private</c>. <see cref="TsAccessibility.None"/> prints no
+    /// modifier, so it is public.
     /// </summary>
     public static bool IsNonPublic(this TsAccessibility modifier) =>
-        modifier is not TsAccessibility.Public;
+        modifier is TsAccessibility.Private or TsAccessibility.Protected;
 
     /// <summary>
     /// The modifier a type's constructor takes from what it declares, before
