@@ -49,6 +49,22 @@ public class ExternalAmbientTranspileTests
                 public int Index { get; set; }
             }
 
+            public enum NKind
+            {
+                A,
+                B,
+            }
+
+            public record NRec(int X)
+            {
+                public int Default => 0;
+            }
+
+            public struct Sx
+            {
+                public int V;
+            }
+
             [StringEnum]
             public enum Kind
             {
@@ -63,6 +79,12 @@ public class ExternalAmbientTranspileTests
         }
 
         [External]
+        public struct ExtSx
+        {
+            public int V;
+        }
+
+        [External]
         public abstract class EventTarget
         {
             public string Name { get; set; } = "";
@@ -72,6 +94,27 @@ public class ExternalAmbientTranspileTests
         public interface IDisposableNode
         {
             string Id { get; }
+        }
+        """;
+
+    private const string NestedConsumer = """
+        using System;
+        using DomLib.Dom;
+
+        [Transpile]
+        public class Nested
+        {
+            public Type FrameType() => typeof(Window.Frame);
+
+            public Type KindType() => typeof(Window.NKind);
+
+            public bool Same(Window.NRec a, Window.NRec b) => a == b;
+
+            public int DefaultOf(Window.NRec r) => r.Default;
+
+            public Window.Sx Zero() => default;
+
+            public ExtSx ZeroExt() => default;
         }
         """;
 
@@ -397,13 +440,90 @@ public class ExternalAmbientTranspileTests
     {
         var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
             AmbientLibrary,
-            AmbientConsumer
+            """
+            using DomLib.Dom;
+
+            [Transpile]
+            public class Listening
+            {
+                public bool IsListener(object o) => o is Window.IListener;
+            }
+            """
         );
 
-        await Assert.That(files["probe.ts"]).Contains("Unsupported expression: IsExpression");
+        await Assert.That(files["listening.ts"]).Contains("Unsupported expression: IsExpression");
 
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsTrue();
+    }
+
+    [Test]
+    public async Task TypeOfTypeNestedInReferencedExternal_ReportsNoDescriptor()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            AmbientLibrary,
+            NestedConsumer
+        );
+
+        var messages = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .Select(d => d.Message)
+            .ToList();
+
+        await Assert
+            .That(messages.Any(m => m.Contains("typeof(DomLib.Dom.Window.Frame)")))
+            .IsTrue();
+        await Assert
+            .That(messages.Any(m => m.Contains("typeof(DomLib.Dom.Window.NKind)")))
+            .IsTrue();
+        await Assert.That(files["nested.ts"]).Contains("Unsupported expression: TypeOfExpression");
+    }
+
+    [Test]
+    public async Task TypesNestedInReferencedExternal_FollowTheHostTypePolicy()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(AmbientLibrary, NestedConsumer);
+
+        var output = result["nested.ts"];
+        await Assert.That(output).Contains("return a === b;");
+        await Assert.That(output).Contains("return r.default;");
+        await Assert.That(output).DoesNotContain("new Window.Sx()");
+    }
+
+    [Test]
+    public async Task TypeNestedInLocalExternal_HasNoSelectorsOrFactories()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            using Metano.Annotations.TypeScript;
+
+            [assembly: TranspileAssembly]
+
+            [External]
+            public abstract class Outer
+            {
+                public class Inner
+                {
+                    public Inner() {}
+                    public Inner(int x) {}
+                }
+            }
+
+            public class Derived : Outer.Inner
+            {
+                public Derived() : base(1) {}
+            }
+
+            public class User
+            {
+                public Outer.Inner Make() => new Outer.Inner(1);
+            }
+            """
+        );
+
+        await Assert.That(result["derived.ts"]).Contains("super(1);");
+        await Assert.That(result["user.ts"]).Contains("return new Outer.Inner(1);");
     }
 }

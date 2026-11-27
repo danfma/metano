@@ -750,7 +750,7 @@ public static class IrTypeRefMapper
         && IsTranspilableType(named, target)
         && !SymbolHelper.HasPlainObject(named)
         && !named.HasJsTuple()
-        && !SymbolHelper.HasExternal(named)
+        && !SymbolHelper.IsAmbient(named)
         && !SymbolHelper.HasImport(named);
 
     /// <summary>

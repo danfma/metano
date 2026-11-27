@@ -274,7 +274,7 @@ public sealed class TsOverloadClaimsRegistry(
     private static INamedTypeSymbol? EmittedBaseOf(INamedTypeSymbol type, IrClassDeclaration ir) =>
         ir.BaseType is IrNamedTypeRef { Semantics.IsTranspilable: true }
         && type.BaseType is { } baseType
-        && !SymbolHelper.HasExternal(baseType)
+        && !baseType.IsAmbient()
             ? baseType
             : null;
 
