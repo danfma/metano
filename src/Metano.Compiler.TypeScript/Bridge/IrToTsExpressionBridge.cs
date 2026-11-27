@@ -1202,6 +1202,8 @@ public static partial class IrToTsExpressionBridge
 
     private static TsExpression MapCall(IrCallExpression call, IrToTsBridgeContext context)
     {
+        call = SelfTypedStatics.OnSelfClass(call);
+
         // TS doesn't support named arguments at the call site — the receiver's
         // parameter list defines positional order. At this layer we drop the
         // argument names and lower each value; reordering / default-filling
@@ -2537,6 +2539,9 @@ public static partial class IrToTsExpressionBridge
     /// </summary>
     private static TsExpression MapNewExpression(IrNewExpression ne, IrToTsBridgeContext context)
     {
+        if (ne.Type is IrTypeParameterRef { Scope: IrTypeParameterScope.Receiver })
+            return SelfTypedStatics.NewReceiver();
+
         if (ne.Type is IrTypeParameterRef tp)
         {
             return TypeParameterTsResolver.Resolve(tp, context.TypeParameters) is { } descriptor

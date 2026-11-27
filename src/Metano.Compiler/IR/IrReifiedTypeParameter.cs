@@ -31,4 +31,10 @@ public enum IrTypeParameterScope
 
     /// <summary>Resolved from the constructor's trailing <c>$typeArgs[i]</c> parameter.</summary>
     CtorParam,
+
+    /// <summary>
+    /// The self parameter of a self-typed static member (spec 001 FR-113): the receiver
+    /// class the member is called on, which <c>new TSelf()</c> constructs.
+    /// </summary>
+    Receiver,
 }

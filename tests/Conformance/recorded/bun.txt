@@ -23,6 +23,7 @@ CollectionTypeArgumentProbes.dictionaryViewInterfaceTestIsLoud THROWS Error: Uns
 CollectionTypeArgumentProbes.enumerableArrayInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.objectArrayInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
 CollectionTypeArgumentProbes.rawArrayInterfaceTestIsLoud THROWS Error: Unsupported expression: CollectionInterfaceTest
+CrtpStaticProbes.openSelfOnAConcreteBase = widget
 DecimalProbes.arithmetic = 3.305|2.4255|1.105|2.0045454545454545454545454545|0.005|-1.1
 DecimalProbes.collections = 7|2.3333333333333333333333333333|3|1.5|True|2|2|3,2.5,1.5|14|7
 DecimalProbes.compound = 3

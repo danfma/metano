@@ -55,6 +55,9 @@ public sealed class ReifiedTypeParameterAnalysis
 
     private sealed class Collector
     {
+        private static readonly IReadOnlySet<IMethodSymbol> NoSelfTypedMembers =
+            new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
+
         private readonly Compilation _compilation;
         private readonly bool _assemblyWideTranspile;
         private readonly TargetLanguage _target;
@@ -65,6 +68,7 @@ public sealed class ReifiedTypeParameterAnalysis
         private readonly List<CallEdge> _callEdges = [];
         private readonly List<NewEdge> _newEdges = [];
         private readonly List<DerivedEdge> _derivedEdges = [];
+        private readonly UndescribableArgumentReports _undescribableArguments = new();
         private readonly List<(IMethodSymbol Member, IMethodSymbol BaseOrIface)> _groupEdges = [];
         private readonly List<IMethodSymbol> _allMethods = [];
         private readonly List<INamedTypeSymbol> _allGenericTypes = [];
@@ -364,7 +368,12 @@ public sealed class ReifiedTypeParameterAnalysis
                         )
                         {
                             _callEdges.Add(
-                                new CallEdge(currentOwner, methodGroup, node.GetLocation())
+                                new CallEdge(
+                                    currentOwner,
+                                    methodGroup,
+                                    node.GetLocation(),
+                                    IsMethodGroup: true
+                                )
                             );
 
                             if (
@@ -425,7 +434,7 @@ public sealed class ReifiedTypeParameterAnalysis
             if (type is null)
                 return;
 
-            foreach (var tp in CollectTypeParameters(type))
+            foreach (var tp in ReifiedSymbols.CollectTypeParameters(type))
             {
                 if (isNewConstraint)
                     _newConstraintTriggers.Add(tp);
@@ -447,7 +456,7 @@ public sealed class ReifiedTypeParameterAnalysis
 
             if (tp.DeclaringType is { } declaringType)
             {
-                var rootMember = UnwrapLocalOrLambdaRoot(enclosingMember);
+                var rootMember = ReifiedSymbols.MemberOf(enclosingMember);
 
                 if (rootMember.IsStatic)
                     return rootMember is IMethodSymbol m ? m.OriginalDefinition : rootMember;
@@ -458,28 +467,16 @@ public sealed class ReifiedTypeParameterAnalysis
             return null;
         }
 
-        private static ISymbol UnwrapLocalOrLambdaRoot(ISymbol symbol)
-        {
-            var cur = symbol;
-
-            while (
-                cur
-                    is IMethodSymbol
-                    {
-                        MethodKind: MethodKind.LocalFunction or MethodKind.AnonymousFunction,
-                        ContainingSymbol: { } parent,
-                    }
-            )
-            {
-                cur = parent;
-            }
-
-            return cur;
-        }
-
-        public ReifiedTypeAnalysisResult Solve(
-            IReadOnlyDictionary<string, string>? typeNamesBySymbol,
-            List<MetanoDiagnostic> diagnostics
+        /// <summary>
+        /// The reified type parameters of each owner: the parameters
+        /// <paramref name="seeds"/> keeps among the direct triggers, propagated over
+        /// override/interface groups, derived class chains, calls and generic object
+        /// creations to a fixpoint. A call to a member of <paramref name="selfTyped"/>
+        /// propagates nothing: its self parameter is the receiver class (FR-113).
+        /// </summary>
+        private Dictionary<ISymbol, HashSet<ITypeParameterSymbol>> Propagate(
+            Func<TriggerSite, bool> seeds,
+            IReadOnlySet<IMethodSymbol> selfTyped
         )
         {
             var reifiedByOwner = new Dictionary<ISymbol, HashSet<ITypeParameterSymbol>>(
@@ -501,7 +498,7 @@ public sealed class ReifiedTypeParameterAnalysis
             }
 
             // Seed from direct triggers.
-            foreach (var trigger in _triggers)
+            foreach (var trigger in _triggers.Where(seeds))
                 Mark(trigger.Owner, trigger.TypeParameter);
 
             // Fixpoint propagation.
@@ -572,7 +569,7 @@ public sealed class ReifiedTypeParameterAnalysis
 
                     foreach (var arg in derivedEdge.BaseType.TypeArguments)
                     {
-                        foreach (var tp in CollectTypeParameters(arg))
+                        foreach (var tp in ReifiedSymbols.CollectTypeParameters(arg))
                         {
                             var owner = ResolveTypeParameterOwner(tp, derivedEdge.DerivedType);
 
@@ -598,7 +595,8 @@ public sealed class ReifiedTypeParameterAnalysis
                     }
 
                     if (
-                        !reifiedByOwner.TryGetValue(calleeDef, out var calleeSet)
+                        selfTyped.Contains(calleeDef)
+                        || !reifiedByOwner.TryGetValue(calleeDef, out var calleeSet)
                         || calleeSet.Count == 0
                     )
                     {
@@ -615,7 +613,11 @@ public sealed class ReifiedTypeParameterAnalysis
                         if (!calleeSet.Contains(calleeDef.TypeParameters[i]))
                             continue;
 
-                        foreach (var tp in CollectTypeParameters(call.Callee.TypeArguments[i]))
+                        foreach (
+                            var tp in ReifiedSymbols.CollectTypeParameters(
+                                call.Callee.TypeArguments[i]
+                            )
+                        )
                         {
                             var owner = ResolveTypeParameterOwner(tp, call.Caller);
 
@@ -639,7 +641,9 @@ public sealed class ReifiedTypeParameterAnalysis
                             if (!calleeSet.Contains(containingDef.TypeParameters[i]))
                                 continue;
 
-                            foreach (var tp in CollectTypeParameters(containingArgs[i]))
+                            foreach (
+                                var tp in ReifiedSymbols.CollectTypeParameters(containingArgs[i])
+                            )
                             {
                                 var owner = ResolveTypeParameterOwner(tp, call.Caller);
 
@@ -675,7 +679,7 @@ public sealed class ReifiedTypeParameterAnalysis
 
                     foreach (var arg in newEdge.TargetType.TypeArguments)
                     {
-                        foreach (var tp in CollectTypeParameters(arg))
+                        foreach (var tp in ReifiedSymbols.CollectTypeParameters(arg))
                         {
                             var owner = ResolveTypeParameterOwner(tp, newEdge.Caller);
 
@@ -685,6 +689,38 @@ public sealed class ReifiedTypeParameterAnalysis
                     }
                 }
             }
+
+            return reifiedByOwner;
+        }
+
+        public ReifiedTypeAnalysisResult Solve(
+            IReadOnlyDictionary<string, string>? typeNamesBySymbol,
+            List<MetanoDiagnostic> diagnostics
+        )
+        {
+            var classifier = new SelfTypedStaticClassifier(
+                _triggers,
+                _callEdges,
+                _newEdges,
+                [.. _groupEdges.Select(edge => new GroupEdge(edge.Member, edge.BaseOrIface))],
+                _allMethods,
+                method => IsUnreifiableMethod(method, out _),
+                _currentAssembly,
+                _isEmitPackage,
+                _target
+            );
+
+            var initial = Propagate(_ => true, NoSelfTypedMembers);
+            var (selfTyped, forwarders) = classifier.Classify(initial);
+
+            var reifiedByOwner =
+                selfTyped.Count > 0
+                    ? Propagate(
+                        trigger =>
+                            trigger.Owner is not IMethodSymbol owner || !selfTyped.Contains(owner),
+                        selfTyped
+                    )
+                    : initial;
 
             // Build final IR descriptors for reified methods and classes, and validate diagnostics.
             var reifiedMethodParams = new Dictionary<
@@ -789,7 +825,7 @@ public sealed class ReifiedTypeParameterAnalysis
                 // W5-5d: public member in an [EmitPackage] library reports MS0054.
                 if (
                     _isEmitPackage
-                    && IsExportedMember(orig)
+                    && ReifiedSymbols.IsExportedMember(orig)
                     && orig.MethodKind == MethodKind.Ordinary
                 )
                 {
@@ -900,6 +936,9 @@ public sealed class ReifiedTypeParameterAnalysis
                 }
             }
 
+            classifier.ReportCallSites(selfTyped, reifiedClassParams, diagnostics);
+            classifier.ReportHidingStatics(selfTyped, diagnostics);
+
             // W5-5j: check new T() call sites with concrete types that lack `create`.
             ValidateNewConstraintCallSites(reifiedByOwner, diagnostics);
 
@@ -918,7 +957,19 @@ public sealed class ReifiedTypeParameterAnalysis
                 parameterlessCtors: parameterlessCtors,
                 unreifiableMembers: _unreifiableSites,
                 staticClassReifiedParams: staticClassReifiedParams
-            );
+            )
+            {
+                UndescribableArguments = _undescribableArguments,
+                SelfTyped = new SelfTypedMembers(
+                    selfTyped,
+                    forwarders,
+                    reifiedClassParams.Keys.ToHashSet<INamedTypeSymbol>(
+                        SymbolEqualityComparer.Default
+                    ),
+                    _currentAssembly,
+                    _target
+                ),
+            };
         }
 
         private void ValidateReifiedCallSiteDescriptors(
@@ -1004,6 +1055,8 @@ public sealed class ReifiedTypeParameterAnalysis
                 && path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase)
             )
                 return;
+
+            _undescribableArguments.Add(arg, location);
 
             diagnostics.Add(
                 new MetanoDiagnostic(
@@ -1356,12 +1409,6 @@ public sealed class ReifiedTypeParameterAnalysis
             }
         }
 
-        private static bool IsExportedMember(IMethodSymbol method) =>
-            method.DeclaredAccessibility is Accessibility.Public or Accessibility.Protected
-            && method.ContainingType.DeclaredAccessibility
-                is Accessibility.Public
-                    or Accessibility.Protected;
-
         private bool IsInteropSurface(IMethodSymbol method)
         {
             if (_jsCallableConversions.Contains(method))
@@ -1388,44 +1435,6 @@ public sealed class ReifiedTypeParameterAnalysis
 
             return SymbolHelper.GetNameOverride(type, _target) ?? type.Name;
         }
-
-        private static IEnumerable<ITypeParameterSymbol> CollectTypeParameters(ITypeSymbol type)
-        {
-            switch (type)
-            {
-                case ITypeParameterSymbol tp:
-                    yield return tp;
-                    break;
-                case IArrayTypeSymbol arr:
-                    foreach (var tp in CollectTypeParameters(arr.ElementType))
-                        yield return tp;
-                    break;
-                case INamedTypeSymbol named:
-                    foreach (var arg in named.TypeArguments)
-                    {
-                        foreach (var tp in CollectTypeParameters(arg))
-                            yield return tp;
-                    }
-
-                    break;
-            }
-        }
-
-        private sealed record TriggerSite(
-            ISymbol? Owner,
-            ITypeParameterSymbol TypeParameter,
-            ISymbol EnclosingMember,
-            Location Location,
-            bool IsNewConstraint
-        );
-
-        private sealed record CallEdge(ISymbol Caller, IMethodSymbol Callee, Location Location);
-
-        private sealed record NewEdge(
-            ISymbol Caller,
-            INamedTypeSymbol TargetType,
-            Location Location
-        );
 
         private sealed record DerivedEdge(INamedTypeSymbol DerivedType, INamedTypeSymbol BaseType);
     }
@@ -1483,6 +1492,13 @@ public sealed class ReifiedTypeAnalysisResult
 
     public bool IsEnabled { get; }
 
+    /// <summary>The undescribable reified type arguments this phase reported.</summary>
+    public UndescribableArgumentReports UndescribableArguments { get; init; } =
+        UndescribableArgumentReports.None;
+
+    /// <summary>The self-typed static members of the compilation (FR-113).</summary>
+    public SelfTypedMembers SelfTyped { get; init; } = SelfTypedMembers.None;
+
     public bool IsUnreifiable(ISymbol member) =>
         _unreifiableMembers.Contains(member.OriginalDefinition);
 
@@ -1501,14 +1517,24 @@ public sealed class ReifiedTypeAnalysisResult
     public IReadOnlyList<IrTypeRef>? ReifiedTypeArgumentsForCall(
         IMethodSymbol callee,
         Func<ITypeSymbol, IrTypeRef> mapType
-    )
+    ) =>
+        ReifiedTypeArgumentSymbolsForCall(callee) is { } symbols
+            ? [.. symbols.Select(mapType)]
+            : null;
+
+    /// <summary>
+    /// The type arguments a call to <paramref name="callee"/> binds to its hidden reified
+    /// parameters, in parameter order: the containing type's reified parameters of a
+    /// static member first, then the method's own. <c>null</c> when it passes none.
+    /// </summary>
+    public IReadOnlyList<ITypeSymbol>? ReifiedTypeArgumentSymbolsForCall(IMethodSymbol callee)
     {
         var orig = callee.OriginalDefinition;
 
         if (!_reifiedMethodParams.TryGetValue(orig, out var reified) || reified.Count == 0)
             return null;
 
-        var args = new List<IrTypeRef>(reified.Count);
+        var args = new List<ITypeSymbol>(reified.Count);
 
         if (
             orig.IsStatic
@@ -1521,7 +1547,7 @@ public sealed class ReifiedTypeAnalysisResult
             foreach (var ctp in staticClassTps)
             {
                 var idx = containingDef.TypeParameters.IndexOf(ctp);
-                args.Add(mapType(callee.ContainingType.TypeArguments[idx]));
+                args.Add(callee.ContainingType.TypeArguments[idx]);
             }
         }
 
@@ -1530,7 +1556,7 @@ public sealed class ReifiedTypeAnalysisResult
             var tpIdx = orig.TypeParameters.ToList().FindIndex(t => t.Name == rp.Name);
 
             if (tpIdx >= 0 && tpIdx < callee.TypeArguments.Length)
-                args.Add(mapType(callee.TypeArguments[tpIdx]));
+                args.Add(callee.TypeArguments[tpIdx]);
         }
 
         return args.Count > 0 ? args : null;
@@ -1567,6 +1593,9 @@ public sealed class ReifiedTypeAnalysisResult
 
             return (IrTypeParameterScope.None, -1, null);
         }
+
+        if (SelfTyped.IsReceiverOf(tp, enclosingMember))
+            return (IrTypeParameterScope.Receiver, -1, null);
 
         if (tp.DeclaringType is { } declaringType)
         {

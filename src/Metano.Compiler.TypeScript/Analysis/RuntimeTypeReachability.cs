@@ -441,7 +441,7 @@ internal sealed partial class RuntimeTypeReachability
         }
 
         if (IrTypeKeys.Find(key, _compilation) is { } symbol && !HasRuntimeDescriptor(symbol))
-            ReportUndescribableTypeOf(symbol, LocationOf(question));
+            ReportUndescribableTypeOf(symbol, question);
     }
 
     /// <summary>
@@ -477,9 +477,12 @@ internal sealed partial class RuntimeTypeReachability
             || BclExportReader.IsRuntimeDeclaredInterface(type, _compilation)
         );
 
-    private void ReportUndescribableTypeOf(INamedTypeSymbol type, Location? location)
+    private void ReportUndescribableTypeOf(INamedTypeSymbol type, IrRuntimeQuestion question)
     {
         _undescribable.Add(KeyOf(type));
+
+        if (question.IsReportedUndescribable)
+            return;
 
         _report(
             new MetanoDiagnostic(
@@ -488,7 +491,7 @@ internal sealed partial class RuntimeTypeReachability
                 $"'typeof({type.ToDisplayString()})' has no runtime type descriptor in TypeScript: "
                     + "only transpiled classes, structs, interfaces and enums, the primitives and "
                     + "the runtime exceptions have one (spec 011 FR-025).",
-                location
+                LocationOf(question)
             )
         );
     }

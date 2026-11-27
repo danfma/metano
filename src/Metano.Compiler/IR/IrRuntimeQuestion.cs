@@ -174,4 +174,11 @@ public sealed record IrRuntimeQuestion
     /// local whose only uses are such operands in the same body.
     /// </summary>
     public bool FeedsTypeQuestion { get; init; }
+
+    /// <summary>
+    /// For a <see cref="IrRuntimeQuestionKind.TypeOf"/> of a type passed to a hidden
+    /// reified parameter, whether the frontend already reported that it has no runtime
+    /// descriptor (MS0001, spec 011 W5-9 R4), so a target does not report it again.
+    /// </summary>
+    public bool IsReportedUndescribable { get; init; }
 }
