@@ -450,6 +450,23 @@ public static class SymbolHelper
         HasTypeScriptAttribute(symbol, "External");
 
     /// <summary>
+    /// Whether the type, or any type containing it, is <c>[External]</c>: provided by
+    /// the host and never emitted. A type nested in an <c>[External]</c> container is
+    /// not emitted, so it is reached through the container's global like the container
+    /// itself. Use <see cref="HasExternal"/> only where the literal attribute is meant.
+    /// </summary>
+    public static bool IsAmbient(this INamedTypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            if (HasExternal(current))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Reads <c>[JsxComponentBuilder]</c> from the
     /// <c>Metano.Annotations.TypeScript</c> namespace. Marks the abstract
     /// base of a JSX component family (the marker carrier itself, not the
@@ -886,7 +903,7 @@ public static class SymbolHelper
         type is { IsStatic: true }
         && !type.IsContainerless()
         && !HasImport(type)
-        && !HasExternal(type)
+        && !type.IsAmbient()
         && Extraction.IrTypeRefMapper.IsTranspilableType(type, target)
         && type.HasExtensionMembers();
 
@@ -1740,7 +1757,7 @@ public static class SymbolHelper
         IAssemblySymbol? currentAssembly
     ) =>
         type.SpecialType == SpecialType.None
-        && !HasExternal(type)
+        && !type.IsAmbient()
         && !HasImport(type)
         && (IsDeclaredIn(type, currentAssembly) || IsTranspiledPackageType(type));
 

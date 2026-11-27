@@ -138,7 +138,7 @@ internal static class IrToTsArgumentGuards
         {
             IrNamedTypeKind.NumericEnum or IrNamedTypeKind.StringEnum or IrNamedTypeKind.Branded =>
                 true,
-            IrNamedTypeKind.Record or IrNamedTypeKind.Struct => !semantics.IsExternal
+            IrNamedTypeKind.Record or IrNamedTypeKind.Struct => !semantics.IsAmbient
                 && semantics.StructuralEqualityLeaves is { } leaves
                 && leaves.All(EquatablePrimitives.Contains),
             _ => false,

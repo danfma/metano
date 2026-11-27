@@ -28,7 +28,7 @@ internal static class EmittedTypes
 
         return type.TypeKind is TypeKind.Class or TypeKind.Struct
             && IrTypeRefMapper.IsTranspilableType(type, target)
-            && !SymbolHelper.HasExternal(type)
+            && !type.IsAmbient()
             && !SymbolHelper.HasPlainObject(type);
     }
 
@@ -38,7 +38,7 @@ internal static class EmittedTypes
     /// </summary>
     public static bool IsTranspiledInterface(INamedTypeSymbol type, TargetLanguage? target) =>
         IrTypeRefMapper.IsTranspilableType(type.OriginalDefinition, target)
-        && !SymbolHelper.HasExternal(type.OriginalDefinition)
+        && !type.OriginalDefinition.IsAmbient()
         && !SymbolHelper.HasJsCallable(type.OriginalDefinition);
 
     /// <summary>
@@ -49,5 +49,5 @@ internal static class EmittedTypes
     public static bool IsEmittedBase(INamedTypeSymbol? type, TargetLanguage? target) =>
         type is { TypeKind: TypeKind.Class, SpecialType: SpecialType.None }
         && IrTypeRefMapper.IsTranspilableType(type.OriginalDefinition, target)
-        && !SymbolHelper.HasExternal(type.OriginalDefinition);
+        && !type.OriginalDefinition.IsAmbient();
 }

@@ -233,7 +233,7 @@ public static class IrToTsTypeMapper
             name = aliasName;
         }
 
-        TsTypeOrigin? origin = named.Origin is { } o
+        TsTypeOrigin? origin = ImportableOrigin(named) is { } o
             ? BuildTsOrigin(o, originalName ?? name)
             : null;
 
@@ -262,9 +262,19 @@ public static class IrToTsTypeMapper
     /// intra-project import.
     /// </summary>
     public static TsTypeOrigin? TryResolveOrigin(IrTypeRef type) =>
-        type is IrNamedTypeRef { Origin: { } origin } named
+        type is IrNamedTypeRef named && ImportableOrigin(named) is { } origin
             ? BuildTsOrigin(origin, named.Name)
             : null;
+
+    /// <summary>
+    /// The cross-package origin a reference to <paramref name="named"/> imports from, or
+    /// <see langword="null"/> when it imports nothing: an <c>[External]</c> type is
+    /// ambient (a runtime global such as a DOM interface) wherever it is referenced, so a
+    /// referenced package's declaration gets no import, the same as one in the declaring
+    /// project, and its package is not added as a dependency for it.
+    /// </summary>
+    internal static IrTypeOrigin? ImportableOrigin(IrNamedTypeRef named) =>
+        named.Semantics is { IsAmbient: true } ? null : named.Origin;
 
     /// <summary>
     /// Resolves the cross-package <see cref="TsTypeOrigin"/> of a value-position type
@@ -272,7 +282,9 @@ public static class IrToTsTypeMapper
     /// intra-project, BCL or synthesized.
     /// </summary>
     public static TsTypeOrigin? TryResolveOrigin(IrTypeReference reference) =>
-        reference.Origin is { } origin ? BuildTsOrigin(origin, reference.Name) : null;
+        reference is { IsAmbient: false, Origin: { } origin }
+            ? BuildTsOrigin(origin, reference.Name)
+            : null;
 
     /// <summary>
     /// Converts a semantic <see cref="IrTypeOrigin"/> to a <see cref="TsTypeOrigin"/> whose

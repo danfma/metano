@@ -440,6 +440,17 @@ public static class IrTypeRefMapper
     private static IrNamedTypeSemantics? BuildNamedTypeSemantics(
         INamedTypeSymbol named,
         Metano.Annotations.TargetLanguage? target = null
+    ) =>
+        BuildKindSemantics(named, target) is { } semantics
+            ? semantics with
+            {
+                IsAmbient = SymbolHelper.IsAmbient(named),
+            }
+            : null;
+
+    private static IrNamedTypeSemantics? BuildKindSemantics(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
     )
     {
         // Enums split into StringEnum (exhaustive value union) and NumericEnum
@@ -471,7 +482,6 @@ public static class IrTypeRefMapper
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
                 EnumZeroMember: ExtractEnumZeroMember(named, target),
-                IsExternal: SymbolHelper.HasExternal(named),
                 IsValueType: true
             )
             {
@@ -485,7 +495,6 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Interface,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named),
                 HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
                 Supertypes: SupertypesOf(named, target)
             );
@@ -503,7 +512,6 @@ public static class IrTypeRefMapper
                 BrandedUnderlyingPrimitive: BrandedUnderlyingPrimitiveOf(named),
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named),
                 IsValueType: named.IsValueType
             );
         }
@@ -513,7 +521,6 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Exception,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named),
                 ClrTypeName: BclExportReader.ExportKey(named),
                 Supertypes: SupertypesOf(named, target)
             );
@@ -535,7 +542,6 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Record,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named),
                 HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
                 IsPlainObject: SymbolHelper.HasPlainObject(named),
                 IsJsTuple: isJsTuple,
@@ -560,7 +566,6 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Struct,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named),
                 HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
                 IsPlainObject: SymbolHelper.HasPlainObject(named),
                 IsJsTuple: isJsTuple,
@@ -581,7 +586,6 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Class,
                 IsTranspilable: IsTranspilableType(named, target),
                 IsIgnored: SymbolHelper.HasIgnore(named, target),
-                IsExternal: SymbolHelper.HasExternal(named),
                 HasGeneratedGuard: SymbolHelper.HasGenerateGuard(named),
                 IsPlainObject: SymbolHelper.HasPlainObject(named),
                 IsJsTuple: isJsTuple,
@@ -617,7 +621,7 @@ public static class IrTypeRefMapper
                 Kind: IrNamedTypeKind.Interface,
                 IsTranspilable: false,
                 IsIgnored: false,
-                IsExternal: false,
+                IsAmbient: false,
             }
             ? semantics with
             {
@@ -746,7 +750,7 @@ public static class IrTypeRefMapper
         && IsTranspilableType(named, target)
         && !SymbolHelper.HasPlainObject(named)
         && !named.HasJsTuple()
-        && !SymbolHelper.HasExternal(named)
+        && !SymbolHelper.IsAmbient(named)
         && !SymbolHelper.HasImport(named);
 
     /// <summary>

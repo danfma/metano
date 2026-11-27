@@ -123,7 +123,7 @@ These are defined inside the TypeScript backend, not in `Metano.Annotations`:
 | Attribute | Purpose |
 | --- | --- |
 | `[Discriminator("Field")]` | Names a `[StringEnum]` discriminator; generated `isT` short-circuits on a literal compare before walking the shape (→ MS0011). |
-| `[External]` | Ambient runtime-provided shape — no file emitted (→ MS0012). Combine with `[NoContainer]` for runtime globals. |
+| `[External]` | Ambient runtime-provided shape — no file emitted (→ MS0012). Combine with `[NoContainer]` for runtime globals. Across packages the type stays ambient (no import, no `package.json` dependency), and a type nested in an `[External]` container follows the same rule. |
 | `[StrictUnionGuard]` | On an abstract base, dispatch per-variant shape validation to the variants' guards from the base's own `<base>.guard.ts` module (spec 011 FR-029; the base module imports no variant). |
 | `[JsTuple]` | On a positional record — lower to a JS array-tuple (array-shape sibling of `[PlainObject]`): tuple type alias `= [T0, T1]` standalone, erased with `[Import]`; `new`→array literal; positional member access → `[i]` (→ MS0027). |
 | `[JsCallable]` | On an interface — erased JS callable; `Invoke(...)` lowers to direct receiver invocation (`recv.Invoke(a)`→`recv(a)`), overloaded `Invoke` supported; no declaration emitted (→ MS0028). |
