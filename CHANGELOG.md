@@ -4,6 +4,15 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 4.1.0
+
+_2026-11-27_
+
+
+### ✨ Features
+
+* lower custom interpolated string handlers, self-type CRTP library statics, spread params in normal form ([#854](https://github.com/danfma/metano/issues/854)) ([fd0584f](https://github.com/danfma/metano/commit/fd0584ffec0ae51f9aa4425e4f054cc68bb2f434)), closes [#828](https://github.com/danfma/metano/issues/828) [#835](https://github.com/danfma/metano/issues/835) [#832](https://github.com/danfma/metano/issues/832) [#834](https://github.com/danfma/metano/issues/834) [#836](https://github.com/danfma/metano/issues/836) [#829](https://github.com/danfma/metano/issues/829) [#828](https://github.com/danfma/metano/issues/828) [#829](https://github.com/danfma/metano/issues/829) [#832](https://github.com/danfma/metano/issues/832) [#834](https://github.com/danfma/metano/issues/834) [#835](https://github.com/danfma/metano/issues/835) [#836](https://github.com/danfma/metano/issues/836)
+
 ## 4.0.3
 
 _2026-11-27_
