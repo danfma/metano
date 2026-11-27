@@ -110,7 +110,8 @@ public sealed record IrTypeReference(
     string Name,
     IrTypeOrigin? Origin = null,
     int PrivateNestedSegments = 0,
-    string? Namespace = null
+    string? Namespace = null,
+    bool IsExternal = false
 ) : IrExpression;
 
 /// <summary>

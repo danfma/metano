@@ -209,4 +209,158 @@ public class ExternalAmbientTranspileTests
         await Assert.That(output).Contains("HTMLElement");
         await Assert.That(output).DoesNotContain("HtmlElement");
     }
+
+    private const string DomLibrary = """
+        using Metano.Annotations;
+        using Metano.Annotations.TypeScript;
+
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("dom-lib")]
+
+        namespace DomLib.Dom;
+
+        [External]
+        public interface HTMLElement
+        {
+            string Id { get; }
+        }
+        """;
+
+    [Test]
+    public async Task ExternalTypeFromReferencedPackage_IsNotImported()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(
+            DomLibrary,
+            """
+            using System.Collections.Generic;
+            using DomLib.Dom;
+
+            [Transpile]
+            public class Renderer
+            {
+                public HTMLElement? Target { get; set; }
+
+                private HTMLElement? _cached;
+
+                public List<HTMLElement> Children { get; } = new();
+
+                public string Describe(HTMLElement element)
+                {
+                    HTMLElement local = element;
+                    _cached = local;
+                    return local.Id;
+                }
+            }
+            """
+        );
+
+        var output = result["renderer.ts"];
+        await Assert.That(output).Contains("HTMLElement");
+        await Assert.That(output).DoesNotContain("dom-lib");
+    }
+
+    [Test]
+    public async Task NonExternalTypeFromReferencedPackage_StillImported()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("dom-lib")]
+
+            namespace DomLib.Dom;
+
+            public record Point(int X, int Y);
+            """,
+            """
+            using DomLib.Dom;
+
+            [Transpile]
+            public class Renderer
+            {
+                public Point? Target { get; set; }
+            }
+            """
+        );
+
+        await Assert.That(result["renderer.ts"]).Contains("import");
+        await Assert.That(result["renderer.ts"]).Contains("dom-lib");
+    }
+
+    private const string AmbientLibrary = """
+        using Metano.Annotations;
+        using Metano.Annotations.TypeScript;
+
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("dom-lib")]
+
+        namespace DomLib.Dom;
+
+        [External]
+        public class Window
+        {
+            public static Window Current { get; } = null!;
+
+            public class Frame
+            {
+                public int Index { get; set; }
+            }
+        }
+
+        [External]
+        public class EventTarget
+        {
+            public string Name { get; set; } = "";
+        }
+
+        [External]
+        public interface IDisposableNode
+        {
+            string Id { get; }
+        }
+        """;
+
+    private const string AmbientConsumer = """
+        using System;
+        using DomLib.Dom;
+
+        [Transpile]
+        public class Probe : EventTarget, IDisposableNode
+        {
+            public string Id => Name;
+
+            public Window Current() => Window.Current;
+
+            public Type WindowType() => typeof(Window);
+
+            public bool IsWindow(object o) => o is Window;
+
+            public Window? AsWindow(object o) => o as Window;
+
+            public Window.Frame? FrameOf(Window.Frame? frame) => frame;
+        }
+        """;
+
+    [Test]
+    public async Task ExternalTypesFromReferencedPackage_InValuePositionsAreNotImported()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(AmbientLibrary, AmbientConsumer);
+
+        var output = result["probe.ts"];
+        await Assert.That(output).Contains("Window.current");
+        await Assert.That(output).DoesNotContain("dom-lib");
+    }
+
+    [Test]
+    public async Task ExternalTypesFromReferencedPackage_AddNoPackageDependency()
+    {
+        var library = TranspileHelper.CompileLibrary(AmbientLibrary);
+        var consumer = TranspileHelper.CompileConsumer(AmbientConsumer, library);
+
+        var transformer = TranspileHelper.NewTransformer(consumer);
+        transformer.TransformAll();
+
+        await Assert.That(transformer.CrossPackageDependencies.ContainsKey("dom-lib")).IsFalse();
+    }
 }
