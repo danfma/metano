@@ -165,16 +165,26 @@ public static class IrRuntimeRequirementScanner
                 ScanMethod(m, acc);
                 break;
             case IrEventDeclaration e:
-                // C# event accessors lower to two helper-call shapes via the
-                // backend (delegateAdd / delegateRemove). The scanner records
-                // the dependency so backends drop their walk-the-AST heuristic.
-                acc.Add(new IrRuntimeRequirement("delegateAdd", IrRuntimeCategory.EventHandling));
-                acc.Add(
-                    new IrRuntimeRequirement("delegateRemove", IrRuntimeCategory.EventHandling)
-                );
-                ScanTypeRef(e.HandlerType, acc);
+                ScanEvent(e, acc);
                 break;
         }
+    }
+
+    /// <summary>
+    /// C# event accessors lower to two helper-call shapes via the backend
+    /// (delegateAdd / delegateRemove). The scanner records the dependency so
+    /// backends drop their walk-the-AST heuristic. An event that re-publishes an
+    /// inherited one reaches the inherited accessors instead.
+    /// </summary>
+    private static void ScanEvent(IrEventDeclaration evt, HashSet<IrRuntimeRequirement> acc)
+    {
+        if (!evt.RepublishesInherited)
+        {
+            acc.Add(new IrRuntimeRequirement("delegateAdd", IrRuntimeCategory.EventHandling));
+            acc.Add(new IrRuntimeRequirement("delegateRemove", IrRuntimeCategory.EventHandling));
+        }
+
+        ScanTypeRef(evt.HandlerType, acc);
     }
 
     private static void ScanMethod(IrMethodDeclaration method, HashSet<IrRuntimeRequirement> acc)

@@ -25,7 +25,7 @@ public static class TsConstructorSelectorShapes
         && !SymbolHelper.HasPlainObject(type)
         && !SymbolHelper.IsPrimitiveBackedBranded(type)
         && !SymbolHelper.HasJsTuple(type)
-        && !SymbolHelper.HasExternal(type)
+        && !type.IsAmbient()
         && !SymbolHelper.HasImport(type)
         && !SymbolHelper.IsJsxRenderable(type);
 

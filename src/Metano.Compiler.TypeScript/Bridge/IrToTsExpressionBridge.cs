@@ -1671,9 +1671,10 @@ public static partial class IrToTsExpressionBridge
         if (
             p.Type is IrNamedTypeRef named
             && named.Semantics is { } sem
-            && (sem.IsIgnored || sem.IsExternal || sem.RendersAsJsxElement)
+            && (sem.IsIgnored || sem.IsAmbient || sem.RendersAsJsxElement)
         )
             return null;
+
         return IrToTsTypeMapper.MapParameterType(p, context.TypeOverrides);
     }
 
@@ -2031,7 +2032,10 @@ public static partial class IrToTsExpressionBridge
                 ExprTreeUInt64TypeName,
                 null
             ),
-            IrNamedTypeRef named => new(named.Name, named.Origin?.PackageId),
+            IrNamedTypeRef named => new(
+                named.Name,
+                IrToTsTypeMapper.ImportableOrigin(named)?.PackageId
+            ),
             _ => new(Printer.RenderType(IrToTsTypeMapper.Map(type)), null),
         };
 
@@ -2683,7 +2687,7 @@ public static partial class IrToTsExpressionBridge
                         {
                             IsValueType: true,
                             IsTranspilable: true,
-                            IsExternal: false,
+                            IsAmbient: false,
                             IsIgnored: false,
                             IsPlainObject: false,
                             IsJsTuple: false,

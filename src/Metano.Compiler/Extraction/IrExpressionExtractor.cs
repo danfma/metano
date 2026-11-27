@@ -1872,7 +1872,8 @@ public sealed partial class IrExpressionExtractor
             QualifiedNestedName(type) ?? EmittedTopLevelName(type, type.Name),
             CrossAssemblyOriginOf(type),
             IrTypeRefMapper.PrivateNestedSegmentCount(type),
-            IrTypeRefMapper.NamespaceOf(type)
+            IrTypeRefMapper.NamespaceOf(type),
+            type.IsAmbient()
         );
 
     /// <summary>
@@ -1889,7 +1890,8 @@ public sealed partial class IrExpressionExtractor
             QualifiedNestedName(type) ?? EmittedTopLevelName(type, spelling),
             CrossAssemblyOriginOf(type),
             IrTypeRefMapper.PrivateNestedSegmentCount(type),
-            IrTypeRefMapper.NamespaceOf(type)
+            IrTypeRefMapper.NamespaceOf(type),
+            type.IsAmbient()
         );
     }
 

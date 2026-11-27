@@ -42,6 +42,9 @@ internal static partial class IrToTsClassBridge
         var name = IrToTsNamingPolicy.ToDeclaredDataMemberName(prop.Name, prop.Attributes);
         var (accessibility, jsdoc) = IrToTsVisibilityMapper.Map(prop.Visibility);
 
+        if (prop.Semantics is { Republishes: not IrRepublishedProperty.None } republished)
+            return BuildRepublishedProperty(prop, republished.Republishes, name, tsType);
+
         if (prop.Semantics?.IsAbstract == true)
             return [BuildAbstractProperty(prop, name, tsType)];
 
@@ -363,6 +366,9 @@ internal static partial class IrToTsClassBridge
         var nullableDelegateType = new TsUnionType([delegateType, new TsNamedType("null")]);
         var eventVisibility = IrToTsVisibilityMapper.Map(evt.Visibility);
         var handlerParam = new TsParameter("handler", delegateType);
+
+        if (evt.RepublishesInherited)
+            return BuildRepublishedEvent(name, handlerParam, eventVisibility);
 
         return
         [

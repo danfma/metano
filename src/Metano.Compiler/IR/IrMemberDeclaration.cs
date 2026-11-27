@@ -189,4 +189,13 @@ public sealed record IrEventDeclaration(
     IrVisibility Visibility,
     bool IsStatic,
     IrTypeRef HandlerType
-) : IrMemberDeclaration(Name, Visibility, IsStatic);
+) : IrMemberDeclaration(Name, Visibility, IsStatic)
+{
+    /// <summary>
+    /// The event only re-publishes a less accessible event of the same name that the
+    /// type inherits (a pure explicit forwarder of a public interface event, #822): it
+    /// declares no storage of its own, and adding or removing a handler goes to the
+    /// inherited event.
+    /// </summary>
+    public bool RepublishesInherited { get; init; }
+}

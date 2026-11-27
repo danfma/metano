@@ -57,7 +57,7 @@ public static class OverloadEmittedName
     /// </summary>
     public static bool PinsOverloadSuffixes(INamedTypeSymbol type, OverloadGroupingPolicy policy) =>
         IrTypeRefMapper.IsTranspilableType(type, policy.Target)
-        && !type.HasExternal()
+        && !type.IsAmbient()
         && !type.HasJsCallable()
         && !type.HasPlainObject();
 }

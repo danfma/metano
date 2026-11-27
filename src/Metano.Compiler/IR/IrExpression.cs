@@ -105,12 +105,17 @@ public sealed record IrIdentifier(string Name) : IrExpression;
 /// same-named types apart (a <c>using</c> alias names one of them, #754). Null for
 /// a type of the global namespace and for synthesized references.
 /// </para>
+/// <para>
+/// <see cref="IsAmbient"/>: the type, or a type that contains it, is <c>[External]</c>:
+/// provided by the host and never emitted, so a backend imports nothing for it.
+/// </para>
 /// </summary>
 public sealed record IrTypeReference(
     string Name,
     IrTypeOrigin? Origin = null,
     int PrivateNestedSegments = 0,
-    string? Namespace = null
+    string? Namespace = null,
+    bool IsAmbient = false
 ) : IrExpression;
 
 /// <summary>

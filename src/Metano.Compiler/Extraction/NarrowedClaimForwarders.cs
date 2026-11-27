@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
@@ -6,48 +7,61 @@ using Microsoft.CodeAnalysis;
 namespace Metano.Compiler.Extraction;
 
 /// <summary>
-/// An explicit implementation of a public interface method that only forwards to a
+/// An explicit implementation of a public interface member that only forwards to a
 /// less accessible member inherited from a base class
 /// (<c>void IDisposable.Dispose() =&gt; Dispose();</c> beside an <c>internal</c>
-/// <c>Dispose</c> of the base class). Dropping it would force the claiming member
-/// public, and with it the public API of every other subclass of its base (#821). The
-/// implementing class declares its own public member under the interface member's name
-/// instead, which calls the claiming member through <c>base</c>, and the claiming member
-/// keeps its own visibility.
+/// <c>Dispose</c> of the base class, <c>bool IChangeTracking.IsChanged =&gt; IsChanged;</c>
+/// beside an <c>internal</c> property). Dropping it would force the claiming member
+/// public, and with it the public API of every other subclass of its base (#821, #822).
+/// The implementing class declares its own public member under the interface member's
+/// name instead, which reaches the claiming member through <c>base</c>, and the claiming
+/// member keeps its own visibility. A method forwarder calls it
+/// (<see cref="CallThroughBase"/>); a property or event forwarder re-publishes it
+/// (<see cref="RepublishInherited"/>, <see cref="RepublishesInherited"/>).
 /// <para>
-/// The 4.0.0 path (the claiming member public, the forwarder dropped) stays for every
-/// other shape: a claiming member declared on the implementing class itself (it cannot
-/// coexist with a second member of the same name), one that is already public (FR-111),
-/// an abstract one (<c>super.m()</c> of an abstract method is TS2513), one that belongs
-/// to an overload group (the forwarder would join the group and its dispatcher), a
-/// forwarder whose return type is not the claiming member's
-/// (<c>object ICloneable.Clone() =&gt; Clone();</c> over <c>internal Node Clone()</c>), and
-/// a target that hides no internal member
-/// (<see cref="OverloadGroupingPolicy.HidesInternalMembers"/>, Dart).
+/// The 4.0.0 path (the claiming member public, the forwarder dropped) stays for a
+/// claiming member declared on the implementing class itself (it cannot coexist with a
+/// second member of the same name), one that is already public (FR-111), and a target
+/// that hides no internal member (<see cref="OverloadGroupingPolicy.HidesInternalMembers"/>,
+/// Dart). Any other shape the class cannot publish keeps it too, with a warning
+/// (<see cref="ReportUnpublished"/>).
 /// </para>
 /// </summary>
-internal static class NarrowedClaimForwarders
+/// <remarks>
+/// Public only for <see cref="ReproducesForwarder"/>, which a target's own diagnostics
+/// read from symbols: a host-extension seam, not an application API.
+/// </remarks>
+[EditorBrowsable(EditorBrowsableState.Never)]
+public static partial class NarrowedClaimForwarders
 {
+    /// <summary>
+    /// Whether the target reproduces what the explicit implementation
+    /// <paramref name="member"/> does: it declares it as a member of the implementing
+    /// class, or drops it as a pure forwarder, so every call through the interface still
+    /// reaches the member that claims its name.
+    /// </summary>
+    public static bool ReproducesForwarder(ISymbol member, OverloadGroupingPolicy policy) =>
+        IsPublishedAsOwnMember(member, policy) || IsDroppedPureForwarder(member, policy);
+
+    /// <summary>
+    /// Whether the target declares the explicit implementation <paramref name="member"/>
+    /// as a member of the implementing class.
+    /// </summary>
+    internal static bool IsPublishedAsOwnMember(ISymbol member, OverloadGroupingPolicy policy) =>
+        ExplicitImplementationLowering.Resolve(member, policy.Target) is { } lowering
+        && IsPublishedAsOwnMember(lowering, policy);
+
     /// <summary>
     /// Whether the target declares the forwarder of <paramref name="lowering"/> as a
     /// member of the implementing class.
     /// </summary>
-    public static bool IsPublishedAsOwnMember(
+    internal static bool IsPublishedAsOwnMember(
         ExplicitImplementation lowering,
         OverloadGroupingPolicy policy
     ) =>
         policy.HidesInternalMembers
-        && lowering
-            is {
-                Fate: ExplicitImplementationFate.Superseded,
-                Member: IMethodSymbol { ContainingType: var owner } member,
-                ClaimingMember: IMethodSymbol claiming
-            }
-        && IsNarrowerThanInterface(lowering.InterfaceMember, claiming)
-        && IsInheritedClaimer(claiming, owner)
-        && IsCallableThroughBase(claiming, owner)
-        && SymbolEqualityComparer.Default.Equals(member.ReturnType, claiming.ReturnType)
-        && ForwardingImplementations.IsPureForwarder(member, claiming);
+        && NarrowedClaimOf(lowering) is { } claim
+        && ObstacleOf(claim, policy) is null;
 
     /// <summary>
     /// <paramref name="declaration"/> of a published forwarder with its call rebound
@@ -57,17 +71,13 @@ internal static class NarrowedClaimForwarders
     /// extraction (no compilation) has no body to rebind, and any other declaration is
     /// returned unchanged.
     /// </summary>
-    public static IrMethodDeclaration CallThroughBase(
+    internal static IrMethodDeclaration CallThroughBase(
         IrMethodDeclaration declaration,
         IMethodSymbol method,
         IrExtractionContext context
     )
     {
-        if (
-            context.Compilation is null
-            || ExplicitImplementationLowering.Resolve(method, context.Target) is not { } lowering
-            || !IsPublishedAsOwnMember(lowering, context.GroupingPolicy)
-        )
+        if (context.Compilation is null || !IsPublishedAsOwnMember(method, context.GroupingPolicy))
             return declaration;
 
         if (declaration.Body is [var statement] && TryRebind(statement) is { } rebound)
@@ -78,26 +88,94 @@ internal static class NarrowedClaimForwarders
         return declaration;
     }
 
-    private static bool IsNarrowerThanInterface(ISymbol interfaceMember, IMethodSymbol claiming) =>
+    /// <summary>
+    /// An explicit implementation the target drops whose body only forwards to the member
+    /// that claims its name, so calls through the interface still reach that member.
+    /// </summary>
+    private static bool IsDroppedPureForwarder(ISymbol member, OverloadGroupingPolicy policy) =>
+        ExplicitImplementationFates.IsDropped(member, policy)
+        && ExplicitImplementationLowering.Resolve(member, policy.Target)
+            is { ClaimingMember: { } claiming }
+        && ForwardingImplementations.IsPureForwarder(member, claiming);
+
+    /// <summary>
+    /// A superseded explicit implementation of a public interface member whose claiming
+    /// member, of the same kind, is less accessible and inherited from a base class.
+    /// An indexer claims nothing here: no target emits one.
+    /// </summary>
+    private static NarrowedClaim? NarrowedClaimOf(ExplicitImplementation lowering) =>
+        lowering
+            is {
+                Fate: ExplicitImplementationFate.Superseded,
+                Member: { ContainingType: var owner } member,
+                ClaimingMember: { } claiming
+            }
+        && member.Kind == claiming.Kind
+        && member is not IPropertySymbol { IsIndexer: true }
+        && claiming is not IPropertySymbol { IsIndexer: true }
+        && IsNarrowerThanInterface(lowering.InterfaceMember, claiming)
+        && IsInheritedClaimer(claiming, owner)
+            ? new NarrowedClaim(member, claiming, owner)
+            : null;
+
+    private static bool IsNarrowerThanInterface(ISymbol interfaceMember, ISymbol claiming) =>
         SymbolHelper.IsEffectivelyPublic(interfaceMember.ContainingType)
         && claiming.DeclaredAccessibility
             is Accessibility.Internal
                 or Accessibility.ProtectedAndInternal;
 
-    private static bool IsInheritedClaimer(IMethodSymbol claiming, INamedTypeSymbol owner) =>
+    private static bool IsInheritedClaimer(ISymbol claiming, INamedTypeSymbol owner) =>
         !SymbolEqualityComparer.Default.Equals(
             claiming.ContainingType.OriginalDefinition,
             owner.OriginalDefinition
         );
 
     /// <summary>
-    /// A concrete claiming member with no overload beside it: <c>super.m()</c> of an
-    /// abstract member does not compile, and an overload makes the forwarder join a
-    /// dispatched group.
+    /// Why the implementing class cannot publish <paramref name="claim"/>, or <c>null</c>
+    /// when it can.
     /// </summary>
-    private static bool IsCallableThroughBase(IMethodSymbol claiming, INamedTypeSymbol owner) =>
-        !claiming.IsAbstract && !HasOverloadBeside(claiming, owner);
+    private static string? ObstacleOf(NarrowedClaim claim, OverloadGroupingPolicy policy) =>
+        claim switch
+        {
+            { Claiming.IsAbstract: true } =>
+                "the base member it forwards to is abstract, and the target cannot publish a "
+                    + "member that reaches an abstract one",
+            { Claiming.IsStatic: true } => "it is static",
+            _ when !HasClaimersType(claim) => TypeMismatchOf(claim),
+            { Claiming: IMethodSymbol method } when HasOverloadBeside(method, claim.Owner) =>
+                "the base member it forwards to has overloads, whose dispatched group the "
+                    + "forwarder would join",
+            { Member: IPropertySymbol { GetMethod: null } } => "it has no getter",
+            { Claiming: IPropertySymbol property } when HasUnpublishableSetter(property, policy) =>
+                "the base property it forwards to has accessors and an 'init' or private "
+                    + "setter, which the target cannot publish",
+            _ when !ForwardingImplementations.IsPureForwarder(claim.Member, claim.Claiming) =>
+                "its body does more than forward to the base member",
+            _ => null,
+        };
 
+    private static bool HasClaimersType(NarrowedClaim claim) =>
+        SymbolEqualityComparer.Default.Equals(TypeOf(claim.Member), TypeOf(claim.Claiming));
+
+    private static string TypeMismatchOf(NarrowedClaim claim) =>
+        claim.Member is IMethodSymbol { IsGenericMethod: true }
+            ? "it is a generic method, whose return type is not the one of the method it "
+                + "forwards to"
+            : "its type is not the type of the member it forwards to";
+
+    private static ITypeSymbol? TypeOf(ISymbol member) =>
+        member switch
+        {
+            IMethodSymbol method => method.ReturnType,
+            IPropertySymbol property => property.Type,
+            IEventSymbol evt => evt.Type,
+            _ => null,
+        };
+
+    /// <summary>
+    /// An overload beside the claiming method makes the forwarder join a dispatched
+    /// group.
+    /// </summary>
     private static bool HasOverloadBeside(IMethodSymbol claiming, INamedTypeSymbol owner)
     {
         for (var type = owner; type is not null; type = type.BaseType)
@@ -147,4 +225,9 @@ internal static class NarrowedClaimForwarders
                 method.Locations.FirstOrDefault()
             )
         );
+
+    /// <summary>
+    /// An explicit implementation and the less accessible inherited member it leans on.
+    /// </summary>
+    private sealed record NarrowedClaim(ISymbol Member, ISymbol Claiming, INamedTypeSymbol Owner);
 }

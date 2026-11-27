@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -12,6 +14,143 @@ namespace Metano.Tests;
 /// </summary>
 public class ExternalAmbientTranspileTests
 {
+    private const string DomLibrary = """
+        using Metano.Annotations;
+        using Metano.Annotations.TypeScript;
+
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("dom-lib")]
+
+        namespace DomLib.Dom;
+
+        [External]
+        public interface HTMLElement
+        {
+            string Id { get; }
+        }
+        """;
+
+    private const string AmbientLibrary = """
+        using Metano.Annotations;
+        using Metano.Annotations.TypeScript;
+
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("dom-lib")]
+
+        namespace DomLib.Dom;
+
+        [External]
+        public abstract class Window
+        {
+            public static Window Current { get; } = null!;
+
+            public class Frame
+            {
+                public int Index { get; set; }
+            }
+
+            public enum NKind
+            {
+                A,
+                B,
+            }
+
+            public record NRec(int X)
+            {
+                public int Default => 0;
+            }
+
+            public struct Sx
+            {
+                public int V;
+            }
+
+            [StringEnum]
+            public enum Kind
+            {
+                X,
+                Y,
+            }
+
+            public interface IListener
+            {
+                void Handle();
+            }
+        }
+
+        [External]
+        public struct ExtSx
+        {
+            public int V;
+        }
+
+        [External]
+        public abstract class EventTarget
+        {
+            public string Name { get; set; } = "";
+        }
+
+        [External]
+        public interface IDisposableNode
+        {
+            string Id { get; }
+        }
+        """;
+
+    private const string NestedConsumer = """
+        using System;
+        using DomLib.Dom;
+
+        [Transpile]
+        public class Nested
+        {
+            public Type FrameType() => typeof(Window.Frame);
+
+            public Type KindType() => typeof(Window.NKind);
+
+            public bool Same(Window.NRec a, Window.NRec b) => a == b;
+
+            public int DefaultOf(Window.NRec r) => r.Default;
+
+            public Window.Sx Zero() => default;
+
+            public ExtSx ZeroExt() => default;
+        }
+        """;
+
+    private const string AmbientConsumer = """
+        using System;
+        using DomLib.Dom;
+
+        [Transpile]
+        public class Probe : EventTarget, IDisposableNode
+        {
+            public string Id => Name;
+
+            public Window Current() => Window.Current;
+
+            public Type WindowType() => typeof(Window);
+
+            public bool IsWindow(object o) => o is Window;
+
+            public Window? AsWindow(object o) => o as Window;
+
+            public Window.Frame? FrameOf(Window.Frame? frame) => frame;
+
+            public Window.Kind? KindOf(Window.Kind? kind) => kind;
+
+            public Window.Kind Why() => Window.Kind.Y;
+
+            public bool IsKind(object o) => o is Window.Kind;
+
+            public bool IsListener(object o) => o is Window.IListener;
+
+            public int Measure(Func<Window.Frame, int> measure) => measure(new Window.Frame());
+
+            public int Use() => Measure(f => f.Index);
+        }
+        """;
+
     [Test]
     public async Task ExternalType_DoesNotProduceFile()
     {
@@ -208,5 +347,182 @@ public class ExternalAmbientTranspileTests
         var output = result["renderer.ts"];
         await Assert.That(output).Contains("HTMLElement");
         await Assert.That(output).DoesNotContain("HtmlElement");
+    }
+
+    [Test]
+    public async Task ExternalTypeFromReferencedPackage_IsNotImported()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(
+            DomLibrary,
+            """
+            using System.Collections.Generic;
+            using DomLib.Dom;
+
+            [Transpile]
+            public class Renderer
+            {
+                public HTMLElement? Target { get; set; }
+
+                private HTMLElement? _cached;
+
+                public List<HTMLElement> Children { get; } = new();
+
+                public string Describe(HTMLElement element)
+                {
+                    HTMLElement local = element;
+                    _cached = local;
+                    return local.Id;
+                }
+            }
+            """
+        );
+
+        var output = result["renderer.ts"];
+        await Assert.That(output).Contains("HTMLElement");
+        await Assert.That(output).DoesNotContain("dom-lib");
+    }
+
+    [Test]
+    public async Task NonExternalTypeFromReferencedPackage_StillImported()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("dom-lib")]
+
+            namespace DomLib.Dom;
+
+            public record Point(int X, int Y);
+            """,
+            """
+            using DomLib.Dom;
+
+            [Transpile]
+            public class Renderer
+            {
+                public Point? Target { get; set; }
+            }
+            """
+        );
+
+        await Assert.That(result["renderer.ts"]).Contains("import");
+        await Assert.That(result["renderer.ts"]).Contains("dom-lib");
+    }
+
+    [Test]
+    public async Task ExternalTypesFromReferencedPackage_InValuePositionsAreNotImported()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(AmbientLibrary, AmbientConsumer);
+
+        var output = result["probe.ts"];
+        await Assert.That(output).Contains("Window.current");
+        await Assert.That(output).Contains("Window.Kind.Y");
+        await Assert.That(output).Contains("return this.measure((f) => f.index);");
+        await Assert.That(output).DoesNotContain("dom-lib");
+    }
+
+    [Test]
+    public async Task ExternalTypesFromReferencedPackage_AddNoPackageDependency()
+    {
+        var library = TranspileHelper.CompileLibrary(AmbientLibrary);
+        var consumer = TranspileHelper.CompileConsumer(AmbientConsumer, library);
+
+        var transformer = TranspileHelper.NewTransformer(consumer);
+        transformer.TransformAll();
+
+        await Assert.That(transformer.CrossPackageDependencies.ContainsKey("dom-lib")).IsFalse();
+    }
+
+    [Test]
+    public async Task IsOverInterfaceNestedInReferencedExternal_ReportsUnsupported()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            AmbientLibrary,
+            """
+            using DomLib.Dom;
+
+            [Transpile]
+            public class Listening
+            {
+                public bool IsListener(object o) => o is Window.IListener;
+            }
+            """
+        );
+
+        await Assert.That(files["listening.ts"]).Contains("Unsupported expression: IsExpression");
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task TypeOfTypeNestedInReferencedExternal_ReportsNoDescriptor()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            AmbientLibrary,
+            NestedConsumer
+        );
+
+        var messages = diagnostics
+            .Where(d => d.Code == DiagnosticCodes.UnsupportedFeature)
+            .Select(d => d.Message)
+            .ToList();
+
+        var reportsFrame = messages.Any(m => m.Contains("typeof(DomLib.Dom.Window.Frame)"));
+        var reportsKind = messages.Any(m => m.Contains("typeof(DomLib.Dom.Window.NKind)"));
+
+        await Assert.That(reportsFrame).IsTrue();
+        await Assert.That(reportsKind).IsTrue();
+        await Assert.That(files["nested.ts"]).Contains("Unsupported expression: TypeOfExpression");
+    }
+
+    [Test]
+    public async Task TypesNestedInReferencedExternal_FollowTheHostTypePolicy()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(AmbientLibrary, NestedConsumer);
+
+        var output = result["nested.ts"];
+        await Assert.That(output).Contains("return a === b;");
+        await Assert.That(output).Contains("return r.default;");
+        await Assert.That(output).DoesNotContain("new Window.Sx()");
+    }
+
+    [Test]
+    public async Task TypeNestedInLocalExternal_HasNoSelectorsOrFactories()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            using Metano.Annotations.TypeScript;
+
+            [assembly: TranspileAssembly]
+
+            [External]
+            public abstract class Outer
+            {
+                public class Inner
+                {
+                    public Inner() {}
+                    public Inner(int x) {}
+                }
+            }
+
+            public class Derived : Outer.Inner
+            {
+                public Derived() : base(1) {}
+            }
+
+            public class User
+            {
+                public Outer.Inner Make() => new Outer.Inner(1);
+            }
+            """
+        );
+
+        await Assert.That(result["derived.ts"]).Contains("super(1);");
+        await Assert.That(result["user.ts"]).Contains("return new Outer.Inner(1);");
     }
 }

@@ -956,8 +956,7 @@ internal sealed partial class RuntimeTypeReachability
             return type.TypeKind switch
             {
                 TypeKind.Enum => DescriptorKind.Enum,
-                TypeKind.Interface
-                    when !SymbolHelper.HasJsCallable(type) && !SymbolHelper.HasExternal(type) =>
+                TypeKind.Interface when !SymbolHelper.HasJsCallable(type) =>
                     DescriptorKind.Interface,
                 TypeKind.Class or TypeKind.Struct when IsEmittedAsClass(type) =>
                     DescriptorKind.Class,
@@ -969,6 +968,7 @@ internal sealed partial class RuntimeTypeReachability
 
         private static bool HasNoEmittedDeclaration(INamedTypeSymbol type) =>
             SymbolHelper.HasImport(type)
+            || type.IsAmbient()
             || SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript)
             || SymbolHelper.HasAttribute(type, "NoEmit");
 
@@ -987,7 +987,6 @@ internal sealed partial class RuntimeTypeReachability
             && !SymbolHelper.HasPlainObject(type)
             && !SymbolHelper.HasJsTuple(type)
             && !SymbolHelper.IsPrimitiveBackedBranded(type)
-            && !SymbolHelper.HasExternal(type)
             && !SymbolHelper.IsJsxComponent(type);
     }
 }

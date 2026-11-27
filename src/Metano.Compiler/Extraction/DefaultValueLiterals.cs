@@ -129,7 +129,8 @@ internal static class DefaultValueLiterals
                 named.Name,
                 named.Origin,
                 named.PrivateNestedSegments,
-                named.Namespace
+                named.Namespace,
+                named.Semantics?.IsAmbient ?? false
             )
             : new IrTypeReference(type.Name);
 

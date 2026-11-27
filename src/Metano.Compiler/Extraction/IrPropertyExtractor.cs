@@ -102,7 +102,7 @@ public static class IrPropertyExtractor
         };
     }
 
-    private static IrPropertyAccessors ResolveAccessors(IPropertySymbol prop)
+    internal static IrPropertyAccessors ResolveAccessors(IPropertySymbol prop)
     {
         if (prop.SetMethod is null)
             return IrPropertyAccessors.GetOnly;

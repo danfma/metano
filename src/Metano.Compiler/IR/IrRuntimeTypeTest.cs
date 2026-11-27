@@ -207,7 +207,7 @@ public abstract record IrRuntimeTypeTest
     /// </summary>
     private static IrRuntimeTypeTest OfInterface(IrNamedTypeSemantics semantics) =>
         semantics
-            is { IsTranspilable: true, IsExternal: false, IsIgnored: false }
+            is { IsTranspilable: true, IsAmbient: false, IsIgnored: false }
                 or { IsRuntimeDeclared: true }
             ? new NominalInterface()
             : new None();

@@ -14,7 +14,7 @@ public static partial class IrToTsExpressionBridge
                 {
                     IsTranspilable: true,
                     IsIgnored: false,
-                    IsExternal: false,
+                    IsAmbient: false,
                     IsPlainObject: false,
                     IsJsTuple: false,
                     Kind: IrNamedTypeKind.Class

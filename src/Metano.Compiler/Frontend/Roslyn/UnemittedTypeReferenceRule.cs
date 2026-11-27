@@ -86,7 +86,7 @@ internal sealed class UnemittedTypeReferenceRule(
             type is { IsImplicitlyDeclared: false, IsAnonymousType: false }
             && !string.IsNullOrEmpty(type.Name)
             && !SymbolHelper.HasIgnore(type, _target)
-            && !SymbolHelper.HasExternal(type)
+            && !type.IsAmbient()
             && !SymbolHelper.HasJsCallable(type);
 
         if (!isUserType)
