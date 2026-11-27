@@ -41,11 +41,7 @@ public static partial class NarrowedClaimForwarders
     /// reaches the member that claims its name.
     /// </summary>
     public static bool ReproducesForwarder(ISymbol member, OverloadGroupingPolicy policy) =>
-        IsPublishedAsOwnMember(member, policy)
-        || ExplicitImplementationFates.IsDropped(member, policy)
-            && ExplicitImplementationLowering.Resolve(member, policy.Target)
-                is { ClaimingMember: { } claiming }
-            && ForwardingImplementations.IsPureForwarder(member, claiming);
+        IsPublishedAsOwnMember(member, policy) || IsDroppedPureForwarder(member, policy);
 
     /// <summary>
     /// Whether the target declares the explicit implementation <paramref name="member"/>
@@ -91,6 +87,16 @@ public static partial class NarrowedClaimForwarders
 
         return declaration;
     }
+
+    /// <summary>
+    /// An explicit implementation the target drops whose body only forwards to the member
+    /// that claims its name, so calls through the interface still reach that member.
+    /// </summary>
+    private static bool IsDroppedPureForwarder(ISymbol member, OverloadGroupingPolicy policy) =>
+        ExplicitImplementationFates.IsDropped(member, policy)
+        && ExplicitImplementationLowering.Resolve(member, policy.Target)
+            is { ClaimingMember: { } claiming }
+        && ForwardingImplementations.IsPureForwarder(member, claiming);
 
     /// <summary>
     /// A superseded explicit implementation of a public interface member whose claiming
