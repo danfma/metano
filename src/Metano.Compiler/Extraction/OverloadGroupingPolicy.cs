@@ -102,6 +102,14 @@ public sealed record OverloadGroupingPolicy(
     /// that other types inherit (#821). <c>false</c>, the default and the answer for a
     /// <c>null</c> target, for a target that ignores the accessibility of members
     /// (Dart): its output keeps the widened member and the dropped forwarder.
+    /// <para>
+    /// <c>true</c> also means the target publishes such a forwarder on the implementing
+    /// class (<see cref="NarrowedClaimForwarders"/>, #822), so it accepts that class's
+    /// restrictions: the base member is reached through the base (not when it is
+    /// abstract, static or overloaded, or a property whose accessors have an
+    /// <c>init</c> or private setter), and any other shape keeps the widened member with
+    /// an MS0001 warning.
+    /// </para>
     /// </summary>
     public bool HidesInternalMembers { get; init; }
 

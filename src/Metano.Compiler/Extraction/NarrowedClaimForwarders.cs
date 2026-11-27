@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Frontend.Roslyn;
 using Metano.Compiler.IR;
@@ -26,13 +27,31 @@ namespace Metano.Compiler.Extraction;
 /// (<see cref="ReportUnpublished"/>).
 /// </para>
 /// </summary>
+/// <remarks>
+/// Public only for <see cref="ReproducesForwarder"/>, which a target's own diagnostics
+/// read from symbols: a host-extension seam, not an application API.
+/// </remarks>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public static partial class NarrowedClaimForwarders
 {
+    /// <summary>
+    /// Whether the target reproduces what the explicit implementation
+    /// <paramref name="member"/> does: it declares it as a member of the implementing
+    /// class, or drops it as a pure forwarder, so every call through the interface still
+    /// reaches the member that claims its name.
+    /// </summary>
+    public static bool ReproducesForwarder(ISymbol member, OverloadGroupingPolicy policy) =>
+        IsPublishedAsOwnMember(member, policy)
+        || ExplicitImplementationFates.IsDropped(member, policy)
+            && ExplicitImplementationLowering.Resolve(member, policy.Target)
+                is { ClaimingMember: { } claiming }
+            && ForwardingImplementations.IsPureForwarder(member, claiming);
+
     /// <summary>
     /// Whether the target declares the explicit implementation <paramref name="member"/>
     /// as a member of the implementing class.
     /// </summary>
-    public static bool IsPublishedAsOwnMember(ISymbol member, OverloadGroupingPolicy policy) =>
+    internal static bool IsPublishedAsOwnMember(ISymbol member, OverloadGroupingPolicy policy) =>
         ExplicitImplementationLowering.Resolve(member, policy.Target) is { } lowering
         && IsPublishedAsOwnMember(lowering, policy);
 
@@ -113,19 +132,19 @@ public static partial class NarrowedClaimForwarders
         claim switch
         {
             { Claiming.IsAbstract: true } =>
-                "the member it forwards to is abstract, and the generated class cannot reach "
-                    + "an abstract member through 'super'",
+                "the base member it forwards to is abstract, and the target cannot publish a "
+                    + "member that reaches an abstract one",
             { Claiming.IsStatic: true } => "it is static",
             _ when !HasClaimersType(claim) => TypeMismatchOf(claim),
             { Claiming: IMethodSymbol method } when HasOverloadBeside(method, claim.Owner) =>
-                "the member it forwards to has overloads, whose dispatched group the forwarder "
-                    + "would join",
+                "the base member it forwards to has overloads, whose dispatched group the "
+                    + "forwarder would join",
             { Member: IPropertySymbol { GetMethod: null } } => "it has no getter",
             { Claiming: IPropertySymbol property } when HasUnpublishableSetter(property, policy) =>
-                "the property it forwards to has accessors and an 'init' or private setter, "
-                    + "which the generated class cannot override",
+                "the base property it forwards to has accessors and an 'init' or private "
+                    + "setter, which the target cannot publish",
             _ when !ForwardingImplementations.IsPureForwarder(claim.Member, claim.Claiming) =>
-                "its body does more than forward to the member",
+                "its body does more than forward to the base member",
             _ => null,
         };
 

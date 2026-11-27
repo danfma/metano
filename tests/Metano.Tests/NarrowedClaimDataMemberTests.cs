@@ -545,7 +545,7 @@ public class NarrowedClaimDataMemberTests
     [Test]
     public async Task ForwardersOfDifferentInterfacesClaimingEachOther_WarnOnEach()
     {
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             [assembly: TranspileAssembly]
 
@@ -562,6 +562,69 @@ public class NarrowedClaimDataMemberTests
 
         await Assert.That(warnings.Count).IsEqualTo(2);
         await Assert.That(warnings).All(d => d.Message.Contains("claims the same name"));
+        await Assert.That(files["base.ts"]).Contains("/** @internal */\n  compareTo(");
+        await Assert.That(files["derived.ts"]).DoesNotContain("compareTo");
+    }
+
+    [Test]
+    public async Task EventForwarderOverAnAbstractClaimer_WarnsOnceWithoutTheCustomAccessorError()
+    {
+        // The dropped pure forwarder loses no body: subscriptions through the interface
+        // reach the claiming event, so only the unpublished warning is reported.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using System;
+            using System.ComponentModel;
+
+            [assembly: TranspileAssembly]
+
+            public abstract class Base
+            {
+                internal abstract event EventHandler? Initialized;
+                internal bool IsInitialized => true;
+                internal void BeginInit() { }
+                internal void EndInit() { }
+            }
+            public abstract class Initializer : Base, ISupportInitializeNotification
+            {
+                event EventHandler? ISupportInitializeNotification.Initialized
+                {
+                    add => Initialized += value;
+                    remove => Initialized -= value;
+                }
+                bool ISupportInitializeNotification.IsInitialized => IsInitialized;
+                void ISupportInitialize.BeginInit() => BeginInit();
+                void ISupportInitialize.EndInit() => EndInit();
+            }
+            """
+        );
+
+        await AssertSingleUnpublishedWarning(diagnostics, "Initialized", "is abstract");
+
+        await Assert
+            .That(diagnostics.Where(d => d.Severity == MetanoDiagnosticSeverity.Error))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task ImpureEventForwarder_KeepsTheCustomAccessorError()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryImageAndDiagnostics(
+            NoteLibrary,
+            """
+            [assembly: TranspileAssembly]
+
+            public abstract class Base { internal event System.Action Changed = () => { }; }
+            public sealed class Note : Base, INote
+            {
+                event System.Action INote.Changed { add { Changed += value; } remove { } }
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Where(d => d.Message.Contains("custom add/remove accessors")))
+            .HasSingleItem();
     }
 
     [Test]

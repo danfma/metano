@@ -7,14 +7,17 @@ namespace Metano.Compiler.TypeScript.Bridge;
 /// The members that re-publish a less accessible inherited member on the implementing
 /// class (#822): the inherited one keeps its <c>@internal</c> tag, so a sibling subclass
 /// gains no public member, and this class declares the member public without storage of
-/// its own.
+/// its own. It applies to explicit implementations of interfaces outside the transpiled
+/// contract (BCL or third-party metadata); one of a project or ProjectReference interface
+/// still reports MS0031.
 /// <list type="bullet">
 ///   <item>An inherited auto-property is a field the base constructor stores: a
 ///     <c>declare</c> field re-types it public and emits no code, so the base value
 ///     stays (a class field would reset it, and <c>super</c> cannot read a field). A field
-///     has no per-accessor visibility, so an inherited internal setter the interface does
-///     not publish stays writable on this class: the same public state the FR-111 path
-///     (the inherited member widened) published.</item>
+///     has no per-accessor visibility, so an inherited <c>internal</c> or
+///     <c>private protected</c> setter the interface does not publish stays writable on
+///     this class: the same public state the FR-111 path (the inherited member widened)
+///     published.</item>
 ///   <item>Inherited accessors are overridden by accessors that reach them through
 ///     <c>super</c>; a setter the interface does not publish keeps the inherited
 ///     visibility, as a JavaScript accessor declaration replaces the base's pair.</item>
@@ -41,6 +44,7 @@ internal static partial class IrToTsClassBridge
     )
     {
         var inherited = SuperMember(name);
+
         var members = new List<TsClassMember>
         {
             new TsGetterMember(name, tsType, [new TsReturnStatement(inherited)]),

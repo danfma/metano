@@ -2021,16 +2021,20 @@ Product requirements added after the migration (normative; each one is traced by
      explicit property or event forwarder (`bool IChangeTracking.IsChanged => IsChanged;`,
      `object? IStrongBox.Value { get => Value; set => Value = value; }`,
      `event Action INote.Changed { add => Changed += value; remove => Changed -= value; }`) to an
-     inherited `internal` or `private protected` member of the same type. The claiming member
+     inherited `internal` or `private protected` member of the same type, for interfaces outside
+     the transpiled contract (BCL or third-party metadata); an explicit implementation of a
+     project or ProjectReference interface still reports `MS0031`. The claiming member
      keeps its tag, and the implementing class re-publishes it public with no storage of its
      own: an inherited auto-property (one with no per-class storage) as a `declare` field
      (`declare value: Object | null;`), with the inherited mutability, except that a private
-     setter the interface does not publish makes it `readonly` (an internal one stays writable on
-     the implementing class, the public state the FR-111 path already published); inherited accessors as
+     setter the interface does not publish makes it `readonly` (an `internal` or `private protected`
+     one stays writable on the implementing class, the public state the FR-111 path already
+     published); inherited accessors as
      `override` accessors that go through `super`, a setter the interface does not publish
      keeping the inherited visibility (`/** @internal */ override set`); an event as `override`
      `name$add`/`name$remove` methods that call the inherited ones through `super` (the
-     custom add/remove accessor error of decision W9-13 does not apply). An indexer forwarder is not
+     custom add/remove accessor error of decision W9-13 does not apply, and it does not apply to a
+     dropped pure event forwarder either). An indexer forwarder is not
      covered: no indexer is emitted. Every other shape keeps the 4.0.0 path of item 2 (the
      claiming member public, the forwarder dropped) and now reports `MS0001` (warning) at the
      forwarder, naming the reason: an abstract or static claiming member; a forwarder whose

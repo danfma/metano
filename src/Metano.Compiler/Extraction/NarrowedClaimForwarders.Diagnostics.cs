@@ -74,16 +74,16 @@ public static partial class NarrowedClaimForwarders
 
     private static string WidenedMessage(NarrowedClaim claim, string obstacle) =>
         $"Explicit implementation '{claim.Member.ToDisplayString()}' cannot be published on "
-        + $"'{claim.Owner.Name}': {obstacle}. The inherited '{NameOf(claim.Claiming)}' it "
-        + "forwards to is emitted public instead, so every class derived from "
+        + $"'{claim.Owner.Name}': {obstacle}. The base member '{NameOf(claim.Claiming)}' it "
+        + "forwards to is made public instead, so every class derived from "
         + $"'{claim.Claiming.ContainingType.Name}' exposes it.";
 
     private static string MutualClaimMessage(MutualClaim mutual) =>
         $"Explicit implementation '{mutual.Member.ToDisplayString()}' cannot be published on "
         + $"'{mutual.Member.ContainingType.Name}': '{mutual.Other.ToDisplayString()}' claims "
         + "the same name, so neither is emitted, and the interface member is reached through "
-        + $"the inherited '{NameOf(mutual.Inherited)}', which stays internal (a declaration "
-        + "file built with 'stripInternal' omits it).";
+        + $"the base member '{NameOf(mutual.Inherited)}', which stays internal, so the "
+        + "target's public surface does not show it.";
 
     private static string NameOf(ISymbol member) => $"{member.ContainingType.Name}.{member.Name}";
 
