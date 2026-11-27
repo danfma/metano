@@ -5123,11 +5123,11 @@ public sealed partial class IrExpressionExtractor
         );
 
     /// <summary>
-    /// Marks the trailing argument as a spread when the C# call passes a
-    /// single value into a <c>params</c> slot (the value is the array
-    /// itself). Discrete element calls (<c>Foo("x", "a", 42)</c>) leave the
-    /// arguments untouched — they already line up with the rest parameter
-    /// at the TypeScript surface.
+    /// Marks the argument that passes the array itself to a <c>params</c> slot
+    /// (the normal form, <see cref="NormalFormParamsArgumentIndex"/>) as a spread,
+    /// wherever the call writes it. Discrete element calls
+    /// (<c>Foo("x", "a", 42)</c>) leave the arguments untouched — they already line
+    /// up with the rest parameter at the TypeScript surface.
     /// </summary>
     private void ApplyParamsSpread(
         List<IrArgument> args,
@@ -5147,22 +5147,71 @@ public sealed partial class IrExpressionExtractor
         )
             return;
 
-        if (syntaxArgs.Count != symbol.Parameters.Length)
+        if (NormalFormParamsArgumentIndex(syntaxArgs) is not { } index)
             return;
-        var lastSyntax = syntaxArgs[^1];
-        var lastType = _semantic.GetTypeInfo(lastSyntax.Expression).ConvertedType;
-        if (lastType is null)
-            return;
-        if (!SymbolEqualityComparer.Default.Equals(lastType, lastParam.Type))
-            return;
-        args[^1] = NormalizeNullParamsArray(
-            args[^1] with
-            {
-                IsSpread = true,
-            },
-            lastSyntax.Expression,
-            symbol
-        );
+
+        args[index] = AsSpreadParamsArray(args[index], syntaxArgs[index].Expression, symbol);
+    }
+
+    /// <summary>
+    /// The position, among the written arguments, of the one that passes the
+    /// array itself to a <c>params</c> parameter (<see cref="IsNormalFormParams"/>),
+    /// wherever the call writes it: last, named, or named among reordered named
+    /// arguments. <c>null</c> when the call passes the elements, nothing, or its
+    /// arguments are not bound to an invocation or a creation.
+    /// </summary>
+    private int? NormalFormParamsArgumentIndex(SeparatedSyntaxList<ArgumentSyntax> syntaxArgs)
+    {
+        if (
+            syntaxArgs.Count == 0
+            || syntaxArgs[0].Parent?.Parent is not { } call
+            || WrittenArgumentsOf(_semantic.GetOperation(call)) is not { } bound
+        )
+            return null;
+
+        // Roslyn binds `null!` to the literal inside the written argument.
+        var written = bound
+            .FirstOrDefault(IsNormalFormParams)
+            ?.Syntax.AncestorsAndSelf()
+            .OfType<ArgumentSyntax>()
+            .FirstOrDefault();
+
+        return written is not null && syntaxArgs.IndexOf(written) is >= 0 and var index
+            ? index
+            : null;
+    }
+
+    /// <summary>
+    /// The arguments of a <c>[PlainObject]</c> construction with its <c>params</c>
+    /// parameter as one array-valued argument, since the object literal holds one
+    /// property per parameter and no rest parameter: the array passed in normal form
+    /// as it is (a collection expression included), the elements of an expanded call
+    /// gathered into an array literal, an omitted <c>params</c> an empty one.
+    /// </summary>
+    private IReadOnlyList<IrArgument> WithParamsAsArray(
+        IMethodSymbol constructor,
+        IReadOnlyList<IrArgument> args
+    )
+    {
+        if (constructor.Parameters is not [.., { IsParams: true }])
+            return args;
+
+        var index = constructor.Parameters.Length - 1;
+
+        if (args.Count == constructor.Parameters.Length && args[index].IsSpread)
+            return [.. args.Take(index), args[index] with { IsSpread = false }];
+
+        var skippedDefaults = constructor
+            .Parameters.Skip(args.Count)
+            .Take(Math.Max(0, index - args.Count))
+            .Select(parameter => new IrArgument(BuildDefaultArgument(parameter)));
+
+        return
+        [
+            .. args.Take(index),
+            .. skippedDefaults,
+            new IrArgument(new IrArrayLiteral([.. args.Skip(index).Select(a => a.Value)])),
+        ];
     }
 
     private bool IsConstantNull(ExpressionSyntax syntax) =>
@@ -5350,6 +5399,7 @@ public sealed partial class IrExpressionExtractor
             typeSymbol is INamedTypeSymbol jsTupleNamed && SymbolHelper.HasJsTuple(jsTupleNamed);
         IReadOnlyList<string>? parameterNames = null;
         var ctor = _semantic.GetSymbolInfo(creationSyntax).Symbol as IMethodSymbol;
+
         if (isPlainObject && ctor is not null && ctor.Parameters.Length > 0)
             parameterNames = ctor.Parameters.Select(p => p.Name).ToList();
 
@@ -5379,6 +5429,9 @@ public sealed partial class IrExpressionExtractor
             args = chain.Arguments;
             parameterNames = chain.Target.Parameters.Select(p => p.Name).ToList();
         }
+
+        if (isPlainObject && (chain?.Target ?? ctor) is { } plainObjectConstructor)
+            args = WithParamsAsArray(plainObjectConstructor, args);
 
         var initializer = InitializerOf(creationSyntax);
 
