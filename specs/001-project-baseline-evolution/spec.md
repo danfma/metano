@@ -2045,6 +2045,63 @@ Product requirements added after the migration (normative; each one is traced by
      `internal`). Dart is unchanged. Tests: `tests/Metano.Tests/NarrowedClaimDataMemberTests.cs`;
      conformance `NarrowedClaimProbes` (Bun and Node).
   Tests: `tests/Metano.Tests/InternalRuntimeTypeTests.cs`; conformance `InternalRuntimeTypeProbes`.
+- **FR-113** (self-typed static members of a CRTP base, #832, decision W15-2, TypeScript;
+  amends spec 011 FR-024 and decision W5-5d):
+  1. A class `B<…, TSelf, …>` is *CRTP-shaped* when exactly one type parameter has `B`
+     constructed over its own type parameters among its constraint types
+     (`where TSelf : B<TSelf>`). That parameter is its *self parameter*.
+  2. A static **method** of a CRTP-shaped class is *self-typed* when (a) it could not carry a
+     hidden parameter (a public or protected member of a public class of an `[EmitPackage]`
+     library, W5-5d), (b) the only type parameter it needs at run time is the self parameter,
+     and (c) every such need is `new TSelf()` or a call that forwards `TSelf` to a self-typed
+     static of its class or of a CRTP base, outside a local function. It gets no hidden
+     parameter and reports no `MS0054` / `MS0019`; it declares the self parameter (beside the
+     class type parameters its signature names, closed over their constraints, the rule every
+     static of a generic class follows) and `this: new () => TSelf`, intersected with
+     `Omit<typeof B, "prototype">` when its body forwards; `new TSelf()` lowers to
+     `new this()` and a forwarding call to `this.m(…)`.
+     Members that carry `TSelf$type` today (internal ones, or anything in an app) keep that
+     lowering unchanged.
+  3. A call to a static method of a CRTP-shaped class with self argument `X` is emitted on
+     `X`'s class (`X.m(…)`), however the source spells it (`X.M()`, `B<X>.M()`, or a class
+     derived from `X`, which builds an `X` as .NET does), when the callee is self-typed or is
+     declared in a referenced package (its body is not visible, so the rule reads the signature
+     only). For a referenced callee, a call that would report `MS0054` under item 5 (an open
+     type parameter, a hiding static, a generic self class with reified slots) keeps its
+     receiver as written (`Component<T>.Name()` stays `Component.name()`), because the callee
+     may not be self-typed. When the class's self parameter has the `new()` constraint (only
+     then can the callee be self-typed) the call reports `MS0054` as a warning: if the callee
+     builds the self type from the receiving class, the call constructs the base class at run
+     time. On an abstract base strict TypeScript also rejects it (TS2684); on a concrete base
+     it type-checks and builds the base (conformance `CrtpStaticProbes.openSelfOnAConcreteBase`,
+     known gap). A base whose self parameter is not constructible stays silent. Follow-up: a
+     metadata marker on a library's self-typed statics would let a consumer decide exactly.
+     The class and method type arguments are passed explicitly when `X` is a constructed
+     generic type and the callee's signature names the self parameter
+     (`Card.make<Card<number>>()`), by the same rule the declaration's emission follows. The
+     call reaches no runtime descriptor.
+  4. An overload group with a self-typed member: every fast path keeps its own shape and the
+     group's overload signatures declare `this: new () => TSelf`; the dispatcher declares
+     `this: (new () => any) & Omit<typeof B, "prototype">` and forwards every branch through
+     `this`. A group that mixes static and instance overloads is split by side; a lone
+     self-typed static's forwarder declares `this` too.
+  5. Not supported (`MS0054`, error, at the call, for a self-typed static of the current
+     compilation): a self argument that is an open type
+     parameter other than the caller's own forwarded `TSelf` (so also a call from an instance
+     member of the base); `X`, or a class between `X` and `B`, declaring a static member that
+     takes the callee's emitted name (the `[Name]` value when present, else the C# name,
+     ignoring case); `X` generic with reified
+     class type arguments (construction from the receiving class passes none); a
+     method-group conversion of the callee. A static method of a derived class that takes a
+     self-typed static's emitted name (the same way) also reports `MS0054` at its
+     declaration; for a static of a referenced package's CRTP base whose self parameter is
+     constructible (item 3) it reports `MS0054` as a warning. A static
+     that reads
+     `typeof(TSelf)`, tests `is` / `as TSelf`, constructs in a local function, or is a static
+     property, field or operator is not self-typed and keeps the W5-5d `MS0054`.
+  6. Dart: unchanged (`MS0019`).
+  Tests: `tests/Metano.Tests/CrtpStaticConstructionTests.cs`; conformance `CrtpStaticProbes`
+  (Bun and Node).
 
 ### Key Entities
 

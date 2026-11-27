@@ -1124,7 +1124,17 @@ internal sealed class IrToTsClassEmitter(
             return dispatcher;
         }
 
-        var (parameters, returnType, typeParameters) = LowerMethodSignature(irMethod, ir, lowering);
+        var (declaredParameters, returnType, typeParameters) = LowerMethodSignature(
+            irMethod,
+            ir,
+            lowering
+        );
+
+        var parameters = SelfTypedStatics.WithThisParameter(
+            declaredParameters,
+            irMethod,
+            _context.ResolveTsName(type)
+        );
 
         var method =
             !irMethod.Semantics.IsAbstract
@@ -1348,80 +1358,19 @@ internal sealed class IrToTsClassEmitter(
         if (!method.IsStatic || classTypeParameters is not { Count: > 0 } classTps)
             return null;
 
-        var referenced = new HashSet<string>(StringComparer.Ordinal);
-        CollectTypeParamRefs(method.ReturnType, referenced);
-        foreach (var p in method.Parameters)
-            CollectTypeParamRefs(p.Type, referenced);
-        foreach (var rp in method.ReifiedTypeParameters)
-            referenced.Add(rp.Name);
+        var required = method.ReifiedTypeParameters.Select(reified => reified.Name).ToList();
 
-        var promoted = classTps.Where(tp => referenced.Contains(tp.Name)).ToList();
+        // A self-typed static types its receiver over the self parameter (FR-113).
+        if (method.SelfTyped is { } selfTyped)
+            required.Add(selfTyped.SelfParameterName);
+
+        var promoted = IrTypeParameterReferences.DeclaredClassTypeParameters(
+            classTps,
+            [method.ReturnType, .. method.Parameters.Select(parameter => parameter.Type)],
+            required
+        );
+
         return promoted.Count > 0 ? promoted : null;
-    }
-
-    private static void CollectTypeParamRefs(IrTypeRef type, HashSet<string> acc)
-    {
-        switch (type)
-        {
-            case IrTypeParameterRef tp:
-                acc.Add(tp.Name);
-                break;
-            case IrNamedTypeRef named when named.TypeArguments is { Count: > 0 } args:
-                foreach (var a in args)
-                    CollectTypeParamRefs(a, acc);
-                break;
-            case IrCollectionTypeRef collection:
-                CollectTypeParamRefs(collection.LegacyForm, acc);
-                break;
-            case IrArrayTypeRef arr:
-                CollectTypeParamRefs(arr.ElementType, acc);
-                break;
-            case IrNullableTypeRef nullable:
-                CollectTypeParamRefs(nullable.Inner, acc);
-                break;
-            case IrTupleTypeRef tup:
-                foreach (var e in tup.Elements)
-                    CollectTypeParamRefs(e, acc);
-                break;
-            case IIrCompositeTypeRef composite:
-                foreach (var component in composite.ComponentTypes)
-                    CollectTypeParamRefs(component, acc);
-                break;
-            case IrFunctionTypeRef fn:
-                CollectTypeParamRefs(fn.ReturnType, acc);
-                if (fn.ThisType is { } thisType)
-                    CollectTypeParamRefs(thisType, acc);
-                foreach (var p in fn.Parameters)
-                    CollectTypeParamRefs(p.Type, acc);
-                break;
-            case IrMapTypeRef map:
-                CollectTypeParamRefs(map.KeyType, acc);
-                CollectTypeParamRefs(map.ValueType, acc);
-                break;
-            case IrSetTypeRef set:
-                CollectTypeParamRefs(set.ElementType, acc);
-                break;
-            case IrPromiseTypeRef promise:
-                CollectTypeParamRefs(promise.ResultType, acc);
-                break;
-            case IrGeneratorTypeRef gen:
-                CollectTypeParamRefs(gen.YieldType, acc);
-                break;
-            case IrIterableTypeRef it:
-                CollectTypeParamRefs(it.ElementType, acc);
-                break;
-            case IrIteratorTypeRef iterator:
-                CollectTypeParamRefs(iterator.ElementType, acc);
-                break;
-            case IrKeyValuePairTypeRef kvp:
-                CollectTypeParamRefs(kvp.KeyType, acc);
-                CollectTypeParamRefs(kvp.ValueType, acc);
-                break;
-            case IrGroupingTypeRef grp:
-                CollectTypeParamRefs(grp.KeyType, acc);
-                CollectTypeParamRefs(grp.ElementType, acc);
-                break;
-        }
     }
 
     /// <summary>

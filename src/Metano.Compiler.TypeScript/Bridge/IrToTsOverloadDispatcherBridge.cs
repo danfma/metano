@@ -123,7 +123,8 @@ public static class IrToTsOverloadDispatcherBridge
                     TsClassMemberTable.MethodNameOf(lone),
                     names.FastPathNameOf(lone),
                     overridesInherited: false,
-                    context
+                    context,
+                    containingTypeName
                 )
             );
 
@@ -166,7 +167,8 @@ public static class IrToTsOverloadDispatcherBridge
                         fastPathName,
                         isStatic,
                         names.OverridesInheritedFastPath(overload),
-                        context
+                        context,
+                        containingTypeName
                     )
             );
 
@@ -179,7 +181,8 @@ public static class IrToTsOverloadDispatcherBridge
                             forwarderName,
                             fastPathName,
                             names.OverridesInheritedMember(overload, forwarderName),
-                            context
+                            context,
+                            containingTypeName
                         )
                     )
             );
@@ -290,7 +293,8 @@ public static class IrToTsOverloadDispatcherBridge
                     forwarder.Name,
                     forwarder.Target,
                     overridesInherited: false,
-                    context
+                    context,
+                    owner.Name
                 )
             )
             .Concat(ForwardingRootDispatchers(owner, names, context));
@@ -413,7 +417,11 @@ public static class IrToTsOverloadDispatcherBridge
         var plan = PlanOverloadGroup(signatures, typeOverrides, sort: false);
         var overridesInherited = kind is IrDispatcherKind.OverridesInherited;
         var name = TsClassMemberTable.MethodNameOf(group.Primary);
-        var receiver = DispatchReceiver(group.Primary.IsStatic, containingTypeName);
+        var isSelfTyped = group.Members.Any(member => member.SelfTyped is not null);
+
+        var receiver = isSelfTyped
+            ? SelfTypedStatics.Receiver()
+            : DispatchReceiver(group.Primary.IsStatic, containingTypeName);
 
         if (ReachesOneOverload(group, branches, signatures))
             return BuildTypedForwarder(
@@ -449,7 +457,13 @@ public static class IrToTsOverloadDispatcherBridge
 
         return new TsMethodMember(
             name,
-            DispatcherParameters(),
+            isSelfTyped
+                ?
+                [
+                    SelfTypedStatics.DispatcherThisParameter(containingTypeName),
+                    .. DispatcherParameters(),
+                ]
+                : DispatcherParameters(),
             plan.CommonReturn,
             body,
             Static: group.Primary.IsStatic,
@@ -504,7 +518,7 @@ public static class IrToTsOverloadDispatcherBridge
 
         return new TsMethodMember(
             name,
-            parameters,
+            SelfTypedStatics.WithSignatureThisParameter(parameters, lone),
             IrToTsTypeMapper.Map(lone.ReturnType, context.TypeOverrides),
             [new TsReturnStatement(call)],
             Static: lone.IsStatic,
@@ -834,7 +848,10 @@ public static class IrToTsOverloadDispatcherBridge
         IrToTsTypeOverrides? typeOverrides
     ) =>
         new(
-            SignatureParameters(method, typeOverrides),
+            SelfTypedStatics.WithSignatureThisParameter(
+                SignatureParameters(method, typeOverrides),
+                method
+            ),
             IrToTsTypeMapper.Map(method.ReturnType, typeOverrides),
             MapTypeParameters(method.TypeParameters),
             IrToTsVisibilityMapper.SignatureJSDocOf(
@@ -860,7 +877,8 @@ public static class IrToTsOverloadDispatcherBridge
         string fastPathName,
         bool isStatic,
         bool overridesInheritedFastPath,
-        IrToTsBridgeContext context
+        IrToTsBridgeContext context,
+        string containingTypeName
     )
     {
         var visibility = IrToTsVisibilityMapper.Map(method.Visibility);
@@ -870,7 +888,11 @@ public static class IrToTsOverloadDispatcherBridge
             fastPathName,
             isAbstract
                 ? SignatureParameters(method, context.TypeOverrides)
-                : FastPathParameters(method, context),
+                : SelfTypedStatics.WithThisParameter(
+                    FastPathParameters(method, context),
+                    method,
+                    containingTypeName
+                ),
             IrToTsTypeMapper.Map(method.ReturnType, context.TypeOverrides),
             isAbstract ? [] : IrToTsStatementBridge.MapBody(method.Body ?? [], context),
             Static: isStatic,
@@ -896,7 +918,8 @@ public static class IrToTsOverloadDispatcherBridge
         string forwarderName,
         string fastPathName,
         bool overridesInherited,
-        IrToTsBridgeContext context
+        IrToTsBridgeContext context,
+        string containingTypeName
     )
     {
         var parameters = SignatureParameters(method, context.TypeOverrides);
@@ -908,7 +931,7 @@ public static class IrToTsOverloadDispatcherBridge
 
         return new TsMethodMember(
             forwarderName,
-            parameters,
+            SelfTypedStatics.WithForwarderThisParameter(parameters, method, containingTypeName),
             IrToTsTypeMapper.Map(method.ReturnType, context.TypeOverrides),
             [new TsReturnStatement(call)],
             Static: method.IsStatic,

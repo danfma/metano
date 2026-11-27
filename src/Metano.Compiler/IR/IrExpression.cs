@@ -465,6 +465,12 @@ public sealed record IrCallExpression(
     /// array expression; <c>null</c> for normal-form or non-<c>params</c> calls.
     /// </summary>
     public int? ExpandedParamsIndex { get; init; }
+
+    /// <summary>
+    /// The binding of the callee class's self parameter at a call to a self-typed static
+    /// (spec 001 FR-113); <c>null</c> for every other call.
+    /// </summary>
+    public IrSelfTypeBinding? SelfType { get; init; }
 }
 
 /// <summary>

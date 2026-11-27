@@ -1201,6 +1201,9 @@ public sealed class Printer(string indent = "  ", ModuleSpecifierRenderer? modul
                 break;
 
             case TsFunctionType funcType:
+                if (funcType.IsConstructor)
+                    _sb.Write("new ");
+
                 PrintTypeParameters(funcType.TypeParameters);
                 _sb.Write("(");
                 if (funcType.ThisType is { } thisType)

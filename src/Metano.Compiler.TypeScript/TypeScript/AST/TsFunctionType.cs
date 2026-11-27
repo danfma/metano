@@ -9,11 +9,13 @@ namespace Metano.Compiler.TypeScript.AST;
 /// mappings (<c>Action&lt;T&gt;</c>, <c>Func&lt;T,R&gt;</c>,
 /// <c>EventHandler&lt;T&gt;</c>, and custom delegate types).
 /// <paramref name="TypeParameters"/> makes it generic
-/// (<c>&lt;P&gt;(this: …) =&gt; R</c>).
+/// (<c>&lt;P&gt;(this: …) =&gt; R</c>). <paramref name="IsConstructor"/> makes it a
+/// constructor type (<c>new () =&gt; R</c>).
 /// </summary>
 public sealed record TsFunctionType(
     IReadOnlyList<TsParameter> Parameters,
     TsType ReturnType,
     TsType? ThisType = null,
-    IReadOnlyList<TsTypeParameter>? TypeParameters = null
+    IReadOnlyList<TsTypeParameter>? TypeParameters = null,
+    bool IsConstructor = false
 ) : TsType;
