@@ -401,6 +401,7 @@ public class ExternalAmbientTranspileTests
         );
 
         await Assert.That(files["probe.ts"]).Contains("Unsupported expression: IsExpression");
+
         await Assert
             .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
             .IsTrue();

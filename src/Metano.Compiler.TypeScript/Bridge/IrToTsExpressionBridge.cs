@@ -1674,6 +1674,7 @@ public static partial class IrToTsExpressionBridge
             && (sem.IsIgnored || sem.IsAmbient || sem.RendersAsJsxElement)
         )
             return null;
+
         return IrToTsTypeMapper.MapParameterType(p, context.TypeOverrides);
     }
 
