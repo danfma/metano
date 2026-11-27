@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 /// <summary>
@@ -12,6 +14,100 @@ namespace Metano.Tests;
 /// </summary>
 public class ExternalAmbientTranspileTests
 {
+    private const string DomLibrary = """
+        using Metano.Annotations;
+        using Metano.Annotations.TypeScript;
+
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("dom-lib")]
+
+        namespace DomLib.Dom;
+
+        [External]
+        public interface HTMLElement
+        {
+            string Id { get; }
+        }
+        """;
+
+    private const string AmbientLibrary = """
+        using Metano.Annotations;
+        using Metano.Annotations.TypeScript;
+
+        [assembly: TranspileAssembly]
+        [assembly: EmitPackage("dom-lib")]
+
+        namespace DomLib.Dom;
+
+        [External]
+        public abstract class Window
+        {
+            public static Window Current { get; } = null!;
+
+            public class Frame
+            {
+                public int Index { get; set; }
+            }
+
+            [StringEnum]
+            public enum Kind
+            {
+                X,
+                Y,
+            }
+
+            public interface IListener
+            {
+                void Handle();
+            }
+        }
+
+        [External]
+        public abstract class EventTarget
+        {
+            public string Name { get; set; } = "";
+        }
+
+        [External]
+        public interface IDisposableNode
+        {
+            string Id { get; }
+        }
+        """;
+
+    private const string AmbientConsumer = """
+        using System;
+        using DomLib.Dom;
+
+        [Transpile]
+        public class Probe : EventTarget, IDisposableNode
+        {
+            public string Id => Name;
+
+            public Window Current() => Window.Current;
+
+            public Type WindowType() => typeof(Window);
+
+            public bool IsWindow(object o) => o is Window;
+
+            public Window? AsWindow(object o) => o as Window;
+
+            public Window.Frame? FrameOf(Window.Frame? frame) => frame;
+
+            public Window.Kind? KindOf(Window.Kind? kind) => kind;
+
+            public Window.Kind Why() => Window.Kind.Y;
+
+            public bool IsKind(object o) => o is Window.Kind;
+
+            public bool IsListener(object o) => o is Window.IListener;
+
+            public int Measure(Func<Window.Frame, int> measure) => measure(new Window.Frame());
+
+            public int Use() => Measure(f => f.Index);
+        }
+        """;
+
     [Test]
     public async Task ExternalType_DoesNotProduceFile()
     {
@@ -210,22 +306,6 @@ public class ExternalAmbientTranspileTests
         await Assert.That(output).DoesNotContain("HtmlElement");
     }
 
-    private const string DomLibrary = """
-        using Metano.Annotations;
-        using Metano.Annotations.TypeScript;
-
-        [assembly: TranspileAssembly]
-        [assembly: EmitPackage("dom-lib")]
-
-        namespace DomLib.Dom;
-
-        [External]
-        public interface HTMLElement
-        {
-            string Id { get; }
-        }
-        """;
-
     [Test]
     public async Task ExternalTypeFromReferencedPackage_IsNotImported()
     {
@@ -288,60 +368,6 @@ public class ExternalAmbientTranspileTests
         await Assert.That(result["renderer.ts"]).Contains("dom-lib");
     }
 
-    private const string AmbientLibrary = """
-        using Metano.Annotations;
-        using Metano.Annotations.TypeScript;
-
-        [assembly: TranspileAssembly]
-        [assembly: EmitPackage("dom-lib")]
-
-        namespace DomLib.Dom;
-
-        [External]
-        public class Window
-        {
-            public static Window Current { get; } = null!;
-
-            public class Frame
-            {
-                public int Index { get; set; }
-            }
-        }
-
-        [External]
-        public class EventTarget
-        {
-            public string Name { get; set; } = "";
-        }
-
-        [External]
-        public interface IDisposableNode
-        {
-            string Id { get; }
-        }
-        """;
-
-    private const string AmbientConsumer = """
-        using System;
-        using DomLib.Dom;
-
-        [Transpile]
-        public class Probe : EventTarget, IDisposableNode
-        {
-            public string Id => Name;
-
-            public Window Current() => Window.Current;
-
-            public Type WindowType() => typeof(Window);
-
-            public bool IsWindow(object o) => o is Window;
-
-            public Window? AsWindow(object o) => o as Window;
-
-            public Window.Frame? FrameOf(Window.Frame? frame) => frame;
-        }
-        """;
-
     [Test]
     public async Task ExternalTypesFromReferencedPackage_InValuePositionsAreNotImported()
     {
@@ -349,6 +375,8 @@ public class ExternalAmbientTranspileTests
 
         var output = result["probe.ts"];
         await Assert.That(output).Contains("Window.current");
+        await Assert.That(output).Contains("Window.Kind.Y");
+        await Assert.That(output).Contains("return this.measure((f) => f.index);");
         await Assert.That(output).DoesNotContain("dom-lib");
     }
 
@@ -362,5 +390,19 @@ public class ExternalAmbientTranspileTests
         transformer.TransformAll();
 
         await Assert.That(transformer.CrossPackageDependencies.ContainsKey("dom-lib")).IsFalse();
+    }
+
+    [Test]
+    public async Task IsOverInterfaceNestedInReferencedExternal_ReportsUnsupported()
+    {
+        var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            AmbientLibrary,
+            AmbientConsumer
+        );
+
+        await Assert.That(files["probe.ts"]).Contains("Unsupported expression: IsExpression");
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsTrue();
     }
 }

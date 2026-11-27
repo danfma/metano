@@ -130,7 +130,7 @@ internal static class DefaultValueLiterals
                 named.Origin,
                 named.PrivateNestedSegments,
                 named.Namespace,
-                named.Semantics?.IsExternal ?? false
+                named.Semantics?.IsAmbient ?? false
             )
             : new IrTypeReference(type.Name);
 

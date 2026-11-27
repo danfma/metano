@@ -273,8 +273,8 @@ public static class IrToTsTypeMapper
     /// referenced package's declaration gets no import, the same as one in the declaring
     /// project, and its package is not added as a dependency for it.
     /// </summary>
-    private static IrTypeOrigin? ImportableOrigin(IrNamedTypeRef named) =>
-        named.Semantics is { IsExternal: true } ? null : named.Origin;
+    internal static IrTypeOrigin? ImportableOrigin(IrNamedTypeRef named) =>
+        named.Semantics is { IsAmbient: true } ? null : named.Origin;
 
     /// <summary>
     /// Resolves the cross-package <see cref="TsTypeOrigin"/> of a value-position type
@@ -282,7 +282,7 @@ public static class IrToTsTypeMapper
     /// intra-project, BCL or synthesized.
     /// </summary>
     public static TsTypeOrigin? TryResolveOrigin(IrTypeReference reference) =>
-        reference is { IsExternal: false, Origin: { } origin }
+        reference is { IsAmbient: false, Origin: { } origin }
             ? BuildTsOrigin(origin, reference.Name)
             : null;
 

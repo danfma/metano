@@ -154,6 +154,8 @@ public sealed record IrNamedTypeRef(
 /// would run where C#'s zero value skips it), a <c>[PlainObject]</c>,
 /// <c>[JsTuple]</c>, <c>[External]</c> or <c>[Import]</c> struct, a BCL struct, and
 /// every non-struct type.</param>
+/// <param name="IsAmbient">The type, or a type that contains it, is <c>[External]</c>:
+/// provided by the host and never emitted.</param>
 /// <param name="IsValueType">The referenced type is a value type: a struct, a
 /// record struct, an enum, a branded struct. Its <c>default</c> is a zeroed
 /// value, never <c>null</c>.</param>
@@ -198,7 +200,7 @@ public sealed record IrNamedTypeSemantics(
     bool IsTranspilable = false,
     bool IsIgnored = false,
     IrEnumMemberInfo? EnumZeroMember = null,
-    bool IsExternal = false,
+    bool IsAmbient = false,
     string? JsxNativeElementTag = null,
     bool IsJsxComponent = false,
     bool RendersAsJsxElement = false,

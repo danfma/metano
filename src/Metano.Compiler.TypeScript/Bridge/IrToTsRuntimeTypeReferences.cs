@@ -168,7 +168,7 @@ internal static class IrToTsRuntimeTypeReferences
 
         if (
             named.Semantics
-            is not { IsTranspilable: true, IsExternal: false, IsIgnored: false }
+            is not { IsTranspilable: true, IsAmbient: false, IsIgnored: false }
                 or { IsJsTuple: true }
                 or { Kind: IrNamedTypeKind.Branded or IrNamedTypeKind.Unknown }
         )
