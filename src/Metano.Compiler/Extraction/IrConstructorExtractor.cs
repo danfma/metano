@@ -46,6 +46,8 @@ public static class IrConstructorExtractor
         var explicitCtors = AllExplicitConstructors(type);
         var primary = FindPrimaryConstructor(type);
 
+        ByReferenceConstructorParameters.Report(explicitCtors);
+
         if (primary is null)
             return ImplicitConstructorWithObservableBaseCall(type, context.Target);
 

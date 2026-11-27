@@ -2045,6 +2045,110 @@ Product requirements added after the migration (normative; each one is traced by
      `internal`). Dart is unchanged. Tests: `tests/Metano.Tests/NarrowedClaimDataMemberTests.cs`;
      conformance `NarrowedClaimProbes` (Bun and Node).
   Tests: `tests/Metano.Tests/InternalRuntimeTypeTests.cs`; conformance `InternalRuntimeTypeProbes`.
+- **FR-112** (custom interpolated string handlers, #828, decision W15-1, TypeScript):
+  1. An interpolated string (or a `+` chain of them) that C# converts to a handler type
+     declared outside the BCL lowers to the handler pattern Roslyn bound: construct the handler
+     with Roslyn's `literalLength` / `formattedCount` constants, then one call per part, in
+     source order, to the **exact** `AppendLiteral` / `AppendFormatted` overload Roslyn bound
+     (never the dispatcher), then yield the handler. A hole is a typed argument: no default-text
+     lowering (`?? ""`), no `formatInteger` / `alignValue`; alignment and format are passed as
+     bound arguments, omitted optional parameters explicitly (FR-017 of spec 013).
+     A struct handler has reference semantics in TypeScript: the lowering passes the one
+     instance it built and never copies it.
+  2. The handler instance is held by one temporary. When the conversion is the statement's own
+     value (declaration initializer, plain store, `return`, `yield`) it is a hoisted `const`
+     followed by one statement per append; elsewhere it is a comma expression over a
+     block-level `let`. A handler in argument position is never hoisted out of it, which would
+     evaluate it before the receiver and the earlier arguments. No IIFE, no closure, no runtime
+     helper, with one inherited exception: a handler conversion inside a static field
+     initializer takes that initializer's existing W13-1 fallback, an IIFE that runs once per
+     class. A generic handler's construction is asserted to the constructed type
+     (`new H(1, 1) as H<number>`), since no argument infers its type arguments.
+  3. `bool`-returning `Append*` methods: the appends form one `&&` chain, so a `false` result
+     skips the remaining appends and their hole expressions, as in .NET.
+  4. `[InterpolatedStringHandlerArgument]`: the receiver and the named arguments are passed to
+     the constructor. Each must be a repeatable read (local, parameter, `this`, constant, plain
+     field of those) with no side-effecting argument between it and the handler.
+  5. `string`, `FormattableString`, `IFormattable` and BCL handler types
+     (`DefaultInterpolatedStringHandler`, `StringBuilder.AppendInterpolatedStringHandler`, …)
+     keep the template-literal lowering of FR-051.
+  6. Not supported (`MS0001`, error, at the interpolated string): a constructor with the
+     trailing `out bool` parameter (a constructor's `out` parameter is itself reported, #835);
+     a handler argument that is not a repeatable read; an `Append*` that is `[Emit]` or
+     `[Inline]`, or bound dynamically (a `dynamic` hole); a handler type the target neither
+     emits nor imports, a `[PlainObject]` one, or an `[ObjectArgs]` construction. Roslyn never
+     binds an `Append*` to an extension method (CS1061), so that shape does not arise.
+     Behavior change: a third-party handler type that is neither transpiled nor imported used to
+     lower to a template literal, so the callee silently received a string; it now reports
+     `MS0001`.
+  7. Dart: every handler conversion of item 1 reports `MS0001`. This is a rollout choice, not
+     an inability: the lowering uses only IR nodes the Dart printer already prints, but its
+     output is not yet verified (`dart analyze` of a lowered handler, a run against .NET).
+  8. (#835) A constructor's `out` or `ref` parameter reports `MS0001` (error) at the parameter, on
+     every target. Behavior change: a `ref` (or `out`) constructor parameter used to be emitted by
+     value with no report; a constructor has no result that could return the written value, as a
+     method's `out` parameters return in its tuple result.
+  Tests: `tests/Metano.Tests/InterpolatedStringHandlerTests.cs` (goldens
+  `interpolated-string-handlers.ts`, `interpolated-string-handler-positions.ts`,
+  `interpolated-string-handler-arguments.ts`); conformance `InterpolatedStringHandlerProbes`
+  (Bun and Node).
+- **FR-113** (self-typed static members of a CRTP base, #832, decision W15-2, TypeScript;
+  amends spec 011 FR-024 and decision W5-5d):
+  1. A class `B<…, TSelf, …>` is *CRTP-shaped* when exactly one type parameter has `B`
+     constructed over its own type parameters among its constraint types
+     (`where TSelf : B<TSelf>`). That parameter is its *self parameter*.
+  2. A static **method** of a CRTP-shaped class is *self-typed* when (a) it could not carry a
+     hidden parameter (a public or protected member of a public class of an `[EmitPackage]`
+     library, W5-5d), (b) the only type parameter it needs at run time is the self parameter,
+     and (c) every such need is `new TSelf()` or a call that forwards `TSelf` to a self-typed
+     static of its class or of a CRTP base, outside a local function. It gets no hidden
+     parameter and reports no `MS0054` / `MS0019`; it declares the self parameter (beside the
+     class type parameters its signature names, closed over their constraints, the rule every
+     static of a generic class follows) and `this: new () => TSelf`, intersected with
+     `Omit<typeof B, "prototype">` when its body forwards; `new TSelf()` lowers to
+     `new this()` and a forwarding call to `this.m(…)`.
+     Members that carry `TSelf$type` today (internal ones, or anything in an app) keep that
+     lowering unchanged.
+  3. A call to a static method of a CRTP-shaped class with self argument `X` is emitted on
+     `X`'s class (`X.m(…)`), however the source spells it (`X.M()`, `B<X>.M()`, or a class
+     derived from `X`, which builds an `X` as .NET does), when the callee is self-typed or is
+     declared in a referenced package (its body is not visible, so the rule reads the signature
+     only). For a referenced callee, a call that would report `MS0054` under item 5 (an open
+     type parameter, a hiding static, a generic self class with reified slots) keeps its
+     receiver as written (`Component<T>.Name()` stays `Component.name()`), because the callee
+     may not be self-typed. When the class's self parameter has the `new()` constraint (only
+     then can the callee be self-typed) the call reports `MS0054` as a warning: if the callee
+     builds the self type from the receiving class, the call constructs the base class at run
+     time. On an abstract base strict TypeScript also rejects it (TS2684); on a concrete base
+     it type-checks and builds the base (conformance `CrtpStaticProbes.openSelfOnAConcreteBase`,
+     known gap). A base whose self parameter is not constructible stays silent. Follow-up: a
+     metadata marker on a library's self-typed statics would let a consumer decide exactly.
+     The class and method type arguments are passed explicitly when `X` is a constructed
+     generic type and the callee's signature names the self parameter
+     (`Card.make<Card<number>>()`), by the same rule the declaration's emission follows. The
+     call reaches no runtime descriptor.
+  4. An overload group with a self-typed member: every fast path keeps its own shape and the
+     group's overload signatures declare `this: new () => TSelf`; the dispatcher declares
+     `this: (new () => any) & Omit<typeof B, "prototype">` and forwards every branch through
+     `this`. A group that mixes static and instance overloads is split by side; a lone
+     self-typed static's forwarder declares `this` too.
+  5. Not supported (`MS0054`, error, at the call, for a self-typed static of the current
+     compilation): a self argument that is an open type
+     parameter other than the caller's own forwarded `TSelf` (so also a call from an instance
+     member of the base); `X`, or a class between `X` and `B`, declaring a static member that
+     takes the callee's emitted name (the `[Name]` value when present, else the C# name,
+     ignoring case); `X` generic with reified
+     class type arguments (construction from the receiving class passes none); a
+     method-group conversion of the callee. A static method of a derived class that takes a
+     self-typed static's emitted name (the same way) also reports `MS0054` at its
+     declaration; for a static of a referenced package's CRTP base whose self parameter is
+     constructible (item 3) it reports `MS0054` as a warning. A static
+     that reads
+     `typeof(TSelf)`, tests `is` / `as TSelf`, constructs in a local function, or is a static
+     property, field or operator is not self-typed and keeps the W5-5d `MS0054`.
+  6. Dart: unchanged (`MS0019`).
+  Tests: `tests/Metano.Tests/CrtpStaticConstructionTests.cs`; conformance `CrtpStaticProbes`
+  (Bun and Node).
 
 ### Key Entities
 

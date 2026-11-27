@@ -1171,4 +1171,118 @@ public class OutArgumentTranspileTests
             )
             .IsTrue();
     }
+
+    [Test]
+    [Arguments("out bool ok", "ok = level > 0;", "out")]
+    [Arguments("ref int count", "count++;", "ref")]
+    public async Task ConstructorByReferenceParameter_IsAnErrorAtTheParameter(
+        string parameter,
+        string body,
+        string keyword
+    )
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            $$"""
+            [Transpile]
+            public class Handler
+            {
+                public Handler(int level, {{parameter}}) { {{body}} }
+            }
+            """
+        );
+
+        var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+        var name = parameter.Split(' ')[^1];
+
+        await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+        var location = error.Location!;
+
+        await Assert
+            .That(location.SourceTree!.GetText().ToString(location.SourceSpan))
+            .IsEqualTo(name);
+
+        await Assert
+            .That(error.Message)
+            .IsEqualTo(
+                $"Constructor parameter '{name}' of 'Handler.Handler(int, {keyword} "
+                    + $"{(keyword == "out" ? "bool" : "int")})' is '{keyword}', which a constructor "
+                    + "cannot lower: it would be passed by value, so the constructor's writes would "
+                    + "not reach the caller."
+            );
+    }
+
+    /// <summary>
+    /// A <c>[PlainObject]</c> constructs as an object literal, which has no
+    /// place for the constructor's writes either: its <c>out</c> parameter is
+    /// reported like any constructor's.
+    /// </summary>
+    [Test]
+    public async Task PlainObjectConstructorOutParameter_IsAnError()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, PlainObject]
+            public record Dto(int Level)
+            {
+                public Dto(int level, out bool ok) : this(level) { ok = true; }
+            }
+            """
+        );
+
+        var error = diagnostics.Single(d => d.Code == DiagnosticCodes.UnsupportedFeature);
+
+        await Assert.That(error.Severity).IsEqualTo(MetanoDiagnosticSeverity.Error);
+
+        await Assert
+            .That(error.Message)
+            .StartsWith("Constructor parameter 'ok' of 'Dto.Dto(int, out bool)'");
+    }
+
+    /// <summary>
+    /// A struct whose constructor has an <c>out</c> parameter, held as a field
+    /// of another struct, reports once: the outer struct's zero value reads the
+    /// nested struct's shape without reporting again (the <c>typeof</c> makes
+    /// the outer struct's zero factory emitted, which reads that shape).
+    /// </summary>
+    [Test]
+    public async Task NestedStructConstructorOutParameter_IsReportedOnce()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile]
+            public struct PInner
+            {
+                public int X;
+
+                public PInner(int x, out bool ok)
+                {
+                    X = x;
+                    ok = true;
+                }
+            }
+
+            [Transpile]
+            public struct POuter
+            {
+                public PInner Inner;
+            }
+
+            [Transpile]
+            public static class Zeroes
+            {
+                public static POuter Outer() => default(POuter);
+
+                public static System.Type Reached() => typeof(POuter);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Count(d => d.Message.StartsWith("Constructor parameter 'ok'")))
+            .IsEqualTo(1);
+
+        await Assert
+            .That(diagnostics.Select(d => (d.Message, d.Location)).Distinct().Count())
+            .IsEqualTo(diagnostics.Count);
+    }
 }

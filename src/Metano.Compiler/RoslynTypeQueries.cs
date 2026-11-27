@@ -210,6 +210,16 @@ public static class RoslynTypeQueries
         && !assembly.HasAttribute(EmitPackageAttributeName);
 
     /// <summary>
+    /// Whether <paramref name="handlerType"/> is an interpolated-string handler
+    /// of the base class library (<c>DefaultInterpolatedStringHandler</c>,
+    /// <c>StringBuilder.AppendInterpolatedStringHandler</c>, …), whose
+    /// conversions keep the template-literal lowering (FR-051), as opposed to a
+    /// custom handler (FR-112).
+    /// </summary>
+    public static bool IsBclInterpolatedStringHandler(this ITypeSymbol? handlerType) =>
+        handlerType?.ContainingAssembly.IsBclAssembly() == true;
+
+    /// <summary>
     /// True for <c>Dictionary&lt;K,V&gt;</c>, <c>IDictionary&lt;K,V&gt;</c> and
     /// <c>IReadOnlyDictionary&lt;K,V&gt;</c> themselves (not their nested
     /// <c>KeyCollection</c> / <c>ValueCollection</c> types, nor types that

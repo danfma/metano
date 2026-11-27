@@ -685,6 +685,7 @@ public sealed class TypeScriptTransformContext(
             EmittedMemberName = IrToTsNamingPolicy.DeclaredNameOf,
             KeepsArgumentEvaluationOrder = true,
             FormatStrings = TsFormatStrings.Instance,
+            LowersInterpolatedStringHandlers = true,
             LowersByDeclarativeMapping = DeclarativeMappings.HasJsMappingFor,
             ReifiedTypeAnalysis = ReifiedTypeAnalysis,
         };

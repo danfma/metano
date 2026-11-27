@@ -85,6 +85,12 @@ public sealed record IrMethodDeclaration(
     /// type parameter is reified.
     /// </summary>
     public IReadOnlyList<IrReifiedTypeParameter> ReifiedTypeParameters { get; init; } = [];
+
+    /// <summary>
+    /// Set on a self-typed static method (spec 001 FR-113), which builds its self
+    /// type from the class it is called on instead of a hidden reified parameter.
+    /// </summary>
+    public IrSelfTypedMember? SelfTyped { get; init; }
 }
 
 /// <summary>

@@ -564,24 +564,32 @@ internal sealed class RuntimeQuestionScanner
             Record(IrRuntimeQuestionKind.TypeOf, method.TypeArguments[index], invocation.Syntax);
     }
 
+    /// <summary>
+    /// A call that passes hidden reified type arguments reads each argument's descriptor
+    /// (spec 011 FR-025), the containing type's arguments of a static member included
+    /// (#834: <c>CardH.Use(cb)</c> on <c>Component&lt;TSelf&gt;</c> passes <c>CardH</c>'s).
+    /// </summary>
     private void RecordReifiedCallArguments(IMethodSymbol method, SyntaxNode syntax)
     {
         if (!_reifiedTypeAnalysis.IsEnabled)
             return;
 
-        var reified = _reifiedTypeAnalysis.ReifiedParametersOf(method);
-
-        if (reified.Count == 0)
-            return;
-
-        var orig = method.OriginalDefinition;
-
-        foreach (var rp in reified)
+        foreach (
+            var argument in _reifiedTypeAnalysis.ReifiedTypeArgumentSymbolsForCall(method) ?? []
+        )
         {
-            var idx = orig.TypeParameters.ToList().FindIndex(t => t.Name == rp.Name);
+            var location = syntax.GetLocation();
 
-            if (idx >= 0 && idx < method.TypeArguments.Length)
-                Record(IrRuntimeQuestionKind.TypeOf, method.TypeArguments[idx], syntax);
+            _questions.Add(
+                Question(IrRuntimeQuestionKind.TypeOf, argument, location) with
+                {
+                    Text = syntax.ToString(),
+                    IsReportedUndescribable = _reifiedTypeAnalysis.UndescribableArguments.Contains(
+                        argument,
+                        location
+                    ),
+                }
+            );
         }
     }
 

@@ -97,8 +97,19 @@ public static class IrMethodExtractor
         {
             Attributes = IrAttributeExtractor.Extract(method),
             ReifiedTypeParameters = context.ReifiedTypeAnalysis.ReifiedParametersOf(method),
+            SelfTyped = SelfTypedOf(method, context.ReifiedTypeAnalysis.SelfTyped),
         };
     }
+
+    /// <summary>The self parameter of a self-typed static method (spec 001 FR-113).</summary>
+    private static IrSelfTypedMember? SelfTypedOf(
+        IMethodSymbol method,
+        Analysis.SelfTypedMembers selfTyped
+    ) =>
+        selfTyped.Contains(method)
+        && Analysis.CrtpSelfParameter.Of(method.ContainingType) is { } self
+            ? new IrSelfTypedMember(self.Name, selfTyped.Forwards(method))
+            : null;
 
     /// <summary>
     /// The signature of a method another declaration owns — an inherited

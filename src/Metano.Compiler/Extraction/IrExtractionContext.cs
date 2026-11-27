@@ -149,6 +149,18 @@ public sealed record IrExtractionContext(
     public bool EmitsStructZeroValue { get; init; }
 
     /// <summary>
+    /// A target capability: whether the target lowers an interpolated string
+    /// converted to a custom interpolated-string handler to the handler pattern
+    /// Roslyn bound (FR-112): the construction, one <c>Append*</c> call per
+    /// part, then the handler. Opt-in, and a rollout choice rather than an
+    /// inability: the lowering uses only nodes every target prints. A target
+    /// that leaves it unset gets <c>MS0001</c> (an error) at each such
+    /// conversion. Dart leaves it unset until its output is verified (a
+    /// <c>dart analyze</c> of a lowered handler and a run against .NET).
+    /// </summary>
+    public bool LowersInterpolatedStringHandlers { get; init; }
+
+    /// <summary>
     /// <see cref="KeepsNativeCollections"/> for a code path that holds only the
     /// target language (the type mapper, the overload-group reporters).
     /// </summary>

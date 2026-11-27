@@ -221,6 +221,6 @@ public class OverloadDispatchArgumentTests
         await Assert.That(output).Contains("Opt.fromA(5)");
         await Assert.That(output).Contains("Opt.fromSRest(\"s\")");
         await Assert.That(output).Contains("Opt.fromSRest(\"s\", 1, 2)");
-        await Assert.That(output).Contains("Opt.fromSRest(\"s\", ...[1, 2, 3])");
+        await Assert.That(output).Contains("Opt.fromSRest(\"s\", 1, 2, 3)");
     }
 }

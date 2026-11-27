@@ -265,14 +265,7 @@ public sealed partial class IrExpressionExtractor
         var arguments = values.Select(value => new IrArgument(Extract(value))).ToList();
 
         if (PassesParamsArrayDirectly(values, add))
-            arguments[^1] = NormalizeNullParamsArray(
-                arguments[^1] with
-                {
-                    IsSpread = true,
-                },
-                values[^1],
-                add
-            );
+            arguments[^1] = AsSpreadParamsArray(arguments[^1], values[^1], add);
 
         return arguments;
     }
