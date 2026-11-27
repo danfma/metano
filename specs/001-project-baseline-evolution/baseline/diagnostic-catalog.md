@@ -113,6 +113,10 @@ On TypeScript a `using` statement or declaration no longer reports `MS0001`: it 
 
 No new code. The `MS0001` sources of wave 10 (`await using`, an unemitted `Dispose`, a `using` declaration directly in a module entry point, a `Dispose` overload shadowing the implementation) apply to the native `using` declarations and to the `tryFinally` opt-out alike; the entry-point message names the form of the active mode. New `MS0001` sources: a warning at an `[Import]` class of the compilation that implements `IDisposable`, under native `using` only (`Transformation/ImportedDisposableDiagnostics.cs`); an error at a transpiled type whose implementing `Dispose()` is `[Emit]` (`Frontend/Roslyn/DisposableImplementationValidator.cs`).
 
+### Wave 15 custom interpolated string handlers (FR-112, #828) and constructor `out` / `ref` (#835, no new code)
+
+No new code. New `MS0001` sources, all errors: a constructor `out` or `ref` parameter, at the parameter (`Extraction/ByReferenceConstructorParameters.cs`); and, at an interpolated string converted to a custom handler (`Extraction/IrExpressionExtractor.InterpolatedStringHandlers.cs`, `Extraction/HandlerArgumentReads.cs`), a constructor with the trailing `out bool` parameter, a handler type that is neither transpiled nor imported (it used to become a template literal), a `[PlainObject]` handler, an `[ObjectArgs]` handler constructor, an `[Emit]` / `[Inline]` / dynamically bound append, and an `[InterpolatedStringHandlerArgument]` receiver or argument that cannot be read again (null-conditional, converted, not a repeatable read, or followed by an argument with a side effect before the handler); on Dart, every custom handler conversion. Tests: `tests/Metano.Tests/InterpolatedStringHandlerTests.cs`, `tests/Metano.Tests/OutArgumentTranspileTests.cs`.
+
 ## Build integration (`Metano.Build.<Target>` packages)
 
 Raised by the MSBuild target, not by the compiler, so it lives outside the `MS` code space.

@@ -2084,6 +2084,10 @@ Product requirements added after the migration (normative; each one is traced by
   7. Dart: every handler conversion of item 1 reports `MS0001`. This is a rollout choice, not
      an inability: the lowering uses only IR nodes the Dart printer already prints, but its
      output is not yet verified (`dart analyze` of a lowered handler, a run against .NET).
+  8. (#835) A constructor's `out` or `ref` parameter reports `MS0001` (error) at the parameter, on
+     every target. Behavior change: a `ref` (or `out`) constructor parameter used to be emitted by
+     value with no report; a constructor has no result that could return the written value, as a
+     method's `out` parameters return in its tuple result.
   Tests: `tests/Metano.Tests/InterpolatedStringHandlerTests.cs` (goldens
   `interpolated-string-handlers.ts`, `interpolated-string-handler-positions.ts`,
   `interpolated-string-handler-arguments.ts`); conformance `InterpolatedStringHandlerProbes`
