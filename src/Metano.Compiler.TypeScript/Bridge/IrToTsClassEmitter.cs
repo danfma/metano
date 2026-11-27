@@ -1735,12 +1735,23 @@ internal sealed class IrToTsClassEmitter(
                     );
                 }
 
-                var nestedIr = IrClassExtractor.Extract(nestedStruct, _context.Extraction);
+                var nestedIr = ZeroValueShapeOf(nestedStruct);
                 return BuildStructZeroObjectLiteral(nestedStruct, nestedIr, nestedRef, null);
             }
         }
 
         return new TsLiteral("null");
+    }
+
+    /// <summary>
+    /// <paramref name="nestedStruct"/>'s IR, read only for the shape of its zero
+    /// value: the struct's own emission reports its diagnostics.
+    /// </summary>
+    private IrClassDeclaration ZeroValueShapeOf(INamedTypeSymbol nestedStruct)
+    {
+        using var _ = ExtractionDiagnostics.Suppress();
+
+        return IrClassExtractor.Extract(nestedStruct, _context.Extraction);
     }
 
     private TsConstructor? TryBuildConstructorDispatcherFromIr(
